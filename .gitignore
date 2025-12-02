@@ -4,3 +4,8 @@ out-tests
 .vscode-test
 *.vsix
 npm-debug.log*
+
+# Environment variables with sensitive credentials
+.env
+.env.local
+.env.*.local

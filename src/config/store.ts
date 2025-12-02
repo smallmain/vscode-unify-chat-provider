@@ -1,12 +1,17 @@
 import * as vscode from 'vscode';
-import { ExtensionConfiguration, ProviderConfig, ModelConfig, ProviderType } from '../types';
+import {
+  ExtensionConfiguration,
+  ProviderConfig,
+  ModelConfig,
+  ProviderType,
+} from '../types';
 
 /**
  * Valid provider types
  */
 const VALID_PROVIDER_TYPES: ProviderType[] = ['anthropic'];
 
-const CONFIG_NAMESPACE = 'unifyChatProviders';
+const CONFIG_NAMESPACE = 'unifyChatProvider';
 
 /**
  * Manages extension configuration stored in VS Code workspace settings
@@ -32,7 +37,9 @@ export class ConfigStore {
     const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
     const rawEndpoints = config.get<unknown[]>('endpoints', []);
 
-    return rawEndpoints.map((raw) => this.normalizeProviderConfig(raw)).filter((p): p is ProviderConfig => p !== null);
+    return rawEndpoints
+      .map((raw) => this.normalizeProviderConfig(raw))
+      .filter((p): p is ProviderConfig => p !== null);
   }
 
   /**
@@ -74,11 +81,14 @@ export class ConfigStore {
       return null;
     }
 
-    // Parse and validate type (default to 'anthropic' for backwards compatibility)
-    const type = typeof obj.type === 'string' ? obj.type : 'anthropic';
-    if (!VALID_PROVIDER_TYPES.includes(type as ProviderType)) {
+    // Parse and validate type
+    if (
+      typeof obj.type !== 'string' ||
+      !VALID_PROVIDER_TYPES.includes(obj.type as ProviderType)
+    ) {
       return null;
     }
+    const type = obj.type as ProviderType;
 
     return {
       type: type as ProviderType,
@@ -86,7 +96,6 @@ export class ConfigStore {
       baseUrl: obj.baseUrl,
       apiKey: typeof obj.apiKey === 'string' ? obj.apiKey : undefined,
       models,
-      defaultModel: typeof obj.defaultModel === 'string' ? obj.defaultModel : undefined,
     };
   }
 
@@ -104,8 +113,14 @@ export class ConfigStore {
         return {
           id: obj.id,
           name: typeof obj.name === 'string' ? obj.name : undefined,
-          maxInputTokens: typeof obj.maxInputTokens === 'number' ? obj.maxInputTokens : undefined,
-          maxOutputTokens: typeof obj.maxOutputTokens === 'number' ? obj.maxOutputTokens : undefined,
+          maxInputTokens:
+            typeof obj.maxInputTokens === 'number'
+              ? obj.maxInputTokens
+              : undefined,
+          maxOutputTokens:
+            typeof obj.maxOutputTokens === 'number'
+              ? obj.maxOutputTokens
+              : undefined,
         };
       }
     }
@@ -122,11 +137,26 @@ export class ConfigStore {
 
   /**
    * Save endpoints to configuration
+   * Respects the user's existing configuration level
    */
   async setEndpoints(endpoints: ProviderConfig[]): Promise<void> {
-    await vscode.workspace
-      .getConfiguration()
-      .update(`${CONFIG_NAMESPACE}.endpoints`, endpoints, vscode.ConfigurationTarget.Workspace);
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    const inspection = config.inspect<ProviderConfig[]>('endpoints');
+
+    // Determine which configuration level to update based on where the value exists
+    let target: vscode.ConfigurationTarget;
+    if (inspection?.workspaceFolderValue !== undefined) {
+      target = vscode.ConfigurationTarget.WorkspaceFolder;
+    } else if (inspection?.workspaceValue !== undefined) {
+      target = vscode.ConfigurationTarget.Workspace;
+    } else if (inspection?.globalValue !== undefined) {
+      target = vscode.ConfigurationTarget.Global;
+    } else {
+      // Default to Global when no existing configuration
+      target = vscode.ConfigurationTarget.Global;
+    }
+
+    await config.update('endpoints', endpoints, target);
   }
 
   /**

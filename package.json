@@ -1,17 +1,21 @@
 {
-  "name": "unify-chat-providers",
-  "displayName": "Unify Chat Providers",
+  "name": "vscode-unify-chat-provider",
+  "displayName": "Unify Chat Provider",
   "description": "Integrate multiple LLM API providers into VS Code's Language Model API.",
-  "version": "0.0.1",
-  "publisher": "example",
-  "license": "MIT",
-  "engines": {
-    "vscode": "^1.104"
-  },
+  "version": "1.0.0",
   "categories": [
     "AI",
     "Chat"
   ],
+  "publisher": "SmallMain",
+  "icon": "icon.png",
+  "repository": "github:smallmain/vscode-unify-chat-provider",
+  "bugs": "https://github.com/smallmain/vscode-unify-chat-provider/issues",
+  "author": "SmallMain",
+  "license": "MIT",
+  "engines": {
+    "vscode": "^1.104.0"
+  },
   "activationEvents": [
     "onStartupFinished"
   ],
@@ -19,34 +23,35 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "unify-chat-providers",
-        "displayName": "Unify Chat Providers",
-        "managementCommand": "unifyChatProviders.manageProviders"
+        "vendor": "unify-chat-provider",
+        "displayName": "Unify Chat Provider",
+        "managementCommand": "unifyChatProvider.manageProviders"
       }
     ],
     "commands": [
       {
-        "command": "unifyChatProviders.addProvider",
-        "title": "Unify Chat Providers: Add Provider"
+        "command": "unifyChatProvider.addProvider",
+        "title": "Unify Chat Provider: Add Provider"
       },
       {
-        "command": "unifyChatProviders.removeProvider",
-        "title": "Unify Chat Providers: Remove Provider"
+        "command": "unifyChatProvider.removeProvider",
+        "title": "Unify Chat Provider: Remove Provider"
       },
       {
-        "command": "unifyChatProviders.manageProviders",
-        "title": "Unify Chat Providers: Manage Providers"
+        "command": "unifyChatProvider.manageProviders",
+        "title": "Unify Chat Provider: Manage Providers"
       }
     ],
     "configuration": {
-      "title": "Unify Chat Providers",
+      "title": "Unify Chat Provider",
       "properties": {
-        "unifyChatProviders.endpoints": {
+        "unifyChatProvider.endpoints": {
           "type": "array",
           "description": "List of LLM API provider endpoints.",
           "items": {
             "type": "object",
             "required": [
+              "type",
               "name",
               "baseUrl",
               "models"
@@ -60,8 +65,7 @@
                 ],
                 "enumDescriptions": [
                   "Anthropic Messages API format"
-                ],
-                "default": "anthropic"
+                ]
               },
               "name": {
                 "type": "string",
@@ -113,10 +117,6 @@
                   ]
                 },
                 "minItems": 1
-              },
-              "defaultModel": {
-                "type": "string",
-                "description": "Default model ID for this provider."
               }
             }
           },
@@ -128,7 +128,11 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p .",
-    "watch": "tsc -watch -p ."
+    "watch": "tsc -watch -p .",
+    "test:build": "tsc -p tsconfig.tests.json",
+    "test": "npm run test:build && node --test out-tests/test/**/*.test.js",
+    "test:unit": "npm run test:build && node --test out-tests/test/config/*.test.js out-tests/test/client/*.test.js out-tests/test/provider/*.test.js",
+    "test:integration": "npm run test:build && node --test out-tests/test/integration/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^22",

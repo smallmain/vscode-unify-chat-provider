@@ -1,0 +1,14 @@
+.vscode/**
+.claude/**
+node_modules/**
+src/**
+test/**
+out-tests/**
+.gitignore
+.env*
+*.ts
+!*.d.ts
+tsconfig*.json
+AGENTS.md
+.git/**
+icon-large.png

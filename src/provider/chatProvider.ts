@@ -33,7 +33,7 @@ export class UnifyChatProvider implements vscode.LanguageModelChatProvider {
    * Provide information about available models
    */
   provideLanguageModelChatInformation(
-    _options: { silent: boolean },
+    options: { silent: boolean },
     _token: vscode.CancellationToken
   ): vscode.ProviderResult<vscode.LanguageModelChatInformation[]> {
     const models: vscode.LanguageModelChatInformation[] = [];
@@ -42,6 +42,11 @@ export class UnifyChatProvider implements vscode.LanguageModelChatProvider {
       for (const model of provider.models) {
         models.push(this.createModelInfo(provider, model));
       }
+    }
+
+    // If no models configured and not silent, prompt user to add a provider
+    if (models.length === 0 && !options.silent) {
+      vscode.commands.executeCommand('unifyChatProvider.addProvider');
     }
 
     return models;

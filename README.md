@@ -1,11 +1,11 @@
-# Unify Chat Providers
+# Unify Chat Provider
 
 A VS Code extension that allows you to integrate multiple LLM API providers into VS Code's Language Model Chat Provider API. Configure any number of API endpoints and use them seamlessly with GitHub Copilot Chat.
 
 ## Supported API Formats
 
-| Type | Description | Example Providers |
-|------|-------------|-------------------|
+| Type        | Description                   | Example Providers                                                                         |
+| ----------- | ----------------------------- | ----------------------------------------------------------------------------------------- |
 | `anthropic` | Anthropic Messages API format | Anthropic, AWS Bedrock, Google Vertex AI, OpenRouter, and other Anthropic-compatible APIs |
 
 More API formats will be added in future releases.
@@ -20,50 +20,26 @@ More API formats will be added in future releases.
 - Token counting estimation
 - Interactive commands to add and manage providers
 
-## Requirements
-
-- VS Code 1.104.0 or newer
-- GitHub Copilot subscription (models are available to Copilot users)
-- Network access to your configured provider endpoints
-
-## Getting Started
-
-1. Install dependencies and build the extension:
-
-   ```bash
-   npm install
-   npm run compile
-   ```
-
-2. Press `F5` in VS Code to launch an Extension Development Host and load the extension.
-
 ## Configuration
 
-Add providers to your workspace settings (`.vscode/settings.json`) using the `unifyChatProviders.endpoints` array:
+Add providers to your workspace settings (`.vscode/settings.json`) using the `unifyChatProvider.endpoints` array:
 
 ```json
 {
-  "unifyChatProviders.endpoints": [
+  "unifyChatProvider.endpoints": [
     {
       "type": "anthropic",
       "name": "Anthropic",
       "baseUrl": "https://api.anthropic.com/v1/messages",
       "apiKey": "your-api-key",
-      "models": [
-        "claude-sonnet-4-20250514",
-        "claude-opus-4-20250514"
-      ],
-      "defaultModel": "claude-sonnet-4-20250514"
+      "models": ["claude-sonnet-4-20250514", "claude-opus-4-20250514"]
     },
     {
       "type": "anthropic",
       "name": "OpenRouter",
       "baseUrl": "https://openrouter.ai/api/v1/messages",
       "apiKey": "your-openrouter-key",
-      "models": [
-        "anthropic/claude-sonnet-4",
-        "anthropic/claude-opus-4"
-      ]
+      "models": ["anthropic/claude-sonnet-4", "anthropic/claude-opus-4"]
     }
   ]
 }
@@ -75,7 +51,7 @@ Models can be specified as simple strings or as objects with additional configur
 
 ```json
 {
-  "unifyChatProviders.endpoints": [
+  "unifyChatProvider.endpoints": [
     {
       "type": "anthropic",
       "name": "Custom Provider",
@@ -97,20 +73,19 @@ Models can be specified as simple strings or as objects with additional configur
 
 ### Configuration Properties
 
-| Property | Required | Description |
-|----------|----------|-------------|
-| `type` | No | API format type. Currently supports `anthropic`. Defaults to `anthropic`. |
-| `name` | Yes | Display name for the provider |
-| `baseUrl` | Yes | API endpoint URL |
-| `apiKey` | No | API key for authentication |
-| `models` | Yes | List of available models (at least one required) |
-| `defaultModel` | No | Default model ID for this provider |
+| Property  | Required | Description                                      |
+| --------- | -------- | ------------------------------------------------ |
+| `type`    | Yes      | API format type                                  |
+| `name`    | Yes      | Display name for the provider                    |
+| `baseUrl` | Yes      | API endpoint URL                                 |
+| `apiKey`  | No       | API key for authentication                       |
+| `models`  | Yes      | List of available models (at least one required) |
 
 ## Commands
 
-- **Unify Chat Providers: Add Provider** - Interactive wizard to add a new provider
-- **Unify Chat Providers: Remove Provider** - Remove a configured provider
-- **Unify Chat Providers: Manage Providers** - Open settings to manage providers
+- **Unify Chat Provider: Add Provider** - Interactive wizard to add a new provider
+- **Unify Chat Provider: Remove Provider** - Remove a configured provider
+- **Unify Chat Provider: Manage Providers** - Open settings to manage providers
 
 ## Architecture
 
@@ -139,6 +114,7 @@ src/
 ```
 
 Adding support for a new API format involves:
+
 1. Adding a new type to `ProviderType` in `types.ts`
 2. Creating a new client class implementing `ApiClient` in `src/client/`
 3. Updating the factory function in `chatProvider.ts`
@@ -156,6 +132,7 @@ Compatible with APIs that follow the Anthropic Messages API format:
 - **Response format**: Server-Sent Events (SSE) streaming
 
 This includes:
+
 - Anthropic's official API
 - AWS Bedrock (with Anthropic gateway)
 - Google Vertex AI (with Anthropic gateway)
