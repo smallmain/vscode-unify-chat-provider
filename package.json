@@ -1,25 +1,29 @@
 {
   "name": "unify-chat-providers",
   "displayName": "Unify Chat Providers",
-  "description": "Manage and register multiple LLM chat providers in VS Code using the Language Model Chat Provider API.",
+  "description": "Integrate multiple LLM API providers into VS Code's Language Model API.",
   "version": "0.0.1",
   "publisher": "example",
   "license": "MIT",
   "engines": {
-    "vscode": "^1.88.0"
+    "vscode": "^1.104"
   },
   "categories": [
-    "Other"
+    "AI",
+    "Chat"
   ],
   "activationEvents": [
-    "onStartupFinished",
-    "onCommand:unifyChatProviders.addProvider",
-    "onCommand:unifyChatProviders.removeProvider",
-    "onCommand:unifyChatProviders.selectProvider",
-    "onCommand:unifyChatProviders.selectModel"
+    "onStartupFinished"
   ],
   "main": "./out/extension.js",
   "contributes": {
+    "languageModelChatProviders": [
+      {
+        "vendor": "unify-chat-providers",
+        "displayName": "Unify Chat Providers",
+        "managementCommand": "unifyChatProviders.manageProviders"
+      }
+    ],
     "commands": [
       {
         "command": "unifyChatProviders.addProvider",
@@ -30,12 +34,8 @@
         "title": "Unify Chat Providers: Remove Provider"
       },
       {
-        "command": "unifyChatProviders.selectProvider",
-        "title": "Unify Chat Providers: Select Provider"
-      },
-      {
-        "command": "unifyChatProviders.selectModel",
-        "title": "Unify Chat Providers: Select Model"
+        "command": "unifyChatProviders.manageProviders",
+        "title": "Unify Chat Providers: Manage Providers"
       }
     ],
     "configuration": {
@@ -43,54 +43,84 @@
       "properties": {
         "unifyChatProviders.endpoints": {
           "type": "array",
-          "description": "List of chat provider endpoints to register.",
+          "description": "List of LLM API provider endpoints.",
           "items": {
             "type": "object",
-            "required": ["name", "baseUrl", "models"],
+            "required": [
+              "name",
+              "baseUrl",
+              "models"
+            ],
             "properties": {
               "type": {
                 "type": "string",
-                "description": "Endpoint type (e.g., anthropic-like).",
-                "default": "anthropic-like",
-                "enum": ["anthropic-like"]
+                "description": "API format type. Determines how requests are formatted.",
+                "enum": [
+                  "anthropic"
+                ],
+                "enumDescriptions": [
+                  "Anthropic Messages API format"
+                ],
+                "default": "anthropic"
               },
               "name": {
                 "type": "string",
-                "description": "Human friendly name for the provider."
+                "description": "Display name for this provider."
               },
               "baseUrl": {
                 "type": "string",
-                "description": "Base URL for the provider's chat completions endpoint (e.g., https://api.example.com/v1/messages)."
+                "description": "API endpoint URL (e.g., https://api.anthropic.com/v1/messages)."
               },
               "apiKey": {
                 "type": "string",
-                "description": "API key used for authorization (stored in workspace settings)."
+                "description": "API key for authentication."
               },
               "models": {
                 "type": "array",
-                "description": "List of available model identifiers for this provider.",
+                "description": "List of available models.",
                 "items": {
-                  "type": "string"
+                  "oneOf": [
+                    {
+                      "type": "string",
+                      "description": "Model ID"
+                    },
+                    {
+                      "type": "object",
+                      "required": [
+                        "id"
+                      ],
+                      "properties": {
+                        "id": {
+                          "type": "string",
+                          "description": "Model ID (e.g., claude-sonnet-4-20250514)."
+                        },
+                        "name": {
+                          "type": "string",
+                          "description": "Display name for the model."
+                        },
+                        "maxInputTokens": {
+                          "type": "number",
+                          "description": "Maximum input tokens.",
+                          "default": 200000
+                        },
+                        "maxOutputTokens": {
+                          "type": "number",
+                          "description": "Maximum output tokens.",
+                          "default": 8192
+                        }
+                      }
+                    }
+                  ]
                 },
                 "minItems": 1
               },
               "defaultModel": {
                 "type": "string",
-                "description": "Optional default model for this provider."
+                "description": "Default model ID for this provider."
               }
             }
           },
           "default": []
-        },
-        "unifyChatProviders.activeProvider": {
-          "type": "string",
-          "description": "Name of the currently selected provider.",
-          "default": ""
-        },
-        "unifyChatProviders.activeModel": {
-          "type": "string",
-          "description": "Identifier for the currently selected model.",
-          "default": ""
         }
       }
     }
@@ -98,14 +128,11 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p .",
-    "watch": "tsc -watch -p .",
-    "test:build": "tsc -p tsconfig.tests.json",
-    "test": "npm run test:build && node --test \"out-tests/test/**/*.js\""
+    "watch": "tsc -watch -p ."
   },
   "devDependencies": {
-    "@types/node": "^20.12.8",
-    "@types/vscode": "^1.88.0",
-    "tslib": "^2.6.2",
-    "typescript": "^5.4.0"
+    "@types/node": "^22",
+    "@types/vscode": "^1.104.0",
+    "typescript": "^5.9.3"
   }
 }

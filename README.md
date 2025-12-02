@@ -1,19 +1,30 @@
 # Unify Chat Providers
 
-A VS Code extension that manages multiple chat providers and registers a unified Language Model Chat participant. Configure any number of Anthropic-style endpoints, select the active provider/model, and chat directly from VS Code.
+A VS Code extension that allows you to integrate multiple LLM API providers into VS Code's Language Model Chat Provider API. Configure any number of API endpoints and use them seamlessly with GitHub Copilot Chat.
+
+## Supported API Formats
+
+| Type | Description | Example Providers |
+|------|-------------|-------------------|
+| `anthropic` | Anthropic Messages API format | Anthropic, AWS Bedrock, Google Vertex AI, OpenRouter, and other Anthropic-compatible APIs |
+
+More API formats will be added in future releases.
 
 ## Features
 
-- Workspace configuration for multiple endpoints (type, name, base URL, API key, available models, default model).
-- Registers a VS Code Language Model chat participant using the currently selected provider and model.
-- Requests follow Anthropic-compatible headers and body schema with streaming responses.
-- Quick commands to add, remove, select providers, and switch models.
-- Designed to be extensible so additional provider formats can be added later.
+- Register multiple LLM API endpoints as language model providers
+- Support for different API formats (currently Anthropic, more coming soon)
+- Multiple providers and models per provider
+- Streaming responses with proper cancellation handling
+- Tool calling support
+- Token counting estimation
+- Interactive commands to add and manage providers
 
 ## Requirements
 
-- VS Code 1.88.0 or newer.
-- Network access to your configured provider endpoints.
+- VS Code 1.104.0 or newer
+- GitHub Copilot subscription (models are available to Copilot users)
+- Network access to your configured provider endpoints
 
 ## Getting Started
 
@@ -28,55 +39,134 @@ A VS Code extension that manages multiple chat providers and registers a unified
 
 ## Configuration
 
-Add providers to your workspace settings (`.vscode/settings.json`) using the `unifyChatProviders.endpoints` array. Each entry should follow this shape:
+Add providers to your workspace settings (`.vscode/settings.json`) using the `unifyChatProviders.endpoints` array:
 
 ```json
 {
   "unifyChatProviders.endpoints": [
     {
-      "type": "anthropic-like",
+      "type": "anthropic",
       "name": "Anthropic",
       "baseUrl": "https://api.anthropic.com/v1/messages",
-      "apiKey": "ANTHROPIC_API_KEY",
-      "models": ["claude-3-opus-20240229", "claude-3-haiku-20240307"],
-      "defaultModel": "claude-3-opus-20240229"
+      "apiKey": "your-api-key",
+      "models": [
+        "claude-sonnet-4-20250514",
+        "claude-opus-4-20250514"
+      ],
+      "defaultModel": "claude-sonnet-4-20250514"
     },
     {
-      "type": "anthropic-like",
-      "name": "Internal Gateway",
-      "baseUrl": "https://llm.company.example/v1/messages",
-      "apiKey": "INTERNAL_TOKEN",
-      "models": ["general-1", "research-2"]
+      "type": "anthropic",
+      "name": "OpenRouter",
+      "baseUrl": "https://openrouter.ai/api/v1/messages",
+      "apiKey": "your-openrouter-key",
+      "models": [
+        "anthropic/claude-sonnet-4",
+        "anthropic/claude-opus-4"
+      ]
     }
-  ],
-  "unifyChatProviders.activeProvider": "Anthropic",
-  "unifyChatProviders.activeModel": "claude-3-opus-20240229"
+  ]
 }
 ```
 
-- `type`: Provider type. Currently supports `anthropic-like` (default). Use this to enable future protocol variations without changing the schema.
-- `name`: Human-friendly provider name.
-- `baseUrl`: Endpoint URL for Anthropic-compatible chat messages.
-- `apiKey`: Optional bearer token.
-- `models`: List of supported models.
-- `defaultModel`: Optional default model for the provider.
+### Model Configuration
 
-## Commands & UI
+Models can be specified as simple strings or as objects with additional configuration:
 
-- **Unify Chat Providers: Add Provider** – Prompt-driven flow to add a provider and models.
-- **Unify Chat Providers: Remove Provider** – Remove a configured provider.
-- **Unify Chat Providers: Select Provider** – Choose which provider is active. The chat participant is re-registered automatically.
-- **Unify Chat Providers: Select Model** – Pick the current model for the active provider.
+```json
+{
+  "unifyChatProviders.endpoints": [
+    {
+      "type": "anthropic",
+      "name": "Custom Provider",
+      "baseUrl": "https://api.example.com/v1/messages",
+      "apiKey": "your-api-key",
+      "models": [
+        {
+          "id": "model-a",
+          "name": "Model A (Display Name)",
+          "maxInputTokens": 200000,
+          "maxOutputTokens": 8192
+        },
+        "model-b"
+      ]
+    }
+  ]
+}
+```
 
-After selecting a provider/model, open the VS Code chat view and start chatting with the registered participant. Requests are sent with Anthropic-compatible headers/body, and streaming responses are rendered as they arrive.
+### Configuration Properties
 
-## Extensibility
+| Property | Required | Description |
+|----------|----------|-------------|
+| `type` | No | API format type. Currently supports `anthropic`. Defaults to `anthropic`. |
+| `name` | Yes | Display name for the provider |
+| `baseUrl` | Yes | API endpoint URL |
+| `apiKey` | No | API key for authentication |
+| `models` | Yes | List of available models (at least one required) |
+| `defaultModel` | No | Default model ID for this provider |
 
-The request pipeline is abstracted in `src/extension.ts` through the `AnthropicLikeClient` and a provider store. You can add new client implementations for other formats and swap them into the registration logic without changing command handling or configuration persistence.
+## Commands
+
+- **Unify Chat Providers: Add Provider** - Interactive wizard to add a new provider
+- **Unify Chat Providers: Remove Provider** - Remove a configured provider
+- **Unify Chat Providers: Manage Providers** - Open settings to manage providers
+
+## Architecture
+
+The extension implements the `LanguageModelChatProvider` interface with:
+
+- `provideLanguageModelChatInformation()` - Returns available models from all configured providers
+- `provideLanguageModelChatResponse()` - Handles chat requests with streaming support
+- `provideTokenCount()` - Provides token count estimation
+
+### Extensible Design
+
+The extension uses a factory pattern to support multiple API formats:
+
+```
+src/
+├── types.ts              # Type definitions and ApiClient interface
+├── config/
+│   └── store.ts          # Configuration management
+├── client/
+│   └── anthropic.ts      # Anthropic API client implementation
+├── provider/
+│   └── chatProvider.ts   # LanguageModelChatProvider with client factory
+├── commands/
+│   └── index.ts          # Command handlers
+└── extension.ts          # Extension entry point
+```
+
+Adding support for a new API format involves:
+1. Adding a new type to `ProviderType` in `types.ts`
+2. Creating a new client class implementing `ApiClient` in `src/client/`
+3. Updating the factory function in `chatProvider.ts`
+
+## API Compatibility
+
+### Anthropic Format (`type: "anthropic"`)
+
+Compatible with APIs that follow the Anthropic Messages API format:
+
+- **Endpoint**: POST to the configured `baseUrl`
+- **Authentication**: `x-api-key` header
+- **API Version**: `anthropic-version: 2023-06-01`
+- **Request format**: Anthropic Messages API
+- **Response format**: Server-Sent Events (SSE) streaming
+
+This includes:
+- Anthropic's official API
+- AWS Bedrock (with Anthropic gateway)
+- Google Vertex AI (with Anthropic gateway)
+- OpenRouter
+- Other Anthropic-compatible proxies and gateways
 
 ## Development
 
 - Build: `npm run compile`
 - Watch: `npm run watch`
 
-Contributions are welcome! The project is licensed under MIT.
+## License
+
+MIT
