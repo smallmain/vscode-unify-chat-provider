@@ -137,6 +137,13 @@
                 "type": "string",
                 "description": "API key for authentication."
               },
+              "mimic": {
+                "type": "string",
+                "description": "Mimic some User-Agent client behavior (leave empty for default).",
+                "enum": [
+                  "claude-code"
+                ]
+              },
               "models": {
                 "type": "array",
                 "description": "List of available models.",

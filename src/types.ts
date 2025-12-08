@@ -46,3 +46,26 @@ export namespace CustomDataPartMimeTypes {
  * The cache type for Anthropic prompt caching.
  */
 export const CacheType = 'ephemeral';
+
+export interface PerformanceTrace {
+  /**
+   * Time to Start
+   */
+  tts: number;
+  /**
+   * Time to Fetch
+   */
+  ttf: number;
+  /**
+   * Time to First Token
+   */
+  ttft: number;
+  /**
+   * Tokens Per Second
+   */
+  tps: number;
+  /**
+   * Total Latency
+   */
+  tl: number;
+}

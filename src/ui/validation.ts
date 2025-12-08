@@ -1,5 +1,5 @@
 import { ProviderType } from '../client';
-import { ModelConfig } from '../client/interface';
+import { ModelConfig, Mimic, SUPPORT_MIMIC } from '../client/interface';
 import { ConfigStore } from '../config-store';
 import { normalizeBaseUrlInput } from '../utils';
 
@@ -51,6 +51,7 @@ export interface ProviderFormData {
   name?: string;
   baseUrl?: string;
   apiKey?: string;
+  mimic?: Mimic;
   models: ModelConfig[];
 }
 
@@ -71,5 +72,18 @@ export function validateProviderForm(
     ? validateBaseUrl(data.baseUrl)
     : 'API base URL is required';
   if (urlErr) errors.push(urlErr);
+
+  if (data.mimic !== undefined) {
+    if (!data.type) {
+      errors.push('Select an API Format before choosing a mimic option');
+    } else {
+      const supported = SUPPORT_MIMIC[data.type] ?? [];
+      if (!supported.includes(data.mimic)) {
+        errors.push(
+          'The selected mimic is not supported by this provider type',
+        );
+      }
+    }
+  }
   return errors;
 }

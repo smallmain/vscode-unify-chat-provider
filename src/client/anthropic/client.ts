@@ -17,19 +17,26 @@ import {
   AnthropicServerToolUseBlock,
   AnthropicWebSearchToolResultBlock,
   AnthropicTextBlockWithCitations,
+  AnthropicUsage,
 } from './types';
 import {
   logResponseChunk,
   logResponseComplete,
   logResponseError,
   logResponseMetadata,
+  logInfo,
   startRequestLog,
 } from '../../logger';
-import { ApiProvider, ProviderConfig, ModelConfig } from '../interface';
+import { ApiProvider, ProviderConfig, ModelConfig, Mimic } from '../interface';
 import { normalizeBaseUrlInput } from '../../utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
-import { CustomDataPartMimeTypes, CacheType } from '../../types';
+import {
+  CustomDataPartMimeTypes,
+  CacheType,
+  PerformanceTrace,
+} from '../../types';
 import { FeatureId, isFeatureSupported } from '../../features';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 
 /**
  * Client for Anthropic-compatible APIs
@@ -43,17 +50,40 @@ export class AnthropicProvider implements ApiProvider {
    */
   private buildHeaders(betaFeatures?: string[]): Record<string, string> {
     const headers: Record<string, string> = {
+      'Accept': 'application/json',
       'Content-Type': 'application/json',
       'anthropic-version': '2023-06-01',
     };
+
+    if (this.config.mimic === Mimic.ClaudeCode) {
+      headers['Accept'] = 'application/json';
+      headers['User-Agent'] = 'claude-cli/2.0.55 (external, cli)';
+      headers['x-app'] = 'cli';
+      headers['x-stainless-arch'] = 'arm64';
+      headers['x-stainless-lang'] = 'js';
+      headers['x-stainless-os'] = 'MacOS';
+      headers['x-stainless-package-version'] = '0.70.0';
+      headers['x-stainless-retry-count'] = '0';
+      headers['x-stainless-runtime'] = 'node';
+      headers['x-stainless-runtime-version'] = 'v20.19.6';
+      headers['x-stainless-timeout'] = '600';
+    }
 
     if (this.config.apiKey) {
       headers['x-api-key'] = this.config.apiKey;
     }
 
     // Add beta features header if any beta features are requested
-    if (betaFeatures && betaFeatures.length > 0) {
-      headers['anthropic-beta'] = betaFeatures.join(',');
+    const features = new Set(betaFeatures);
+
+    // Ensure anthropic-beta is always present for Claude Code validation
+    if (this.config.mimic === Mimic.ClaudeCode) {
+      features.add('claude-code-20250219');
+      features.add('interleaved-thinking-2025-05-14');
+    }
+
+    if (features.size > 0) {
+      headers['anthropic-beta'] = Array.from(features).join(',');
     }
 
     return headers;
@@ -68,6 +98,8 @@ export class AnthropicProvider implements ApiProvider {
     system?: string | AnthropicSystemContentBlock[];
     messages: AnthropicMessage[];
   } {
+    const systemBlocks: AnthropicSystemContentBlock[] = [];
+    let hasSystemCacheControl = false;
     let system: string | AnthropicSystemContentBlock[] | undefined;
     const converted: AnthropicMessage[] = [];
 
@@ -82,11 +114,28 @@ export class AnthropicProvider implements ApiProvider {
         if (content.length > 0) {
           converted.push({ role: 'assistant', content });
         }
+      } else if (msg.role === vscode.LanguageModelChatMessageRole.System) {
+        const { blocks, hasCacheControl } = this.extractSystemContent(msg);
+        if (blocks.length > 0) {
+          systemBlocks.push(...blocks);
+          hasSystemCacheControl = hasSystemCacheControl || hasCacheControl;
+        }
       }
     }
 
-    // Ensure messages alternate between user and assistant
-    return { system, messages: this.ensureAlternatingRoles(converted) };
+    if (systemBlocks.length > 0) {
+      if (!hasSystemCacheControl) {
+        // When no cache control is present, collapse to a single string
+        system = systemBlocks.map((b) => b.text).join('\n');
+      } else {
+        system = systemBlocks;
+      }
+    }
+
+    return {
+      system,
+      messages: this.ensureAlternatingRoles(converted),
+    };
   }
 
   /**
@@ -248,6 +297,52 @@ export class AnthropicProvider implements ApiProvider {
     }
 
     return blocks;
+  }
+
+  /**
+   * Extract system content blocks, keeping cache_control markers.
+   */
+  private extractSystemContent(msg: vscode.LanguageModelChatRequestMessage): {
+    blocks: AnthropicSystemContentBlock[];
+    hasCacheControl: boolean;
+  } {
+    const blocks: AnthropicSystemContentBlock[] = [];
+    let hasCacheControl = false;
+
+    for (const part of msg.content) {
+      if (part instanceof vscode.LanguageModelTextPart) {
+        if (part.value.trim()) {
+          blocks.push({ type: 'text', text: part.value });
+        }
+      } else if (part instanceof vscode.LanguageModelDataPart) {
+        if (this.isCacheControlMarker(part)) {
+          const previousBlock = blocks.at(-1);
+          if (previousBlock) {
+            previousBlock.cache_control = { type: 'ephemeral' };
+          } else {
+            blocks.push({
+              type: 'text',
+              text: ' ',
+              cache_control: { type: 'ephemeral' },
+            });
+          }
+          hasCacheControl = true;
+        } else if (part.mimeType === CustomDataPartMimeTypes.StatefulMarker) {
+          continue;
+        } else if (part.mimeType.startsWith('text/')) {
+          const text = Buffer.from(part.data).toString('utf-8');
+          blocks.push({ type: 'text', text });
+        } else {
+          throw new Error(
+            `Unsupported mime type in system message LanguageModelDataPart: ${
+              part.mimeType
+            }. Data length: ${part.data?.byteLength ?? 'unknown'}`,
+          );
+        }
+      }
+    }
+
+    return { blocks, hasCacheControl };
   }
 
   /**
@@ -533,6 +628,7 @@ export class AnthropicProvider implements ApiProvider {
     model: ModelConfig,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     options: vscode.ProvideLanguageModelChatResponseOptions,
+    performanceTrace: PerformanceTrace,
     token: vscode.CancellationToken,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const abortController = new AbortController();
@@ -601,6 +697,12 @@ export class AnthropicProvider implements ApiProvider {
         stream: true,
       };
 
+      if (this.config.mimic === Mimic.ClaudeCode) {
+        requestBody.metadata = {
+          user_id: USER_ID,
+        };
+      }
+
       if (system) {
         requestBody.system = system;
       }
@@ -654,11 +756,15 @@ export class AnthropicProvider implements ApiProvider {
         body: requestBody,
       });
 
+      performanceTrace.ttf = Date.now() - performanceTrace.tts;
+
       const response = await fetch(endpoint, {
         method: 'POST',
         headers,
         body: JSON.stringify(requestBody),
         signal: abortController.signal,
+        keepalive: true,
+        mode: 'cors',
       });
 
       logResponseMetadata(requestId, response);
@@ -673,13 +779,26 @@ export class AnthropicProvider implements ApiProvider {
 
       const contentType = response.headers.get('content-type') ?? '';
 
+      let usage: AnthropicUsage | undefined = undefined;
+
       if (contentType.includes('text/event-stream')) {
-        yield* this.parseSSEStream(response, token, requestId);
+        yield* this.parseSSEStream(
+          response,
+          token,
+          requestId,
+          (usage = {} as AnthropicUsage),
+          performanceTrace,
+        );
       } else {
         // Non-streaming response fallback
         const rawText = await response.text();
         logResponseChunk(requestId, rawText);
         const result = JSON.parse(rawText);
+
+        usage = (result as { usage?: AnthropicUsage }).usage;
+        performanceTrace.ttft =
+          Date.now() - (performanceTrace.tts + performanceTrace.ttf);
+
         for (const block of result.content ?? []) {
           if (block.type === 'text') {
             // Check for citations in text block
@@ -733,6 +852,19 @@ export class AnthropicProvider implements ApiProvider {
         }
       }
 
+      if (usage?.output_tokens !== undefined) {
+        performanceTrace.tps =
+          (usage.output_tokens /
+            (Date.now() - (performanceTrace.tts + performanceTrace.ttf))) *
+          1000;
+      } else {
+        performanceTrace.tps = NaN;
+      }
+
+      if (usage) {
+        logInfo(`[${requestId}] Usage: ${JSON.stringify(usage)}`);
+      }
+
       logResponseComplete(requestId);
     } catch (error) {
       // Errors are logged before being rethrown so the UI still handles them.
@@ -750,6 +882,8 @@ export class AnthropicProvider implements ApiProvider {
     response: Response,
     token: vscode.CancellationToken,
     requestId: string,
+    usage: AnthropicUsage,
+    performanceTrace: PerformanceTrace,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const reader = response.body?.getReader();
     if (!reader) {
@@ -792,6 +926,15 @@ export class AnthropicProvider implements ApiProvider {
 
     // Track pending web search tool result
     let pendingWebSearchResult: AnthropicWebSearchToolResultBlock | null = null;
+
+    let firstTokenRecorded = false;
+    const recordFirstToken = () => {
+      if (!firstTokenRecorded) {
+        performanceTrace.ttft =
+          Date.now() - (performanceTrace.tts + performanceTrace.ttf);
+        firstTokenRecorded = true;
+      }
+    };
 
     try {
       while (!token.isCancellationRequested) {
@@ -857,6 +1000,7 @@ export class AnthropicProvider implements ApiProvider {
                   event.content_block as AnthropicWebSearchToolResultBlock;
                 pendingWebSearchResult = resultBlock;
                 // Emit the web search result as a data part
+                recordFirstToken();
                 yield new vscode.LanguageModelDataPart(
                   new TextEncoder().encode(JSON.stringify(resultBlock)),
                   CustomDataPartMimeTypes.WebSearchToolResult,
@@ -871,6 +1015,7 @@ export class AnthropicProvider implements ApiProvider {
                     hasCitations: true,
                   };
                   // Emit citations as a data part first
+                  recordFirstToken();
                   yield new vscode.LanguageModelDataPart(
                     new TextEncoder().encode(
                       JSON.stringify({ citations: textBlock.citations }),
@@ -879,6 +1024,7 @@ export class AnthropicProvider implements ApiProvider {
                   );
                   // Then emit the text
                   if (textBlock.text) {
+                    recordFirstToken();
                     yield new vscode.LanguageModelTextPart(textBlock.text);
                   }
                 } else {
@@ -890,6 +1036,7 @@ export class AnthropicProvider implements ApiProvider {
               }
             } else if (event.type === 'content_block_delta') {
               if (event.delta.type === 'text_delta') {
+                recordFirstToken();
                 yield new vscode.LanguageModelTextPart(event.delta.text);
               } else if (event.delta.type === 'input_json_delta') {
                 // Handle input_json_delta for both regular tool_use and server_tool_use
@@ -898,6 +1045,7 @@ export class AnthropicProvider implements ApiProvider {
                   // Try progressive JSON parsing - emit tool call as soon as JSON is complete
                   try {
                     const parsedJson = JSON.parse(currentToolCall.inputJson);
+                    recordFirstToken();
                     yield new vscode.LanguageModelToolCallPart(
                       currentToolCall.id,
                       currentToolCall.name,
@@ -916,6 +1064,7 @@ export class AnthropicProvider implements ApiProvider {
                 pendingThinking
               ) {
                 pendingThinking.thinking += event.delta.thinking || '';
+                recordFirstToken();
                 yield new vscode.LanguageModelThinkingPart(
                   event.delta.thinking || '',
                 );
@@ -924,11 +1073,23 @@ export class AnthropicProvider implements ApiProvider {
                 pendingThinking
               ) {
                 pendingThinking.signature += event.delta.signature || '';
+              } else if (event.delta.type === 'citations_delta') {
+                const citation = (event.delta as { citation?: unknown })
+                  .citation;
+                if (citation) {
+                  const payload = { citations: [citation] };
+                  recordFirstToken();
+                  yield new vscode.LanguageModelDataPart(
+                    new TextEncoder().encode(JSON.stringify(payload)),
+                    CustomDataPartMimeTypes.TextCitations,
+                  );
+                }
               }
             } else if (event.type === 'content_block_stop') {
               if (currentToolCall) {
                 try {
                   const input = JSON.parse(currentToolCall.inputJson || '{}');
+                  recordFirstToken();
                   yield new vscode.LanguageModelToolCallPart(
                     currentToolCall.id,
                     currentToolCall.name,
@@ -950,6 +1111,7 @@ export class AnthropicProvider implements ApiProvider {
                     name: currentServerToolUse.name,
                     input,
                   };
+                  recordFirstToken();
                   yield new vscode.LanguageModelDataPart(
                     new TextEncoder().encode(JSON.stringify(serverToolUseData)),
                     CustomDataPartMimeTypes.WebSearchToolUse,
@@ -967,6 +1129,7 @@ export class AnthropicProvider implements ApiProvider {
                     signature: pendingThinking.signature,
                     _completeThinking: pendingThinking.thinking,
                   };
+                  recordFirstToken();
                   yield finalThinkingPart;
                 }
                 pendingThinking = null;
@@ -980,6 +1143,15 @@ export class AnthropicProvider implements ApiProvider {
                 // Clear text block state
                 currentTextBlock = null;
               }
+            } else if (event.type === 'message_start') {
+              const _usage = event.message?.usage;
+              if (_usage) Object.assign(usage, _usage);
+            } else if (event.type === 'message_delta') {
+              const _usage = event.usage;
+              if (_usage) usage.output_tokens = _usage.output_tokens;
+            } else if (event.type === 'message_stop') {
+              const _usage = event.message?.usage;
+              if (_usage) Object.assign(usage, _usage);
             } else if (event.type === 'error') {
               throw new Error(`Stream error: ${event.error.message}`);
             }
@@ -1022,6 +1194,7 @@ export class AnthropicProvider implements ApiProvider {
         const response = await fetch(endpoint, {
           method: 'GET',
           headers,
+          keepalive: true,
         });
 
         if (!response.ok) {
@@ -1072,4 +1245,33 @@ function toModelsUrl(baseUrl: string, afterId?: string): string {
     url.searchParams.set('after_id', afterId);
   }
   return url.toString();
+}
+
+const USER_ID = generateClaudeUserId();
+
+/**
+ * 生成 ClaudeCode 风格的 user_id
+ * 格式: user_{SHA256}_account__session_{UUID}
+ * * @param seedInput - 可选：用于生成哈希的种子字符串（如邮箱、用户名）。如果不传，则随机生成。
+ * @returns 格式化后的 user_id 字符串
+ */
+function generateClaudeUserId(seedInput?: string): string {
+  // 1. 生成 SHA-256 部分 (64字符)
+  let hashContent: string | Buffer;
+
+  if (seedInput) {
+    hashContent = seedInput;
+  } else {
+    // 如果没有输入，生成随机的高熵字节作为哈希源
+    hashContent = randomBytes(32);
+  }
+
+  // 计算 SHA-256 哈希值并转为十六进制字符串
+  const sha256Part = createHash('sha256').update(hashContent).digest('hex');
+
+  // 2. 生成会话 UUID 部分 (标准 UUID v4)
+  const uuidPart = randomUUID();
+
+  // 3. 拼接字符串
+  return `user_${sha256Part}_account__session_${uuidPart}`;
 }

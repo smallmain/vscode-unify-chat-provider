@@ -18,6 +18,8 @@ import {
   ModelCapabilities,
   ModelConfig,
   ProviderConfig,
+  Mimic,
+  SUPPORT_MIMIC,
 } from '../client/interface';
 import { WELL_KNOWN_MODELS } from '../well-known-models';
 
@@ -26,7 +28,12 @@ type ProviderFormDraft = {
   name?: string;
   baseUrl?: string;
   apiKey?: string;
+  mimic?: Mimic;
   models: ModelConfig[];
+};
+
+const MIMIC_LABELS: Record<Mimic, string> = {
+  [Mimic.ClaudeCode]: 'Claude Code',
 };
 
 type ProviderListItem = vscode.QuickPickItem & {
@@ -242,7 +249,17 @@ async function editProviderField(
           typeValue: opt.type,
         })),
       });
-      if (picked) draft.type = picked.typeValue;
+      if (picked) {
+        draft.type = picked.typeValue;
+
+        // Reset mimic if it is not supported by the newly selected provider type
+        if (
+          draft.mimic &&
+          !(SUPPORT_MIMIC[draft.type] ?? []).includes(draft.mimic)
+        ) {
+          draft.mimic = undefined;
+        }
+      }
       break;
     }
     case 'name': {
@@ -275,6 +292,49 @@ async function editProviderField(
       if (val !== undefined) {
         const trimmed = val.trim();
         draft.apiKey = trimmed ? trimmed : undefined;
+      }
+      break;
+    }
+    case 'mimic': {
+      if (!draft.type) {
+        vscode.window.showWarningMessage(
+          'Please select an API format before choosing a mimic option.',
+        );
+        break;
+      }
+
+      const supported = SUPPORT_MIMIC[draft.type] ?? [];
+      if (supported.length === 0) {
+        vscode.window.showInformationMessage(
+          'The selected provider type does not have any mimic options.',
+        );
+        draft.mimic = undefined;
+        break;
+      }
+
+      const picked = await pickQuickItem<
+        vscode.QuickPickItem & { mimicValue?: Mimic }
+      >({
+        title: 'Mimic Behavior',
+        placeholder: 'Select a mimic option (or None)',
+        items: [
+          {
+            label: 'None',
+            description: "Use the provider's default behavior",
+            picked: !draft.mimic,
+            mimicValue: undefined,
+          },
+          ...supported.map((mimic) => ({
+            label: formatMimicLabel(mimic),
+            description: mimic,
+            picked: draft.mimic === mimic,
+            mimicValue: mimic,
+          })),
+        ],
+      });
+
+      if (picked) {
+        draft.mimic = picked.mimicValue ?? undefined;
       }
       break;
     }
@@ -740,6 +800,9 @@ function buildProviderFormItems(
   isEditing: boolean,
 ): ProviderFormItem[] {
   const modelCount = draft.models.length;
+  const mimicDescription = draft.mimic
+    ? formatMimicLabel(draft.mimic)
+    : '(optional, none)';
   const items: ProviderFormItem[] = [
     { label: '$(arrow-left) Back', action: 'cancel' },
     {
@@ -757,10 +820,6 @@ function buildProviderFormItems(
       description:
         Object.values(PROVIDERS).find((o) => o.type === draft.type)?.label ||
         '(required)',
-      detail: draft.type
-        ? Object.values(PROVIDERS).find((o) => o.type === draft.type)
-            ?.description
-        : undefined,
       field: 'type',
     },
     {
@@ -776,7 +835,7 @@ function buildProviderFormItems(
     {
       label: '',
       kind: vscode.QuickPickItemKind.Separator,
-      description: 'Other Fields',
+      description: 'Content Fields',
     },
     {
       label: '$(symbol-misc) Models',
@@ -787,6 +846,17 @@ function buildProviderFormItems(
           ? draft.models.map((m) => m.name || m.id).join(', ')
           : undefined,
       field: 'models',
+    },
+    {
+      label: '',
+      kind: vscode.QuickPickItemKind.Separator,
+      description: 'Other Fields',
+    },
+    {
+      label: '$(vr) Mimic',
+      description: mimicDescription,
+      detail: 'Mimic some User-Agent client behavior.',
+      field: 'mimic',
     },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
     {
@@ -962,6 +1032,10 @@ function buildModelFormItems(
   return items;
 }
 
+function formatMimicLabel(mimic: Mimic): string {
+  return MIMIC_LABELS[mimic] ?? mimic;
+}
+
 function formatModelDetail(model: ModelConfig): string | undefined {
   const parts: string[] = [];
   if (model.maxInputTokens) {
@@ -989,6 +1063,7 @@ function normalizeProviderDraft(draft: ProviderFormDraft): ProviderConfig {
     name: draft.name!.trim(),
     baseUrl: normalizeBaseUrlInput(draft.baseUrl!),
     apiKey: draft.apiKey?.trim() || undefined,
+    mimic: draft.mimic,
     models: cloneModels(draft.models),
   };
 }
@@ -1085,6 +1160,7 @@ function hasProviderChanges(
       !!trimmedName ||
       !!trimmedBaseUrl ||
       !!trimmedApiKey ||
+      !!draft.mimic ||
       draft.models.length > 0
     );
   }
@@ -1093,6 +1169,7 @@ function hasProviderChanges(
   if ((trimmedName ?? '') !== original.name) return true;
   if ((trimmedBaseUrl ?? '') !== original.baseUrl) return true;
   if ((trimmedApiKey ?? '') !== (original.apiKey ?? '')) return true;
+  if (draft.mimic !== original.mimic) return true;
   return modelsChanged(draft.models, original.models);
 }
 

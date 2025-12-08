@@ -5,6 +5,21 @@ import type {
   ProvideLanguageModelChatResponseOptions,
 } from 'vscode';
 import type { ProviderType } from '.';
+import { PerformanceTrace } from '../types';
+
+/**
+ * Provider mimic options
+ */
+export enum Mimic {
+  ClaudeCode = 'claude-code',
+}
+
+/**
+ * Supported mimic options per provider
+ */
+export const SUPPORT_MIMIC: Record<ProviderType, Mimic[]> = {
+  ['anthropic']: [Mimic.ClaudeCode],
+};
 
 /**
  * Configuration for a single provider endpoint
@@ -20,6 +35,8 @@ export interface ProviderConfig {
   apiKey?: string;
   /** List of available model IDs */
   models: ModelConfig[];
+  /** Mimic behavior */
+  mimic?: Mimic;
 }
 
 /**
@@ -110,6 +127,7 @@ export interface ApiProvider {
     model: ModelConfig,
     messages: readonly LanguageModelChatRequestMessage[],
     options: ProvideLanguageModelChatResponseOptions,
+    performanceTrace: PerformanceTrace,
     token: CancellationToken,
   ): AsyncGenerator<LanguageModelResponsePart2>;
 

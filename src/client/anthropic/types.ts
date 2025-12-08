@@ -187,6 +187,9 @@ export interface AnthropicRequest {
     name?: string;
     disable_parallel_tool_use?: boolean;
   };
+  metadata?: {
+    user_id: string;
+  };
 }
 
 /**
@@ -234,6 +237,25 @@ export interface AnthropicMemoryTool {
 }
 
 /**
+ * Usage metrics returned by Anthropic Messages API.
+ * See https://platform.claude.com/docs/en/api/messages#usage
+ */
+export interface AnthropicUsage {
+  input_tokens: number;
+  output_tokens: number;
+  cache_creation_input_tokens: number;
+  cache_read_input_tokens: number;
+  cache_creation: {
+    ephemeral_1h_input_tokens: number;
+    ephemeral_5m_input_tokens: number;
+  };
+  server_tool_use: {
+    web_search_requests: number;
+  };
+  service_tier: 'standard' | 'priority' | 'batch';
+}
+
+/**
  * Union type for all tool types in Anthropic API requests
  */
 export type AnthropicToolUnion =
@@ -245,7 +267,14 @@ export type AnthropicToolUnion =
  * Anthropic streaming event types
  */
 export type AnthropicStreamEvent =
-  | { type: 'message_start'; message: { id: string; model: string } }
+  | {
+      type: 'message_start';
+      message: {
+        id: string;
+        model: string;
+        usage?: AnthropicUsage;
+      };
+    }
   | {
       type: 'content_block_start';
       index: number;
@@ -256,16 +285,22 @@ export type AnthropicStreamEvent =
   | {
       type: 'message_delta';
       delta: { stop_reason: string };
-      usage?: { output_tokens?: number };
+      usage?: AnthropicUsage;
     }
-  | { type: 'message_stop' }
+  | {
+      type: 'message_stop';
+      message?: {
+        usage?: AnthropicUsage;
+      };
+    }
   | { type: 'error'; error: { type: string; message: string } };
 
 export type AnthropicDelta =
   | { type: 'text_delta'; text: string }
   | { type: 'input_json_delta'; partial_json: string }
   | { type: 'thinking_delta'; thinking: string }
-  | { type: 'signature_delta'; signature: string };
+  | { type: 'signature_delta'; signature: string }
+  | { type: 'citations_delta'; citation: AnthropicCitation };
 
 /**
  * Anthropic ListModels API response types

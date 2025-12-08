@@ -131,7 +131,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     id: 'MiniMax-M2',
     name: 'MiniMax-M2',
     maxInputTokens: 204800,
-    maxOutputTokens: 64000,
+    maxOutputTokens: 102400,
     stream: true,
     thinking: {
       type: 'enabled',
@@ -146,7 +146,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     id: 'MiniMax-M2-Stable',
     name: 'MiniMax-M2-Stable',
     maxInputTokens: 204800,
-    maxOutputTokens: 64000,
+    maxOutputTokens: 102400,
     stream: true,
     thinking: {
       type: 'enabled',

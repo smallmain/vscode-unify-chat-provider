@@ -7,6 +7,7 @@ import {
 } from './defaults';
 import { ApiProvider, ProviderConfig, ModelConfig } from './client/interface';
 import { logInfo } from './logger';
+import { PerformanceTrace } from './types';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -135,6 +136,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
     token: vscode.CancellationToken,
   ): Promise<void> {
+    const performanceTrace: PerformanceTrace = {
+      tts: Date.now(),
+      tl: 0,
+      tps: 0,
+      ttf: 0,
+      ttft: 0,
+    };
+
     logInfo(`[Chat Request] Model: ${model.id}`);
     logInfo(
       `[Chat Request] Raw Messages: ${JSON.stringify(messages, null, 2)}`,
@@ -150,7 +159,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     const client = this.getClient(provider);
 
     // Stream the response
-    const stream = client.streamChat(modelConfig, messages, options, token);
+    const stream = client.streamChat(
+      modelConfig,
+      messages,
+      options,
+      performanceTrace,
+      token,
+    );
 
     for await (const part of stream) {
       if (token.isCancellationRequested) {
@@ -159,6 +174,17 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       logInfo(`[Chat Response] Chunk: ${JSON.stringify(part)}`);
       progress.report(part);
     }
+
+    performanceTrace.tl = Date.now() - performanceTrace.tts;
+    logInfo(
+      `[Chat Response] Performance trace: TimeToFetch: ${
+        performanceTrace.ttf
+      }ms, TimeToFirstToken: ${
+        performanceTrace.ttft
+      }ms, TokensPerSecond: ${performanceTrace.tps.toFixed(
+        1,
+      )}/s, TotalLatency: ${performanceTrace.tl}ms`,
+    );
   }
 
   /**

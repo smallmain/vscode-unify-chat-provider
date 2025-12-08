@@ -4,6 +4,8 @@ import {
   ProviderConfig,
   ModelConfig,
   ModelCapabilities,
+  Mimic,
+  SUPPORT_MIMIC,
 } from './client/interface';
 import { PROVIDER_TYPES, ProviderType } from './client';
 
@@ -104,12 +106,21 @@ export class ConfigStore {
     }
     const type = obj.type as ProviderType;
 
+    // Validate mimic option (optional, defaults to undefined)
+    const supportMimics = SUPPORT_MIMIC[type] ?? [];
+    const rawMimic = obj.mimic;
+    const mimic: Mimic | undefined =
+      typeof rawMimic === 'string' && supportMimics.includes(rawMimic as Mimic)
+        ? (rawMimic as Mimic)
+        : undefined;
+
     return {
       type: type as ProviderType,
       name: obj.name,
       baseUrl,
       apiKey: typeof obj.apiKey === 'string' ? obj.apiKey : undefined,
       models,
+      mimic,
     };
   }
 
