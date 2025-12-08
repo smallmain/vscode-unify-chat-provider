@@ -135,7 +135,6 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     stream: true,
     thinking: {
       type: 'enabled',
-      budgetTokens: 0,
     },
     interleavedThinking: true,
     capabilities: {
@@ -151,7 +150,6 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     stream: true,
     thinking: {
       type: 'enabled',
-      budgetTokens: 0,
     },
     interleavedThinking: true,
     capabilities: {
