@@ -71,6 +71,7 @@ export class AnthropicProvider implements ApiProvider {
 
     if (this.config.apiKey) {
       headers['x-api-key'] = this.config.apiKey;
+      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
 
     // Add beta features header if any beta features are requested
