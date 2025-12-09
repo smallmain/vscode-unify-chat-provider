@@ -11,6 +11,11 @@ import { PerformanceTrace } from './types';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
+  private readonly onDidChangeModelInfoEmitter =
+    new vscode.EventEmitter<void>();
+
+  readonly onDidChangeLanguageModelChatInformation =
+    this.onDidChangeModelInfoEmitter.event;
 
   constructor(private readonly configStore: ConfigStore) {}
 
@@ -227,5 +232,19 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
    */
   clearClients(): void {
     this.clients.clear();
+  }
+
+  /**
+   * Handle configuration change by clearing cached clients and notifying VS Code
+   * that the available language model information has changed.
+   */
+  handleConfigurationChange(): void {
+    this.clearClients();
+    this.onDidChangeModelInfoEmitter.fire();
+  }
+
+  dispose(): void {
+    this.clearClients();
+    this.onDidChangeModelInfoEmitter.dispose();
   }
 }

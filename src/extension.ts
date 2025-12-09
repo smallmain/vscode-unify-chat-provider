@@ -18,6 +18,7 @@ export function activate(context: vscode.ExtensionContext): void {
     chatProvider,
   );
   context.subscriptions.push(providerRegistration);
+  context.subscriptions.push(chatProvider);
 
   // Register commands
   registerCommands(context, configStore);
@@ -25,7 +26,7 @@ export function activate(context: vscode.ExtensionContext): void {
   // Re-register provider when configuration changes to pick up new models
   context.subscriptions.push(
     configStore.onDidChange(() => {
-      chatProvider.clearClients();
+      chatProvider.handleConfigurationChange();
     }),
   );
 
