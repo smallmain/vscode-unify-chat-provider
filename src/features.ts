@@ -22,9 +22,14 @@ export enum FeatureId {
    */
   OpenAIOnlyUseMaxCompletionTokens = 'openai_only-use-max-completion-tokens',
   /**
-   * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+   * @see https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model
    */
   OpenAIReasoningContent = 'openai_reasoning-content',
+  /**
+   * Compared to {@link OpenAIReasoningContent}, this only sends the thought content after the user's last message.
+   * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+   */
+  OpenAIConciseReasoningContent = 'openai_concise-reasoning-content',
 }
 
 export interface Feature {
@@ -108,7 +113,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIReasoningContent]: {
-    supportedModels: ['deepseek-reasoner'],
+    supportedFamilys: ['kimi-k2-thinking', 'kimi-k2-thinking-turbo'],
+  },
+  [FeatureId.OpenAIConciseReasoningContent]: {
+    supportedFamilys: ['deepseek-reasoner'],
   },
 };
 

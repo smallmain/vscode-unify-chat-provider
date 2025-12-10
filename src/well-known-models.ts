@@ -14,6 +14,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
       type: 'enabled',
       budgetTokens: 16000,
     },
+    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -40,6 +41,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
       type: 'enabled',
       budgetTokens: 32000,
     },
+    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -55,6 +57,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
       type: 'enabled',
       budgetTokens: 10000,
     },
+    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -70,6 +73,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
       type: 'enabled',
       budgetTokens: 10000,
     },
+    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -100,6 +104,7 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
       type: 'enabled',
       budgetTokens: 10000,
     },
+    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -128,6 +133,155 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     },
   },
   {
+    id: 'gpt-5.1',
+    name: 'GPT-5.1',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5',
+    name: 'GPT-5',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5-mini',
+    name: 'GPT-5 mini',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5-nano',
+    name: 'GPT-5 nano',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5.1-codex',
+    name: 'GPT-5.1 Codex',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5.1-codex-max',
+    name: 'GPT-5.1-Codex-Max',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5-codex',
+    name: 'GPT-5-Codex',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5.1-codex-mini',
+    name: 'GPT-5.1 Codex mini',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5-pro',
+    name: 'GPT-5 pro',
+    maxInputTokens: 400000,
+    maxOutputTokens: 272000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5.1-chat-latest',
+    name: 'GPT-5.1 Chat',
+    maxInputTokens: 128000,
+    maxOutputTokens: 16384,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gpt-5-chat-latest',
+    name: 'GPT-5 Chat',
+    maxInputTokens: 128000,
+    maxOutputTokens: 16384,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'MiniMax-M2',
     name: 'MiniMax-M2',
     maxInputTokens: 204800,
@@ -136,11 +290,11 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     thinking: {
       type: 'enabled',
     },
-    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: false,
     },
+    temperature: 1.0,
   },
   {
     id: 'MiniMax-M2-Stable',
@@ -151,11 +305,11 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     thinking: {
       type: 'enabled',
     },
-    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: false,
     },
+    temperature: 1.0,
   },
   {
     id: 'deepseek-chat',
@@ -177,10 +331,63 @@ export const WELL_KNOWN_MODELS: ModelConfig[] = [
     thinking: {
       type: 'enabled',
     },
-    interleavedThinking: true,
     capabilities: {
       toolCalling: true,
       imageInput: false,
     },
+  },
+  {
+    id: 'kimi-k2-thinking',
+    name: 'Kimi K2 Thinking',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+  },
+  {
+    id: 'kimi-k2-thinking-turbo',
+    name: 'Kimi K2 Thinking Turbo',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+  },
+  {
+    id: 'kimi-k2-0905-preview',
+    name: 'Kimi K2 0905 Preview',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 0.6,
+  },
+  {
+    id: 'kimi-k2-turbo-preview',
+    name: 'Kimi K2 Turbo Preview',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 0.6,
   },
 ];

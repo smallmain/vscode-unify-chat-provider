@@ -24,6 +24,7 @@ import { PerformanceTrace, CustomDataPartMimeTypes } from '../../types';
 import { normalizeBaseUrlInput } from '../../utils';
 import { ApiProvider, ModelConfig, ProviderConfig } from '../interface';
 import { FeatureId, isFeatureSupported } from '../../features';
+import { WELL_KNOWN_MODELS } from '../../well-known-models';
 
 type OpenAIContentPart =
   | ChatCompletionContentPartText
@@ -221,9 +222,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       content,
       toolCalls,
       reasoningContent:
-        includeReasoningContent && reasoningParts.length > 0
-          ? reasoningParts.join('\n')
-          : undefined,
+        reasoningParts.length > 0 ? reasoningParts.join('\n') : undefined,
     };
   }
 
@@ -290,6 +289,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
   private convertMessages(
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     emitReasoningContent: boolean,
+    keepAllReasoningContent: boolean,
   ): ChatCompletionMessageParam[] {
     const result: ChatCompletionMessageParam[] = [];
 
@@ -337,7 +337,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           !!nextMessage &&
           isToolResultUserMessage(nextMessage);
         const { content, toolCalls, reasoningContent } =
-          this.convertAssistantParts(msg.content, shouldKeepReasoningContent);
+          this.convertAssistantParts(
+            msg.content,
+            shouldKeepReasoningContent || keepAllReasoningContent,
+          );
         result.push({
           role: 'assistant',
           content: content.length > 0 ? content : null,
@@ -586,13 +589,18 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       abortController.abort();
     });
 
-    const emitReasoningContent = isFeatureSupported(
+    const emitReasoningContent =
+      isFeatureSupported(FeatureId.OpenAIReasoningContent, model) ||
+      isFeatureSupported(FeatureId.OpenAIConciseReasoningContent, model);
+    const keepAllReasoningContent = isFeatureSupported(
       FeatureId.OpenAIReasoningContent,
       model,
     );
+
     const convertedMessages = this.convertMessages(
       messages,
       emitReasoningContent,
+      keepAllReasoningContent,
     );
     const tools = this.convertTools(options.tools);
     const toolChoice = this.convertToolChoice(options.toolMode, tools);
@@ -713,7 +721,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const result: ModelConfig[] = [];
     const page = await this.client.models.list();
     for await (const model of page) {
-      result.push({ id: model.id });
+      const wellKnwonConfig = WELL_KNOWN_MODELS.find((v) => v.id === model.id);
+      result.push(Object.assign(wellKnwonConfig ?? {}, { id: model.id }));
     }
     return result;
   }

@@ -37,6 +37,7 @@ import {
 } from '../../types';
 import { FeatureId, isFeatureSupported } from '../../features';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { WELL_KNOWN_MODELS } from '../../well-known-models';
 
 /**
  * Client for Anthropic-compatible APIs
@@ -1218,10 +1219,15 @@ export class AnthropicProvider implements ApiProvider {
 
         // Convert API response to ModelConfig format
         for (const model of data.data) {
-          allModels.push({
-            id: model.id,
-            name: model.display_name,
-          });
+          const wellKnwonConfig = WELL_KNOWN_MODELS.find(
+            (v) => v.id === model.id,
+          );
+          allModels.push(
+            Object.assign(wellKnwonConfig ?? {}, {
+              id: model.id,
+              name: model.display_name,
+            }),
+          );
         }
 
         // Handle pagination
