@@ -101,3 +101,57 @@ export async function showValidationErrors(errors: string[]): Promise<void> {
     `Please fix the following:\n${errors.join('\n')}`,
   );
 }
+
+/**
+ * Show a confirmation dialog for delete actions.
+ * Returns true if the user confirmed.
+ */
+export async function confirmDelete(
+  itemName: string,
+  itemType = 'item',
+): Promise<boolean> {
+  const result = await vscode.window.showWarningMessage(
+    `Delete ${itemType} "${itemName}"?`,
+    { modal: true },
+    'Delete',
+  );
+  return result === 'Delete';
+}
+
+/**
+ * Show a confirmation dialog for remove actions.
+ * Returns true if the user confirmed.
+ */
+export async function confirmRemove(
+  itemName: string,
+  itemType = 'item',
+): Promise<boolean> {
+  const result = await vscode.window.showWarningMessage(
+    `Are you sure you want to remove ${itemType} "${itemName}"?`,
+    { modal: true },
+    'Remove',
+  );
+  return result === 'Remove';
+}
+
+/**
+ * Show a success message for item deletion.
+ */
+export function showDeletedMessage(itemName: string, itemType = 'item'): void {
+  vscode.window.showInformationMessage(
+    `${capitalize(itemType)} "${itemName}" has been deleted.`,
+  );
+}
+
+/**
+ * Show a success message for item removal.
+ */
+export function showRemovedMessage(itemName: string, itemType = 'item'): void {
+  vscode.window.showInformationMessage(
+    `${capitalize(itemType)} "${itemName}" has been removed.`,
+  );
+}
+
+function capitalize(s: string): string {
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}

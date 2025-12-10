@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ConfigStore } from './config-store';
 import { UnifyChatService } from './service';
-import { addProvider, removeProvider, manageProviders } from './ui/state';
+import { addProvider, removeProvider, manageProviders } from './ui';
 
 const VENDOR_ID = 'unify-chat-provider';
 
