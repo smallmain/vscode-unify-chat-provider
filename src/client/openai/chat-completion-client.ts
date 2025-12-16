@@ -32,6 +32,7 @@ import {
   ChatCompletionMessageParam,
   ChatCompletionMessageToolCall,
   ChatCompletionToolChoiceOption,
+  OpenRouterReasoningDetail,
 } from 'openai/resources/chat/completions';
 import { FunctionParameters } from 'openai/resources/shared';
 import { getBaseModelId } from '../../model-id-utils';
@@ -54,14 +55,18 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return /\/v\d+$/.test(normalized) ? normalized : `${normalized}/v1`;
   }
 
-  private buildHeaders(): Record<string, string> {
+  private buildHeaders(modelConfig?: ModelConfig): Record<string, string> {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     };
+
+    Object.assign(headers, this.config.extraHeaders, modelConfig?.extraHeaders);
+
     if (this.config.apiKey) {
       headers['Authorization'] = `Bearer ${this.config.apiKey}`;
     }
+
     return headers;
   }
 
@@ -199,7 +204,52 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     // TODO 将连续的不同种类的 Assistant 消息尽量合并为一条消息（比如 content, reasoning_content, tool_calls 可以合并，但是 content, content 则不可以合并，(content and reasoning_content), tool_calls 可以合并）
 
+    // add a cache breakpoint at the end.
+    this.applyCacheControl(outMessages);
+
     return outMessages;
+  }
+
+  private applyCacheControl(messages: ChatCompletionMessageParam[]): void {
+    const lastSystemMessage = messages
+      .filter((m) => m.role === 'system')
+      .at(-1);
+    if (lastSystemMessage && 'content' in lastSystemMessage) {
+      this.applyCacheControlToContent(lastSystemMessage);
+    }
+
+    const lastUserMessage = messages.filter((m) => m.role === 'user').at(-1);
+    if (lastUserMessage && 'content' in lastUserMessage) {
+      this.applyCacheControlToContent(lastUserMessage);
+    }
+  }
+
+  private applyCacheControlToContent(
+    message: ChatCompletionMessageParam,
+  ): void {
+    if (!message.content) return;
+
+    if (typeof message.content === 'string') {
+      message.content = [
+        {
+          type: 'text',
+          text: message.content,
+          cache_control: { type: 'ephemeral' },
+        },
+      ];
+      return;
+    }
+
+    if (Array.isArray(message.content)) {
+      const lastTextBlock = [...message.content]
+        .reverse()
+        .find(
+          (part): part is ChatCompletionContentPartText => part.type === 'text',
+        );
+      if (lastTextBlock) {
+        lastTextBlock.cache_control = { type: 'ephemeral' };
+      }
+    }
   }
 
   convertPart(
@@ -403,7 +453,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       model: getBaseModelId(model.id),
       messages: convertedMessages,
       ...(model.thinking?.effort !== undefined
-        ? { reasoning_effort: model.thinking.effort as any }
+        ? { reasoning_effort: model.thinking.effort }
         : {}),
       ...(model.maxOutputTokens !== undefined
         ? isFeatureSupported(FeatureId.OpenAIOnlyUseMaxCompletionTokens, model)
@@ -432,11 +482,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       ...(streamEnabled ? { stream_options: { include_usage: true } } : {}),
     };
 
+    Object.assign(baseBody, this.config.extraBody, model.extraBody);
+
     logger.providerRequest({
       provider: this.config.name,
       modelId: model.id,
       endpoint: this.endpoint,
-      headers: this.buildHeaders(),
+      headers: this.buildHeaders(model),
       body: baseBody,
     });
 
@@ -499,16 +551,12 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     }
 
     const raw = choice.message;
-    const { content, reasoning_content, tool_calls } = choice.message;
+    const { content, tool_calls } = raw;
+
+    yield* this.extractThinkingParts(raw);
 
     if (content) {
       yield new vscode.LanguageModelTextPart(content);
-    }
-
-    if (reasoning_content) {
-      yield new vscode.LanguageModelThinkingPart(reasoning_content, undefined, {
-        _completeThinking: reasoning_content,
-      } satisfies ThinkingBlockMetadata);
     }
 
     if (tool_calls) {
@@ -553,6 +601,110 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return parsedArgs;
   }
 
+  private normalizeThinkingContents(
+    message:
+      | ChatCompletionMessage
+      | ChatCompletionChunk.Choice.Delta
+      | ChatCompletionSnapshot.Choice.Message,
+  ): OpenRouterReasoningDetail[] | undefined {
+    const details = message.reasoning_details;
+    if (details && details.length > 0) {
+      return details;
+    }
+
+    if (message.reasoning_content) {
+      return [
+        {
+          type: 'reasoning.text',
+          index: 0,
+          text: message.reasoning_content,
+        },
+      ];
+    }
+
+    if (message.reasoning) {
+      return [
+        {
+          type: 'reasoning.text',
+          index: 0,
+          text: message.reasoning,
+        },
+      ];
+    }
+
+    return undefined;
+  }
+
+  private *extractThinkingParts(
+    message:
+      | ChatCompletionMessage
+      | ChatCompletionChunk.Choice.Delta
+      | ChatCompletionSnapshot.Choice.Message,
+    emitMode: 'full' | 'metadata-only' | 'content-only' = 'full',
+    metadata?: ThinkingBlockMetadata,
+  ): Generator<vscode.LanguageModelThinkingPart> {
+    const contents = this.normalizeThinkingContents(message);
+
+    if (!contents) {
+      return undefined;
+    }
+
+    if (emitMode !== 'content-only' && metadata == null) {
+      metadata = {};
+    }
+
+    for (const content of contents) {
+      switch (content.type) {
+        case 'reasoning.summary':
+          if (emitMode !== 'metadata-only') {
+            yield new vscode.LanguageModelThinkingPart(content.summary);
+          }
+          if (metadata) {
+            metadata._completeThinking =
+              (metadata._completeThinking || '') + content.summary;
+          }
+          break;
+
+        case 'reasoning.text':
+          if (emitMode !== 'metadata-only') {
+            yield new vscode.LanguageModelThinkingPart(content.text);
+          }
+          if (metadata) {
+            metadata._completeThinking =
+              (metadata._completeThinking || '') + content.text;
+            if (content.signature) {
+              metadata.signature = content.signature;
+            }
+          }
+          break;
+
+        case 'reasoning.encrypted':
+          if (emitMode !== 'metadata-only') {
+            yield new vscode.LanguageModelThinkingPart('[Thinking...]');
+          }
+          if (metadata) {
+            metadata.redactedData = content.data;
+          }
+          break;
+
+        default:
+          throw new Error(
+            `Unsupported reasoning detail type: ${
+              (content as OpenRouterReasoningDetail).type
+            }`,
+          );
+      }
+    }
+
+    if (
+      emitMode !== 'content-only' &&
+      metadata &&
+      Object.keys(metadata).length > 0
+    ) {
+      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+    }
+  }
+
   private async *parseMessageStream(
     stream: Stream<OpenAI.Chat.Completions.ChatCompletionChunk>,
     token: vscode.CancellationToken,
@@ -586,21 +738,29 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         continue;
       }
 
-      const { content, reasoning_content } = choice.delta;
+      const { content } = choice.delta;
 
       recordFirstToken();
+
+      yield* this.extractThinkingParts(choice.delta, 'content-only');
 
       if (content) {
         yield new vscode.LanguageModelTextPart(content);
       }
 
-      if (reasoning_content) {
-        yield new vscode.LanguageModelThinkingPart(reasoning_content);
-      }
-
       if (choice.finish_reason) {
-        const { content, reasoning_content, tool_calls, refusal } =
-          snapshot.choices[choice.index].message;
+        const message = snapshot.choices[choice.index].message;
+
+        const {
+          content,
+          tool_calls,
+          refusal,
+          reasoning,
+          reasoning_content,
+          reasoning_details,
+        } = message;
+
+        yield* this.extractThinkingParts(message, 'metadata-only');
 
         if (tool_calls && tool_calls.length > 0) {
           for (const call of tool_calls) {
@@ -614,17 +774,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           }
         }
 
-        if (reasoning_content) {
-          yield new vscode.LanguageModelThinkingPart('', undefined, {
-            _completeThinking: reasoning_content,
-          } satisfies ThinkingBlockMetadata);
-        }
-
         yield encodeStatefulMarkerPart<ChatCompletionMessage>({
+          role: 'assistant',
           content: content ?? null,
           refusal: refusal ?? null,
-          role: 'assistant',
           tool_calls: tool_calls ?? undefined,
+          reasoning,
+          reasoning_content,
+          reasoning_details,
         });
       }
     }
@@ -692,7 +849,15 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
       if (!delta) continue; // Shouldn't happen; just in case.
 
-      const { content, reasoning_content, refusal, role, tool_calls } = delta;
+      const {
+        content,
+        reasoning,
+        reasoning_content,
+        reasoning_details,
+        refusal,
+        role,
+        tool_calls,
+      } = delta;
 
       if (refusal) {
         choice.message.refusal = (choice.message.refusal || '') + refusal;
@@ -707,6 +872,24 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       if (reasoning_content) {
         choice.message.reasoning_content =
           (choice.message.reasoning_content || '') + reasoning_content;
+      }
+
+      if (reasoning) {
+        choice.message.reasoning = (choice.message.reasoning || '') + reasoning;
+      }
+
+      if (reasoning_details && reasoning_details.length > 0) {
+        const details = (choice.message.reasoning_details ??= []);
+        for (const delta of reasoning_details) {
+          if (delta.index != null) {
+            details[delta.index] = delta;
+          } else {
+            details.push({
+              ...delta,
+              index: details.length,
+            });
+          }
+        }
       }
 
       if (tool_calls) {

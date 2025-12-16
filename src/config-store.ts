@@ -119,6 +119,14 @@ export class ConfigStore {
       apiKey: typeof obj.apiKey === 'string' ? obj.apiKey : undefined,
       models,
       mimic,
+      extraHeaders:
+        obj.extraHeaders && typeof obj.extraHeaders === 'object'
+          ? (obj.extraHeaders as Record<string, string>)
+          : undefined,
+      extraBody:
+        obj.extraBody && typeof obj.extraBody === 'object'
+          ? (obj.extraBody as Record<string, unknown>)
+          : undefined,
     };
   }
 
@@ -217,6 +225,14 @@ export class ConfigStore {
                     effort,
                   };
                 })()
+              : undefined,
+          extraHeaders:
+            obj.extraHeaders && typeof obj.extraHeaders === 'object'
+              ? (obj.extraHeaders as Record<string, string>)
+              : undefined,
+          extraBody:
+            obj.extraBody && typeof obj.extraBody === 'object'
+              ? (obj.extraBody as Record<string, unknown>)
               : undefined,
         };
       }

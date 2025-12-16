@@ -89,11 +89,13 @@ export class AnthropicProvider implements ApiProvider {
   /**
    * Build request headers
    */
-  private buildHeaders(): Record<string, string> {
+  private buildHeaders(modelConfig?: ModelConfig): Record<string, string> {
     const headers: Record<string, string> = {
       'Accept': 'application/json',
       'Content-Type': 'application/json',
     };
+
+    Object.assign(headers, this.config.extraHeaders, modelConfig?.extraHeaders);
 
     if (this.config.mimic === 'claude-code') {
       headers['User-Agent'] = 'claude-cli/2.0.55 (external, cli)';
@@ -184,7 +186,25 @@ export class AnthropicProvider implements ApiProvider {
       }
     }
 
+    // use raw messages, for details, see parseMessage's NOTE comments.
+    for (const [param, raw] of rawMap) {
+      const index = outMessages.indexOf(param);
+      outMessages[index].content = raw.content;
+    }
+
     // add a cache breakpoint at the end.
+    this.applyCacheControl(system, outMessages);
+
+    return {
+      messages: this.ensureAlternatingRoles(outMessages),
+      system: system.length > 0 ? system : undefined,
+    };
+  }
+
+  private applyCacheControl(
+    system: Anthropic.Beta.Messages.BetaTextBlockParam[],
+    outMessages: Anthropic.Beta.Messages.BetaMessageParam[],
+  ) {
     const lastSystem = system.at(-1);
     if (lastSystem) {
       lastSystem.cache_control = { type: 'ephemeral' };
@@ -212,17 +232,79 @@ export class AnthropicProvider implements ApiProvider {
         } satisfies BetaTextBlockParam);
       }
     }
+  }
 
-    // use raw messages, for details, see parseMessage's NOTE comments.
-    for (const [param, raw] of rawMap) {
-      const index = outMessages.indexOf(param);
-      outMessages[index].content = raw.content;
+  private isCacheControlApplicableBlock(
+    block: BetaContentBlockParam,
+  ): block is Exclude<
+    BetaContentBlockParam,
+    BetaThinkingBlockParam | BetaRedactedThinkingBlockParam
+  > {
+    return block.type !== 'thinking' && block.type !== 'redacted_thinking';
+  }
+
+  /**
+   * Ensure messages alternate between user and assistant roles
+   */
+  private ensureAlternatingRoles(
+    messages: BetaMessageParam[],
+  ): BetaMessageParam[] {
+    if (messages.length === 0) {
+      return [];
     }
 
-    return {
-      messages: this.ensureAlternatingRoles(outMessages),
-      system: system.length > 0 ? system : undefined,
-    };
+    const result: BetaMessageParam[] = [];
+
+    for (const msg of messages) {
+      const lastRole =
+        result.length > 0 ? result[result.length - 1].role : null;
+
+      if (lastRole === msg.role) {
+        // Merge with previous message of same role
+        const param = result[result.length - 1];
+        const newContent = Array.isArray(param.content)
+          ? param.content
+          : [
+              {
+                type: 'text',
+                text: param.content,
+              } satisfies BetaTextBlockParam,
+            ];
+        newContent.push(
+          ...(Array.isArray(msg.content)
+            ? msg.content
+            : [
+                {
+                  type: 'text',
+                  text: msg.content,
+                } satisfies BetaTextBlockParam,
+              ]),
+        );
+        param.content = newContent;
+      } else {
+        result.push({
+          ...msg,
+          content: [
+            ...(Array.isArray(msg.content)
+              ? msg.content
+              : [
+                  {
+                    type: 'text',
+                    text: msg.content,
+                  } satisfies BetaTextBlockParam,
+                ]),
+          ],
+        });
+      }
+    }
+
+    if (result.length > 0 && result[0].role !== 'user') {
+      throw new Error(
+        'The first message must be from the user role for Anthropic API',
+      );
+    }
+
+    return result;
   }
 
   convertPart(
@@ -342,79 +424,6 @@ export class AnthropicProvider implements ApiProvider {
     } else {
       throw new Error(`Unsupported ${role} message part type encountered`);
     }
-  }
-
-  private isCacheControlApplicableBlock(
-    block: BetaContentBlockParam,
-  ): block is Exclude<
-    BetaContentBlockParam,
-    BetaThinkingBlockParam | BetaRedactedThinkingBlockParam
-  > {
-    return block.type !== 'thinking' && block.type !== 'redacted_thinking';
-  }
-
-  /**
-   * Ensure messages alternate between user and assistant roles
-   */
-  private ensureAlternatingRoles(
-    messages: BetaMessageParam[],
-  ): BetaMessageParam[] {
-    if (messages.length === 0) {
-      return [];
-    }
-
-    const result: BetaMessageParam[] = [];
-
-    for (const msg of messages) {
-      const lastRole =
-        result.length > 0 ? result[result.length - 1].role : null;
-
-      if (lastRole === msg.role) {
-        // Merge with previous message of same role
-        const param = result[result.length - 1];
-        const newContent = Array.isArray(param.content)
-          ? param.content
-          : [
-              {
-                type: 'text',
-                text: param.content,
-              } satisfies BetaTextBlockParam,
-            ];
-        newContent.push(
-          ...(Array.isArray(msg.content)
-            ? msg.content
-            : [
-                {
-                  type: 'text',
-                  text: msg.content,
-                } satisfies BetaTextBlockParam,
-              ]),
-        );
-        param.content = newContent;
-      } else {
-        result.push({
-          ...msg,
-          content: [
-            ...(Array.isArray(msg.content)
-              ? msg.content
-              : [
-                  {
-                    type: 'text',
-                    text: msg.content,
-                  } satisfies BetaTextBlockParam,
-                ]),
-          ],
-        });
-      }
-    }
-
-    if (result.length > 0 && result[0].role !== 'user') {
-      throw new Error(
-        'The first message must be from the user role for Anthropic API',
-      );
-    }
-
-    return result;
   }
 
   /**
@@ -650,7 +659,7 @@ export class AnthropicProvider implements ApiProvider {
       betaFeatures.add('interleaved-thinking-2025-05-14');
     }
 
-    const headers = this.buildHeaders();
+    const headers = this.buildHeaders(model);
 
     // Pass thinkingEnabled to convertToolChoice to enforce tool_choice restrictions
     const toolChoice = this.applyParallelToolChoice(
@@ -664,6 +673,8 @@ export class AnthropicProvider implements ApiProvider {
         messages: anthropicMessages,
         max_tokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       };
+
+      Object.assign(requestBase, this.config.extraBody, model.extraBody);
 
       if (this.config.mimic === 'claude-code') {
         requestBase.metadata = {

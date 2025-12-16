@@ -31,9 +31,10 @@ export interface ModelFieldContext extends FieldContext {
 export const modelFormSchema: FormSchema<ModelConfig> = {
   sections: [
     { id: 'primary', label: 'Primary Fields' },
-    { id: 'detailed', label: 'Detailed Fields' },
+    { id: 'details', label: 'Detailed Fields' },
     { id: 'capabilities', label: 'Capabilities' },
     { id: 'parameters', label: 'Parameters' },
+    { id: 'others', label: 'others' },
   ],
   fields: [
     {
@@ -120,7 +121,7 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       type: 'number',
       label: 'Max Input Tokens',
       icon: 'arrow-down',
-      section: 'detailed',
+      section: 'details',
       prompt: `Enter max input tokens (leave blank for defaults: ${DEFAULT_MAX_INPUT_TOKENS.toLocaleString()})`,
       positiveInteger: true,
       getDescription: (draft) =>
@@ -133,7 +134,7 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       type: 'number',
       label: 'Max Output Tokens',
       icon: 'arrow-up',
-      section: 'detailed',
+      section: 'details',
       prompt: `Enter max output tokens (leave blank for defaults: ${DEFAULT_MAX_OUTPUT_TOKENS.toLocaleString()})`,
       positiveInteger: true,
       getDescription: (draft) =>
@@ -514,6 +515,52 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
         draft.presencePenalty === undefined
           ? 'default'
           : draft.presencePenalty.toString(),
+    },
+    // Extra Headers
+    {
+      key: 'extraHeaders',
+      type: 'custom',
+      label: 'Extra Headers',
+      icon: 'json',
+      section: 'others',
+      edit: async () => {
+        const choice = await vscode.window.showInformationMessage(
+          'Extra headers must be configured in VS Code settings (JSON).',
+          'Open Settings',
+        );
+        if (choice === 'Open Settings') {
+          await vscode.commands.executeCommand(
+            'workbench.action.openSettingsJson',
+          );
+        }
+      },
+      getDescription: (draft) =>
+        draft.extraHeaders
+          ? `${Object.keys(draft.extraHeaders).length} headers`
+          : 'Not configured',
+    },
+    // Extra Body
+    {
+      key: 'extraBody',
+      type: 'custom',
+      label: 'Extra Body',
+      icon: 'json',
+      section: 'others',
+      edit: async () => {
+        const choice = await vscode.window.showInformationMessage(
+          'Extra body parameters must be configured in VS Code settings (JSON).',
+          'Open Settings',
+        );
+        if (choice === 'Open Settings') {
+          await vscode.commands.executeCommand(
+            'workbench.action.openSettingsJson',
+          );
+        }
+      },
+      getDescription: (draft) =>
+        draft.extraBody
+          ? `${Object.keys(draft.extraBody).length} properties`
+          : 'Not configured',
     },
   ],
 };

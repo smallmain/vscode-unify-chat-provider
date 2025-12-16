@@ -146,6 +146,18 @@
                   "claude-code"
                 ]
               },
+              "extraHeaders": {
+                "type": "object",
+                "description": "Extra headers to include in requests.",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "extraBody": {
+                "type": "object",
+                "description": "Extra body parameters to include in requests.",
+                "additionalProperties": true
+              },
               "models": {
                 "type": "array",
                 "description": "List of available models.",
@@ -298,6 +310,18 @@
                               ]
                             }
                           ]
+                        },
+                        "extraHeaders": {
+                          "type": "object",
+                          "description": "Extra headers to include in requests.",
+                          "additionalProperties": {
+                            "type": "string"
+                          }
+                        },
+                        "extraBody": {
+                          "type": "object",
+                          "description": "Extra body parameters to include in requests.",
+                          "additionalProperties": true
                         }
                       }
                     }

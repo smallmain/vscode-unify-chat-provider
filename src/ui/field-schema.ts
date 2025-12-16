@@ -34,7 +34,11 @@ export interface TextFieldDef<T, K extends keyof T> extends BaseFieldDef<T, K> {
     value: string,
     draft: T,
     context: FieldContext,
-  ) => Promise<boolean | { value: string } | void> | boolean | { value: string } | void;
+  ) =>
+    | Promise<boolean | { value: string } | void>
+    | boolean
+    | { value: string }
+    | void;
   /** Transform the value before storing */
   transform?: (value: string) => string | undefined;
   /** Get the current value for display */
@@ -138,7 +142,7 @@ export interface FieldContext {
  * Form item with field reference.
  */
 export type FormItem<T> = vscode.QuickPickItem & {
-  action?: 'confirm' | 'cancel' | 'delete';
+  action?: 'confirm' | 'cancel' | 'delete' | 'copy' | 'duplicate';
   field?: keyof T;
 };
 
@@ -153,6 +157,8 @@ export function buildFormItems<T>(
     backLabel?: string;
     saveLabel?: string;
     deleteLabel?: string;
+    copyLabel?: string;
+    duplicateLabel?: string;
   },
 ): FormItem<T>[] {
   const {
@@ -160,6 +166,8 @@ export function buildFormItems<T>(
     backLabel = '$(arrow-left) Back',
     saveLabel = '$(check) Save',
     deleteLabel = '$(trash) Delete',
+    copyLabel = '$(copy) Copy',
+    duplicateLabel = '$(files) Duplicate',
   } = options;
   const items: FormItem<T>[] = [];
 
@@ -230,6 +238,8 @@ export function buildFormItems<T>(
   items.push({ label: saveLabel, action: 'confirm' });
 
   if (isEditing) {
+    items.push({ label: copyLabel, action: 'copy' });
+    items.push({ label: duplicateLabel, action: 'duplicate' });
     items.push({ label: deleteLabel, action: 'delete' });
   }
 

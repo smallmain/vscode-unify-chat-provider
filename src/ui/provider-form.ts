@@ -23,11 +23,16 @@ import {
   type ProviderFieldContext,
 } from './provider-fields';
 import { manageModelList } from './model-form';
+import {
+  mergePartialProviderConfig,
+  promptForBase64Config,
+  showCopiedBase64Config,
+} from './base64-config';
 
 export type ProviderFormResult = 'saved' | 'deleted' | 'cancelled';
 
 type ProviderListItem = vscode.QuickPickItem & {
-  action: 'add' | 'provider';
+  action?: 'add' | 'add-from-base64' | 'provider';
   providerName?: string;
 };
 
@@ -45,20 +50,54 @@ export async function manageProviders(store: ConfigStore): Promise<void> {
         const item = event.item;
         if (item.action !== 'provider' || !item.providerName) return;
 
-        qp.ignoreFocusOut = true;
-        const confirmed = await confirmDelete(item.providerName, 'provider');
-        qp.ignoreFocusOut = false;
+        const buttonIndex = item.buttons?.findIndex((b) => b === event.button);
 
-        if (!confirmed) return;
-        await store.removeProvider(item.providerName);
-        showDeletedMessage(item.providerName, 'Provider');
-        qp.items = buildProviderListItems(store);
+        // Copy
+        if (buttonIndex === 0) {
+          const provider = store.getProvider(item.providerName);
+          if (provider) {
+            await showCopiedBase64Config(provider);
+          }
+          return;
+        }
+
+        // Duplicate
+        if (buttonIndex === 1) {
+          const provider = store.getProvider(item.providerName);
+          if (provider) {
+            await duplicateProvider(store, provider);
+            qp.items = buildProviderListItems(store);
+          }
+          return;
+        }
+
+        // Delete
+        if (buttonIndex === 2) {
+          qp.ignoreFocusOut = true;
+          const confirmed = await confirmDelete(item.providerName, 'provider');
+          qp.ignoreFocusOut = false;
+
+          if (!confirmed) return;
+          await store.removeProvider(item.providerName);
+          showDeletedMessage(item.providerName, 'Provider');
+          qp.items = buildProviderListItems(store);
+        }
       },
     });
 
     if (!selection) return;
     if (selection.action === 'add') {
       await openProviderForm(store);
+      continue;
+    }
+    if (selection.action === 'add-from-base64') {
+      const config = await promptForBase64Config<Partial<ProviderConfig>>({
+        title: 'Add Provider From Base64 Config',
+        placeholder: 'Paste Base64 configuration string...',
+      });
+      if (config) {
+        await openProviderForm(store, undefined, config);
+      }
       continue;
     }
     if (selection.providerName) {
@@ -118,9 +157,15 @@ function buildProviderListItems(store: ConfigStore): ProviderListItem[] {
       action: 'add',
       alwaysShow: true,
     },
+    {
+      label: '$(file-code) Add From Base64 Config...',
+      action: 'add-from-base64',
+      alwaysShow: true,
+    },
   ];
 
   for (const provider of store.endpoints) {
+    items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
     const modelList = provider.models.map((m) => m.name || m.id).join(', ');
     items.push({
       label: provider.name,
@@ -129,6 +174,14 @@ function buildProviderListItems(store: ConfigStore): ProviderListItem[] {
       action: 'provider',
       providerName: provider.name,
       buttons: [
+        {
+          iconPath: new vscode.ThemeIcon('copy'),
+          tooltip: 'Copy as Base64 config',
+        },
+        {
+          iconPath: new vscode.ThemeIcon('files'),
+          tooltip: 'Duplicate provider',
+        },
         {
           iconPath: new vscode.ThemeIcon('trash'),
           tooltip: 'Delete provider',
@@ -142,10 +195,14 @@ function buildProviderListItems(store: ConfigStore): ProviderListItem[] {
 
 /**
  * Open the provider form for adding or editing a provider.
+ * @param store - The config store
+ * @param providerName - The name of the provider to edit (undefined for new)
+ * @param initialConfig - Initial config values to pre-fill (for add from base64)
  */
 export async function openProviderForm(
   store: ConfigStore,
   providerName?: string,
+  initialConfig?: Partial<ProviderConfig>,
 ): Promise<ProviderFormResult> {
   const existing = providerName ? store.getProvider(providerName) : undefined;
   if (providerName && !existing) {
@@ -154,6 +211,12 @@ export async function openProviderForm(
   }
 
   const draft = createProviderDraft(existing);
+
+  // Apply initial config if provided (for add from base64)
+  if (initialConfig && !existing) {
+    mergePartialProviderConfig(draft, initialConfig);
+  }
+
   const originalName = existing?.name;
 
   // Create the context for field editing
@@ -204,6 +267,18 @@ export async function openProviderForm(
       continue;
     }
 
+    if (selection.action === 'copy') {
+      // Build a config from current draft for copying
+      const configToCopy = buildProviderConfigFromDraft(draft);
+      await showCopiedBase64Config(configToCopy);
+      continue;
+    }
+
+    if (selection.action === 'duplicate' && existing) {
+      await duplicateProvider(store, existing);
+      continue;
+    }
+
     if (selection.action === 'confirm') {
       const saved = await saveProviderDraft(
         draft,
@@ -248,4 +323,54 @@ async function saveProviderDraft(
       : `Provider "${provider.name}" added.`,
   );
   return 'saved';
+}
+
+/**
+ * Build a partial provider config from a draft (for copying).
+ */
+function buildProviderConfigFromDraft(
+  draft: ProviderFormDraft,
+): Partial<ProviderConfig> {
+  const config: Partial<ProviderConfig> = {};
+  if (draft.type) config.type = draft.type;
+  if (draft.name) config.name = draft.name;
+  if (draft.baseUrl) config.baseUrl = draft.baseUrl;
+  if (draft.apiKey) config.apiKey = draft.apiKey;
+  if (draft.mimic) config.mimic = draft.mimic;
+  if (draft.models.length > 0) config.models = [...draft.models];
+  if (draft.extraHeaders) config.extraHeaders = { ...draft.extraHeaders };
+  if (draft.extraBody) config.extraBody = { ...draft.extraBody };
+  return config;
+}
+
+/**
+ * Duplicate a provider with auto-incremented name.
+ */
+async function duplicateProvider(
+  store: ConfigStore,
+  provider: ProviderConfig,
+): Promise<void> {
+  // Generate a unique name
+  let baseName = provider.name;
+  let newName = `${baseName} (copy)`;
+  let counter = 2;
+
+  while (store.getProvider(newName)) {
+    newName = `${baseName} (copy ${counter})`;
+    counter++;
+  }
+
+  // Create the duplicated provider
+  const duplicated: ProviderConfig = {
+    ...provider,
+    name: newName,
+    models: provider.models.map((m) => ({ ...m })),
+    extraHeaders: provider.extraHeaders
+      ? { ...provider.extraHeaders }
+      : undefined,
+    extraBody: provider.extraBody ? { ...provider.extraBody } : undefined,
+  };
+
+  await store.upsertProvider(duplicated);
+  vscode.window.showInformationMessage(`Provider duplicated as "${newName}".`);
 }

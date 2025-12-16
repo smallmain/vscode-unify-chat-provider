@@ -32,7 +32,8 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
   sections: [
     { id: 'primary', label: 'Primary Fields' },
     { id: 'content', label: 'Content Fields' },
-    { id: 'other', label: 'Other Fields' },
+    { id: 'special', label: 'Special Fields' },
+    { id: 'others', label: 'Other Fields' },
   ],
   fields: [
     // Name field
@@ -140,7 +141,7 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       type: 'custom',
       label: 'Mimic',
       icon: 'vr',
-      section: 'other',
+      section: 'special',
       edit: async (draft) => {
         if (!draft.type) {
           vscode.window.showWarningMessage(
@@ -187,6 +188,52 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       getDescription: (draft) =>
         draft.mimic ? formatMimicLabel(draft.mimic) : '(optional, none)',
       getDetail: () => 'Mimic some User-Agent client behavior.',
+    },
+    // Extra Headers
+    {
+      key: 'extraHeaders',
+      type: 'custom',
+      label: 'Extra Headers',
+      icon: 'json',
+      section: 'others',
+      edit: async () => {
+        const choice = await vscode.window.showInformationMessage(
+          'Extra headers must be configured in VS Code settings (JSON).',
+          'Open Settings',
+        );
+        if (choice === 'Open Settings') {
+          await vscode.commands.executeCommand(
+            'workbench.action.openSettingsJson',
+          );
+        }
+      },
+      getDescription: (draft) =>
+        draft.extraHeaders
+          ? `${Object.keys(draft.extraHeaders).length} headers`
+          : 'Not configured',
+    },
+    // Extra Body
+    {
+      key: 'extraBody',
+      type: 'custom',
+      label: 'Extra Body',
+      icon: 'json',
+      section: 'others',
+      edit: async () => {
+        const choice = await vscode.window.showInformationMessage(
+          'Extra body parameters must be configured in VS Code settings (JSON).',
+          'Open Settings',
+        );
+        if (choice === 'Open Settings') {
+          await vscode.commands.executeCommand(
+            'workbench.action.openSettingsJson',
+          );
+        }
+      },
+      getDescription: (draft) =>
+        draft.extraBody
+          ? `${Object.keys(draft.extraBody).length} properties`
+          : 'Not configured',
     },
   ],
 };

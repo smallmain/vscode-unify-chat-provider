@@ -24,6 +24,10 @@ export interface ProviderConfig {
   models: ModelConfig[];
   /** Mimic behavior */
   mimic?: Mimic;
+  /** Extra headers to include in requests */
+  extraHeaders?: Record<string, string>;
+  /** Extra body parameters to include in requests */
+  extraBody?: Record<string, unknown>;
 }
 
 /**
@@ -99,6 +103,10 @@ export interface ModelConfig {
    * Use native memory tool.
    */
   memoryTool?: boolean;
+  /** Extra headers to include in requests */
+  extraHeaders?: Record<string, string>;
+  /** Extra body parameters to include in requests */
+  extraBody?: Record<string, unknown>;
 }
 
 /**

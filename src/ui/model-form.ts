@@ -20,6 +20,12 @@ import {
   type ProviderFormDraft,
 } from './form-utils';
 import { modelFormSchema, type ModelFieldContext } from './model-fields';
+import {
+  duplicateModel,
+  mergePartialModelConfig,
+  promptForBase64Config,
+  showCopiedBase64Config,
+} from './base64-config';
 
 export type ModelFormResult =
   | { kind: 'saved'; model: ModelConfig }
@@ -27,7 +33,13 @@ export type ModelFormResult =
   | { kind: 'cancelled' };
 
 type ModelListItem = vscode.QuickPickItem & {
-  action?: 'add' | 'back' | 'edit' | 'add-from-official' | 'add-from-wellknown';
+  action?:
+    | 'add'
+    | 'back'
+    | 'edit'
+    | 'add-from-official'
+    | 'add-from-wellknown'
+    | 'add-from-base64';
   model?: ModelConfig;
 };
 
@@ -66,16 +78,41 @@ export async function manageModelList(
       onDidTriggerItemButton: async (event, qp) => {
         const model = event.item.model;
         if (!model) return;
-        if (mustKeepOne && models.length <= 1) {
-          vscode.window.showWarningMessage(
-            'Cannot delete the last model. A provider must have at least one model.',
-          );
+
+        const buttonIndex = event.item.buttons?.findIndex(
+          (b) => b === event.button,
+        );
+
+        // Copy
+        if (buttonIndex === 0) {
+          await showCopiedBase64Config(model);
           return;
         }
-        const confirmed = await confirmDelete(model.id, 'model');
-        if (!confirmed) return;
-        removeModel(models, model.id);
-        qp.items = buildModelListItems(models);
+
+        // Duplicate
+        if (buttonIndex === 1) {
+          const duplicated = duplicateModel(model, models);
+          models.push(duplicated);
+          vscode.window.showInformationMessage(
+            `Model duplicated as "${duplicated.id}".`,
+          );
+          qp.items = buildModelListItems(models);
+          return;
+        }
+
+        // Delete
+        if (buttonIndex === 2) {
+          if (mustKeepOne && models.length <= 1) {
+            vscode.window.showWarningMessage(
+              'Cannot delete the last model. A provider must have at least one model.',
+            );
+            return;
+          }
+          const confirmed = await confirmDelete(model.id, 'model');
+          if (!confirmed) return;
+          removeModel(models, model.id);
+          qp.items = buildModelListItems(models);
+        }
       },
     });
 
@@ -84,9 +121,23 @@ export async function manageModelList(
     }
 
     if (selection.action === 'add') {
-      const result = await runModelForm(undefined, models);
+      const result = await openModelForm(undefined, models);
       if (result.kind === 'saved') {
         models.push(result.model);
+      }
+      continue;
+    }
+
+    if (selection.action === 'add-from-base64') {
+      const config = await promptForBase64Config<Partial<ModelConfig>>({
+        title: 'Add Model From Base64 Config',
+        placeholder: 'Paste Base64 configuration string...',
+      });
+      if (config) {
+        const result = await openModelForm(undefined, models, config);
+        if (result.kind === 'saved') {
+          models.push(result.model);
+        }
       }
       continue;
     }
@@ -143,7 +194,7 @@ export async function manageModelList(
 
     const selectedModel = selection.model;
     if (selectedModel) {
-      const result = await runModelForm(selectedModel, models);
+      const result = await openModelForm(selectedModel, models);
       if (result.kind === 'deleted') {
         if (mustKeepOne && models.length <= 1) {
           vscode.window.showWarningMessage(
@@ -164,12 +215,22 @@ export async function manageModelList(
 
 /**
  * Run the model form for adding or editing a model.
+ * @param model - The existing model to edit (undefined for new)
+ * @param models - The list of existing models (for validation)
+ * @param initialConfig - Initial config values to pre-fill (for add from base64)
  */
-async function runModelForm(
+async function openModelForm(
   model: ModelConfig | undefined,
   models: ModelConfig[],
+  initialConfig?: Partial<ModelConfig>,
 ): Promise<ModelFormResult> {
   const draft = createModelDraft(model);
+
+  // Apply initial config if provided (for add from base64)
+  if (initialConfig && !model) {
+    mergePartialModelConfig(draft, initialConfig);
+  }
+
   const originalId = model?.id;
 
   const context: ModelFieldContext = {
@@ -202,6 +263,20 @@ async function runModelForm(
 
     if (selection.action === 'delete') {
       return { kind: 'deleted' };
+    }
+
+    if (selection.action === 'copy') {
+      await showCopiedBase64Config(draft);
+      continue;
+    }
+
+    if (selection.action === 'duplicate' && model) {
+      const duplicated = duplicateModel(model, models);
+      models.push(duplicated);
+      vscode.window.showInformationMessage(
+        `Model duplicated as "${duplicated.id}".`,
+      );
+      continue;
     }
 
     if (selection.action === 'confirm') {
@@ -270,12 +345,16 @@ function buildModelListItems(models: ModelConfig[]): ModelListItem[] {
     { label: '$(arrow-left) Back', action: 'back' },
     { label: '$(add) Add Model...', action: 'add' },
     {
-      label: '$(clippy) Add From Well-Known Model List...',
+      label: '$(broadcast) Add From Well-Known Model List...',
       action: 'add-from-wellknown',
     },
     {
       label: '$(cloud-download) Add From Official Model List...',
       action: 'add-from-official',
+    },
+    {
+      label: '$(file-code) Add From Base64 Config...',
+      action: 'add-from-base64',
     },
   ];
 
@@ -289,6 +368,14 @@ function buildModelListItems(models: ModelConfig[]): ModelListItem[] {
         model,
         action: 'edit',
         buttons: [
+          {
+            iconPath: new vscode.ThemeIcon('copy'),
+            tooltip: 'Copy as Base64 config',
+          },
+          {
+            iconPath: new vscode.ThemeIcon('files'),
+            tooltip: 'Duplicate model',
+          },
           { iconPath: new vscode.ThemeIcon('trash'), tooltip: 'Delete model' },
         ],
       });

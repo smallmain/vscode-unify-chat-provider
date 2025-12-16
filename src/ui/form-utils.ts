@@ -15,6 +15,8 @@ export type ProviderFormDraft = {
   apiKey?: string;
   mimic?: ProviderConfig['mimic'];
   models: ModelConfig[];
+  extraHeaders?: Record<string, string>;
+  extraBody?: Record<string, unknown>;
 };
 
 /**
@@ -29,6 +31,10 @@ export function createProviderDraft(
   return {
     ...existing,
     models: cloneModels(existing.models),
+    extraHeaders: existing.extraHeaders
+      ? { ...existing.extraHeaders }
+      : undefined,
+    extraBody: existing.extraBody ? { ...existing.extraBody } : undefined,
   };
 }
 
@@ -52,6 +58,11 @@ export function cloneModels(models: ModelConfig[]): ModelConfig[] {
     frequencyPenalty: m.frequencyPenalty,
     presencePenalty: m.presencePenalty,
     thinking: m.thinking ? { ...m.thinking } : undefined,
+    interleavedThinking: m.interleavedThinking,
+    webSearch: m.webSearch ? { ...m.webSearch } : undefined,
+    memoryTool: m.memoryTool,
+    extraHeaders: m.extraHeaders ? { ...m.extraHeaders } : undefined,
+    extraBody: m.extraBody ? { ...m.extraBody } : undefined,
   }));
 }
 
@@ -86,6 +97,8 @@ export function normalizeProviderDraft(
     apiKey: draft.apiKey?.trim() || undefined,
     mimic: draft.mimic,
     models: cloneModels(draft.models),
+    extraHeaders: draft.extraHeaders,
+    extraBody: draft.extraBody,
   };
 }
 
@@ -109,6 +122,11 @@ export function normalizeModelDraft(draft: ModelConfig): ModelConfig {
     frequencyPenalty: draft.frequencyPenalty,
     presencePenalty: draft.presencePenalty,
     thinking: draft.thinking ? { ...draft.thinking } : undefined,
+    interleavedThinking: draft.interleavedThinking,
+    webSearch: draft.webSearch ? { ...draft.webSearch } : undefined,
+    memoryTool: draft.memoryTool,
+    extraHeaders: draft.extraHeaders ? { ...draft.extraHeaders } : undefined,
+    extraBody: draft.extraBody ? { ...draft.extraBody } : undefined,
   };
 }
 
@@ -155,6 +173,12 @@ export function hasProviderChanges(
   if ((trimmedBaseUrl ?? '') !== original.baseUrl) return true;
   if ((trimmedApiKey ?? '') !== (original.apiKey ?? '')) return true;
   if (draft.mimic !== original.mimic) return true;
+  if (
+    JSON.stringify(draft.extraHeaders) !== JSON.stringify(original.extraHeaders)
+  )
+    return true;
+  if (JSON.stringify(draft.extraBody) !== JSON.stringify(original.extraBody))
+    return true;
   return modelsChanged(draft.models, original.models);
 }
 
@@ -181,6 +205,11 @@ export function hasModelChanges(
   const frequencyPenalty = draft.frequencyPenalty;
   const presencePenalty = draft.presencePenalty;
   const thinking = draft.thinking;
+  const interleavedThinking = draft.interleavedThinking;
+  const webSearch = draft.webSearch;
+  const memoryTool = draft.memoryTool;
+  const extraHeaders = draft.extraHeaders;
+  const extraBody = draft.extraBody;
 
   if (!original) {
     return (
@@ -198,7 +227,12 @@ export function hasModelChanges(
       parallelToolCalling !== undefined ||
       frequencyPenalty !== undefined ||
       presencePenalty !== undefined ||
-      thinking !== undefined
+      thinking !== undefined ||
+      interleavedThinking !== undefined ||
+      webSearch !== undefined ||
+      memoryTool !== undefined ||
+      extraHeaders !== undefined ||
+      extraBody !== undefined
     );
   }
 
@@ -217,7 +251,12 @@ export function hasModelChanges(
     parallelToolCalling !== original.parallelToolCalling ||
     frequencyPenalty !== original.frequencyPenalty ||
     presencePenalty !== original.presencePenalty ||
-    !thinkingEqual(thinking, original.thinking)
+    !thinkingEqual(thinking, original.thinking) ||
+    interleavedThinking !== original.interleavedThinking ||
+    JSON.stringify(webSearch) !== JSON.stringify(original.webSearch) ||
+    memoryTool !== original.memoryTool ||
+    JSON.stringify(extraHeaders) !== JSON.stringify(original.extraHeaders) ||
+    JSON.stringify(extraBody) !== JSON.stringify(original.extraBody)
   );
 }
 
@@ -253,7 +292,12 @@ export function modelsEqual(a: ModelConfig, b: ModelConfig): boolean {
     a.parallelToolCalling === b.parallelToolCalling &&
     a.frequencyPenalty === b.frequencyPenalty &&
     a.presencePenalty === b.presencePenalty &&
-    thinkingEqual(a.thinking, b.thinking)
+    thinkingEqual(a.thinking, b.thinking) &&
+    a.interleavedThinking === b.interleavedThinking &&
+    JSON.stringify(a.webSearch) === JSON.stringify(b.webSearch) &&
+    a.memoryTool === b.memoryTool &&
+    JSON.stringify(a.extraHeaders) === JSON.stringify(b.extraHeaders) &&
+    JSON.stringify(a.extraBody) === JSON.stringify(b.extraBody)
   );
 }
 
