@@ -336,6 +336,7 @@ export class AnthropicProvider implements ApiProvider {
           type: 'tool_result',
           tool_use_id: part.callId,
           content: content || [],
+          is_error: part.isError,
         },
       ];
     } else {

@@ -7,6 +7,8 @@ declare module 'openai/resources/chat/completions' {
      * Thinking reasoning content to be included in the response.
      *
      * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+     * @see https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model
+     * @see https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
      */
     reasoning_content?: string;
   }
@@ -15,6 +17,8 @@ declare module 'openai/resources/chat/completions' {
      * Thinking reasoning content to be included in the response.
      *
      * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+     * @see https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model
+     * @see https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
      */
     reasoning_content?: string;
   }
@@ -25,6 +29,8 @@ declare module 'openai/resources/chat/completions' {
          * Thinking reasoning content to be included in the response chunk.
          *
          * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+         * @see https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model
+         * @see https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
          */
         reasoning_content?: string;
       }
@@ -40,6 +46,8 @@ declare module 'openai/lib/ChatCompletionStream' {
          * Thinking reasoning content to be included in the response chunk.
          *
          * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+         * @see https://platform.moonshot.cn/docs/guide/use-kimi-k2-thinking-model
+         * @see https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
          */
         reasoning_content?: string;
       }
