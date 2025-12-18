@@ -1,4 +1,4 @@
-import type { ModelConfig } from './client/interface';
+import { ModelConfig } from './types';
 
 /**
  * Delimiter used to separate base model ID from version.

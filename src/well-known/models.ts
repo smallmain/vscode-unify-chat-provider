@@ -1,4 +1,4 @@
-import { ModelConfig } from './client/interface';
+import { ModelConfig } from '../types';
 
 /**
  * Well-known model configuration with additional matching options

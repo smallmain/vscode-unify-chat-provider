@@ -1,74 +1,111 @@
+import { ProviderType, Mimic } from './client/definitions';
+
 /**
- * Custom data part mime types used for special markers.
- * These are used to communicate metadata through LanguageModelDataPart.
+ * Configuration for a single provider endpoint
  */
-export namespace DataPartMimeTypes {
-  /**
-   * Cache control marker for Anthropic prompt caching.
-   * When a LanguageModelDataPart with this mimeType is encountered,
-   * the previous content block will be marked with cache_control.
-   * The data should be 'ephemeral' (as Uint8Array or string).
-   */
-  export const CacheControl = 'cache_control';
-
-  /**
-   * Stateful marker - reserved for internal use.
-   */
-  export const StatefulMarker = 'stateful_marker';
-
-  /**
-   * Thinking data marker - reserved for thinking block metadata.
-   */
-  export const ThinkingData = 'thinking';
-
-  /**
-   * Web search server tool use marker.
-   * Contains JSON data about the web search query being executed.
-   */
-  export const WebSearchToolUse =
-    'application/vnd.anthropic.web-search-tool-use+json';
-
-  /**
-   * Web search tool result marker.
-   * Contains JSON data about the web search results.
-   */
-  export const WebSearchToolResult =
-    'application/vnd.anthropic.web-search-tool-result+json';
-
-  /**
-   * Text with citations marker.
-   * Contains JSON data about citations in text content.
-   */
-  export const TextCitations = 'application/vnd.anthropic.text-citations+json';
-}
-
-export interface ThinkingBlockMetadata {
-  /**
-   * Signature of the thinking block.
-   *
-   * VSCode use this.
-   */
-  signature?: string;
-
-  /**
-   * The thinking content (if any).
-   *
-   * VSCode use this.
-   */
-  redactedData?: string;
-
-  /**
-   * The complete thinking content (if available).
-   *
-   * VSCode use this.
-   */
-  _completeThinking?: string;
+export interface ProviderConfig {
+  /** Provider type (determines API format) */
+  type: ProviderType;
+  /** Unique name for this provider */
+  name: string;
+  /** Base URL for the API (e.g., https://api.anthropic.com) */
+  baseUrl: string;
+  /** API key for authentication */
+  apiKey?: string;
+  /** List of available model IDs */
+  models: ModelConfig[];
+  /** Mimic behavior */
+  mimic?: Mimic;
+  /** Extra headers to include in requests */
+  extraHeaders?: Record<string, string>;
+  /** Extra body parameters to include in requests */
+  extraBody?: Record<string, unknown>;
 }
 
 /**
- * `modelid\base64-encoded-raw-data`
+ * Configuration for a single model
  */
-export type StatefulMarkerData = `${string}\\${string}`;
+export interface ModelConfig {
+  /** Model ID (e.g., claude-sonnet-4-20250514#thinking) */
+  id: string;
+  /** Display name for the model */
+  name?: string;
+  /** Model family (e.g., gpt-4, claude-3) */
+  family?: string;
+  /** Maximum input tokens */
+  maxInputTokens?: number;
+  /** Maximum output tokens */
+  maxOutputTokens?: number;
+  /** Model capabilities */
+  capabilities?: ModelCapabilities;
+  /** Whether to stream the response */
+  stream?: boolean;
+  /** Sampling temperature */
+  temperature?: number;
+  /** Top-k sampling */
+  topK?: number;
+  /** Top-p sampling */
+  topP?: number;
+  /** Frequency penalty */
+  frequencyPenalty?: number;
+  /** Presence penalty */
+  presencePenalty?: number;
+  /** Parallel tool calling (true to enable, false to disable, undefined to use default) */
+  parallelToolCalling?: boolean;
+  /**
+   * Constrains response verbosity. Lower = concise, higher = verbose.
+   * Supported values: low | medium | high.
+   */
+  verbosity?: 'low' | 'medium' | 'high';
+  /** Thinking configuration */
+  thinking?: {
+    type: 'enabled' | 'disabled';
+    budgetTokens?: number;
+    /**
+     * Thinking effort level. Leave undefined to let the provider decide.
+     */
+    effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+  };
+  /**
+   * Use native web search tool.
+   */
+  webSearch?: {
+    /** Whether web search is enabled. Defaults to false. */
+    enabled?: boolean;
+    /** Maximum number of web searches per request. */
+    maxUses?: number;
+    /** Only include results from these domains. */
+    allowedDomains?: string[];
+    /** Never include results from these domains. */
+    blockedDomains?: string[];
+    /** User location for localizing search results. */
+    userLocation?: {
+      type: 'approximate';
+      city?: string;
+      region?: string;
+      country?: string;
+      timezone?: string;
+    };
+  };
+  /**
+   * Use native memory tool.
+   */
+  memoryTool?: boolean;
+  /** Extra headers to include in requests */
+  extraHeaders?: Record<string, string>;
+  /** Extra body parameters to include in requests */
+  extraBody?: Record<string, unknown>;
+}
+
+/**
+ * Model capabilities configuration
+ */
+export interface ModelCapabilities {
+  /** Whether the model supports tool/function calling. If a number is provided, it is the maximum number of tools. */
+  toolCalling?: boolean | number;
+  /** Whether the model supports image input */
+  imageInput?: boolean;
+}
 
 export interface PerformanceTrace {
   /**

@@ -4,8 +4,8 @@ import {
   CancellationToken,
 } from 'vscode';
 import { RequestLogger } from '../../logger';
-import { PerformanceTrace, ThinkingBlockMetadata } from '../../types';
-import { ApiProvider, ModelConfig, ProviderConfig } from '../interface';
+import { ThinkingBlockMetadata } from '../types';
+import { ApiProvider } from '../interface';
 import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
@@ -37,6 +37,7 @@ import {
 import { getBaseModelId } from '../../model-id-utils';
 import { Stream } from 'openai/core/streaming';
 import { randomUUID } from 'crypto';
+import { ProviderConfig, ModelConfig, PerformanceTrace } from '../../types';
 
 export class OpenAIResponsesProvider implements ApiProvider {
   private readonly baseUrl: string;

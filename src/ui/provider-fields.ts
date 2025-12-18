@@ -1,6 +1,5 @@
 import * as vscode from 'vscode';
 import { ConfigStore } from '../config-store';
-import { Mimic, MIMIC_LABELS, PROVIDER_TYPES, ProviderType } from '../client';
 import type { FormSchema, FieldContext } from './field-schema';
 import {
   validateBaseUrl,
@@ -8,6 +7,12 @@ import {
   type ProviderFormDraft,
 } from './form-utils';
 import { normalizeBaseUrlInput } from '../utils';
+import {
+  Mimic,
+  MIMIC_LABELS,
+  ProviderType,
+  PROVIDER_TYPES,
+} from '../client/definitions';
 
 /**
  * Context for provider form fields.

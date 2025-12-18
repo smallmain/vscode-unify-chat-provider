@@ -6,8 +6,13 @@ import {
   withoutKeys,
 } from './config-ops';
 import { normalizeBaseUrlInput } from './utils';
-import { ProviderConfig, ModelConfig } from './client/interface';
-import { Mimic, PROVIDER_KEYS, PROVIDER_TYPES, ProviderType } from './client';
+import {
+  PROVIDER_KEYS,
+  ProviderType,
+  PROVIDER_TYPES,
+  Mimic,
+} from './client/definitions';
+import { ProviderConfig, ModelConfig } from './types';
 
 const CONFIG_NAMESPACE = 'unifyChatProvider';
 

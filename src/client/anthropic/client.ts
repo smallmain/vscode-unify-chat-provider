@@ -17,7 +17,7 @@ import type {
   BetaTool,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import type { RequestLogger } from '../../logger';
-import { ApiProvider, ProviderConfig, ModelConfig } from '../interface';
+import { ApiProvider } from '../interface';
 import {
   normalizeBaseUrlInput,
   fetchWithRetry,
@@ -31,10 +31,12 @@ import {
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
-import { PerformanceTrace, ThinkingBlockMetadata } from '../../types';
-import { FeatureId, isFeatureSupported } from '../../features';
+import { ModelConfig, PerformanceTrace, ProviderConfig } from '../../types';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
+import { ThinkingBlockMetadata } from '../types';
+import { FeatureId } from '../definitions';
+import { isFeatureSupported } from '../utils';
 
 /**
  * Client for Anthropic-compatible APIs

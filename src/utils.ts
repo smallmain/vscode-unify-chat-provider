@@ -1,6 +1,6 @@
+import { DataPartMimeTypes, StatefulMarkerData } from './client/types';
 import type { RequestLogger } from './logger';
 import * as vscode from 'vscode';
-import { DataPartMimeTypes, StatefulMarkerData } from './types';
 
 /**
  * HTTP status codes that should trigger a retry.

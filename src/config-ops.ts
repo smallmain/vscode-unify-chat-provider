@@ -1,4 +1,4 @@
-import type { ModelConfig, ProviderConfig } from './client/interface';
+import { ModelConfig, ProviderConfig } from './types';
 
 export const MODEL_CONFIG_KEYS = [
   'id',

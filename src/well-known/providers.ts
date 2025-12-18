@@ -1,5 +1,5 @@
-import type { ModelConfig, ProviderConfig } from './client/interface';
-import { WELL_KNOWN_MODELS, WellKnownModelId } from './well-known-models';
+import { ProviderConfig, ModelConfig } from '../types';
+import { WellKnownModelId, WELL_KNOWN_MODELS } from './models';
 
 export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
   {

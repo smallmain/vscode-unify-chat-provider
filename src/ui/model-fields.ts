@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import type { ModelConfig } from '../client/interface';
 import {
   DEFAULT_MAX_INPUT_TOKENS,
   DEFAULT_MAX_OUTPUT_TOKENS,
@@ -16,6 +15,7 @@ import {
   generateAutoVersionedId,
   MODEL_VERSION_DELIMITER,
 } from '../model-id-utils';
+import { ModelConfig } from '../types';
 
 /**
  * Context for model form fields.

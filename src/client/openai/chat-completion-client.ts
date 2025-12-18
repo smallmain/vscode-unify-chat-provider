@@ -4,8 +4,8 @@ import {
   CancellationToken,
 } from 'vscode';
 import { RequestLogger } from '../../logger';
-import { PerformanceTrace, ThinkingBlockMetadata } from '../../types';
-import { ApiProvider, ModelConfig, ProviderConfig } from '../interface';
+import { ApiProvider } from '../interface';
+import { ProviderConfig, ModelConfig, PerformanceTrace } from '../../types';
 import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
@@ -36,10 +36,12 @@ import {
 } from 'openai/resources/chat/completions';
 import { FunctionParameters } from 'openai/resources/shared';
 import { getBaseModelId } from '../../model-id-utils';
-import { FeatureId, isFeatureSupported } from '../../features';
 import { CompletionUsage } from 'openai/resources/completions';
 import { Stream } from 'openai/core/streaming';
 import { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
+import { ThinkingBlockMetadata } from '../types';
+import { FeatureId } from '../definitions';
+import { isFeatureSupported } from '../utils';
 
 export class OpenAIChatCompletionProvider implements ApiProvider {
   private readonly baseUrl: string;

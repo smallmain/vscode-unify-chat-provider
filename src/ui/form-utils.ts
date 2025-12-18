@@ -1,6 +1,4 @@
 import * as vscode from 'vscode';
-import { PROVIDER_TYPES } from '../client';
-import type { ModelConfig, ProviderConfig } from '../client/interface';
 import { ConfigStore } from '../config-store';
 import {
   deepClone,
@@ -11,6 +9,8 @@ import {
 } from '../config-ops';
 import { normalizeBaseUrlInput } from '../utils';
 import { showValidationErrors } from './component';
+import { PROVIDER_TYPES } from '../client/definitions';
+import { ProviderConfig, ModelConfig } from '../types';
 
 /**
  * Draft type for provider form editing.

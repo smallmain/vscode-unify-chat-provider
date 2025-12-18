@@ -1,14 +1,14 @@
 import * as vscode from 'vscode';
 import { ConfigStore } from './config-store';
-import { createProvider } from './client';
 import {
   DEFAULT_MAX_INPUT_TOKENS,
   DEFAULT_MAX_OUTPUT_TOKENS,
 } from './defaults';
-import { ApiProvider, ProviderConfig, ModelConfig } from './client/interface';
+import { ApiProvider } from './client/interface';
 import { createRequestLogger } from './logger';
-import { PerformanceTrace } from './types';
+import { ModelConfig, PerformanceTrace, ProviderConfig } from './types';
 import { getBaseModelId } from './model-id-utils';
+import { createProvider } from './client/utils';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();

@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import type { ModelConfig, ProviderConfig } from '../client/interface';
 import { generateAutoVersionedId } from '../model-id-utils';
 import {
   deepClone,
@@ -8,6 +7,7 @@ import {
   PROVIDER_CONFIG_KEYS,
   withoutKey,
 } from '../config-ops';
+import { ProviderConfig, ModelConfig } from '../types';
 
 /**
  * Encode a configuration object to Base64-URL string.
