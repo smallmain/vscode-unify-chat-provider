@@ -101,8 +101,10 @@ export async function runModelListScreen(
           );
           return;
         }
-        const confirmed = await confirmDelete(model.id, 'model');
-        if (!confirmed) return;
+        if (route.invocation !== 'providerEdit') {
+          const confirmed = await confirmDelete(model.id, 'model');
+          if (!confirmed) return;
+        }
         removeModel(route.models, model.id);
         qp.items = buildModelListItems(route, includeSave);
       }

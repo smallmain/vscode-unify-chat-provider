@@ -466,12 +466,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
     logger: RequestLogger,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     // NOTE: The current behavior of VSCode is such that all Parts returned here will be
-    // aggregated into a single Part during the next request, and only the Thought part
+    // aggregated into a single Part during the next request, and only the Thinking part
     // will be retained during the tool invocation round; most other types of Parts
     // will be directly ignored, which can prevent us from sending the original data
     // to the model provider and thus compromise full context and prompt caching support.
     // we can only use two approaches simultaneously:
-    // 1. use the metadata attribute already in use in vscode-copilot-chat to restore the Thought part,
+    // 1. use the metadata attribute already in use in vscode-copilot-chat to restore the Thinking part,
     // ensuring basic compatibility across different models.
     // 2. always send a StatefulMarker DataPart containing the complete, raw response data, to maximize context restoration.
 

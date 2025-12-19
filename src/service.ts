@@ -9,6 +9,7 @@ import { createRequestLogger } from './logger';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from './types';
 import { getBaseModelId } from './model-id-utils';
 import { createProvider } from './client/utils';
+import { formatModelDetail } from './ui/form-utils';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -63,6 +64,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         toolCalling: model.capabilities?.toolCalling ?? false,
         imageInput: model.capabilities?.imageInput ?? false,
       },
+      category: {
+        label: provider.name,
+        order: 1,
+      },
+      detail: provider.name,
+      tooltip: formatModelDetail(model),
+      isUserSelectable: true,
     };
   }
 
