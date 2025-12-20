@@ -10,7 +10,7 @@ import type {
 } from '../router/types';
 
 interface TimeoutFormItem extends vscode.QuickPickItem {
-  action?: 'back' | 'save' | 'reset';
+  action?: 'back' | 'reset';
   field?: 'connection' | 'response';
 }
 
@@ -38,7 +38,6 @@ export async function runTimeoutFormScreen(
       field: 'response',
     },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
-    { label: '$(check) Save', action: 'save' },
     { label: '$(refresh) Reset to Defaults', action: 'reset' },
   ];
 
@@ -50,11 +49,6 @@ export async function runTimeoutFormScreen(
   });
 
   if (!selection || selection.action === 'back') {
-    return { kind: 'pop' };
-  }
-
-  if (selection.action === 'save') {
-    // Apply timeout to draft
     route.draft.timeout = hasTimeoutValues(timeout) ? timeout : undefined;
     return { kind: 'pop' };
   }
@@ -106,7 +100,8 @@ async function editTimeoutField(
   const currentValue = timeout[field];
   const defaultValue = DEFAULT_TIMEOUT_CONFIG[field];
 
-  const label = field === 'connection' ? 'Connection Timeout' : 'Response Timeout';
+  const label =
+    field === 'connection' ? 'Connection Timeout' : 'Response Timeout';
   const placeholder = `Enter timeout in milliseconds (default: ${defaultValue})`;
 
   const input = await vscode.window.showInputBox({
