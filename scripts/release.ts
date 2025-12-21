@@ -154,14 +154,18 @@ try {
   if (doCommitAndTag) {
     await runInherit(repoRoot, 'git', ['add', 'package.json', 'CHANGELOG.md']);
     await runInherit(repoRoot, 'git', ['commit', '-m', `chore(release): ${tagName}`]);
-    await ensureGitTag(repoRoot, tagName);
   }
 
   const vsixPath = join(repoRoot, `${extensionName}-${nextVersion}.vsix`);
-  await runInherit(repoRoot, 'vsce', ['package', '--out', vsixPath]);
+  await runInherit(repoRoot, 'vsce', ['package', '--out', vsixPath, '--allow-all-proposed-apis']);
 
   if (!skipPublish) {
     await runInherit(repoRoot, 'vsce', ['publish', '--packagePath', vsixPath]);
+  }
+
+  // Create git tag after successful packaging/publishing to avoid manual cleanup on failure
+  if (doCommitAndTag) {
+    await ensureGitTag(repoRoot, tagName);
   }
 
   if (!skipGitHub) {
