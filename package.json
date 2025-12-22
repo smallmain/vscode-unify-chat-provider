@@ -7,6 +7,21 @@
     "AI",
     "Chat"
   ],
+  "keywords": [
+    "ai",
+    "chat",
+    "copilot",
+    "github-copilot",
+    "language-model",
+    "llm",
+    "openai",
+    "anthropic",
+    "ollama",
+    "gemini",
+    "deepseek",
+    "custom-models",
+    "自定义模型"
+  ],
   "publisher": "SmallMain",
   "icon": "icon.png",
   "repository": "github:smallmain/vscode-unify-chat-provider",
