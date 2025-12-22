@@ -165,6 +165,20 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gpt-5.2-codex',
+    name: 'GPT-5.2 Codex',
+    maxInputTokens: 400000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'gpt-5.2',
     name: 'GPT-5.2',
     maxInputTokens: 400000,
@@ -463,6 +477,20 @@ const _WELL_KNOWN_MODELS = [
       imageInput: false,
     },
     temperature: 0.6,
+  },
+  {
+    id: 'mimo-v2-flash',
+    name: 'MiMo V2 Flash',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
   },
 ] as const satisfies WellKnownModelConfig[];
 export const WELL_KNOWN_MODELS: WellKnownModelConfig[] = _WELL_KNOWN_MODELS;

@@ -188,6 +188,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'o4-mini-deep-research',
       'gpt-oss-120b',
       'gpt-oss-20b',
+      'mimo-',
     ],
   },
   [FeatureId.OpenAICacheControl]: {
@@ -221,9 +222,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: ['openrouter.ai'],
   },
   [FeatureId.OpenAIUseThinkingParam]: {
-    supportedProviders: ['api.deepseek.com'],
+    supportedProviders: ['api.deepseek.com', 'api.xiaomimimo.com'],
   },
   [FeatureId.OpenAIUseReasoningContent]: {
-    supportedProviders: ['api.deepseek.com'],
+    supportedProviders: ['api.deepseek.com', 'api.xiaomimimo.com'],
   },
 };

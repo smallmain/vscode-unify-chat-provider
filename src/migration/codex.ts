@@ -9,14 +9,14 @@ import {
   firstExistingFilePath,
   normalizeConfigFilePathInput,
 } from './fs-utils';
-import { WELL_KNOWN_MODELS } from '../well-known/models';
+import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
 import type { ModelConfig, ProviderConfig } from '../types';
 
-const CODEX_DEFAULT_MODEL_IDS = [
-  'gpt-5.1-codex',
+const CODEX_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
+  'gpt-5.2-codex',
   'gpt-5.1-codex-mini',
   'gpt-5.1-codex-max',
-  'gpt-5-codex',
+  'gpt-5.2',
 ] as const;
 
 function getCodexDefaultModels(): ModelConfig[] {

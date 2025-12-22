@@ -1,11 +1,17 @@
 import * as os from 'os';
 import * as path from 'path';
-import type { ProviderMigrationCandidate, ProviderMigrationSource } from './types';
-import { firstExistingFilePath, normalizeConfigFilePathInput } from './fs-utils';
-import { WELL_KNOWN_MODELS } from '../well-known/models';
+import type {
+  ProviderMigrationCandidate,
+  ProviderMigrationSource,
+} from './types';
+import {
+  firstExistingFilePath,
+  normalizeConfigFilePathInput,
+} from './fs-utils';
+import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
 import type { ModelConfig, ProviderConfig } from '../types';
 
-const CLAUDE_CODE_DEFAULT_MODEL_IDS = [
+const CLAUDE_CODE_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
   'claude-sonnet-4-5',
   'claude-opus-4-5',
   'claude-haiku-4-5',
@@ -182,7 +188,9 @@ function extractClaudeCodeSettings(content: string): {
     ['providername'],
   );
 
-  const baseUrl = baseUrlRaw ? normalizeUrlCandidate(baseUrlRaw) ?? baseUrlRaw : undefined;
+  const baseUrl = baseUrlRaw
+    ? normalizeUrlCandidate(baseUrlRaw) ?? baseUrlRaw
+    : undefined;
   const apiKey = apiKeyRaw?.trim() || undefined;
   const modelId = modelIdRaw?.trim() || undefined;
   const providerName = providerNameRaw?.trim() || undefined;
@@ -225,7 +233,10 @@ export const claudeCodeMigrationSource: ProviderMigrationSource = {
       process.env.CLAUDE_CONFIG_PATH,
       process.env.CLAUDE_SETTINGS_PATH,
     ]
-      .filter((value): value is string => typeof value === 'string' && value.trim().length > 0)
+      .filter(
+        (value): value is string =>
+          typeof value === 'string' && value.trim().length > 0,
+      )
       .map((value) => normalizeConfigFilePathInput(value));
 
     const home = os.homedir();
@@ -254,8 +265,20 @@ export const claudeCodeMigrationSource: ProviderMigrationSource = {
     // macOS app support dirs
     if (process.platform === 'darwin') {
       candidates.push(
-        path.join(home, 'Library', 'Application Support', 'Claude', 'config.json'),
-        path.join(home, 'Library', 'Application Support', 'Claude Code', 'config.json'),
+        path.join(
+          home,
+          'Library',
+          'Application Support',
+          'Claude',
+          'config.json',
+        ),
+        path.join(
+          home,
+          'Library',
+          'Application Support',
+          'Claude Code',
+          'config.json',
+        ),
       );
     }
 

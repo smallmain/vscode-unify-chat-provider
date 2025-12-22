@@ -19,6 +19,12 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
     ),
   },
   {
+    name: 'Xiaomi MIMO',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.xiaomimimo.com/v1',
+    models: wellKnowns('mimo-v2-flash'),
+  },
+  {
     name: 'Ollama Local',
     type: 'ollama',
     baseUrl: 'http://localhost:11434',
