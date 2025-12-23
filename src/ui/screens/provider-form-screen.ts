@@ -1,23 +1,12 @@
 import * as vscode from 'vscode';
 import { ConfigStore } from '../../config-store';
 import { confirmDelete, pickQuickItem, showDeletedMessage } from '../component';
-import {
-  ConfigValue,
-  mergePartialProviderConfig,
-  mergePartialModelConfig,
-  promptForConfigValue,
-} from '../base64-config';
-import {
-  isProviderConfigInput,
-  parseModelConfigArray,
-  selectModelsForImport,
-} from '../import-selection';
+import { mergePartialProviderConfig } from '../base64-config';
 import { editField } from '../field-editors';
 import { buildFormItems, type FormItem } from '../field-schema';
 import {
   confirmDiscardProviderChanges,
   createProviderDraft,
-  normalizeModelDraft,
   type ProviderFormDraft,
 } from '../form-utils';
 import {
@@ -36,7 +25,6 @@ import {
   saveProviderDraft,
 } from '../provider-ops';
 import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
-import { ModelConfig } from '../../types';
 
 const providerSettingsSchema = {
   ...providerFormSchema,
@@ -78,11 +66,6 @@ export async function runProviderFormScreen(
     },
     context,
   );
-
-  if (!isSettings) {
-    items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
-    items.push({ label: '$(file-code) Import From Config...', action: 'import' });
-  }
 
   const selection = await pickQuickItem<FormItem<ProviderFormDraft>>({
     title: isSettings
@@ -135,67 +118,6 @@ export async function runProviderFormScreen(
       draft,
       apiKeyStore: ctx.apiKeyStore,
     });
-    return { kind: 'stay' };
-  }
-
-  if (!isSettings && selection.action === 'import') {
-    const config = await promptForConfigValue({
-      title: 'Import From Config',
-      placeholder: 'Paste configuration JSON or Base64 string...',
-      validate: (value: ConfigValue) => {
-        if (Array.isArray(value)) {
-          return parseModelConfigArray(value)
-            ? null
-            : 'Invalid model configuration array.';
-        }
-        if (isProviderConfigInput(value)) {
-          return null;
-        }
-        const rawId = value.id;
-        const modelId = typeof rawId === 'string' ? rawId.trim() : '';
-        if (!modelId) {
-          return 'Model ID is required to import this model.';
-        }
-        if (draft.models.some((model) => model.id === modelId)) {
-          return `Model ID conflicts: ${modelId}. Please edit it before importing.`;
-        }
-        return null;
-      },
-    });
-    if (!config) return { kind: 'stay' };
-
-    if (Array.isArray(config)) {
-      const models = parseModelConfigArray(config);
-      if (!models) return { kind: 'stay' };
-
-      const selected = await selectModelsForImport({
-        models,
-        existingModels: draft.models,
-        providerType: draft.type,
-        title: 'Import Models From Config',
-      });
-      if (!selected) return { kind: 'stay' };
-      draft.models.push(...selected);
-      return { kind: 'stay' };
-    }
-
-    if (isProviderConfigInput(config)) {
-      const modelsRef = draft.models;
-      mergePartialProviderConfig(draft, config);
-      if (Array.isArray(config.models)) {
-        modelsRef.length = 0;
-        modelsRef.push(...draft.models);
-        draft.models = modelsRef;
-      }
-      return { kind: 'stay' };
-    }
-
-    const modelDraft: ModelConfig = { id: '' };
-    mergePartialModelConfig(modelDraft, config as Partial<ModelConfig>);
-    const modelId = modelDraft.id.trim();
-    if (!modelId) return { kind: 'stay' };
-    if (draft.models.some((model) => model.id === modelId)) return { kind: 'stay' };
-    draft.models.push(normalizeModelDraft(modelDraft));
     return { kind: 'stay' };
   }
 

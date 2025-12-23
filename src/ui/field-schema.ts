@@ -142,13 +142,7 @@ export interface FieldContext {
  * Form item with field reference.
  */
 export type FormItem<T> = vscode.QuickPickItem & {
-  action?:
-    | 'confirm'
-    | 'cancel'
-    | 'delete'
-    | 'duplicate'
-    | 'import'
-    | 'export';
+  action?: 'confirm' | 'cancel' | 'delete' | 'duplicate' | 'export';
   field?: keyof T;
 };
 
