@@ -12,6 +12,9 @@ import { runWellKnownProviderApiKeyScreen } from '../screens/well-known-provider
 import { runWellKnownProviderListScreen } from '../screens/well-known-provider-list-screen';
 import { runWellKnownProviderNameScreen } from '../screens/well-known-provider-name-screen';
 import { runImportProvidersScreen } from '../screens/import-providers-screen';
+import { runProviderDraftFormScreen } from '../screens/provider-draft-form-screen';
+import { runImportProviderConfigArrayScreen } from '../screens/import-provider-config-array-screen';
+import { runImportModelConfigArrayScreen } from '../screens/import-model-config-array-screen';
 
 export async function runUiStack(
   ctx: UiContext,
@@ -83,6 +86,12 @@ async function dispatchRoute(
       return runTimeoutFormScreen(ctx, route, resume);
     case 'importProviders':
       return runImportProvidersScreen(ctx, route, resume);
+    case 'providerDraftForm':
+      return runProviderDraftFormScreen(ctx, route, resume);
+    case 'importProviderConfigArray':
+      return runImportProviderConfigArrayScreen(ctx, route, resume);
+    case 'importModelConfigArray':
+      return runImportModelConfigArrayScreen(ctx, route, resume);
     default:
       return assertNever(route);
   }

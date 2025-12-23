@@ -29,6 +29,7 @@ export async function runModelFormScreen(
   route: ModelFormRoute,
   _resume: UiResume | undefined,
 ): Promise<UiNavAction> {
+  const isImportMode = route.mode === 'import';
   if (!route.draft) {
     route.draft = createModelDraft(route.model);
     route.originalId = route.model?.id;
@@ -51,7 +52,9 @@ export async function runModelFormScreen(
 
   const selection = await pickQuickItem<FormItem<ModelConfig>>({
     title: route.model
-      ? `Model: ${route.model.name || route.model.id}${providerSuffix}`
+      ? isImportMode
+        ? `Edit Model (${route.model.name || route.model.id})${providerSuffix}`
+        : `Model: ${route.model.name || route.model.id}${providerSuffix}`
       : `Add Model${providerSuffix}`,
     placeholder: 'Select a field to edit',
     ignoreFocusOut: true,
@@ -59,7 +62,10 @@ export async function runModelFormScreen(
       modelFormSchema,
       draft,
       {
-        isEditing: !!route.model,
+        isEditing: !isImportMode && !!route.model,
+        hasExport: !isImportMode,
+        backLabel: '$(arrow-left) Back',
+        saveLabel: isImportMode ? '$(check) Done' : '$(check) Save',
       },
       context,
     ),

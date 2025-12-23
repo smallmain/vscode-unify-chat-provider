@@ -62,6 +62,7 @@ export interface ModelListRoute {
 
 export interface ModelFormRoute {
   kind: 'modelForm';
+  mode?: 'full' | 'import';
   providerLabel?: string;
   providerType?: ProviderType;
   model?: ModelConfig;
@@ -95,6 +96,31 @@ export interface ImportProvidersRoute {
   kind: 'importProviders';
 }
 
+export interface ProviderDraftFormRoute {
+  kind: 'providerDraftForm';
+  draft: ProviderFormDraft;
+  original: ProviderFormDraft;
+}
+
+export interface ImportProviderConfigArrayRoute {
+  kind: 'importProviderConfigArray';
+  configs: Partial<ProviderConfig>[];
+  drafts?: ProviderFormDraft[];
+  selectedIds?: Set<number>;
+  editingEntryId?: number;
+}
+
+export interface ImportModelConfigArrayRoute {
+  kind: 'importModelConfigArray';
+  models: ModelConfig[];
+  /** Existing models to check conflicts against and append into on completion. */
+  targetModels: ModelConfig[];
+  providerLabel: string;
+  providerType?: ProviderType;
+  selectedIds?: Set<number>;
+  editingEntryId?: number;
+}
+
 export type UiRoute =
   | ProviderListRoute
   | ProviderFormRoute
@@ -106,7 +132,14 @@ export type UiRoute =
   | ModelViewRoute
   | ModelSelectionRoute
   | TimeoutFormRoute
-  | ImportProvidersRoute;
+  | ImportProvidersRoute
+  | ProviderDraftFormRoute
+  | ImportProviderConfigArrayRoute
+  | ImportModelConfigArrayRoute;
+
+export type ProviderDraftFormResult =
+  | { kind: 'saved'; draft: ProviderFormDraft }
+  | { kind: 'cancelled' };
 
 export type ModelFormResult =
   | { kind: 'saved'; model: ModelConfig; originalId?: string }
@@ -115,7 +148,8 @@ export type ModelFormResult =
 
 export type UiResume =
   | { kind: 'modelFormResult'; result: ModelFormResult }
-  | { kind: 'modelSelectionResult'; models: ModelConfig[] };
+  | { kind: 'modelSelectionResult'; models: ModelConfig[] }
+  | { kind: 'providerDraftFormResult'; result: ProviderDraftFormResult };
 
 export type UiNavAction =
   | { kind: 'stay' }

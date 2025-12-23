@@ -1,21 +1,13 @@
 import * as vscode from 'vscode';
 import { ConfigStore } from '../config-store';
+import { showCopiedBase64Config } from './base64-config';
 import {
-  ConfigValue,
-  promptForConfigValue,
-  showCopiedBase64Config,
-} from './base64-config';
-import {
-  buildProviderDraftFromConfig,
-  isProviderConfigInput,
-  parseProviderConfigArray,
-  selectProvidersForImport,
-} from './import-selection';
+  promptForProviderImportConfig,
+} from './import-from-config';
 import { runUiStack } from './router/stack-router';
 import type { UiContext } from './router/types';
 import { runRemoveProviderScreen } from './screens/remove-provider-screen';
 import type { ApiKeySecretStore } from '../api-key-secret-store';
-import { saveProviderDraft } from './provider-ops';
 import { resolveProvidersForExportOrShowError } from '../api-key-utils';
 
 export async function manageProviders(
@@ -38,45 +30,19 @@ export async function addProviderFromConfig(
   store: ConfigStore,
   apiKeyStore: ApiKeySecretStore,
 ): Promise<void> {
-  const config = await promptForConfigValue({
-    title: 'Import Provider From Config',
-    placeholder: 'Paste configuration JSON or Base64 string...',
-    validate: (value: ConfigValue) => {
-      if (Array.isArray(value)) {
-        return parseProviderConfigArray(value)
-          ? null
-          : 'Invalid provider configuration array.';
-      }
-      return isProviderConfigInput(value)
-        ? null
-        : 'Invalid provider configuration.';
-    },
-  });
-  if (!config) return;
-
   const ctx: UiContext = { store, apiKeyStore };
+  const imported = await promptForProviderImportConfig();
+  if (!imported) return;
 
-  if (Array.isArray(config)) {
-    const configs = parseProviderConfigArray(config);
-    if (!configs) return;
-
-    const drafts = configs.map(buildProviderDraftFromConfig);
-    const selected = await selectProvidersForImport({
-      ctx,
-      drafts,
-      title: 'Import Providers From Config',
+  if (imported.kind === 'multiple') {
+    await runUiStack(ctx, {
+      kind: 'importProviderConfigArray',
+      configs: imported.configs,
     });
-    if (!selected) return;
-
-    for (const draft of selected) {
-      await saveProviderDraft({ draft, store, apiKeyStore });
-    }
     return;
   }
 
-  if (!isProviderConfigInput(config)) return;
-
-  await runUiStack(ctx, { kind: 'providerForm', initialConfig: config });
+  await runUiStack(ctx, { kind: 'providerForm', initialConfig: imported.config });
 }
 
 export async function addProviderFromWellKnownList(

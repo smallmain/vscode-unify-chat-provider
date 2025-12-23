@@ -1,16 +1,9 @@
 import * as vscode from 'vscode';
 import { confirmDelete, pickQuickItem, showDeletedMessage } from '../component';
+import { showCopiedBase64Config } from '../base64-config';
 import {
-  ConfigValue,
-  promptForConfigValue,
-  showCopiedBase64Config,
-} from '../base64-config';
-import {
-  buildProviderDraftFromConfig,
-  isProviderConfigInput,
-  parseProviderConfigArray,
-  selectProvidersForImport,
-} from '../import-selection';
+  promptForProviderImportConfig,
+} from '../import-from-config';
 import type {
   ProviderListRoute,
   UiContext,
@@ -105,51 +98,17 @@ export async function runProviderListScreen(
   }
 
   if (selection.action === 'add-from-base64') {
-    const config = await promptForConfigValue({
-      title: 'Import Provider From Config',
-      placeholder: 'Paste configuration JSON or Base64 string...',
-      validate: (value: ConfigValue) => {
-        if (Array.isArray(value)) {
-          return parseProviderConfigArray(value)
-            ? null
-            : 'Invalid provider configuration array.';
-        }
-        return isProviderConfigInput(value)
-          ? null
-          : 'Invalid provider configuration.';
-      },
-    });
-    if (!config) return { kind: 'stay' };
+    const imported = await promptForProviderImportConfig();
+    if (!imported) return { kind: 'stay' };
 
-    if (Array.isArray(config)) {
-      const configs = parseProviderConfigArray(config);
-      if (!configs) return { kind: 'stay' };
-
-      const drafts = configs.map(buildProviderDraftFromConfig);
-      const selected = await selectProvidersForImport({
-        ctx,
-        drafts,
-        title: 'Import Providers From Config',
-      });
-      if (!selected) return { kind: 'stay' };
-
-      for (const draft of selected) {
-        await saveProviderDraft({
-          draft,
-          store: ctx.store,
-          apiKeyStore: ctx.apiKeyStore,
-        });
-      }
-
-      return { kind: 'stay' };
+    if (imported.kind === 'multiple') {
+      return {
+        kind: 'push',
+        route: { kind: 'importProviderConfigArray', configs: imported.configs },
+      };
     }
 
-    if (!isProviderConfigInput(config)) return { kind: 'stay' };
-
-    return {
-      kind: 'push',
-      route: { kind: 'providerForm', initialConfig: config },
-    };
+    return { kind: 'push', route: { kind: 'providerForm', initialConfig: imported.config } };
   }
 
   if (selection.action === 'export-all') {

@@ -1,0 +1,212 @@
+import * as vscode from 'vscode';
+import { deepClone } from '../../config-ops';
+import {
+  confirmCancelImport,
+  confirmFinalizeImport,
+  showImportReviewPicker,
+  type ImportReviewItem,
+} from '../import-review';
+import { buildProviderDraftFromConfig } from '../import-config';
+import { showValidationErrors } from '../component';
+import { validateProviderForm, type ProviderFormDraft } from '../form-utils';
+import type {
+  ImportProviderConfigArrayRoute,
+  UiContext,
+  UiNavAction,
+  UiResume,
+} from '../router/types';
+import { saveProviderDraft } from '../provider-ops';
+import { officialModelsManager } from '../../official-models-manager';
+
+const editButton: vscode.QuickInputButton = {
+  iconPath: new vscode.ThemeIcon('edit'),
+  tooltip: 'Edit provider',
+};
+
+function getProviderDisplayName(
+  draft: ProviderFormDraft,
+  fallbackIndex: number,
+): string {
+  const name = draft.name?.trim();
+  if (name) return name;
+  return `Provider ${fallbackIndex + 1}`;
+}
+
+function buildProviderImportItems(
+  drafts: ProviderFormDraft[],
+  selectedIds: Set<number>,
+): ImportReviewItem[] {
+  return drafts.map((draft, index) => {
+    const name = getProviderDisplayName(draft, index);
+    const modelNames = draft.models
+      .map((m) => m.name || m.id)
+      .filter((value): value is string => !!value);
+    const detail =
+      modelNames.length > 0 ? `Models: ${modelNames.join(', ')}` : 'No models';
+
+    return {
+      label: name,
+      description: draft.baseUrl,
+      detail,
+      entryId: index,
+      picked: selectedIds.has(index),
+      buttons: [editButton],
+    };
+  });
+}
+
+function findDuplicates(values: string[]): string[] {
+  const seen = new Set<string>();
+  const duplicates = new Set<string>();
+
+  for (const value of values) {
+    if (seen.has(value)) {
+      duplicates.add(value);
+    } else {
+      seen.add(value);
+    }
+  }
+
+  return [...duplicates];
+}
+
+function validateSelectedProviders(options: {
+  drafts: ProviderFormDraft[];
+  selectedIds: Set<number>;
+  store: UiContext['store'];
+}): string[] {
+  const selected = [...options.selectedIds]
+    .map((id) => ({ id, draft: options.drafts[id] }))
+    .filter((entry): entry is { id: number; draft: ProviderFormDraft } =>
+      Boolean(entry.draft),
+    );
+
+  if (selected.length === 0) {
+    return ['Select at least one provider to import.'];
+  }
+
+  const errors: string[] = [];
+
+  const names = selected.map(({ draft }) => draft.name?.trim() ?? '');
+  if (names.some((name) => !name)) {
+    errors.push('Some providers are missing names. Please edit them first.');
+  }
+
+  const duplicates = findDuplicates(names.filter((name) => !!name));
+  if (duplicates.length > 0) {
+    errors.push(`Provider name conflicts: ${duplicates.join(', ')}`);
+  }
+
+  for (const { id, draft } of selected) {
+    const providerErrors = validateProviderForm(draft, options.store);
+    if (providerErrors.length > 0) {
+      const displayName = getProviderDisplayName(draft, id);
+      for (const err of providerErrors) {
+        errors.push(`${displayName}: ${err}`);
+      }
+    }
+  }
+
+  return errors;
+}
+
+export async function runImportProviderConfigArrayScreen(
+  ctx: UiContext,
+  route: ImportProviderConfigArrayRoute,
+  resume: UiResume | undefined,
+): Promise<UiNavAction> {
+  if (resume?.kind === 'providerDraftFormResult') {
+    const entryId = route.editingEntryId;
+    route.editingEntryId = undefined;
+
+    if (entryId !== undefined && route.drafts?.[entryId]) {
+      if (resume.result.kind === 'saved') {
+        route.drafts[entryId] = resume.result.draft;
+      }
+    }
+  }
+
+  if (!route.drafts) {
+    route.drafts = route.configs.map(buildProviderDraftFromConfig);
+  }
+  const drafts = route.drafts;
+  if (drafts.length === 0) {
+    vscode.window.showInformationMessage('No providers found to import.');
+    return { kind: 'pop' };
+  }
+  if (!route.selectedIds) {
+    route.selectedIds = new Set(drafts.map((_, index) => index));
+  }
+
+  const pickerResult = await showImportReviewPicker({
+    title: 'Import Providers From Config',
+    placeholder: 'Select providers to import',
+    items: buildProviderImportItems(drafts, route.selectedIds),
+  });
+
+  if (pickerResult.kind === 'back') {
+    const confirmed = await confirmCancelImport();
+    if (!confirmed) return { kind: 'stay' };
+
+    for (const draft of drafts) {
+      const sessionId = draft._officialModelsSessionId;
+      if (sessionId) {
+        officialModelsManager.clearDraftSession(sessionId);
+      }
+    }
+    return { kind: 'pop' };
+  }
+
+  route.selectedIds = pickerResult.selectedIds;
+
+  if (pickerResult.kind === 'edit') {
+    const draft = drafts[pickerResult.entryId];
+    if (!draft) {
+      vscode.window.showErrorMessage('Provider not found.');
+      return { kind: 'stay' };
+    }
+
+    route.editingEntryId = pickerResult.entryId;
+    const editable = deepClone(draft);
+    return {
+      kind: 'push',
+      route: {
+        kind: 'providerDraftForm',
+        draft: editable,
+        original: deepClone(editable),
+      },
+    };
+  }
+
+  const validationErrors = validateSelectedProviders({
+    drafts,
+    selectedIds: route.selectedIds,
+    store: ctx.store,
+  });
+  if (validationErrors.length > 0) {
+    await showValidationErrors(validationErrors);
+    return { kind: 'stay' };
+  }
+
+  const selectedDrafts = [...route.selectedIds]
+    .map((id) => drafts[id])
+    .filter((draft): draft is ProviderFormDraft => Boolean(draft));
+  const ok = await confirmFinalizeImport({
+    count: selectedDrafts.length,
+    itemLabel: 'provider',
+  });
+  if (!ok) return { kind: 'stay' };
+
+  for (const draft of selectedDrafts) {
+    const saved = await saveProviderDraft({
+      draft,
+      store: ctx.store,
+      apiKeyStore: ctx.apiKeyStore,
+    });
+    if (saved !== 'saved') {
+      return { kind: 'stay' };
+    }
+  }
+
+  return { kind: 'pop' };
+}

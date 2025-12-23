@@ -117,6 +117,7 @@ export async function runProviderFormScreen(
     await exportProviderConfigFromDraft({
       draft,
       apiKeyStore: ctx.apiKeyStore,
+      allowPartial: true,
     });
     return { kind: 'stay' };
   }

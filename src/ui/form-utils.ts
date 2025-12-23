@@ -5,7 +5,6 @@ import {
   modelConfigEquals,
   stableStringify,
   toComparableModelConfig,
-  toComparableProviderConfig,
 } from '../config-ops';
 import { normalizeBaseUrlInput } from '../utils';
 import { showValidationErrors } from './component';
@@ -107,12 +106,12 @@ function toComparableProviderDraft(draft: ProviderFormDraft): unknown {
  */
 export function hasProviderChanges(
   draft: ProviderFormDraft,
-  original?: ProviderConfig,
+  original?: ProviderFormDraft,
 ): boolean {
   const baseline: ProviderFormDraft = { models: [] };
   return original
     ? stableStringify(toComparableProviderDraft(draft)) !==
-        stableStringify(toComparableProviderConfig(original))
+        stableStringify(toComparableProviderDraft(original))
     : stableStringify(toComparableProviderDraft(draft)) !==
         stableStringify(toComparableProviderDraft(baseline));
 }
@@ -153,7 +152,7 @@ export function modelsEqual(a: ModelConfig, b: ModelConfig): boolean {
  */
 export async function confirmDiscardProviderChanges(
   draft: ProviderFormDraft,
-  original?: ProviderConfig,
+  original?: ProviderFormDraft,
 ): Promise<'discard' | 'save' | 'stay'> {
   if (!hasProviderChanges(draft, original)) return 'discard';
   const choice = await vscode.window.showWarningMessage(

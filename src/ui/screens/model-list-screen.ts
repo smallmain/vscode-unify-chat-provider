@@ -1,17 +1,10 @@
 import * as vscode from 'vscode';
 import { WELL_KNOWN_MODELS } from '../../well-known/models';
 import { confirmDelete, pickQuickItem, showDeletedMessage } from '../component';
+import { duplicateModel, showCopiedBase64Config } from '../base64-config';
 import {
-  ConfigValue,
-  duplicateModel,
-  promptForConfigValue,
-  showCopiedBase64Config,
-} from '../base64-config';
-import {
-  isProviderConfigInput,
-  parseModelConfigArray,
-  selectModelsForImport,
-} from '../import-selection';
+  promptForModelImportConfig,
+} from '../import-from-config';
 import {
   confirmDiscardProviderChanges,
   formatModelDetail,
@@ -311,36 +304,20 @@ export async function runModelListScreen(
   }
 
   if (selection.action === 'add-from-base64') {
-    const config = await promptForConfigValue({
-      title: 'Import From Config',
-      placeholder: 'Paste configuration JSON or Base64 string...',
-      validate: (value: ConfigValue) => {
-        if (Array.isArray(value)) {
-          return parseModelConfigArray(value)
-            ? null
-            : 'Invalid model configuration array.';
-        }
-        if (isProviderConfigInput(value)) {
-          return 'Provider configuration is not allowed here.';
-        }
-        return null;
-      },
-    });
-    if (!config) return { kind: 'stay' };
+    const imported = await promptForModelImportConfig();
+    if (!imported) return { kind: 'stay' };
 
-    if (Array.isArray(config)) {
-      const models = parseModelConfigArray(config);
-      if (!models) return { kind: 'stay' };
-
-      const selected = await selectModelsForImport({
-        models,
-        existingModels: route.models,
-        providerType: route.draft?.type,
-        title: 'Import Models From Config',
-      });
-      if (!selected) return { kind: 'stay' };
-      route.models.push(...selected);
-      return { kind: 'stay' };
+    if (imported.kind === 'multiple') {
+      return {
+        kind: 'push',
+        route: {
+          kind: 'importModelConfigArray',
+          models: imported.models,
+          targetModels: route.models,
+          providerLabel: route.draft?.name ?? route.providerLabel,
+          providerType: route.draft?.type,
+        },
+      };
     }
 
     return {
@@ -348,7 +325,7 @@ export async function runModelListScreen(
       route: {
         kind: 'modelForm',
         models: route.models,
-        initialConfig: config as Partial<ModelConfig>,
+        initialConfig: imported.config,
         providerLabel: route.draft?.name ?? route.providerLabel,
         providerType: route.draft?.type,
       },
