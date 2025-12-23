@@ -16,6 +16,19 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
     ),
   },
   {
+    name: 'Byte Plus',
+    type: 'openai-responses',
+    baseUrl: 'https://ark.ap-southeast.bytepluses.com/api/v3',
+    models: wellKnowns(
+      'doubao-seed-1-8-251215',
+      'doubao-seed-code-preview-251028',
+      'doubao-seed-1-6-lite-251015',
+      'doubao-seed-1-6-flash-250828',
+      'doubao-seed-1-6-vision-250815',
+      'doubao-seed-translation-250915',
+    ),
+  },
+  {
     name: 'DeepSeek',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.deepseek.com',
