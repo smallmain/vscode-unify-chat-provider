@@ -66,6 +66,34 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
     baseUrl: 'https://api.minimax.io/anthropic',
     models: wellKnowns('MiniMax-M2.1', 'MiniMax-M2.1-lightning'),
   },
+  {
+    name: 'Moonshot AI (China)',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.moonshot.cn',
+    models: wellKnowns(
+      'kimi-k2-thinking',
+      'kimi-k2-thinking-turbo',
+      'kimi-k2-0905-preview',
+      'kimi-k2-turbo-preview',
+    ),
+  },
+  {
+    name: 'Moonshot AI (International)',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.moonshot.ai',
+    models: wellKnowns(
+      'kimi-k2-thinking',
+      'kimi-k2-thinking-turbo',
+      'kimi-k2-0905-preview',
+      'kimi-k2-turbo-preview',
+    ),
+  },
+  {
+    name: 'Moonshot AI (Coding Plan)',
+    type: 'anthropic',
+    baseUrl: 'https://api.kimi.com/coding',
+    models: wellKnowns('kimi-for-coding'),
+  },
 ];
 
 function wellKnowns(...ids: WellKnownModelId[]): ModelConfig[] {

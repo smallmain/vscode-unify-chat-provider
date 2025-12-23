@@ -494,6 +494,22 @@ const _WELL_KNOWN_MODELS = [
     temperature: 0.6,
   },
   {
+    id: 'kimi-for-coding',
+    name: 'Kimi For Coding',
+    maxInputTokens: 262144,
+    maxOutputTokens: 32768,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 0.6,
+  },
+  {
     id: 'mimo-v2-flash',
     name: 'MiMo V2 Flash',
     maxInputTokens: 256000,

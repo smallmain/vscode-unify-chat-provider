@@ -235,6 +235,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
       'api.z.ai',
+      'api.moonshot.cn',
+      'api.moonshot.ai',
+      'api.kimi.com',
     ],
   },
 };
