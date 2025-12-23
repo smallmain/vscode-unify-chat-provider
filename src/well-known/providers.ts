@@ -54,6 +54,18 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
     models: wellKnowns('glm-4.7', 'glm-4.6', 'glm-4.5-air'),
   },
+  {
+    name: 'MiniMax (China)',
+    type: 'anthropic',
+    baseUrl: 'https://api.minimaxi.com/anthropic',
+    models: wellKnowns('MiniMax-M2.1', 'MiniMax-M2.1-lightning'),
+  },
+  {
+    name: 'MiniMax (International)',
+    type: 'anthropic',
+    baseUrl: 'https://api.minimax.io/anthropic',
+    models: wellKnowns('MiniMax-M2.1', 'MiniMax-M2.1-lightning'),
+  },
 ];
 
 function wellKnowns(...ids: WellKnownModelId[]): ModelConfig[] {

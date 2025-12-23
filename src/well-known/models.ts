@@ -368,8 +368,8 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
-    id: 'MiniMax-M2',
-    name: 'MiniMax-M2',
+    id: 'MiniMax-M2.1',
+    name: 'MiniMax-M2.1',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
     stream: true,
@@ -383,8 +383,23 @@ const _WELL_KNOWN_MODELS = [
     temperature: 1.0,
   },
   {
-    id: 'MiniMax-M2-Stable',
-    name: 'MiniMax-M2-Stable',
+    id: 'MiniMax-M2.1-lightning',
+    name: 'MiniMax-M2.1-Lightning',
+    maxInputTokens: 204800,
+    maxOutputTokens: 102400,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+  },
+  {
+    id: 'MiniMax-M2',
+    name: 'MiniMax-M2',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
     stream: true,

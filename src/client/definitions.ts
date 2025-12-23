@@ -219,7 +219,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: ['openrouter.ai'],
   },
   [FeatureId.OpenAIUseReasoningDetails]: {
-    supportedProviders: ['openrouter.ai'],
+    supportedProviders: ['openrouter.ai', 'api.minimaxi.com', 'api.minimax.io'],
   },
   [FeatureId.OpenAIUseThinkingParam]: {
     supportedProviders: [
