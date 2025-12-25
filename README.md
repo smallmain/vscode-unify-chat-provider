@@ -61,7 +61,7 @@ Most of the extension's interfaces are integrated into the VS Code Command Palet
    - Use mouse click or keyboard up/down arrow keys to select command, press Enter to execute selected command.
 
 <div align="center">
-  <img src="assets/screenshot-2025-12-25-12.03.52@2x.png" width="500" />
+  <img src="./assets/screenshot-1.png" width="500" />
 </div>
 
 ### One-Click Migration
@@ -79,7 +79,7 @@ Applications or extensions supported for one-click migration:
 1. Open VS Code Command Palette, search for `Import Config From Other Applications`.
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-12.07.01@2x.png" width="500" />
+   <img src="assets/screenshot-2.png" width="500" />
    </div>
 
    - The interface displays all supported applications or extensions and their detected configuration file paths.
@@ -92,7 +92,7 @@ Applications or extensions supported for one-click migration:
 4. Click the `Save` button to complete the import. You can immediately use the models in Copilot Chat.
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-12.23.30@2x.png" width="500" />
+   <img src="assets/screenshot-3.png" width="500" />
    </div>
 
 ### One-Click Configuration
@@ -122,7 +122,7 @@ Model providers supported for one-click configuration:
 1. Open VS Code Command Palette, search for `Add Provider From Well-Known Provider List`.
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-13.45.53@2x.png" width="500" />
+   <img src="assets/screenshot-4.png" width="500" />
    </div>
 
 2. Select the provider you want to add from the popup list.
@@ -131,14 +131,14 @@ Model providers supported for one-click configuration:
 4. Click the `Save` button to complete the import. You can immediately use the models in Copilot Chat.
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-13.59.13@2x.png" width="500" />
+   <img src="assets/screenshot-5.png" width="500" />
    </div>
 
 ### Manual Configuration
 
 1. Open VS Code Command Palette, search for `Add Provider`.
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-14.28.11@2x.png" width="500" />
+   <img src="assets/screenshot-6.png" width="500" />
    </div>
 2. Fill in the configuration in the add configuration interface, which is similar to the [Provider Configuration]() interface. You can read the documentation of that interface to understand the function of each field.
 3. Click the `Save` button to complete the addition. You can immediately use the models in Copilot Chat.

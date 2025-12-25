@@ -61,7 +61,7 @@ Unify Chat Provider
    - 使用鼠标点击或键盘的上下箭头键选择命令，按回车键执行所选命令。
 
 <div align="center">
-  <img src="assets/screenshot-2025-12-25-12.03.52@2x.png" width="500" />
+  <img src="./assets/screenshot-1.png" width="500" />
 </div>
 
 ### 一键迁移
@@ -79,7 +79,7 @@ Unify Chat Provider
 1. 打开 VSCode 命令面板，搜索 `Import Config From Other Applications`。
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-12.07.01@2x.png" width="500" />
+   <img src="assets/screenshot-2.png" width="500" />
    </div>
 
    - 界面展示所有支持的应用或扩展，及其检测到的配置文件路径。
@@ -92,7 +92,7 @@ Unify Chat Provider
 4. 点击 `Save` 按钮即完成导入，你可以立即在 Copilot Chat 中使用其中的模型。
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-12.23.30@2x.png" width="500" />
+   <img src="assets/screenshot-3.png" width="500" />
    </div>
 
 ### 一键配置
@@ -122,7 +122,7 @@ Unify Chat Provider
 1. 打开 VSCode 命令面板，搜索 `Add Provider From Well-Known Provider List`。
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-13.45.53@2x.png" width="500" />
+   <img src="assets/screenshot-4.png" width="500" />
    </div>
 
 2. 在弹出的列表中选择你想要添加的供应商。
@@ -131,14 +131,14 @@ Unify Chat Provider
 4. 点击 `Save` 按钮即完成导入，你可以立即在 Copilot Chat 中使用其中的模型。
 
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-13.59.13@2x.png" width="500" />
+   <img src="assets/screenshot-5.png" width="500" />
    </div>
 
 ### 手动配置
 
 1. 打开 VSCode 命令面板，搜索 `Add Provider`。
    <div align="center">
-   <img src="assets/screenshot-2025-12-25-14.28.11@2x.png" width="500" />
+   <img src="assets/screenshot-6.png" width="500" />
    </div>
 2. 在添加配置界面填写配置，该界面与 [供应商配置]() 界面相似，你可以阅读该界面的文档了解每个字段的作用。
 3. 点击 `Save` 按钮即完成添加，你可以立即在 Copilot Chat 中使用其中的模型。
