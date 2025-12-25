@@ -7,16 +7,6 @@ import {
 
 export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
   {
-    name: 'Anthropic',
-    type: 'anthropic',
-    baseUrl: 'https://api.anthropic.com',
-    models: wellKnowns(
-      'claude-opus-4-5',
-      'claude-sonnet-4-5',
-      'claude-haiku-4-5',
-    ),
-  },
-  {
     name: 'Open AI',
     type: 'openai-responses',
     baseUrl: 'https://api.openai.com',
@@ -29,6 +19,22 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
       'gpt-5-nano',
       'gpt-4.1',
     ),
+  },
+  {
+    name: 'Anthropic',
+    type: 'anthropic',
+    baseUrl: 'https://api.anthropic.com',
+    models: wellKnowns(
+      'claude-opus-4-5',
+      'claude-sonnet-4-5',
+      'claude-haiku-4-5',
+    ),
+  },
+  {
+    name: 'Hugging Face (Inference Providers)',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://router.huggingface.co/v1',
+    models: [],
   },
   {
     name: 'Alibaba Cloud Model Studio (China)',
@@ -107,9 +113,15 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
   {
     name: 'Ollama Local',
     type: 'ollama',
-    baseUrl: 'http://localhost:11434',
+    baseUrl: 'http://localhost:11434/api',
     models: [],
     autoFetchOfficialModels: true,
+  },
+  {
+    name: 'Ollama Cloud',
+    type: 'ollama',
+    baseUrl: 'https://ollama.com/api',
+    models: [],
   },
   {
     name: 'ZhiPu AI',

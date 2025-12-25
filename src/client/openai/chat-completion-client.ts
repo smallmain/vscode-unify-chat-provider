@@ -587,6 +587,16 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       this.config,
       model,
     );
+    const useOnlyMaxCompletionTokens = isFeatureSupported(
+      FeatureId.OpenAIOnlyMaxCompletionTokens,
+      this.config,
+      model,
+    );
+    const useOnlyMaxTokens = isFeatureSupported(
+      FeatureId.OpenAIOnlyMaxTokens,
+      this.config,
+      model,
+    );
 
     const thinkingParamType:
       | 'reasoning'
@@ -630,12 +640,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         ? { max_input_tokens: model.maxInputTokens }
         : {}),
       ...(model.maxOutputTokens !== undefined
-        ? isFeatureSupported(
-            FeatureId.OpenAIOnlyMaxCompletionTokens,
-            this.config,
-            model,
-          )
+        ? useOnlyMaxCompletionTokens
           ? { max_completion_tokens: model.maxOutputTokens }
+          : useOnlyMaxTokens
+          ? { max_tokens: model.maxOutputTokens }
           : {
               max_tokens: model.maxOutputTokens,
               max_completion_tokens: model.maxOutputTokens,

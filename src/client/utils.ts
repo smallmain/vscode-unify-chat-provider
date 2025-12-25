@@ -174,10 +174,6 @@ export function isFeatureSupported(
   return false;
 }
 
-// ============================================================================
-// Shared utility functions for client implementations
-// ============================================================================
-
 /**
  * Build a base URL with optional pattern stripping or suffix ensuring.
  */

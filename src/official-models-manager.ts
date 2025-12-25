@@ -502,8 +502,6 @@ export class OfficialModelsManager {
     await this.saveState();
   }
 
-  // ========== Draft Session Methods ==========
-
   /**
    * Compute a configuration signature for change detection
    */

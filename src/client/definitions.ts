@@ -92,6 +92,10 @@ export enum FeatureId {
    */
   OpenAIOnlyMaxCompletionTokens = 'openai_only-max-completion-tokens',
   /**
+   * Some OpenAI-compatible providers only accept `max_tokens` and will reject `max_completion_tokens`.
+   */
+  OpenAIOnlyMaxTokens = 'openai_only-max-tokens',
+  /**
    * @see https://openrouter.ai/docs/guides/best-practices/prompt-caching
    */
   OpenAICacheControl = 'openai_cache-control',
@@ -234,6 +238,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'gpt-oss-20b',
       'mimo-',
     ],
+  },
+  [FeatureId.OpenAIOnlyMaxTokens]: {
+    supportedProviders: ['router.huggingface.co'],
   },
   [FeatureId.OpenAICacheControl]: {
     customCheckers: [
