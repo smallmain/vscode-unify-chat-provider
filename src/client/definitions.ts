@@ -290,24 +290,28 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'dashscope.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
+      'api-inference.modelscope.cn',
     ],
   },
   [FeatureId.OpenAIUseMaxInputTokens]: {
     supportedProviders: [
       'dashscope.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
+      'api-inference.modelscope.cn',
     ],
   },
   [FeatureId.OpenAIUseThinkingParam3]: {
     supportedProviders: [
       'dashscope.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
+      'api-inference.modelscope.cn',
     ],
   },
   [FeatureId.OpenAIUseThinkingBudgetParam]: {
     supportedProviders: [
       'dashscope-intl.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
+      'api-inference.modelscope.cn',
     ],
   },
   [FeatureId.OpenAIUseReasoningContent]: {
@@ -321,6 +325,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.kimi.com',
       'dashscope-intl.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
+      'api-inference.modelscope.cn',
     ],
   },
   [FeatureId.OpenAIUseClearThinking]: {
