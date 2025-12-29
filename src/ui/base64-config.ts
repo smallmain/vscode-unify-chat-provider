@@ -21,7 +21,7 @@ function isConfigArray(value: unknown): value is ConfigArrayItem[] {
   return value.every((item) => typeof item === 'string' || isObjectRecord(item));
 }
 
-function isValidHttpUrl(text: string): boolean {
+export function isValidHttpUrl(text: string): boolean {
   try {
     const url = new URL(text.trim());
     return url.protocol === 'http:' || url.protocol === 'https:';
@@ -30,7 +30,7 @@ function isValidHttpUrl(text: string): boolean {
   }
 }
 
-async function fetchConfigFromUrl(
+export async function fetchConfigFromUrl(
   url: string,
 ): Promise<{ ok: true; content: string } | { ok: false; error: string }> {
   try {
@@ -54,7 +54,7 @@ async function fetchConfigFromUrl(
   }
 }
 
-function decodeConfigStringToValue(
+export function decodeConfigStringToValue(
   text: string,
   options?: { allowArray?: boolean },
 ): ConfigValue | undefined {

@@ -16,6 +16,7 @@ import {
   removeProvider,
 } from './ui';
 import { officialModelsManager } from './official-models-manager';
+import { registerUriHandler } from './uri-handler';
 
 const VENDOR_ID = 'unify-chat-provider';
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -44,6 +45,9 @@ export async function activate(
 
   // Register commands
   registerCommands(context, configStore, apiKeyStore);
+
+  // Register URI handler for importing configurations via URI
+  registerUriHandler(context, configStore, apiKeyStore);
 
   registerApiKeyStorageMaintenance(context, configStore, apiKeyStore);
   runApiKeyStorageMaintenanceOnStartup(configStore, apiKeyStore);
