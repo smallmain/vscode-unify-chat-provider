@@ -17,6 +17,10 @@ import type {
 } from '../router/types';
 import { saveProviderDraft } from '../provider-ops';
 import { officialModelsManager } from '../../official-models-manager';
+import {
+  promptConflictResolution,
+  generateUniqueProviderName,
+} from '../conflict-resolution';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
@@ -70,6 +74,10 @@ function findDuplicates(values: string[]): string[] {
   return [...duplicates];
 }
 
+/**
+ * Validate selected providers for internal errors only.
+ * Does NOT check conflicts with existing store providers.
+ */
 function validateSelectedProviders(options: {
   drafts: ProviderFormDraft[];
   selectedIds: Set<number>;
@@ -92,13 +100,17 @@ function validateSelectedProviders(options: {
     errors.push('Some providers are missing names. Please edit them first.');
   }
 
+  // Check for duplicates within imported configs (invalid config error)
   const duplicates = findDuplicates(names.filter((name) => !!name));
   if (duplicates.length > 0) {
     errors.push(`Provider name conflicts: ${duplicates.join(', ')}`);
   }
 
+  // Validate each provider, but skip name uniqueness check (handled separately)
   for (const { id, draft } of selected) {
-    const providerErrors = validateProviderForm(draft, options.store);
+    const providerErrors = validateProviderForm(draft, options.store, undefined, {
+      skipNameUniquenessCheck: true,
+    });
     if (providerErrors.length > 0) {
       const displayName = getProviderDisplayName(draft, id);
       for (const err of providerErrors) {
@@ -108,6 +120,29 @@ function validateSelectedProviders(options: {
   }
 
   return errors;
+}
+
+/**
+ * Find providers that conflict with existing store providers.
+ */
+function findStoreConflicts(options: {
+  drafts: ProviderFormDraft[];
+  selectedIds: Set<number>;
+  store: UiContext['store'];
+}): string[] {
+  const conflicts: string[] = [];
+
+  for (const id of options.selectedIds) {
+    const draft = options.drafts[id];
+    if (!draft) continue;
+
+    const name = draft.name?.trim();
+    if (name && options.store.getProvider(name)) {
+      conflicts.push(name);
+    }
+  }
+
+  return [...new Set(conflicts)];
 }
 
 export async function runImportProviderConfigArrayScreen(
@@ -178,6 +213,7 @@ export async function runImportProviderConfigArrayScreen(
     };
   }
 
+  // Step 1: Validate for internal errors (excluding store conflicts)
   const validationErrors = validateSelectedProviders({
     drafts,
     selectedIds: route.selectedIds,
@@ -186,6 +222,38 @@ export async function runImportProviderConfigArrayScreen(
   if (validationErrors.length > 0) {
     await showValidationErrors(validationErrors);
     return { kind: 'stay' };
+  }
+
+  // Step 2: Check for conflicts with existing store providers
+  const storeConflicts = findStoreConflicts({
+    drafts,
+    selectedIds: route.selectedIds,
+    store: ctx.store,
+  });
+
+  if (storeConflicts.length > 0) {
+    const resolution = await promptConflictResolution({
+      kind: 'provider',
+      conflicts: storeConflicts,
+    });
+
+    if (resolution === 'cancel') {
+      return { kind: 'stay' };
+    }
+
+    // Apply resolution to all conflicting drafts
+    for (const id of route.selectedIds) {
+      const draft = drafts[id];
+      if (!draft) continue;
+
+      const name = draft.name?.trim();
+      if (!name || !storeConflicts.includes(name)) continue;
+
+      if (resolution === 'rename') {
+        draft.name = generateUniqueProviderName(name, ctx.store);
+      }
+      // For 'overwrite', we don't need to modify the draft - upsertProvider will handle it
+    }
   }
 
   const selectedDrafts = [...route.selectedIds]
@@ -202,6 +270,7 @@ export async function runImportProviderConfigArrayScreen(
       draft,
       store: ctx.store,
       apiKeyStore: ctx.apiKeyStore,
+      skipConflictResolution: true,
     });
     if (saved !== 'saved') {
       return { kind: 'stay' };

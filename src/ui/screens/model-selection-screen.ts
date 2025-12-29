@@ -1,5 +1,4 @@
 import * as vscode from 'vscode';
-import { generateAutoVersionedId } from '../../model-id-utils';
 import { formatModelDetail } from '../form-utils';
 import type {
   ModelSelectionRoute,
@@ -8,6 +7,10 @@ import type {
   UiResume,
 } from '../router/types';
 import { ModelConfig } from '../../types';
+import {
+  promptConflictResolution,
+  generateUniqueModelIdAndName,
+} from '../conflict-resolution';
 
 type ModelSelectionItem = vscode.QuickPickItem & {
   model?: ModelConfig;
@@ -54,27 +57,13 @@ async function showModelSelectionPicker(
         qp.busy = false;
         qp.placeholder = 'Select models to add';
 
-        const existingIds = new Set(route.existingModels.map((m) => m.id));
         const items: ModelSelectionItem[] = [];
 
         for (const model of models) {
-          const alreadyExists = existingIds.has(model.id);
-          let detail: string | undefined;
-
-          if (alreadyExists) {
-            const newId = generateAutoVersionedId(
-              model.id,
-              route.existingModels,
-            );
-            detail = `(already exists, will add as ${newId})`;
-          } else {
-            detail = formatModelDetail(model);
-          }
-
           items.push({
             label: model.name || model.id,
             description: model.name ? model.id : undefined,
-            detail,
+            detail: formatModelDetail(model),
             model,
             picked: false,
           });
@@ -109,45 +98,99 @@ async function showModelSelectionPicker(
       }
     });
 
-    qp.onDidAccept(() => {
+    qp.onDidAccept(async () => {
       const selectedItems = qp.selectedItems;
 
       if (isLoading || selectedItems.length === 0) {
         return;
       }
 
+      // Collect selected models
+      const selectedModels = selectedItems
+        .filter((item) => item.model)
+        .map((item) => ({ ...item.model! }));
+
+      if (selectedModels.length === 0) {
+        return;
+      }
+
+      // Find conflicts with existing models
       const existingIds = new Set(route.existingModels.map((m) => m.id));
-      const newModels: ModelConfig[] = [];
-      const addedInBatch: ModelConfig[] = [];
+      const conflicts = selectedModels
+        .map((m) => m.id)
+        .filter((id) => existingIds.has(id));
 
-      for (const item of selectedItems) {
-        if (!item.model) continue;
+      if (conflicts.length > 0) {
+        // Prompt user for conflict resolution
+        const resolution = await promptConflictResolution({
+          kind: 'model',
+          conflicts: [...new Set(conflicts)],
+        });
 
-        const combinedModels = [...route.existingModels, ...addedInBatch];
-        let newId = item.model.id;
-
-        if (
-          existingIds.has(item.model.id) ||
-          addedInBatch.some((m) => m.id === item.model!.id)
-        ) {
-          newId = generateAutoVersionedId(item.model.id, combinedModels);
+        if (resolution === 'cancel') {
+          return;
         }
 
-        const newModel = { ...item.model, id: newId };
-        newModels.push(newModel);
-        addedInBatch.push(newModel);
+        // Build a list of all existing models for generating unique IDs
+        const allExistingModels = [...route.existingModels];
+
+        // Apply resolution to all models
+        for (const model of selectedModels) {
+          if (!existingIds.has(model.id)) continue;
+
+          if (resolution === 'rename') {
+            // Generate unique model ID and name
+            const result = generateUniqueModelIdAndName(
+              model.id,
+              model.name,
+              allExistingModels,
+            );
+            model.id = result.id;
+            if (result.name) {
+              model.name = result.name;
+            }
+            // Track for subsequent conflict checks
+            allExistingModels.push({ id: model.id });
+          } else if (resolution === 'overwrite') {
+            // Remove the existing model from existingModels
+            const existingIndex = route.existingModels.findIndex(
+              (m) => m.id === model.id,
+            );
+            if (existingIndex !== -1) {
+              route.existingModels.splice(existingIndex, 1);
+            }
+          }
+        }
       }
 
-      if (newModels.length > 0) {
-        vscode.window.showInformationMessage(
-          `Added ${newModels.length} model(s): ${newModels
-            .map((m) => m.name || m.id)
-            .join(', ')}`,
-        );
+      // Handle duplicates within the selection itself (same model selected twice won't happen,
+      // but if well-known list has duplicates we need to handle it)
+      const seenIds = new Set<string>();
+      const allExistingForDupes = [...route.existingModels];
+      for (const model of selectedModels) {
+        if (seenIds.has(model.id)) {
+          const result = generateUniqueModelIdAndName(
+            model.id,
+            model.name,
+            allExistingForDupes,
+          );
+          model.id = result.id;
+          if (result.name) {
+            model.name = result.name;
+          }
+        }
+        seenIds.add(model.id);
+        allExistingForDupes.push({ id: model.id });
       }
+
+      vscode.window.showInformationMessage(
+        `Added ${selectedModels.length} model(s): ${selectedModels
+          .map((m) => m.name || m.id)
+          .join(', ')}`,
+      );
 
       qp.hide();
-      finish(newModels.length > 0 ? newModels : undefined);
+      finish(selectedModels);
     });
 
     qp.onDidHide(() => {

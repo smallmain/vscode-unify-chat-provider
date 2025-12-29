@@ -274,20 +274,35 @@ export function validateModelIdUnique(
 }
 
 /**
+ * Options for validating the provider form.
+ */
+export interface ValidateProviderFormOptions {
+  /** Skip the name uniqueness check (for conflict resolution) */
+  skipNameUniquenessCheck?: boolean;
+}
+
+/**
  * Validate the provider form.
  */
 export function validateProviderForm(
   data: ProviderFormDraft,
   store: ConfigStore,
   originalName?: string,
+  options?: ValidateProviderFormOptions,
 ): string[] {
   const errors: string[] = [];
   if (!data.type) errors.push('API Format is required');
 
-  const nameErr = data.name
-    ? validateProviderNameUnique(data.name, store, originalName)
-    : 'Provider name is required';
-  if (nameErr) errors.push(nameErr);
+  if (options?.skipNameUniquenessCheck) {
+    if (!data.name?.trim()) {
+      errors.push('Provider name is required');
+    }
+  } else {
+    const nameErr = data.name
+      ? validateProviderNameUnique(data.name, store, originalName)
+      : 'Provider name is required';
+    if (nameErr) errors.push(nameErr);
+  }
 
   const urlErr = data.baseUrl
     ? validateBaseUrl(data.baseUrl)

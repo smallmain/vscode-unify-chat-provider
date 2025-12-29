@@ -16,10 +16,15 @@ import { showCopiedBase64Config } from './base64-config';
 import {
   normalizeProviderDraft,
   validateProviderForm,
+  validateProviderNameUnique,
   type ProviderFormDraft,
 } from './form-utils';
 import { ProviderConfig } from '../types';
 import { officialModelsManager } from '../official-models-manager';
+import {
+  promptConflictResolution,
+  generateUniqueProviderName,
+} from './conflict-resolution';
 
 async function applyApiKeyStoragePolicy(options: {
   store: ConfigStore;
@@ -79,32 +84,80 @@ export async function saveProviderDraft(options: {
   apiKeyStore: ApiKeySecretStore;
   existing?: ProviderConfig;
   originalName?: string;
-}): Promise<'saved' | 'invalid'> {
+  /** Skip conflict resolution prompt (caller has already handled it) */
+  skipConflictResolution?: boolean;
+}): Promise<'saved' | 'invalid' | 'cancelled'> {
+  // First validate without name uniqueness check
   const errors = validateProviderForm(
     options.draft,
     options.store,
     options.originalName,
+    { skipNameUniquenessCheck: true },
   );
   if (errors.length > 0) {
     await showValidationErrors(errors);
     return 'invalid';
   }
 
+  let finalDraft = options.draft;
+  let existingToOverwrite: ProviderConfig | undefined;
+
+  // Check for name conflict separately (unless caller already handled it)
+  if (!options.skipConflictResolution) {
+    const nameConflict = validateProviderNameUnique(
+      options.draft.name!,
+      options.store,
+      options.originalName,
+    );
+
+    if (nameConflict) {
+      // Name conflicts with an existing provider
+      const resolution = await promptConflictResolution({
+        kind: 'provider',
+        conflicts: [options.draft.name!.trim()],
+      });
+
+      if (resolution === 'cancel') {
+        return 'cancelled';
+      }
+
+      if (resolution === 'rename') {
+        // Generate a unique name
+        const uniqueName = generateUniqueProviderName(
+          options.draft.name!.trim(),
+          options.store,
+        );
+        finalDraft = { ...options.draft, name: uniqueName };
+      } else if (resolution === 'overwrite') {
+        // Mark the existing provider to be overwritten
+        existingToOverwrite = options.store.getProvider(
+          options.draft.name!.trim(),
+        );
+      }
+    }
+  } else {
+    // Caller handled conflict - check if we're overwriting an existing provider
+    existingToOverwrite = options.store.getProvider(
+      options.draft.name!.trim(),
+    );
+  }
+
   const provider = await applyApiKeyStoragePolicy({
     store: options.store,
     apiKeyStore: options.apiKeyStore,
-    provider: normalizeProviderDraft(options.draft),
-    existing: options.existing,
+    provider: normalizeProviderDraft(finalDraft),
+    existing: options.existing ?? existingToOverwrite,
   });
+
   if (options.originalName && provider.name !== options.originalName) {
     await options.store.removeProvider(options.originalName);
   }
   await options.store.upsertProvider(provider);
 
   // Handle official models state migration
-  const sessionId = options.draft._officialModelsSessionId;
+  const sessionId = finalDraft._officialModelsSessionId;
   if (sessionId) {
-    if (options.draft.autoFetchOfficialModels) {
+    if (finalDraft.autoFetchOfficialModels) {
       await officialModelsManager.migrateDraftToProvider(
         sessionId,
         provider.name,
@@ -115,7 +168,7 @@ export async function saveProviderDraft(options: {
   }
 
   vscode.window.showInformationMessage(
-    options.existing
+    options.existing || existingToOverwrite
       ? `Provider "${provider.name}" updated.`
       : `Provider "${provider.name}" added.`,
   );

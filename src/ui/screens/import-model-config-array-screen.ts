@@ -18,6 +18,10 @@ import type {
   UiResume,
 } from '../router/types';
 import { ModelConfig } from '../../types';
+import {
+  promptConflictResolution,
+  generateUniqueModelIdAndName,
+} from '../conflict-resolution';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
@@ -59,10 +63,13 @@ function findDuplicates(values: string[]): string[] {
   return [...duplicates];
 }
 
+/**
+ * Validate selected models for internal errors only.
+ * Does NOT check conflicts with existing models.
+ */
 function validateSelectedModels(options: {
   importedModels: ModelConfig[];
   selectedIds: Set<number>;
-  existingModels: ModelConfig[];
 }): string[] {
   const selected = [...options.selectedIds]
     .map((id) => ({ id, model: options.importedModels[id] }))
@@ -79,19 +86,37 @@ function validateSelectedModels(options: {
     return ['Some models are missing IDs. Please edit them first.'];
   }
 
+  // Check for duplicates within imported configs (invalid config error)
   const duplicates = findDuplicates(ids);
   if (duplicates.length > 0) {
     return [`Model ID conflicts: ${duplicates.join(', ')}`];
   }
 
+  return [];
+}
+
+/**
+ * Find models that conflict with existing models.
+ */
+function findExistingConflicts(options: {
+  importedModels: ModelConfig[];
+  selectedIds: Set<number>;
+  existingModels: ModelConfig[];
+}): string[] {
   const existingIds = new Set(options.existingModels.map((m) => m.id));
-  const conflicts = ids.filter((id) => existingIds.has(id));
-  if (conflicts.length > 0) {
-    const unique = [...new Set(conflicts)];
-    return [`Model ID conflicts: ${unique.join(', ')}`];
+  const conflicts: string[] = [];
+
+  for (const id of options.selectedIds) {
+    const model = options.importedModels[id];
+    if (!model) continue;
+
+    const modelId = model.id?.trim();
+    if (modelId && existingIds.has(modelId)) {
+      conflicts.push(modelId);
+    }
   }
 
-  return [];
+  return [...new Set(conflicts)];
 }
 
 function applyModelFormResultToImportedList(options: {
@@ -171,14 +196,67 @@ export async function runImportModelConfigArrayScreen(
     };
   }
 
+  // Step 1: Validate for internal errors (excluding existing model conflicts)
   const errors = validateSelectedModels({
     importedModels: route.models,
     selectedIds: route.selectedIds,
-    existingModels: route.targetModels,
   });
   if (errors.length > 0) {
     await showValidationErrors(errors);
     return { kind: 'stay' };
+  }
+
+  // Step 2: Check for conflicts with existing models
+  const existingConflicts = findExistingConflicts({
+    importedModels: route.models,
+    selectedIds: route.selectedIds,
+    existingModels: route.targetModels,
+  });
+
+  if (existingConflicts.length > 0) {
+    const resolution = await promptConflictResolution({
+      kind: 'model',
+      conflicts: existingConflicts,
+    });
+
+    if (resolution === 'cancel') {
+      return { kind: 'stay' };
+    }
+
+    // Build a list of existing models for generating unique IDs
+    const allExistingModels = [...route.targetModels];
+
+    // Apply resolution to all conflicting models
+    for (const id of route.selectedIds) {
+      const model = route.models[id];
+      if (!model) continue;
+
+      const modelId = model.id?.trim();
+      if (!modelId || !existingConflicts.includes(modelId)) continue;
+
+      if (resolution === 'rename') {
+        // Generate unique model ID (#1, #2) and name ((1), (2)) with matching version
+        const result = generateUniqueModelIdAndName(
+          modelId,
+          model.name,
+          allExistingModels,
+        );
+        model.id = result.id;
+        if (result.name) {
+          model.name = result.name;
+        }
+        // Add to allExistingModels to avoid conflicts with other imports
+        allExistingModels.push({ id: model.id });
+      } else if (resolution === 'overwrite') {
+        // Remove the existing model from targetModels
+        const existingIndex = route.targetModels.findIndex(
+          (m) => m.id === modelId,
+        );
+        if (existingIndex !== -1) {
+          route.targetModels.splice(existingIndex, 1);
+        }
+      }
+    }
   }
 
   const selectedModels = [...route.selectedIds]

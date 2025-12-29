@@ -56,7 +56,7 @@ export interface ModelListRoute {
   existing?: ProviderConfig;
   originalName?: string;
   confirmDiscardOnBack?: boolean;
-  onSave?: () => Promise<'saved' | 'invalid'>;
+  onSave?: () => Promise<'saved' | 'invalid' | 'cancelled'>;
   afterSave?: 'pop' | 'popToRoot';
 }
 
