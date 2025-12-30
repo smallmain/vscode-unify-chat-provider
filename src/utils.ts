@@ -3,6 +3,7 @@ import type { ProviderHttpLogger } from './logger';
 import { officialModelsManager } from './official-models-manager';
 import type { ModelConfig, ProviderConfig } from './types';
 import * as vscode from 'vscode';
+import { t } from './i18n';
 
 /**
  * HTTP status codes that should trigger a retry.
@@ -384,7 +385,7 @@ export async function* withIdleTimeout<T>(
 
     if (result.kind === 'timeout') {
       throw new Error(
-        `Response timeout: No data received for ${responseTimeoutMs}ms`,
+        t('Response timeout: No data received for {0}ms', responseTimeoutMs),
       );
     }
 

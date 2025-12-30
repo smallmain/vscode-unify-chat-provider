@@ -218,8 +218,8 @@ export function formatBoolean(
   value: boolean | undefined,
   labels?: { default?: string; true?: string; false?: string },
 ): string {
-  if (value === undefined) return labels?.default ?? t('default');
-  return value ? labels?.true ?? t('true') : labels?.false ?? t('false');
+  if (value === undefined) return labels?.default ?? t('Default');
+  return value ? labels?.true ?? t('Enabled') : labels?.false ?? t('Disabled');
 }
 
 /**

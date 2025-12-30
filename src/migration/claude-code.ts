@@ -9,6 +9,7 @@ import {
   normalizeConfigFilePathInput,
 } from './fs-utils';
 import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
 const CLAUDE_CODE_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
@@ -22,7 +23,7 @@ function getClaudeCodeDefaultModels(): ModelConfig[] {
   for (const id of CLAUDE_CODE_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
-      throw new Error(`Well-known model not found: ${id}`);
+      throw new Error(t('Well-known model not found: {0}', id));
     }
     const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
     models.push(withoutAlternativeIds);
@@ -209,7 +210,7 @@ function buildClaudeCodeProvider(
     if (!baseUrl) missing.push('URL');
     if (!apiKey) missing.push('TOKEN/APIKEY');
     throw new Error(
-      `Claude Code config is missing required field(s): ${missing.join(', ')}`,
+      t('Claude Code config is missing required field(s): {0}', missing.join(', ')),
     );
   }
 

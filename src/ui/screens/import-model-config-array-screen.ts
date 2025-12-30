@@ -26,7 +26,7 @@ import { t } from '../../i18n';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
-  tooltip: 'Edit model',
+  tooltip: t('Edit Model'),
 };
 
 function getModelDisplayName(model: ModelConfig, fallbackIndex: number): string {

@@ -9,6 +9,7 @@ import {
   normalizeConfigFilePathInput,
 } from './fs-utils';
 import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
 const GEMINI_CLI_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
@@ -16,14 +17,14 @@ const GEMINI_CLI_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
   'gemini-3-flash-preview',
   'gemini-2.5-pro',
   'gemini-2.5-flash',
-  ] as const;
+] as const;
 
 function getGeminiCliDefaultModels(): ModelConfig[] {
   const models: ModelConfig[] = [];
   for (const id of GEMINI_CLI_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
-      throw new Error(`Well-known model not found: ${id}`);
+      throw new Error(t('Well-known model not found: {0}', id));
     }
     const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
     models.push(withoutAlternativeIds);
@@ -184,9 +185,12 @@ function buildGeminiCliProvider(
 ): ProviderMigrationCandidate {
   const geminiApiKey = getString(env['GEMINI_API_KEY']);
   const googleApiKey = getString(env['GOOGLE_API_KEY']);
-  const applicationCredentials = getString(env['GOOGLE_APPLICATION_CREDENTIALS']);
+  const applicationCredentials = getString(
+    env['GOOGLE_APPLICATION_CREDENTIALS'],
+  );
   const project =
-    getString(env['GOOGLE_CLOUD_PROJECT']) ?? getString(env['GOOGLE_CLOUD_PROJECT_ID']);
+    getString(env['GOOGLE_CLOUD_PROJECT']) ??
+    getString(env['GOOGLE_CLOUD_PROJECT_ID']);
   const location = getString(env['GOOGLE_CLOUD_LOCATION']);
   const useVertexFromEnv =
     getString(env['GOOGLE_GENAI_USE_VERTEXAI'])?.toLowerCase() === 'true';
@@ -199,9 +203,10 @@ function buildGeminiCliProvider(
 
   if (enabledAuthMethods.length > 1) {
     throw new Error(
-      `Gemini CLI config has multiple authentication variables set (${enabledAuthMethods.join(
-        ', ',
-      )}). Keep only one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.`,
+      t(
+        'Gemini CLI config has multiple authentication variables set ({0}). Keep only one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.',
+        enabledAuthMethods.join(', '),
+      ),
     );
   }
 
@@ -211,9 +216,10 @@ function buildGeminiCliProvider(
       if (!project) missing.push('GOOGLE_CLOUD_PROJECT');
       if (!location) missing.push('GOOGLE_CLOUD_LOCATION');
       throw new Error(
-        `Vertex AI (service account JSON key) is missing required env var(s): ${missing.join(
-          ', ',
-        )}.`,
+        t(
+          'Vertex AI (service account JSON key) is missing required env var(s): {0}.',
+          missing.join(', '),
+        ),
       );
     }
 
@@ -252,12 +258,16 @@ function buildGeminiCliProvider(
 
   if (project || location || useVertexFromEnv) {
     throw new Error(
-      'Gemini CLI appears to be configured for Vertex AI without API keys (ADC / Login with Google). This migration only supports GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.',
+      t(
+        'Gemini CLI appears to be configured for Vertex AI without API keys (ADC / Login with Google). This migration only supports GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.',
+      ),
     );
   }
 
   throw new Error(
-    'No supported Gemini CLI authentication variables found. Set one of GEMINI_API_KEY (Gemini API key), GOOGLE_API_KEY (Google Cloud API key), or GOOGLE_APPLICATION_CREDENTIALS (Vertex service account JSON key).',
+    t(
+      'No supported Gemini CLI authentication variables found. Set one of GEMINI_API_KEY (Gemini API key), GOOGLE_API_KEY (Google Cloud API key), or GOOGLE_APPLICATION_CREDENTIALS (Vertex service account JSON key).',
+    ),
   );
 }
 
@@ -295,4 +305,3 @@ export const geminiCliMigrationSource: ProviderMigrationSource = {
     return [buildGeminiCliProvider(env)];
   },
 };
-

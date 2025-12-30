@@ -28,7 +28,7 @@ export async function runWellKnownProviderListScreen(
     matchOnDetail: true,
     ignoreFocusOut: true,
     items: [
-      { label: '$(arrow-left) Back', action: 'back' },
+      { label: `$(arrow-left) ${t('Back')}`, action: 'back' },
       { label: '', kind: vscode.QuickPickItemKind.Separator },
       ...WELL_KNOWN_PROVIDERS.map((provider) => ({
         label: provider.name,

@@ -5,6 +5,7 @@ import { mergeWithWellKnownModels } from './well-known/models';
 import { stableStringify } from './config-ops';
 import { ApiKeySecretStore } from './api-key-secret-store';
 import { normalizeBaseUrlInput } from './utils';
+import { t } from './i18n';
 
 /**
  * State for a single provider's official models fetch
@@ -274,7 +275,7 @@ export class OfficialModelsManager {
       const client = createProvider(resolvedProvider);
 
       if (!client.getAvailableModels) {
-        throw new Error('Provider does not support fetching available models');
+        throw new Error(t('Provider does not support fetching available models'));
       }
 
       const rawModels = await client.getAvailableModels();
@@ -345,26 +346,19 @@ export class OfficialModelsManager {
   private getProviderConfigError(provider: ProviderConfig): string | undefined {
     const missing: string[] = [];
 
-    if (!provider.name.trim()) missing.push('Name');
-    if (!provider.type) missing.push('API Format');
-    if (!provider.baseUrl.trim()) missing.push('API base URL');
+    if (!provider.name.trim()) missing.push(t('Name'));
+    if (!provider.type) missing.push(t('API Format'));
+    if (!provider.baseUrl.trim()) missing.push(t('API Base URL'));
 
     if (missing.length === 0) return undefined;
     return this.formatMissingFieldsError(missing);
   }
 
   private formatMissingFieldsError(missing: string[]): string {
-    if (missing.length === 1) {
-      return `Cannot fetch official models: configure ${missing[0]} first.`;
-    }
-
-    if (missing.length === 2) {
-      return `Cannot fetch official models: configure ${missing[0]} and ${missing[1]} first.`;
-    }
-
-    return `Cannot fetch official models: configure ${missing
-      .slice(0, -1)
-      .join(', ')} and ${missing[missing.length - 1]} first.`;
+    return t(
+      'Cannot fetch official models: please configure the following fields first: {0}',
+      missing.join(', '),
+    );
   }
 
   private normalizeDraftBaseUrlForSignature(raw: string | undefined): string {
@@ -394,12 +388,12 @@ export class OfficialModelsManager {
     | { kind: 'error'; message: string } {
     const missing: string[] = [];
 
-    const name = input.name?.trim() || 'Draft Provider';
+    const name = input.name?.trim() || t('Draft Provider');
     const type = input.type;
     const baseUrlRaw = input.baseUrl?.trim();
 
-    if (!type) missing.push('API Format');
-    if (!baseUrlRaw) missing.push('API base URL');
+    if (!type) missing.push(t('API Format'));
+    if (!baseUrlRaw) missing.push(t('API Base URL'));
 
     if (missing.length > 0) {
       return { kind: 'error', message: this.formatMissingFieldsError(missing) };
@@ -409,7 +403,7 @@ export class OfficialModelsManager {
       return {
         kind: 'error',
         message:
-          'Cannot fetch official models: provider configuration is incomplete.',
+          t('Cannot fetch official models: provider configuration is incomplete.'),
       };
     }
 
@@ -420,7 +414,7 @@ export class OfficialModelsManager {
       return {
         kind: 'error',
         message:
-          'Cannot fetch official models: please enter a valid API base URL.',
+          t('Cannot fetch official models: please enter a valid API base URL.'),
       };
     }
 
@@ -452,7 +446,10 @@ export class OfficialModelsManager {
     }
 
     throw new Error(
-      `API key for provider "${provider.name}" is missing. Please re-enter it.`,
+      t(
+        'API key for provider "{0}" is missing. Please re-enter it and try again.',
+        provider.name,
+      ),
     );
   }
 
@@ -681,7 +678,7 @@ export class OfficialModelsManager {
       const client = createProvider(resolvedProvider);
 
       if (!client.getAvailableModels) {
-        throw new Error('Provider does not support fetching available models');
+        throw new Error(t('Provider does not support fetching available models'));
       }
 
       const rawModels = await client.getAvailableModels();

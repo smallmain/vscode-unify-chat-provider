@@ -84,10 +84,15 @@ export async function confirmCancelImport(): Promise<boolean> {
 
 export async function confirmFinalizeImport(options: {
   count: number;
-  itemLabel: string;
+  itemLabel: 'provider' | 'model';
 }): Promise<boolean> {
-  const label =
-    options.count === 1 ? options.itemLabel : `${options.itemLabel}s`;
+  const labelKey: 'provider' | 'providers' | 'model' | 'models' =
+    options.count === 1
+      ? options.itemLabel
+      : options.itemLabel === 'provider'
+        ? 'providers'
+        : 'models';
+  const label = t(labelKey);
   const choice = await vscode.window.showWarningMessage(
     t('Import {0} {1}?', options.count, label),
     { modal: true },

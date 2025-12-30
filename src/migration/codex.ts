@@ -10,6 +10,7 @@ import {
   normalizeConfigFilePathInput,
 } from './fs-utils';
 import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
 const CODEX_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
@@ -24,7 +25,7 @@ function getCodexDefaultModels(): ModelConfig[] {
   for (const id of CODEX_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
-      throw new Error(`Well-known model not found: ${id}`);
+      throw new Error(t('Well-known model not found: {0}', id));
     }
     const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
     models.push(withoutAlternativeIds);
@@ -148,22 +149,36 @@ function buildCodexProviderFromToml(
   if (!providerBaseUrl) {
     throw new Error(
       effectiveProviderId === 'openai'
-        ? 'Missing APIURL for Codex import: set OPENAI_BASE_URL or define a custom model provider with base_url in ~/.codex/config.toml.'
-        : `Missing APIURL for Codex import: set [model_providers.${effectiveProviderId}].base_url in ~/.codex/config.toml.`,
+        ? t(
+            'Missing APIURL for Codex import: set OPENAI_BASE_URL or define a custom model provider with base_url in ~/.codex/config.toml.',
+          )
+        : t(
+            'Missing APIURL for Codex import: set [model_providers.{0}].base_url in ~/.codex/config.toml.',
+            effectiveProviderId,
+          ),
     );
   }
 
   if (!apiKey) {
     if (envKey) {
       throw new Error(
-        `Missing APIKEY for Codex import: environment variable ${envKey} is not set (referenced by [model_providers.${effectiveProviderId}].env_key).`,
+        t(
+          'Missing APIKEY for Codex import: environment variable {0} is not set (referenced by [model_providers.{1}].env_key).',
+          envKey,
+          effectiveProviderId,
+        ),
       );
     }
 
     throw new Error(
       effectiveProviderId === 'openai'
-        ? 'Missing APIKEY for Codex import: set OPENAI_API_KEY in your environment (Codex uses env vars for keys).'
-        : `Missing APIKEY for Codex import: set [model_providers.${effectiveProviderId}].env_key in ~/.codex/config.toml and export that environment variable.`,
+        ? t(
+            'Missing APIKEY for Codex import: set OPENAI_API_KEY in your environment (Codex uses env vars for keys).',
+          )
+        : t(
+            'Missing APIKEY for Codex import: set [model_providers.{0}].env_key in ~/.codex/config.toml and export that environment variable.',
+            effectiveProviderId,
+          ),
     );
   }
 
@@ -221,11 +236,11 @@ export const codexMigrationSource: ProviderMigrationSource = {
       parsed = toml.parse(content);
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error);
-      throw new Error(`Failed to parse Codex config.toml: ${message}`);
+      throw new Error(t('Failed to parse Codex config.toml: {0}', message));
     }
 
     if (!isObjectRecord(parsed)) {
-      throw new Error('Codex config.toml must be a TOML table/object.');
+      throw new Error(t('Codex config.toml must be a TOML table/object.'));
     }
 
     return [buildCodexProviderFromToml(parsed)];

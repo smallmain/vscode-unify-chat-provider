@@ -25,7 +25,7 @@ import { t } from '../../i18n';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
-  tooltip: 'Edit provider',
+  tooltip: t('Edit Provider'),
 };
 
 function getProviderDisplayName(

@@ -32,17 +32,17 @@ type CandidatePickItem = vscode.QuickPickItem & {
 
 const browseButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('folder-opened'),
-  tooltip: 'Browse...',
+  tooltip: t('Browse...'),
 };
 
 const customPathButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('folder-opened'),
-  tooltip: 'Custom path...',
+  tooltip: t('Custom path...'),
 };
 
 const importFromContentButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('file-code'),
-  tooltip: 'Import from config content',
+  tooltip: t('Import from config content'),
 };
 
 type SourceItemAction =

@@ -9,6 +9,7 @@ import type { UiContext } from './router/types';
 import { runRemoveProviderScreen } from './screens/remove-provider-screen';
 import type { ApiKeySecretStore } from '../api-key-secret-store';
 import { resolveProvidersForExportOrShowError } from '../api-key-utils';
+import { t } from '../i18n';
 
 export async function manageProviders(
   store: ConfigStore,
@@ -67,7 +68,7 @@ export async function exportAllProviders(
 ): Promise<void> {
   const providers = store.endpoints;
   if (providers.length === 0) {
-    vscode.window.showInformationMessage('No providers configured.');
+    vscode.window.showInformationMessage(t('No providers configured.'));
     return;
   }
 

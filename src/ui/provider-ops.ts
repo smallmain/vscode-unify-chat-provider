@@ -138,9 +138,7 @@ export async function saveProviderDraft(options: {
     }
   } else {
     // Caller handled conflict - check if we're overwriting an existing provider
-    existingToOverwrite = options.store.getProvider(
-      options.draft.name!.trim(),
-    );
+    existingToOverwrite = options.store.getProvider(options.draft.name!.trim());
   }
 
   const provider = await applyApiKeyStoragePolicy({
@@ -196,7 +194,10 @@ export async function duplicateProvider(
   const ok = await resolveApiKeyForExportOrShowError(
     apiKeyStore,
     duplicated,
-    t('Provider "{0}" API key is missing. Please re-enter it before duplicating.', provider.name),
+    t(
+      'Provider "{0}" API key is missing. Please re-enter it before duplicating.',
+      provider.name,
+    ),
   );
   if (!ok) return;
 
@@ -211,7 +212,9 @@ export async function duplicateProvider(
   }
 
   await store.upsertProvider(duplicated);
-  vscode.window.showInformationMessage(t('Provider duplicated as "{0}".', newName));
+  vscode.window.showInformationMessage(
+    t('Provider duplicated as "{0}".', newName),
+  );
 }
 
 export function buildProviderConfigFromDraft(
@@ -252,7 +255,7 @@ async function promptForProviderExportSections(): Promise<
       },
       {
         label: t('Settings'),
-        detail: t('Export provider settings without models'),
+        detail: t('Export provider settings'),
         section: 'settings',
         picked: true,
       },
@@ -269,9 +272,12 @@ async function promptForProviderExportSections(): Promise<
     qp.onDidAccept(() => {
       const sections = new Set(qp.selectedItems.map((item) => item.section));
       if (sections.size === 0) {
-        vscode.window.showErrorMessage(t('Select at least one export option.'), {
-          modal: true,
-        });
+        vscode.window.showErrorMessage(
+          t('Select at least one export option.'),
+          {
+            modal: true,
+          },
+        );
         return;
       }
       qp.hide();
