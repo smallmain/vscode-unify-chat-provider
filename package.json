@@ -15,6 +15,7 @@
     "language-model",
     "llm",
     "ucp",
+    "oai",
     "openai",
     "anthropic",
     "gemini",
