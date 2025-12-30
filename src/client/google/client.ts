@@ -78,14 +78,18 @@ export class GoogleAIStudioProvider implements ApiProvider {
     };
   }
 
-  private createClient(modelConfig?: ModelConfig): GoogleGenAI {
-    const responseTimeoutMs =
-      this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection;
+  private createClient(
+    modelConfig: ModelConfig | undefined,
+    streamEnabled: boolean,
+  ): GoogleGenAI {
+    const requestTimeoutMs = streamEnabled
+      ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
+      : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
     const httpOptions: HttpOptions = {
       baseUrl: this.baseUrl,
       headers: this.buildHeaders(modelConfig),
-      timeout: responseTimeoutMs,
+      timeout: requestTimeoutMs,
       extraBody: this.buildExtraBody(modelConfig),
     };
 
@@ -663,7 +667,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
       ...{ ...this.buildThinkingConfig(model, useThinkingLevel) },
     };
 
-    const client = this.createClient(model);
+    const client = this.createClient(model, streamEnabled);
 
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -867,7 +871,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
       providerType: this.config.type,
     });
     try {
-      const client = this.createClient();
+      const client = this.createClient(undefined, false);
       const result: ModelConfig[] = [];
       const pager = await withGoogleFetchLogger(logger, async () => {
         return client.models.list({

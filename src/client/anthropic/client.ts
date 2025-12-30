@@ -66,9 +66,13 @@ export class AnthropicProvider implements ApiProvider {
    * Create an Anthropic client with custom fetch for retry support.
    * A new client is created per request to enable per-request logging.
    */
-  private createClient(logger?: ProviderHttpLogger): Anthropic {
-    const connectionTimeoutMs =
-      this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection;
+  private createClient(
+    logger: ProviderHttpLogger | undefined,
+    stream: boolean,
+  ): Anthropic {
+    const requestTimeoutMs = stream
+      ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
+      : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
     // Claude Code client always calls the messages endpoints with `?beta=true`.
     const urlTransformer =
@@ -93,7 +97,11 @@ export class AnthropicProvider implements ApiProvider {
       apiKey: this.config.apiKey,
       baseURL: this.baseUrl,
       maxRetries: 0,
-      fetch: createCustomFetch({ connectionTimeoutMs, logger, urlTransformer }),
+      fetch: createCustomFetch({
+        connectionTimeoutMs: requestTimeoutMs,
+        logger,
+        urlTransformer,
+      }),
     });
   }
 
@@ -816,7 +824,7 @@ export class AnthropicProvider implements ApiProvider {
         requestBase.betas = Array.from(betaFeatures);
       }
 
-      const client = this.createClient(logger);
+      const client = this.createClient(logger, stream);
 
       performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -1256,7 +1264,7 @@ export class AnthropicProvider implements ApiProvider {
     let afterId: string | undefined;
 
     try {
-      const client = this.createClient(logger);
+      const client = this.createClient(logger, false);
 
       do {
         const page = await client.models.list(

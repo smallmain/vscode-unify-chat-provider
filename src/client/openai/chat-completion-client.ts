@@ -79,15 +79,22 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
    * Create an OpenAI client with custom fetch for retry support.
    * A new client is created per request to enable per-request logging.
    */
-  private createClient(logger?: ProviderHttpLogger): OpenAI {
-    const connectionTimeoutMs =
-      this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection;
+  private createClient(
+    logger: ProviderHttpLogger | undefined,
+    stream: boolean,
+  ): OpenAI {
+    const requestTimeoutMs = stream
+      ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
+      : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
     return new OpenAI({
       apiKey: this.config.apiKey,
       baseURL: this.baseUrl,
       maxRetries: 0,
-      fetch: createCustomFetch({ connectionTimeoutMs, logger }),
+      fetch: createCustomFetch({
+        connectionTimeoutMs: requestTimeoutMs,
+        logger,
+      }),
     });
   }
 
@@ -670,7 +677,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
 
-    const client = this.createClient(logger);
+    const client = this.createClient(logger, streamEnabled);
 
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -1143,7 +1150,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     });
     try {
       const result: ModelConfig[] = [];
-      const client = this.createClient(logger);
+      const client = this.createClient(logger, false);
       const page = await client.models.list({ headers: this.buildHeaders() });
       for await (const model of page) {
         result.push({ id: model.id });

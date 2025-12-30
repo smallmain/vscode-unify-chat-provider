@@ -34,8 +34,8 @@ export const DEFAULT_RETRY_CONFIG = {
  * Default timeout configuration for HTTP requests and SSE streams.
  */
 export const DEFAULT_TIMEOUT_CONFIG = {
-  /** Connection timeout in milliseconds (10 seconds) */
-  connection: 10_000,
+  /** Connection timeout in milliseconds (20 seconds) */
+  connection: 20_000,
   /** Response/idle timeout in milliseconds (2 minutes) */
   response: 120_000,
 } as const;

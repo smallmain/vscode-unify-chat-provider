@@ -69,13 +69,19 @@ export class OllamaProvider implements ApiProvider {
   private createClient(
     headers?: Record<string, string>,
     logger?: ProviderHttpLogger,
+    stream?: boolean,
   ): Ollama {
-    const connectionTimeoutMs =
-      this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection;
+    const streamEnabled = stream ?? true;
+    const requestTimeoutMs = streamEnabled
+      ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
+      : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
     return new Ollama({
       host: this.baseUrl,
-      fetch: createCustomFetch({ connectionTimeoutMs, logger }),
+      fetch: createCustomFetch({
+        connectionTimeoutMs: requestTimeoutMs,
+        logger,
+      }),
       headers,
     });
   }
@@ -431,7 +437,8 @@ export class OllamaProvider implements ApiProvider {
     logger: RequestLogger,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const headers = this.buildHeaders(model);
-    const client = this.createClient(headers, logger);
+    const streamEnabled = model.stream ?? true;
+    const client = this.createClient(headers, logger, streamEnabled);
     const abortController = new AbortController();
     let stream: AbortableAsyncIterator<ChatResponse> | undefined;
     const cancellationListener = token.onCancellationRequested(() => {
@@ -445,7 +452,6 @@ export class OllamaProvider implements ApiProvider {
 
     const convertedMessages = this.convertMessages(encodedModelId, messages);
     const tools = this.convertTools(options.tools);
-    const streamEnabled = model.stream ?? true;
     const requestOptions = this.buildOptions(model);
 
     const baseBody: ChatRequest = {
