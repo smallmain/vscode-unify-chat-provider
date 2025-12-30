@@ -1,5 +1,6 @@
 import { getBaseModelId } from '../model-id-utils';
 import { AnthropicProvider } from './anthropic/client';
+import { GoogleAIStudioProvider } from './google/client';
 import { ProviderDefinition } from './interface';
 import { OllamaProvider } from './ollama/client';
 import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
@@ -9,6 +10,7 @@ import { matchProvider, matchModelFamily } from './utils';
 
 export type ProviderType =
   | 'anthropic'
+  | 'google-ai-studio'
   | 'openai-chat-completion'
   | 'openai-responses'
   | 'ollama';
@@ -20,6 +22,13 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/v1/messages',
     supportMimics: ['claude-code'],
     class: AnthropicProvider,
+  },
+  'google-ai-studio': {
+    type: 'google-ai-studio',
+    label: 'Google AI Studio (Gemini API)',
+    description: '/v1beta/models:generateContent',
+    supportMimics: [],
+    class: GoogleAIStudioProvider,
   },
   'openai-chat-completion': {
     type: 'openai-chat-completion',
@@ -156,6 +165,10 @@ export enum FeatureId {
    * @see https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode
    */
   OpenAIUseClearThinking = 'openai_use-clear-thinking',
+  /**
+   * @see https://ai.google.dev/gemini-api/docs/thinking?hl=zh-cn#levels-budgets
+   */
+  GeminiUseThinkingLevel = 'gemini_use-thinking-level',
 }
 
 export const FEATURES: Record<FeatureId, Feature> = {
@@ -330,5 +343,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseClearThinking]: {
     supportedProviders: ['open.bigmodel.cn', 'api.z.ai'],
+  },
+  [FeatureId.GeminiUseThinkingLevel]: {
+    supportedFamilys: ['gemini-3-'],
   },
 };

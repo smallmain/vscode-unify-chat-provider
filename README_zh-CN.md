@@ -412,6 +412,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&apiKe
 | 供应商                                                                                          | 支持特性                                                 |
 | :---------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
 | [Open AI](https://openai.com/)                                                                  |
+| [Google AI Studio](https://aistudio.google.com/)                                                |                                                          |
 | [Anthropic](https://www.anthropic.com/)                                                         | <li>InterleavedThinking <li>FineGrainedToolStreaming     |
 | [xAI](https://docs.x.ai/)                                                                       |
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)           |

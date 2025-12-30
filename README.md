@@ -106,6 +106,7 @@ Applications or extensions supported for one-click migration:
 Model providers supported for one-click configuration:
 
 - OpenAI
+- Google AI Studio
 - Anthropic
 - xAI
 - Hugging Face

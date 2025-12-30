@@ -183,12 +183,14 @@
                 "description": "API format type. Determines how requests are formatted.",
                 "enum": [
                   "anthropic",
+                  "google-ai-studio",
                   "openai-chat-completion",
                   "openai-responses",
                   "ollama"
                 ],
                 "enumDescriptions": [
                   "Anthropic Messages API",
+                  "Google AI Studio (Gemini API)",
                   "OpenAI Chat Completion API",
                   "OpenAI Responses API",
                   "Ollama Chat API"
@@ -535,6 +537,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@google/genai": "^1.34.0",
     "@iarna/toml": "^2.2.5",
     "ollama": "^0.6.3",
     "openai": "^6.10.0"
