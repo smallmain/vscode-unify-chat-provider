@@ -1,5 +1,15 @@
 # Changelog
 
+## v2.1.6 - 2026-01-07
+
+### Fixes
+- avoid errors in caching log printing from affecting the main logic. (a6fd898, SmallMain)
+- handle cancellation requests in API providers and utility functions (06c64ec, SmallMain)
+
+### Chores
+- add GitHub Actions release workflow (e5d1fd5, SmallMain)
+- update package-lock.json files (8605d04, SmallMain)
+
 ## v2.1.5 - 2026-01-04
 
 ### Fixes
