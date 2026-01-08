@@ -41,7 +41,7 @@ export function cloneModels(models: ModelConfig[]): ModelConfig[] {
  */
 export function createModelDraft(existing?: ModelConfig): ModelConfig {
   if (!existing) {
-    return { id: '' };
+    return { id: '', capabilities: { toolCalling: true } };
   }
   return { ...existing };
 }
