@@ -53,6 +53,16 @@ export class ConfigStore {
   }
 
   /**
+   * Raw endpoints value from configuration.
+   *
+   * This is only intended for startup-time migration of legacy config fields.
+   */
+  get rawEndpoints(): unknown[] {
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    return config.get<unknown[]>('endpoints', []);
+  }
+
+  /**
    * Whether verbose logging is enabled
    */
   get verbose(): boolean {
@@ -138,9 +148,6 @@ export class ConfigStore {
       ] as const),
     );
 
-    provider.apiKey =
-      typeof provider.apiKey === 'string' ? provider.apiKey : undefined;
-
     provider.extraHeaders = this.normalizeStringRecord(provider.extraHeaders);
     provider.extraBody = this.normalizeObjectRecord(provider.extraBody);
 
@@ -216,22 +223,31 @@ export class ConfigStore {
    */
   async setEndpoints(endpoints: ProviderConfig[]): Promise<void> {
     const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
-    const inspection = config.inspect<ProviderConfig[]>('endpoints');
+    await config.update('endpoints', endpoints, this.getEndpointsTarget());
+  }
 
-    // Determine which configuration level to update based on where the value exists
-    let target: vscode.ConfigurationTarget;
+  /**
+   * Save raw endpoints to configuration (used by startup migration).
+   */
+  async setRawEndpoints(endpoints: unknown[]): Promise<void> {
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    await config.update('endpoints', endpoints, this.getEndpointsTarget());
+  }
+
+  private getEndpointsTarget(): vscode.ConfigurationTarget {
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    const inspection = config.inspect<unknown[]>('endpoints');
+
     if (inspection?.workspaceFolderValue !== undefined) {
-      target = vscode.ConfigurationTarget.WorkspaceFolder;
-    } else if (inspection?.workspaceValue !== undefined) {
-      target = vscode.ConfigurationTarget.Workspace;
-    } else if (inspection?.globalValue !== undefined) {
-      target = vscode.ConfigurationTarget.Global;
-    } else {
-      // Default to Global when no existing configuration
-      target = vscode.ConfigurationTarget.Global;
+      return vscode.ConfigurationTarget.WorkspaceFolder;
     }
-
-    await config.update('endpoints', endpoints, target);
+    if (inspection?.workspaceValue !== undefined) {
+      return vscode.ConfigurationTarget.Workspace;
+    }
+    if (inspection?.globalValue !== undefined) {
+      return vscode.ConfigurationTarget.Global;
+    }
+    return vscode.ConfigurationTarget.Global;
   }
 
   /**

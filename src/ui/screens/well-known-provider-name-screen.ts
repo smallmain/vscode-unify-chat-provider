@@ -32,7 +32,7 @@ export async function runWellKnownProviderNameScreen(
   return {
     kind: 'push',
     route: {
-      kind: 'wellKnownProviderApiKey',
+      kind: 'wellKnownProviderAuth',
       provider: route.provider,
       draft: route.draft,
     },

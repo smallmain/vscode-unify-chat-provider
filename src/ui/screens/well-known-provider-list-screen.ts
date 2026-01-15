@@ -31,8 +31,8 @@ export async function runWellKnownProviderListScreen(
       { label: `$(arrow-left) ${t('Back')}`, action: 'back' },
       { label: '', kind: vscode.QuickPickItemKind.Separator },
       ...WELL_KNOWN_PROVIDERS.map((provider) => ({
-        label: provider.name,
-        description: provider.type,
+        label: t(provider.name),
+        description: t(provider.name) === provider.name ? '' : provider.name,
         detail: provider.baseUrl,
         provider,
       })),
@@ -50,7 +50,7 @@ export async function runWellKnownProviderListScreen(
     return {
       kind: 'push',
       route: {
-        kind: 'wellKnownProviderApiKey',
+        kind: 'wellKnownProviderAuth',
         provider: picked.provider,
         draft,
       },

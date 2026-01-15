@@ -210,7 +210,10 @@ async function buildCodexProviderFromToml(
     type: providerType,
     name: providerDisplayName,
     baseUrl,
-    apiKey,
+    auth: {
+      method: 'api-key',
+      apiKey,
+    },
     models,
   };
 

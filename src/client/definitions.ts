@@ -1,4 +1,5 @@
 import { getBaseModelId } from '../model-id-utils';
+import { t } from '../i18n';
 import { AnthropicProvider } from './anthropic/client';
 import { GoogleAIStudioProvider } from './google/ai-studio-client';
 import { VertexAIProvider } from './google/vertex-ai-client';
@@ -20,37 +21,37 @@ export type ProviderType =
 export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
   anthropic: {
     type: 'anthropic',
-    label: 'Anthropic Messages API',
+    label: t('Anthropic Messages API'),
     description: '/v1/messages',
     class: AnthropicProvider,
   },
   'google-ai-studio': {
     type: 'google-ai-studio',
-    label: 'Google AI Studio (Gemini API)',
+    label: t('Google AI Studio (Gemini API)'),
     description: '/v1beta/models:generateContent',
     class: GoogleAIStudioProvider,
   },
   'google-vertex-ai': {
     type: 'google-vertex-ai',
-    label: 'Google Vertex AI',
+    label: t('Google Vertex AI'),
     description: '/v1beta1/models:generateContent',
     class: VertexAIProvider,
   },
   'openai-chat-completion': {
     type: 'openai-chat-completion',
-    label: 'OpenAI Chat Completion API',
+    label: t('OpenAI Chat Completion API'),
     description: '/v1/chat/completions',
     class: OpenAIChatCompletionProvider,
   },
   'openai-responses': {
     type: 'openai-responses',
-    label: 'OpenAI Responses API',
+    label: t('OpenAI Responses API'),
     description: '/v1/responses',
     class: OpenAIResponsesProvider,
   },
   ollama: {
     type: 'ollama',
-    label: 'Ollama Chat API',
+    label: t('Ollama Chat API'),
     description: '/api/chat',
     class: OllamaProvider,
   },

@@ -14,13 +14,12 @@ import {
   duplicateProvider,
   exportProviderConfigFromDraft,
   saveProviderDraft,
+  promptForSensitiveDataInclusion,
 } from '../provider-ops';
 import { createProviderDraft } from '../form-utils';
 import { getAllModelsForProvider } from '../../utils';
-import {
-  deleteProviderApiKeySecretIfUnused,
-  resolveProvidersForExportOrShowError,
-} from '../../api-key-utils';
+import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
+import { resolveProvidersForExportOrShowError } from '../../auth/auth-transfer';
 import { t } from '../../i18n';
 
 type ProviderListItem = vscode.QuickPickItem & {
@@ -58,7 +57,7 @@ export async function runProviderListScreen(
       if (buttonIndex === 1) {
         const provider = ctx.store.getProvider(item.providerName);
         if (provider) {
-          await duplicateProvider(ctx.store, ctx.apiKeyStore, provider);
+          await duplicateProvider(ctx.store, ctx.secretStore, provider);
           qp.items = await buildProviderListItems(ctx.store);
         }
         return;
@@ -71,7 +70,7 @@ export async function runProviderListScreen(
 
         if (!confirmed) return;
         await deleteProviderApiKeySecretIfUnused({
-          apiKeyStore: ctx.apiKeyStore,
+          secretStore: ctx.secretStore,
           providers: ctx.store.endpoints,
           providerName: item.providerName,
         });
@@ -100,7 +99,7 @@ export async function runProviderListScreen(
     const draft = createProviderDraft(provider);
     await exportProviderConfigFromDraft({
       draft,
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       allowPartial: true,
     });
     return { kind: 'stay' };
@@ -135,9 +134,13 @@ export async function runProviderListScreen(
       return { kind: 'stay' };
     }
 
+    const includeSensitive = await promptForSensitiveDataInclusion();
+    if (includeSensitive === undefined) return { kind: 'stay' };
+
     const resolved = await resolveProvidersForExportOrShowError({
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       providers,
+      includeSensitive,
     });
     if (!resolved) return { kind: 'stay' };
     await showCopiedBase64Config(resolved);
@@ -177,7 +180,7 @@ export async function runProviderListScreen(
           saveProviderDraft({
             draft,
             store: ctx.store,
-            apiKeyStore: ctx.apiKeyStore,
+            secretStore: ctx.secretStore,
             existing,
             originalName: existing.name,
           }),

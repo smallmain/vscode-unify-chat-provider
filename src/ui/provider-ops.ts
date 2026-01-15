@@ -7,12 +7,8 @@ import {
   PROVIDER_CONFIG_KEYS,
 } from '../config-ops';
 import { showValidationErrors } from './component';
-import {
-  ApiKeySecretStore,
-  createApiKeySecretRef,
-  isApiKeySecretRef,
-} from '../api-key-secret-store';
-import { resolveApiKeyForExportOrShowError } from '../api-key-utils';
+import { SecretStore } from '../secret';
+import { resolveAuthForExportOrShowError } from '../auth/auth-transfer';
 import { showCopiedBase64Config } from './base64-config';
 import {
   normalizeProviderDraft,
@@ -26,63 +22,39 @@ import {
   promptConflictResolution,
   generateUniqueProviderName,
 } from './conflict-resolution';
+import { getAuthMethodCtor } from '../auth';
 
-async function applyApiKeyStoragePolicy(options: {
+async function applyAuthStoragePolicy(options: {
   store: ConfigStore;
-  apiKeyStore: ApiKeySecretStore;
+  secretStore: SecretStore;
   provider: ProviderConfig;
   existing?: ProviderConfig;
 }): Promise<ProviderConfig> {
   const next = options.provider;
-  const storeApiKeyInSettings = options.store.storeApiKeyInSettings;
-
-  const existingRef =
-    options.existing?.apiKey && isApiKeySecretRef(options.existing.apiKey)
-      ? options.existing.apiKey
-      : undefined;
-
-  const status = await options.apiKeyStore.getStatus(next.apiKey);
-
-  if (storeApiKeyInSettings) {
-    if (status.kind === 'unset') {
-      next.apiKey = undefined;
-      return next;
-    }
-    if (status.kind === 'plain') {
-      next.apiKey = status.apiKey;
-      return next;
-    }
-    if (status.kind === 'secret') {
-      next.apiKey = status.apiKey;
-      return next;
-    }
-    next.apiKey = status.ref;
+  const auth = next.auth;
+  if (!auth || auth.method === 'none') {
     return next;
   }
 
-  // Store in VS Code Secret Storage by default
-  if (status.kind === 'unset') {
-    next.apiKey = undefined;
-    return next;
-  }
-  if (status.kind === 'plain') {
-    const ref = existingRef ?? createApiKeySecretRef();
-    await options.apiKeyStore.set(ref, status.apiKey);
-    next.apiKey = ref;
-    return next;
-  }
-  if (status.kind === 'secret') {
-    next.apiKey = status.ref;
-    return next;
-  }
-  next.apiKey = status.ref;
+  const storeSecretsInSettings = options.store.storeApiKeyInSettings;
+  const existingAuth = options.existing?.auth;
+
+  const normalized = await getAuthMethodCtor(auth.method)!.normalizeOnImport(
+    auth,
+    {
+      secretStore: options.secretStore,
+      storeSecretsInSettings,
+      existing: existingAuth?.method === auth.method ? existingAuth : undefined,
+    },
+  );
+  next.auth = normalized;
   return next;
 }
 
 export async function saveProviderDraft(options: {
   draft: ProviderFormDraft;
   store: ConfigStore;
-  apiKeyStore: ApiKeySecretStore;
+  secretStore: SecretStore;
   existing?: ProviderConfig;
   originalName?: string;
   /** Skip conflict resolution prompt (caller has already handled it) */
@@ -141,9 +113,9 @@ export async function saveProviderDraft(options: {
     existingToOverwrite = options.store.getProvider(options.draft.name!.trim());
   }
 
-  const provider = await applyApiKeyStoragePolicy({
+  const provider = await applyAuthStoragePolicy({
     store: options.store,
-    apiKeyStore: options.apiKeyStore,
+    secretStore: options.secretStore,
     provider: normalizeProviderDraft(finalDraft),
     existing: options.existing ?? existingToOverwrite,
   });
@@ -153,16 +125,17 @@ export async function saveProviderDraft(options: {
   }
   await options.store.upsertProvider(provider);
 
+  const draftSessionId = finalDraft._draftSessionId;
+
   // Handle official models state migration
-  const sessionId = finalDraft._officialModelsSessionId;
-  if (sessionId) {
+  if (draftSessionId) {
     if (finalDraft.autoFetchOfficialModels) {
       await officialModelsManager.migrateDraftToProvider(
-        sessionId,
+        draftSessionId,
         provider.name,
       );
     } else {
-      officialModelsManager.clearDraftSession(sessionId);
+      officialModelsManager.clearDraftSession(draftSessionId);
     }
   }
 
@@ -176,7 +149,7 @@ export async function saveProviderDraft(options: {
 
 export async function duplicateProvider(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
   provider: ProviderConfig,
 ): Promise<void> {
   let baseName = provider.name;
@@ -191,23 +164,26 @@ export async function duplicateProvider(
   const duplicated = deepClone(provider);
   duplicated.name = newName;
 
-  const ok = await resolveApiKeyForExportOrShowError(
-    apiKeyStore,
-    duplicated,
-    t(
-      'Provider "{0}" API key is missing. Please re-enter it before duplicating.',
-      provider.name,
-    ),
-  );
-  if (!ok) return;
+  const storeSecretsInSettings = store.storeApiKeyInSettings;
 
-  if (!store.storeApiKeyInSettings) {
-    if (duplicated.apiKey) {
-      const newRef = createApiKeySecretRef();
-      await apiKeyStore.set(newRef, duplicated.apiKey);
-      duplicated.apiKey = newRef;
-    } else {
-      duplicated.apiKey = undefined;
+  const auth = duplicated.auth;
+  if (auth && auth.method !== 'none') {
+    try {
+      duplicated.auth = await getAuthMethodCtor(
+        auth.method,
+      )!.prepareForDuplicate(auth, {
+        secretStore,
+        storeSecretsInSettings,
+      });
+    } catch {
+      vscode.window.showErrorMessage(
+        t(
+          'Provider "{0}" authentication data is missing. Please re-enter it before duplicating.',
+          provider.name,
+        ),
+        { modal: true },
+      );
+      return;
     }
   }
 
@@ -220,11 +196,11 @@ export async function duplicateProvider(
 export function buildProviderConfigFromDraft(
   draft: ProviderFormDraft,
 ): Partial<ProviderConfig> {
+  const { _draftSessionId: _, ...rest } = deepClone(draft);
   const source: Partial<ProviderConfig> = {
-    ...deepClone(draft),
+    ...rest,
     name: draft.name?.trim() || undefined,
     baseUrl: draft.baseUrl?.trim() || undefined,
-    apiKey: draft.apiKey?.trim() || undefined,
     models: draft.models.length > 0 ? deepClone(draft.models) : undefined,
   };
 
@@ -293,9 +269,37 @@ async function promptForProviderExportSections(): Promise<
   });
 }
 
+export async function promptForSensitiveDataInclusion(): Promise<
+  boolean | undefined
+> {
+  const result = await vscode.window.showQuickPick(
+    [
+      {
+        label: '$(lock) ' + t('Exclude Sensitive Data (Safer)'),
+        detail: t('API keys, OAuth tokens, and client secrets will be removed'),
+        picked: true,
+        value: false,
+      },
+      {
+        label: '$(unlock) ' + t('Include Sensitive Data (Riskier)'),
+        detail: t(
+          'API keys, OAuth tokens, and client secrets will be included in plain text',
+        ),
+        value: true,
+      },
+    ],
+    {
+      placeHolder: t('Select export mode'),
+      ignoreFocusOut: true,
+    },
+  );
+
+  return result ? result.value : undefined;
+}
+
 export async function exportProviderConfigFromDraft(options: {
   draft: ProviderFormDraft;
-  apiKeyStore: ApiKeySecretStore;
+  secretStore: SecretStore;
   allowPartial?: boolean;
 }): Promise<void> {
   const sections = options.allowPartial
@@ -303,6 +307,9 @@ export async function exportProviderConfigFromDraft(options: {
     : new Set<ProviderExportSection>(['models', 'settings']);
 
   if (!sections || sections.size === 0) return;
+
+  const includeSensitive = await promptForSensitiveDataInclusion();
+  if (includeSensitive === undefined) return;
 
   if (sections.has('models') && !sections.has('settings')) {
     await showCopiedBase64Config(options.draft.models);
@@ -315,18 +322,20 @@ export async function exportProviderConfigFromDraft(options: {
     const settingsOnly = { ...config };
     delete settingsOnly.models;
 
-    const ok = await resolveApiKeyForExportOrShowError(
-      options.apiKeyStore,
+    const ok = await resolveAuthForExportOrShowError(
+      options.secretStore,
       settingsOnly,
+      { includeSensitive },
     );
     if (!ok) return;
     await showCopiedBase64Config(settingsOnly);
     return;
   }
 
-  const ok = await resolveApiKeyForExportOrShowError(
-    options.apiKeyStore,
+  const ok = await resolveAuthForExportOrShowError(
+    options.secretStore,
     config,
+    { includeSensitive },
   );
   if (!ok) return;
   await showCopiedBase64Config(config);

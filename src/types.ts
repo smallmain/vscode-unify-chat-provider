@@ -1,3 +1,4 @@
+import { AuthConfig } from './auth/types';
 import { ProviderType } from './client/definitions';
 
 /**
@@ -10,7 +11,14 @@ export interface ProviderConfig {
   name: string;
   /** Base URL for the API (e.g., https://api.anthropic.com) */
   baseUrl: string;
-  /** API key for authentication */
+  /**
+   * Unified authentication configuration.
+   */
+  auth?: AuthConfig;
+  /**
+   * @deprecated Use `auth` field instead. This field is kept for configuration migration
+   * and will be removed in a future version.
+   */
   apiKey?: string;
   /** List of available model IDs */
   models: ModelConfig[];
@@ -23,6 +31,12 @@ export interface ProviderConfig {
   /** Whether to auto-fetch official models from the provider API */
   autoFetchOfficialModels?: boolean;
 }
+
+export type DeprecatedProviderConfigKey = 'apiKey';
+export type ProviderConfigPersistedKey = Exclude<
+  keyof ProviderConfig,
+  DeprecatedProviderConfigKey
+>;
 
 /**
  * Configuration for a single model

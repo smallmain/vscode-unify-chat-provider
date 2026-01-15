@@ -4,6 +4,8 @@ import * as os from 'node:os';
 import { GoogleAIStudioProvider } from './ai-studio-client';
 import { ModelConfig, ProviderConfig } from '../../types';
 import { DEFAULT_TIMEOUT_CONFIG } from '../../utils';
+import type { AuthTokenInfo } from '../../auth/types';
+import { getToken } from '../utils';
 
 /**
  * Vertex AI provider that extends Google AI Studio provider.
@@ -11,18 +13,16 @@ import { DEFAULT_TIMEOUT_CONFIG } from '../../utils';
  * Supports two authentication modes:
  *
  * 1. API Key mode (express mode):
- *    - Detected when apiKey is NOT a file path
+ *    - Detected when auth.apiKey is NOT a file path
  *    - Uses global endpoint: https://aiplatform.googleapis.com
  *    - No project/location needed
  *
  * 2. Service Account mode (standard mode):
- *    - Detected when apiKey IS a file path (e.g., /path/to/key.json)
+ *    - Detected when auth.apiKey IS a file path (e.g., /path/to/key.json)
  *    - Requires baseUrl with project and location:
  *      https://{location}-aiplatform.googleapis.com/v1beta1/projects/{project}/locations/{location}
  */
 export class VertexAIProvider extends GoogleAIStudioProvider {
-  private readonly isServiceAccountAuth: boolean;
-  private readonly serviceAccountPath: string | undefined;
   private readonly vertexProject: string | undefined;
   private readonly vertexLocation: string | undefined;
   private readonly vertexBaseDomain: string | undefined;
@@ -30,10 +30,6 @@ export class VertexAIProvider extends GoogleAIStudioProvider {
 
   constructor(config: ProviderConfig) {
     super(config);
-
-    const detected = this.detectAuthMethod(config.apiKey);
-    this.isServiceAccountAuth = detected.isServiceAccount;
-    this.serviceAccountPath = detected.filePath;
 
     this.vertexApiVersion = this.parseApiVersionFromUrl(config.baseUrl);
 
@@ -133,37 +129,50 @@ export class VertexAIProvider extends GoogleAIStudioProvider {
   protected override createClient(
     modelConfig: ModelConfig | undefined,
     streamEnabled: boolean,
+    credential?: AuthTokenInfo,
   ): GoogleGenAI {
     const requestTimeoutMs = streamEnabled
       ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
       : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
+    const token = getToken(credential);
+    const detected = this.detectAuthMethod(token);
+
     // Use the base domain (without path) for httpOptions.baseUrl
     // The SDK will construct the full URL using project/location
     const httpOptions: HttpOptions = {
       baseUrl: this.vertexBaseDomain ?? this.baseUrl,
-      headers: this.buildHeaders(modelConfig),
+      headers: this.buildHeaders(credential, modelConfig),
       timeout: requestTimeoutMs,
       extraBody: this.buildExtraBody(modelConfig),
     };
 
-    if (this.isServiceAccountAuth && this.serviceAccountPath) {
+    if (detected.isServiceAccount && detected.filePath) {
       // Service account JSON key authentication (standard mode)
       return new GoogleGenAI({
         vertexai: true,
         project: this.vertexProject,
         location: this.vertexLocation,
         googleAuthOptions: {
-          keyFilename: this.serviceAccountPath,
+          keyFilename: detected.filePath,
         },
         apiVersion: this.vertexApiVersion,
         httpOptions,
       });
-    } else {
+    } else if (token) {
       // Google Cloud API key authentication (express mode)
       return new GoogleGenAI({
         vertexai: true,
-        apiKey: this.config.apiKey,
+        apiKey: token,
+        apiVersion: this.vertexApiVersion,
+        httpOptions,
+      });
+    } else {
+      // Application Default Credentials (ADC)
+      return new GoogleGenAI({
+        vertexai: true,
+        project: this.vertexProject,
+        location: this.vertexLocation,
         apiVersion: this.vertexApiVersion,
         httpOptions,
       });

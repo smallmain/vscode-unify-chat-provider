@@ -8,6 +8,7 @@ import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../../types';
+import type { AuthTokenInfo } from '../../auth/types';
 import { Ollama } from 'ollama';
 import type {
   AbortableAsyncIterator,
@@ -35,6 +36,8 @@ import {
   createCustomFetch,
   createFirstTokenRecorder,
   estimateTokenCount as sharedEstimateTokenCount,
+  getToken,
+  getTokenType,
   mergeHeaders,
   processUsage as sharedProcessUsage,
 } from '../utils';
@@ -48,15 +51,17 @@ export class OllamaProvider implements ApiProvider {
     this.baseUrl = buildBaseUrl(config.baseUrl, { stripPattern: /\/api$/i });
   }
 
-  private buildHeaders(modelConfig?: ModelConfig): Record<string, string> {
-    const headers = mergeHeaders(
-      this.config.apiKey,
-      this.config.extraHeaders,
-      modelConfig?.extraHeaders,
-    );
+  private buildHeaders(
+    credential?: AuthTokenInfo,
+    modelConfig?: ModelConfig,
+  ): Record<string, string> {
+    const token = getToken(credential);
 
-    if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    const headers = mergeHeaders(token, this.config.extraHeaders, modelConfig?.extraHeaders);
+
+    if (token) {
+      const tokenType = getTokenType(credential) ?? 'Bearer';
+      headers['Authorization'] = `${tokenType} ${token}`;
     }
 
     return headers;
@@ -435,8 +440,9 @@ export class OllamaProvider implements ApiProvider {
     performanceTrace: PerformanceTrace,
     token: CancellationToken,
     logger: RequestLogger,
+    credential: AuthTokenInfo,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
-    const headers = this.buildHeaders(model);
+    const headers = this.buildHeaders(credential, model);
     const streamEnabled = model.stream ?? true;
     const client = this.createClient(headers, logger, streamEnabled);
     const abortController = new AbortController();
@@ -732,13 +738,13 @@ export class OllamaProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(): Promise<ModelConfig[]> {
+  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
       providerType: this.config.type,
     });
-    const headers = this.buildHeaders();
+    const headers = this.buildHeaders(credential);
     const client = this.createClient(headers, logger);
 
     try {

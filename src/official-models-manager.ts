@@ -3,9 +3,13 @@ import { ModelConfig, ProviderConfig } from './types';
 import { createProvider } from './client/utils';
 import { mergeWithWellKnownModels } from './well-known/models';
 import { stableStringify } from './config-ops';
-import { ApiKeySecretStore } from './api-key-secret-store';
+import { SecretStore } from './secret';
 import { normalizeBaseUrlInput } from './utils';
 import { t } from './i18n';
+import type { AuthConfig, AuthCredential, AuthTokenInfo } from './auth/types';
+import { createAuthProvider } from './auth/create-auth-provider';
+import type { AuthProviderContext } from './auth/auth-provider';
+import { getAuthMethodCtor, type AuthManager } from './auth';
 
 /**
  * State for a single provider's official models fetch
@@ -13,6 +17,8 @@ import { t } from './i18n';
 export interface OfficialModelsFetchState {
   /** Last successful fetch timestamp (ms) */
   lastFetchTime: number;
+  /** Last fetch attempt timestamp (ms), includes both success and failure */
+  lastAttemptTime?: number;
   /** Last successfully fetched models */
   models: ModelConfig[];
   /** Hash of the last fetched models for comparison */
@@ -21,10 +27,15 @@ export interface OfficialModelsFetchState {
   consecutiveIdenticalFetches: number;
   /** Current fetch interval in milliseconds */
   currentIntervalMs: number;
+  /** Number of consecutive failed fetch attempts */
+  consecutiveErrorFetches?: number;
+  /** Current retry interval after errors in milliseconds */
+  currentErrorIntervalMs?: number;
   /** Last error message if the last fetch failed */
   lastError?: string;
   /** Timestamp of last error */
   lastErrorTime?: number;
+  lastConfigSignature?: FetchConfigSignature;
   /** Whether a fetch is currently in progress */
   isFetching?: boolean;
 }
@@ -35,7 +46,10 @@ export interface OfficialModelsFetchState {
 export interface FetchConfigSignature {
   type: string;
   baseUrl: string;
-  apiKeyHash: string;
+  authMethod: string;
+  authHash: string;
+  extraHeadersHash: string;
+  extraBodyHash: string;
 }
 
 /**
@@ -46,7 +60,7 @@ export interface OfficialModelsDraftInput {
   type?: ProviderConfig['type'];
   name?: string;
   baseUrl?: string;
-  apiKey?: string;
+  auth?: AuthConfig;
   extraHeaders?: ProviderConfig['extraHeaders'];
   extraBody?: ProviderConfig['extraBody'];
   timeout?: ProviderConfig['timeout'];
@@ -82,9 +96,18 @@ const FETCH_CONFIG = {
   identicalFetchesThreshold: 2,
   /** Minimum interval even after reset (1 minute) */
   minIntervalMs: 60 * 1000,
+  /** Initial retry interval after an error (1 seconds) */
+  errorInitialIntervalMs: 1 * 1000,
+  /** Maximum retry interval after errors (1 minutes) */
+  errorMaxIntervalMs: 1 * 60 * 1000,
+  /** Multiplier for interval when errors continue */
+  errorBackoffMultiplier: 2,
 };
 
 const STATE_KEY = 'officialModelsState';
+
+const AUTH_REQUIRED_MESSAGE =
+  'Authentication required. Please re-authorize in Provider Settings.';
 
 /**
  * Manager for fetching and caching official models from providers
@@ -92,7 +115,8 @@ const STATE_KEY = 'officialModelsState';
 export class OfficialModelsManager {
   private state: PersistedState = {};
   private extensionContext?: vscode.ExtensionContext;
-  private apiKeyStore!: ApiKeySecretStore;
+  private secretStore!: SecretStore;
+  private authManager?: AuthManager;
   private fetchInProgress = new Map<string, Promise<ModelConfig[]>>();
   private readonly onDidUpdateEmitter = new vscode.EventEmitter<string>();
 
@@ -109,10 +133,12 @@ export class OfficialModelsManager {
    */
   async initialize(
     context: vscode.ExtensionContext,
-    apiKeyStore: ApiKeySecretStore,
+    secretStore: SecretStore,
+    authManager?: AuthManager,
   ): Promise<void> {
     this.extensionContext = context;
-    this.apiKeyStore = apiKeyStore;
+    this.secretStore = secretStore;
+    this.authManager = authManager;
     await this.loadState();
   }
 
@@ -174,8 +200,55 @@ export class OfficialModelsManager {
     const state = this.state[providerName];
     if (!state) return true;
 
-    const timeSinceLastFetch = Date.now() - state.lastFetchTime;
-    return timeSinceLastFetch >= state.currentIntervalMs;
+    return this.shouldFetchByState(state);
+  }
+
+  private shouldFetchByState(state: OfficialModelsFetchState): boolean {
+    const lastAttempt =
+      state.lastAttemptTime ?? state.lastErrorTime ?? state.lastFetchTime;
+    if (!lastAttempt) {
+      return true;
+    }
+
+    const intervalMs =
+      state.lastError && state.lastErrorTime
+        ? state.currentErrorIntervalMs ?? FETCH_CONFIG.errorInitialIntervalMs
+        : state.currentIntervalMs;
+
+    return Date.now() - lastAttempt >= intervalMs;
+  }
+
+  private recordSuccess(state: OfficialModelsFetchState, now: number): void {
+    state.lastFetchTime = now;
+    state.lastAttemptTime = now;
+    state.lastError = undefined;
+    state.lastErrorTime = undefined;
+    state.consecutiveErrorFetches = 0;
+    state.currentErrorIntervalMs = FETCH_CONFIG.errorInitialIntervalMs;
+  }
+
+  private recordFailure(
+    state: OfficialModelsFetchState,
+    now: number,
+    errorMessage: string,
+  ): void {
+    state.lastAttemptTime = now;
+    state.lastError = errorMessage;
+    state.lastErrorTime = now;
+
+    const nextConsecutive = (state.consecutiveErrorFetches ?? 0) + 1;
+    state.consecutiveErrorFetches = nextConsecutive;
+
+    const current =
+      state.currentErrorIntervalMs ?? FETCH_CONFIG.errorInitialIntervalMs;
+    const next =
+      nextConsecutive <= 1
+        ? current
+        : Math.min(
+            current * FETCH_CONFIG.errorBackoffMultiplier,
+            FETCH_CONFIG.errorMaxIntervalMs,
+          );
+    state.currentErrorIntervalMs = next;
   }
 
   /**
@@ -230,16 +303,28 @@ export class OfficialModelsManager {
       return inProgress;
     }
 
+    const existingState = this.state[providerName];
+    const currentSignature = await this.computeConfigSignature(provider);
+
+    const configChanged =
+      !!existingState &&
+      (!existingState.lastConfigSignature ||
+        !this.signaturesEqual(
+          existingState.lastConfigSignature,
+          currentSignature,
+        ));
+
+    const shouldForceFetch = forceFetch || configChanged;
+
     // Return cached models if not time to fetch yet
-    if (!forceFetch && !this.shouldFetch(providerName)) {
-      const state = this.state[providerName];
-      if (state) {
-        return state.models;
+    if (!shouldForceFetch && !this.shouldFetch(providerName)) {
+      if (existingState) {
+        return existingState.models;
       }
     }
 
     // Start a new fetch
-    const fetchPromise = this.doFetch(provider);
+    const fetchPromise = this.doFetch(provider, currentSignature);
     this.fetchInProgress.set(providerName, fetchPromise);
 
     try {
@@ -252,58 +337,62 @@ export class OfficialModelsManager {
   /**
    * Actually perform the fetch
    */
-  private async doFetch(provider: ProviderConfig): Promise<ModelConfig[]> {
+  private async doFetch(
+    provider: ProviderConfig,
+    signature: FetchConfigSignature,
+  ): Promise<ModelConfig[]> {
     const providerName = provider.name;
 
     const configError = this.getProviderConfigError(provider);
     if (configError) {
       const state = this.ensureState(providerName);
-      state.lastError = configError;
-      state.lastErrorTime = Date.now();
+      this.recordFailure(state, Date.now(), configError);
       state.isFetching = false;
+      state.lastConfigSignature = signature;
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
       return state.models;
     }
 
-    // Set fetching state and notify
-    this.ensureState(providerName).isFetching = true;
+    const state = this.ensureState(providerName);
+    state.isFetching = true;
+    state.lastConfigSignature = signature;
     this.onDidUpdateEmitter.fire(providerName);
 
     try {
-      const resolvedProvider = await this.resolveProvider(provider);
-      const client = createProvider(resolvedProvider);
-
-      if (!client.getAvailableModels) {
-        throw new Error(t('Provider does not support fetching available models'));
+      const credential = await this.resolveCredentialForPersistedProvider(
+        provider,
+      );
+      if (!credential) {
+        this.recordFailure(state, Date.now(), AUTH_REQUIRED_MESSAGE);
+        state.isFetching = false;
+        state.lastConfigSignature = signature;
+        await this.saveState();
+        this.onDidUpdateEmitter.fire(providerName);
+        return state.models;
       }
 
-      const rawModels = await client.getAvailableModels();
+      const client = createProvider(provider);
+
+      if (!client.getAvailableModels) {
+        throw new Error(
+          t('Provider does not support fetching available models'),
+        );
+      }
+
+      const rawModels = await client.getAvailableModels(credential);
       const models = mergeWithWellKnownModels(rawModels);
       const modelsHash = this.hashModels(models);
 
-      const existingState = this.state[providerName];
-      const isIdentical = existingState?.modelsHash === modelsHash;
+      const isIdentical = state.modelsHash === modelsHash;
+      const now = Date.now();
 
-      // Update or create state
-      if (existingState) {
-        existingState.lastFetchTime = Date.now();
-        existingState.models = models;
-        existingState.modelsHash = modelsHash;
-        existingState.lastError = undefined;
-        existingState.lastErrorTime = undefined;
-        existingState.isFetching = false;
-        this.updateInterval(existingState, isIdentical);
-      } else {
-        this.state[providerName] = {
-          lastFetchTime: Date.now(),
-          models,
-          modelsHash,
-          consecutiveIdenticalFetches: 0,
-          currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
-          isFetching: false,
-        };
-      }
+      this.recordSuccess(state, now);
+      state.models = models;
+      state.modelsHash = modelsHash;
+      state.isFetching = false;
+      state.lastConfigSignature = signature;
+      this.updateInterval(state, isIdentical);
 
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
@@ -312,34 +401,14 @@ export class OfficialModelsManager {
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
+      const now = Date.now();
 
-      // Update error state but keep last successful models
-      const existingState = this.state[providerName];
-      if (existingState) {
-        existingState.lastError = errorMessage;
-        existingState.lastErrorTime = Date.now();
-        existingState.isFetching = false;
-        await this.saveState();
-        this.onDidUpdateEmitter.fire(providerName);
-        // Return last successful models on error
-        return existingState.models;
-      }
-
-      // No previous state, create error state with empty models
-      this.state[providerName] = {
-        lastFetchTime: 0,
-        models: [],
-        modelsHash: '',
-        consecutiveIdenticalFetches: 0,
-        currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
-        lastError: errorMessage,
-        lastErrorTime: Date.now(),
-        isFetching: false,
-      };
+      this.recordFailure(state, now, errorMessage);
+      state.isFetching = false;
+      state.lastConfigSignature = signature;
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
-
-      return [];
+      return state.models;
     }
   }
 
@@ -371,13 +440,33 @@ export class OfficialModelsManager {
     }
   }
 
+  private computeAuthHash(auth: AuthConfig | undefined): string {
+    if (!auth || auth.method === 'none') {
+      return this.hashString('');
+    }
+
+    return this.hashString(
+      stableStringify(getAuthMethodCtor(auth.method)?.redactForExport(auth)),
+    );
+  }
+
   private computeDraftConfigSignature(
     input: OfficialModelsDraftInput,
   ): FetchConfigSignature {
+    const auth = input.auth;
+    const authMethod = auth?.method ?? 'none';
+
+    const authHash = this.computeAuthHash(auth);
+
     return {
       type: input.type ?? '',
       baseUrl: this.normalizeDraftBaseUrlForSignature(input.baseUrl),
-      apiKeyHash: this.hashString(input.apiKey?.trim() ?? ''),
+      authMethod,
+      authHash,
+      extraHeadersHash: this.hashString(
+        stableStringify(input.extraHeaders ?? {}),
+      ),
+      extraBodyHash: this.hashString(stableStringify(input.extraBody ?? {})),
     };
   }
 
@@ -402,8 +491,9 @@ export class OfficialModelsManager {
     if (!type || !baseUrlRaw) {
       return {
         kind: 'error',
-        message:
-          t('Cannot fetch official models: provider configuration is incomplete.'),
+        message: t(
+          'Cannot fetch official models: provider configuration is incomplete.',
+        ),
       };
     }
 
@@ -413,8 +503,9 @@ export class OfficialModelsManager {
     } catch {
       return {
         kind: 'error',
-        message:
-          t('Cannot fetch official models: please enter a valid API base URL.'),
+        message: t(
+          'Cannot fetch official models: please enter a valid API base URL.',
+        ),
       };
     }
 
@@ -422,7 +513,7 @@ export class OfficialModelsManager {
       type,
       name,
       baseUrl,
-      apiKey: input.apiKey?.trim() || undefined,
+      auth: input.auth,
       models: [],
       extraHeaders: input.extraHeaders,
       extraBody: input.extraBody,
@@ -432,25 +523,62 @@ export class OfficialModelsManager {
     return { kind: 'ok', provider };
   }
 
-  private async resolveProvider(
+  private toAuthTokenInfo(
+    credential: AuthCredential | undefined,
+  ): AuthTokenInfo {
+    if (!credential?.value) {
+      return { kind: 'none' };
+    }
+
+    return {
+      kind: 'token',
+      token: credential.value,
+      tokenType: credential.tokenType,
+      expiresAt: credential.expiresAt,
+    };
+  }
+
+  private async resolveCredentialForPersistedProvider(
     provider: ProviderConfig,
-  ): Promise<ProviderConfig> {
-    const status = await this.apiKeyStore.getStatus(provider.apiKey);
-
-    if (status.kind === 'unset' || status.kind === 'plain') {
-      return provider;
+  ): Promise<AuthTokenInfo | undefined> {
+    const auth = provider.auth;
+    if (!auth || auth.method === 'none') {
+      return { kind: 'none' };
     }
 
-    if (status.kind === 'secret') {
-      return { ...provider, apiKey: status.apiKey };
+    if (!this.authManager) {
+      return undefined;
     }
 
-    throw new Error(
-      t(
-        'API key for provider "{0}" is missing. Please re-enter it and try again.',
-        provider.name,
-      ),
+    const credential = await this.authManager.getCredential(
+      provider.name,
+      auth,
     );
+    return this.toAuthTokenInfo(credential);
+  }
+
+  private async resolveCredentialForDraftProvider(
+    provider: ProviderConfig,
+  ): Promise<AuthTokenInfo | undefined> {
+    const auth = provider.auth;
+    if (!auth || auth.method === 'none') {
+      return { kind: 'none' };
+    }
+
+    const context: AuthProviderContext = {
+      providerId: provider.name,
+      providerLabel: provider.name,
+      secretStore: this.secretStore,
+    };
+
+    const authProvider = createAuthProvider(context, auth);
+
+    try {
+      const credential = await authProvider?.getCredential();
+      return this.toAuthTokenInfo(credential);
+    } finally {
+      authProvider?.dispose?.();
+    }
   }
 
   /**
@@ -460,10 +588,13 @@ export class OfficialModelsManager {
     if (!this.state[providerName]) {
       this.state[providerName] = {
         lastFetchTime: 0,
+        lastAttemptTime: 0,
         models: [],
         modelsHash: '',
         consecutiveIdenticalFetches: 0,
         currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
+        consecutiveErrorFetches: 0,
+        currentErrorIntervalMs: FETCH_CONFIG.errorInitialIntervalMs,
       };
     }
     return this.state[providerName];
@@ -497,14 +628,22 @@ export class OfficialModelsManager {
     await this.saveState();
   }
 
-  /**
-   * Compute a configuration signature for change detection
-   */
-  computeConfigSignature(provider: ProviderConfig): FetchConfigSignature {
+  private async computeConfigSignature(
+    provider: ProviderConfig,
+  ): Promise<FetchConfigSignature> {
+    const auth = provider.auth;
+    const authMethod = auth?.method ?? 'none';
+    const authHash = this.computeAuthHash(auth);
+
     return {
       type: provider.type,
       baseUrl: provider.baseUrl,
-      apiKeyHash: this.hashString(provider.apiKey ?? ''),
+      authMethod,
+      authHash,
+      extraHeadersHash: this.hashString(
+        stableStringify(provider.extraHeaders ?? {}),
+      ),
+      extraBodyHash: this.hashString(stableStringify(provider.extraBody ?? {})),
     };
   }
 
@@ -551,13 +690,23 @@ export class OfficialModelsManager {
       session = {
         state: {
           lastFetchTime: 0,
+          lastAttemptTime: 0,
           models: [],
           modelsHash: '',
           consecutiveIdenticalFetches: 0,
           currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
+          consecutiveErrorFetches: 0,
+          currentErrorIntervalMs: FETCH_CONFIG.errorInitialIntervalMs,
         },
         // Placeholder signature; real signature is set when a fetch is triggered.
-        configSignature: { type: '', baseUrl: '', apiKeyHash: '' },
+        configSignature: {
+          type: '',
+          baseUrl: '',
+          authMethod: 'none',
+          authHash: '',
+          extraHeadersHash: '',
+          extraBodyHash: '',
+        },
       };
       this.draftSessions.set(sessionId, session);
     }
@@ -591,17 +740,20 @@ export class OfficialModelsManager {
     }
 
     const provider = resolved.provider;
-    const currentSignature = this.computeConfigSignature(provider);
+    const currentSignature = await this.computeConfigSignature(provider);
 
     // Check if config changed since last fetch
     const configChanged =
       session &&
       !this.signaturesEqual(session.configSignature, currentSignature);
 
-    const forceFetch =
-      options?.forceFetch || configChanged || !!session?.state.lastError;
+    const shouldFetch =
+      options?.forceFetch ||
+      configChanged ||
+      !session ||
+      this.shouldFetchByState(session.state);
 
-    if (forceFetch || !session) {
+    if (shouldFetch) {
       await this.fetchForDraft(sessionId, provider, currentSignature);
     }
 
@@ -619,7 +771,10 @@ export class OfficialModelsManager {
     return (
       a.type === b.type &&
       a.baseUrl === b.baseUrl &&
-      a.apiKeyHash === b.apiKeyHash
+      a.authMethod === b.authMethod &&
+      a.authHash === b.authHash &&
+      a.extraHeadersHash === b.extraHeadersHash &&
+      a.extraBodyHash === b.extraBodyHash
     );
   }
 
@@ -660,8 +815,7 @@ export class OfficialModelsManager {
 
     const configError = this.getProviderConfigError(provider);
     if (configError) {
-      session.state.lastError = configError;
-      session.state.lastErrorTime = Date.now();
+      this.recordFailure(session.state, Date.now(), configError);
       session.state.isFetching = false;
       session.configSignature = signature;
       this.onDidUpdateEmitter.fire(sessionId);
@@ -674,21 +828,30 @@ export class OfficialModelsManager {
     this.onDidUpdateEmitter.fire(sessionId);
 
     try {
-      const resolvedProvider = await this.resolveProvider(provider);
-      const client = createProvider(resolvedProvider);
-
-      if (!client.getAvailableModels) {
-        throw new Error(t('Provider does not support fetching available models'));
+      const credential = await this.resolveCredentialForDraftProvider(provider);
+      if (!credential) {
+        this.recordFailure(session.state, Date.now(), AUTH_REQUIRED_MESSAGE);
+        session.state.isFetching = false;
+        session.configSignature = signature;
+        this.onDidUpdateEmitter.fire(sessionId);
+        return session.state.models;
       }
 
-      const rawModels = await client.getAvailableModels();
-      const models = mergeWithWellKnownModels(rawModels);
+      const client = createProvider(provider);
 
-      session.state.lastFetchTime = Date.now();
+      if (!client.getAvailableModels) {
+        throw new Error(
+          t('Provider does not support fetching available models'),
+        );
+      }
+
+      const rawModels = await client.getAvailableModels(credential);
+      const models = mergeWithWellKnownModels(rawModels);
+      const now = Date.now();
+
       session.state.models = models;
       session.state.modelsHash = this.hashModels(models);
-      session.state.lastError = undefined;
-      session.state.lastErrorTime = undefined;
+      this.recordSuccess(session.state, now);
       session.state.isFetching = false;
 
       this.onDidUpdateEmitter.fire(sessionId);
@@ -697,8 +860,7 @@ export class OfficialModelsManager {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
-      session.state.lastError = errorMessage;
-      session.state.lastErrorTime = Date.now();
+      this.recordFailure(session.state, Date.now(), errorMessage);
       session.state.isFetching = false;
 
       this.onDidUpdateEmitter.fire(sessionId);
@@ -728,8 +890,10 @@ export class OfficialModelsManager {
     }
 
     const provider = resolved.provider;
-    const signature = this.computeConfigSignature(provider);
-    this.fetchForDraft(sessionId, provider, signature);
+    void (async () => {
+      const signature = await this.computeConfigSignature(provider);
+      await this.fetchForDraft(sessionId, provider, signature);
+    })();
   }
 
   /**
@@ -772,7 +936,10 @@ export class OfficialModelsManager {
     if (!session) return;
 
     // Copy draft state to persisted state
-    this.state[providerName] = { ...session.state };
+    this.state[providerName] = {
+      ...session.state,
+      lastConfigSignature: session.configSignature,
+    };
     await this.saveState();
 
     // Clean up draft session

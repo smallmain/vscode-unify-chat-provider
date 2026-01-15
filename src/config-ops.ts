@@ -1,4 +1,4 @@
-import { ModelConfig, ProviderConfig } from './types';
+import { ModelConfig, ProviderConfig, type ProviderConfigPersistedKey } from './types';
 
 export const MODEL_CONFIG_KEYS = [
   'id',
@@ -26,13 +26,13 @@ export const PROVIDER_CONFIG_KEYS = [
   'type',
   'name',
   'baseUrl',
-  'apiKey',
+  'auth',
   'models',
   'extraHeaders',
   'extraBody',
   'timeout',
   'autoFetchOfficialModels',
-] as const satisfies ReadonlyArray<keyof ProviderConfig>;
+] as const satisfies ReadonlyArray<ProviderConfigPersistedKey>;
 
 type AssertNever<T extends never> = T;
 
@@ -41,7 +41,7 @@ export type _AssertModelConfigKeysComplete = AssertNever<
 >;
 
 export type _AssertProviderConfigKeysComplete = AssertNever<
-  Exclude<keyof ProviderConfig, (typeof PROVIDER_CONFIG_KEYS)[number]>
+  Exclude<ProviderConfigPersistedKey, (typeof PROVIDER_CONFIG_KEYS)[number]>
 >;
 
 export function deepClone<T>(value: T): T {
@@ -139,7 +139,6 @@ export function toComparableProviderConfig(
   const cloned = deepClone(provider);
   cloned.name = cloned.name.trim();
   cloned.baseUrl = cloned.baseUrl.trim();
-  cloned.apiKey = cloned.apiKey?.trim() ?? '';
   cloned.models = cloned.models.map(toComparableModelConfig);
   return cloned;
 }

@@ -1,5 +1,6 @@
 import { getBaseModelId } from '../model-id-utils';
 import type { ProviderHttpLogger, RequestLogger } from '../logger';
+import type { AuthTokenInfo } from '../auth/types';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../types';
 import {
   bodyInitToLoggableValue,
@@ -203,6 +204,20 @@ export function buildBaseUrl(
   }
 
   return normalized;
+}
+
+export function getToken(info: AuthTokenInfo | undefined): string | undefined {
+  if (!info || info.kind === 'none') {
+    return undefined;
+  }
+  return info.token;
+}
+
+export function getTokenType(info: AuthTokenInfo | undefined): string | undefined {
+  if (!info || info.kind === 'none') {
+    return undefined;
+  }
+  return info.tokenType;
 }
 
 /**

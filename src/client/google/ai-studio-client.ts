@@ -17,6 +17,7 @@ import { createSimpleHttpLogger } from '../../logger';
 import type { RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../../types';
+import type { AuthTokenInfo } from '../../auth/types';
 import { withGoogleFetchLogger } from './fetch-logger';
 import {
   decodeStatefulMarkerPart,
@@ -33,6 +34,7 @@ import { ThinkingBlockMetadata } from '../types';
 import {
   createFirstTokenRecorder,
   estimateTokenCount as sharedEstimateTokenCount,
+  getToken,
   mergeHeaders,
   processUsage as sharedProcessUsage,
   isFeatureSupported,
@@ -63,9 +65,14 @@ export class GoogleAIStudioProvider implements ApiProvider {
     this.baseUrl = normalized.toString().replace(/\/+$/, '');
   }
 
-  protected buildHeaders(modelConfig?: ModelConfig): Record<string, string> {
+  protected buildHeaders(
+    credential?: AuthTokenInfo,
+    modelConfig?: ModelConfig,
+  ): Record<string, string> {
+    const credentialValue = getToken(credential);
+
     return mergeHeaders(
-      this.config.apiKey,
+      credentialValue,
       this.config.extraHeaders,
       modelConfig?.extraHeaders,
     );
@@ -81,20 +88,23 @@ export class GoogleAIStudioProvider implements ApiProvider {
   protected createClient(
     modelConfig: ModelConfig | undefined,
     streamEnabled: boolean,
+    credential?: AuthTokenInfo,
   ): GoogleGenAI {
     const requestTimeoutMs = streamEnabled
       ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
       : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
+    const credentialValue = getToken(credential);
+
     const httpOptions: HttpOptions = {
       baseUrl: this.baseUrl,
-      headers: this.buildHeaders(modelConfig),
+      headers: this.buildHeaders(credential, modelConfig),
       timeout: requestTimeoutMs,
       extraBody: this.buildExtraBody(modelConfig),
     };
 
     return new GoogleGenAI({
-      apiKey: this.config.apiKey,
+      apiKey: credentialValue,
       apiVersion: this.apiVersion,
       httpOptions,
     });
@@ -624,6 +634,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     performanceTrace: PerformanceTrace,
     token: vscode.CancellationToken,
     logger: RequestLogger,
+    credential: AuthTokenInfo,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const abortController = new AbortController();
     const cancellationListener = token.onCancellationRequested(() => {
@@ -655,7 +666,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     const generateConfig: GenerateContentConfig = {
       abortSignal: abortController.signal,
       httpOptions: {
-        headers: this.buildHeaders(model),
+        headers: this.buildHeaders(credential, model),
         extraBody: this.buildExtraBody(model),
       },
       ...(systemInstruction ? { systemInstruction } : {}),
@@ -680,7 +691,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
       ...{ ...this.buildThinkingConfig(model, useThinkingLevel) },
     };
 
-    const client = this.createClient(model, streamEnabled);
+    const client = this.createClient(model, streamEnabled, credential);
 
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -877,20 +888,20 @@ export class GoogleAIStudioProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(): Promise<ModelConfig[]> {
+  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
       providerType: this.config.type,
     });
     try {
-      const client = this.createClient(undefined, false);
+      const client = this.createClient(undefined, false, credential);
       const result: ModelConfig[] = [];
       const pager = await withGoogleFetchLogger(logger, async () => {
         return client.models.list({
           config: {
             httpOptions: {
-              headers: this.buildHeaders(),
+              headers: this.buildHeaders(credential),
               extraBody: this.buildExtraBody(),
             },
           },

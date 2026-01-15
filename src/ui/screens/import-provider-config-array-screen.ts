@@ -22,6 +22,7 @@ import {
   generateUniqueProviderName,
 } from '../conflict-resolution';
 import { t } from '../../i18n';
+import { cleanupUnusedSecrets } from '../../secret';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
@@ -47,7 +48,9 @@ function buildProviderImportItems(
       .map((m) => m.name || m.id)
       .filter((value): value is string => !!value);
     const detail =
-      modelNames.length > 0 ? t('Models: {0}', modelNames.join(', ')) : t('No models');
+      modelNames.length > 0
+        ? t('Models: {0}', modelNames.join(', '))
+        : t('No models');
 
     return {
       label: name,
@@ -109,9 +112,14 @@ function validateSelectedProviders(options: {
 
   // Validate each provider, but skip name uniqueness check (handled separately)
   for (const { id, draft } of selected) {
-    const providerErrors = validateProviderForm(draft, options.store, undefined, {
-      skipNameUniquenessCheck: true,
-    });
+    const providerErrors = validateProviderForm(
+      draft,
+      options.store,
+      undefined,
+      {
+        skipNameUniquenessCheck: true,
+      },
+    );
     if (providerErrors.length > 0) {
       const displayName = getProviderDisplayName(draft, id);
       for (const err of providerErrors) {
@@ -185,11 +193,14 @@ export async function runImportProviderConfigArrayScreen(
     if (!confirmed) return { kind: 'stay' };
 
     for (const draft of drafts) {
-      const sessionId = draft._officialModelsSessionId;
+      const sessionId = draft._draftSessionId;
       if (sessionId) {
         officialModelsManager.clearDraftSession(sessionId);
       }
     }
+
+    await cleanupUnusedSecrets(ctx.secretStore);
+
     return { kind: 'pop' };
   }
 
@@ -270,7 +281,7 @@ export async function runImportProviderConfigArrayScreen(
     const saved = await saveProviderDraft({
       draft,
       store: ctx.store,
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       skipConflictResolution: true,
     });
     if (saved !== 'saved') {

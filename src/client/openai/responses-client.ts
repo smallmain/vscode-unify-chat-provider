@@ -9,6 +9,7 @@ import { ThinkingBlockMetadata } from '../types';
 import { FeatureId } from '../definitions';
 import { ApiProvider } from '../interface';
 import OpenAI from 'openai';
+import type { AuthTokenInfo } from '../../auth/types';
 import {
   decodeStatefulMarkerPart,
   DEFAULT_TIMEOUT_CONFIG,
@@ -24,6 +25,8 @@ import {
   createCustomFetch,
   createFirstTokenRecorder,
   estimateTokenCount as sharedEstimateTokenCount,
+  getToken,
+  getTokenType,
   isFeatureSupported,
   mergeHeaders,
   parseToolArguments,
@@ -59,15 +62,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
     });
   }
 
-  private buildHeaders(modelConfig?: ModelConfig): Record<string, string> {
-    const headers = mergeHeaders(
-      this.config.apiKey,
-      this.config.extraHeaders,
-      modelConfig?.extraHeaders,
-    );
+  private buildHeaders(
+    credential?: AuthTokenInfo,
+    modelConfig?: ModelConfig,
+  ): Record<string, string> {
+    const token = getToken(credential);
+    const headers = mergeHeaders(token, this.config.extraHeaders, modelConfig?.extraHeaders);
 
-    if (this.config.apiKey) {
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    if (token) {
+      const tokenType = getTokenType(credential) ?? 'Bearer';
+      headers['Authorization'] = `${tokenType} ${token}`;
     }
 
     return headers;
@@ -80,13 +84,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
   private createClient(
     logger: ProviderHttpLogger | undefined,
     stream: boolean,
+    credential?: AuthTokenInfo,
   ): OpenAI {
     const requestTimeoutMs = stream
       ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
       : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
+    const token = getToken(credential);
+
     return new OpenAI({
-      apiKey: this.config.apiKey,
+      apiKey: token ?? '',
       baseURL: this.baseUrl,
       maxRetries: 0,
       fetch: createCustomFetch({
@@ -399,6 +406,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     performanceTrace: PerformanceTrace,
     token: CancellationToken,
     logger: RequestLogger,
+    credential: AuthTokenInfo,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const abortController = new AbortController();
     const cancellationListener = token.onCancellationRequested(() => {
@@ -443,9 +451,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
 
-    const headers = this.buildHeaders(model);
+    const headers = this.buildHeaders(credential, model);
 
-    const client = this.createClient(logger, streamEnabled);
+    const client = this.createClient(logger, streamEnabled, credential);
 
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -749,7 +757,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(): Promise<ModelConfig[]> {
+  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -757,8 +765,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
     });
     try {
       const result: ModelConfig[] = [];
-      const client = this.createClient(logger, false);
-      const page = await client.models.list({ headers: this.buildHeaders() });
+      const client = this.createClient(logger, false, credential);
+      const page = await client.models.list({
+        headers: this.buildHeaders(credential),
+      });
       for await (const model of page) {
         result.push({ id: model.id });
       }

@@ -227,7 +227,10 @@ function buildGeminiCliProvider(
       type: 'google-vertex-ai',
       name: 'Gemini CLI',
       baseUrl: `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}`,
-      apiKey: applicationCredentials,
+      auth: {
+        method: 'api-key',
+        apiKey: applicationCredentials,
+      },
       models: getGeminiCliDefaultModels(),
     };
 
@@ -239,7 +242,10 @@ function buildGeminiCliProvider(
       type: 'google-vertex-ai',
       name: 'Gemini CLI',
       baseUrl: 'https://aiplatform.googleapis.com',
-      apiKey: googleApiKey,
+      auth: {
+        method: 'api-key',
+        apiKey: googleApiKey,
+      },
       models: getGeminiCliDefaultModels(),
     };
     return { provider };
@@ -250,7 +256,10 @@ function buildGeminiCliProvider(
       type: 'google-ai-studio',
       name: 'Gemini CLI',
       baseUrl: 'https://generativelanguage.googleapis.com',
-      apiKey: geminiApiKey,
+      auth: {
+        method: 'api-key',
+        apiKey: geminiApiKey,
+      },
       models: getGeminiCliDefaultModels(),
     };
     return { provider };

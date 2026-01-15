@@ -44,7 +44,10 @@ import {
   mergeHeaders,
   parseToolArguments,
   processUsage as sharedProcessUsage,
+  getToken,
+  getTokenType,
 } from '../utils';
+import type { AuthTokenInfo } from '../../auth/types';
 
 /**
  * Client for Anthropic-compatible APIs
@@ -65,13 +68,16 @@ export class AnthropicProvider implements ApiProvider {
   private createClient(
     logger: ProviderHttpLogger | undefined,
     stream: boolean,
+    credential?: AuthTokenInfo,
   ): Anthropic {
     const requestTimeoutMs = stream
       ? this.config.timeout?.connection ?? DEFAULT_TIMEOUT_CONFIG.connection
       : this.config.timeout?.response ?? DEFAULT_TIMEOUT_CONFIG.response;
 
+    const apiKey = getToken(credential);
+
     return new Anthropic({
-      apiKey: this.config.apiKey,
+      apiKey,
       baseURL: this.baseUrl,
       maxRetries: 0,
       fetch: createCustomFetch({
@@ -85,17 +91,23 @@ export class AnthropicProvider implements ApiProvider {
    * Build request headers
    */
   private buildHeaders(
+    credential?: AuthTokenInfo,
     modelConfig?: ModelConfig,
   ): Record<string, string | null> {
+    const token = getToken(credential);
+    const tokenType = getTokenType(credential);
+
     const headers: Record<string, string | null> = mergeHeaders(
-      this.config.apiKey,
+      token,
       this.config.extraHeaders,
       modelConfig?.extraHeaders,
     );
 
-    if (this.config.apiKey) {
-      headers['x-api-key'] = this.config.apiKey;
-      headers['Authorization'] = `Bearer ${this.config.apiKey}`;
+    if (token) {
+      headers['x-api-key'] = token;
+      if (tokenType) {
+        headers['Authorization'] = `${tokenType} ${token}`;
+      }
     } else {
       const hasAuthHeader = Object.keys(headers).some((key) => {
         const normalized = key.toLowerCase();
@@ -602,6 +614,7 @@ export class AnthropicProvider implements ApiProvider {
     performanceTrace: PerformanceTrace,
     token: vscode.CancellationToken,
     logger: RequestLogger,
+    credential: AuthTokenInfo,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     const abortController = new AbortController();
     const cancellationListener = token.onCancellationRequested(() => {
@@ -670,7 +683,7 @@ export class AnthropicProvider implements ApiProvider {
       betaFeatures.add('fine-grained-tool-streaming-2025-05-14');
     }
 
-    const headers = this.buildHeaders(model);
+    const headers = this.buildHeaders(credential, model);
 
     // Pass thinkingEnabled to convertToolChoice to enforce tool_choice restrictions
     const toolChoice = this.applyParallelToolChoice(
@@ -733,7 +746,7 @@ export class AnthropicProvider implements ApiProvider {
         requestBase.betas = Array.from(betaFeatures);
       }
 
-      const client = this.createClient(logger, stream);
+      const client = this.createClient(logger, stream, credential);
 
       performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
@@ -1163,7 +1176,7 @@ export class AnthropicProvider implements ApiProvider {
    * Get available models from the Anthropic API
    * Uses the ListModels endpoint with pagination support
    */
-  async getAvailableModels(): Promise<ModelConfig[]> {
+  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1173,12 +1186,12 @@ export class AnthropicProvider implements ApiProvider {
     let afterId: string | undefined;
 
     try {
-      const client = this.createClient(logger, false);
+      const client = this.createClient(logger, false, credential);
 
       do {
         const page = await client.models.list(
           { after_id: afterId },
-          { headers: this.buildHeaders() },
+          { headers: this.buildHeaders(credential) },
         );
 
         for (const model of page.data) {

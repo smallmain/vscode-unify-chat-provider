@@ -8,7 +8,7 @@ import { runModelSelectionScreen } from '../screens/model-selection-screen';
 import { runProviderFormScreen } from '../screens/provider-form-screen';
 import { runProviderListScreen } from '../screens/provider-list-screen';
 import { runTimeoutFormScreen } from '../screens/timeout-form-screen';
-import { runWellKnownProviderApiKeyScreen } from '../screens/well-known-provider-api-key-screen';
+import { runWellKnownProviderAuthScreen } from '../screens/well-known-provider-auth-screen';
 import { runWellKnownProviderListScreen } from '../screens/well-known-provider-list-screen';
 import { runWellKnownProviderNameScreen } from '../screens/well-known-provider-name-screen';
 import { runImportProvidersScreen } from '../screens/import-providers-screen';
@@ -72,8 +72,8 @@ async function dispatchRoute(
       return runWellKnownProviderListScreen(ctx, route, resume);
     case 'wellKnownProviderName':
       return runWellKnownProviderNameScreen(ctx, route, resume);
-    case 'wellKnownProviderApiKey':
-      return runWellKnownProviderApiKeyScreen(ctx, route, resume);
+    case 'wellKnownProviderAuth':
+      return runWellKnownProviderAuthScreen(ctx, route, resume);
     case 'modelList':
       return runModelListScreen(ctx, route, resume);
     case 'modelForm':

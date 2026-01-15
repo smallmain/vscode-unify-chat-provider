@@ -3,6 +3,29 @@ import { MODEL_CONFIG_KEYS, mergePartialFromRecordByKeys } from '../config-ops';
 import { mergePartialProviderConfig } from './base64-config';
 import { createProviderDraft, type ProviderFormDraft } from './form-utils';
 
+/**
+ * Import compatibility: migrate legacy top-level `apiKey` field to `auth`.
+ */
+export function normalizeLegacyApiKeyProviderConfig(
+  config: Partial<ProviderConfig>,
+): Partial<ProviderConfig> {
+  if (!Object.prototype.hasOwnProperty.call(config, 'apiKey')) {
+    return config;
+  }
+
+  const next: Partial<ProviderConfig> = { ...config };
+
+  if (!next.auth && typeof next.apiKey === 'string' && next.apiKey.trim()) {
+    next.auth = {
+      method: 'api-key',
+      apiKey: next.apiKey,
+    };
+  }
+
+  delete next.apiKey;
+  return next;
+}
+
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -65,6 +88,6 @@ export function buildProviderDraftFromConfig(
   config: Partial<ProviderConfig>,
 ): ProviderFormDraft {
   const draft = createProviderDraft();
-  mergePartialProviderConfig(draft, config);
+  mergePartialProviderConfig(draft, normalizeLegacyApiKeyProviderConfig(config));
   return draft;
 }

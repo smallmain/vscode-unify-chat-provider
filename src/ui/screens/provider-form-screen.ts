@@ -4,9 +4,11 @@ import { confirmDelete, pickQuickItem, showDeletedMessage } from '../component';
 import { mergePartialProviderConfig } from '../base64-config';
 import { editField } from '../field-editors';
 import { buildFormItems, type FormItem } from '../field-schema';
+import { normalizeLegacyApiKeyProviderConfig } from '../import-config';
 import {
   confirmDiscardProviderChanges,
   createProviderDraft,
+  ensureDraftSessionId,
   type ProviderFormDraft,
 } from '../form-utils';
 import {
@@ -24,8 +26,11 @@ import {
   exportProviderConfigFromDraft,
   saveProviderDraft,
 } from '../provider-ops';
+import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
+import { deepClone } from '../../config-ops';
 import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import { t } from '../../i18n';
+import { cleanupUnusedSecrets } from '../../secret';
 
 const providerSettingsSchema = {
   ...providerFormSchema,
@@ -46,27 +51,35 @@ export async function runProviderFormScreen(
   const originalName = route.originalName;
   const isSettings = route.mode === 'settings';
 
-  const apiKeyStatus = await ctx.apiKeyStore.getStatus(draft.apiKey);
-
   const context: ProviderFieldContext = {
     store: ctx.store,
-    apiKeyStatus,
-    storeApiKeyInSettings: ctx.store.storeApiKeyInSettings,
     originalName,
     onEditModels: async () => {},
     onEditTimeout: async () => {},
+    secretStore: ctx.secretStore,
+    uriHandler: ctx.uriHandler,
   };
 
-  const items = buildFormItems(
-    isSettings ? providerSettingsSchema : providerFormSchema,
-    draft,
-    {
-      isEditing: !isSettings && !!existing,
-      hasConfirm: !isSettings,
-      hasExport: !isSettings,
-    },
-    context,
-  );
+  let authDetail: string | undefined =
+    draft.auth && draft.auth.method !== 'none' ? t('Loading...') : undefined;
+
+  const buildItems = (): FormItem<ProviderFormDraft>[] => {
+    const items = buildFormItems(
+      isSettings ? providerSettingsSchema : providerFormSchema,
+      draft,
+      {
+        isEditing: !isSettings && !!existing,
+        hasConfirm: !isSettings,
+        hasExport: !isSettings,
+      },
+      context,
+    );
+
+    return items.map((item) => {
+      if (item.field !== 'auth') return item;
+      return { ...item, detail: authDetail };
+    });
+  };
 
   const selection = await pickQuickItem<FormItem<ProviderFormDraft>>({
     title: isSettings
@@ -78,19 +91,113 @@ export async function runProviderFormScreen(
       : t('Add Provider'),
     placeholder: t('Select a field to edit'),
     ignoreFocusOut: true,
-    items,
+    items: buildItems(),
+    onExternalRefresh: (refreshItems) => {
+      let disposed = false;
+      let refreshInFlight = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let currentIntervalMs = 5_000;
+
+      const intervalFromSnapshot = (snapshot: AuthUiStatusSnapshot | undefined): number => {
+        if (snapshot?.kind !== 'valid' && snapshot?.kind !== 'expired') {
+          return 5_000;
+        }
+
+        const expiresAt = snapshot.expiresAt;
+        if (expiresAt === undefined) {
+          return 5_000;
+        }
+
+        const remainingMs = expiresAt - Date.now();
+        if (remainingMs > 0 && remainingMs < 60_000) {
+          return 1_000;
+        }
+
+        return 5_000;
+      };
+
+      const schedule = () => {
+        if (disposed) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          void refresh();
+        }, currentIntervalMs);
+      };
+
+      const refresh = async () => {
+        if (disposed) return;
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+
+        try {
+          const auth = draft.auth;
+          if (!auth || auth.method === 'none') {
+            authDetail = undefined;
+            refreshItems(buildItems());
+            return;
+          }
+
+          const providerLabel = draft.name?.trim() || originalName || t('Provider');
+          const providerId = originalName ?? ensureDraftSessionId(draft);
+          const authProvider = createAuthProvider(
+            {
+              providerId,
+              providerLabel,
+              secretStore: ctx.secretStore,
+              uriHandler: ctx.uriHandler,
+            },
+            deepClone(auth),
+          );
+
+          if (!authProvider) {
+            authDetail = undefined;
+            refreshItems(buildItems());
+            return;
+          }
+
+          try {
+            authDetail = await authProvider.getSummaryDetail?.();
+            const snapshot = await authProvider.getStatusSnapshot?.();
+            const nextInterval = intervalFromSnapshot(snapshot);
+            if (nextInterval !== currentIntervalMs) {
+              currentIntervalMs = nextInterval;
+            }
+          } finally {
+            authProvider.dispose?.();
+          }
+
+          refreshItems(buildItems());
+        } finally {
+          refreshInFlight = false;
+          schedule();
+        }
+      };
+
+      schedule();
+      void refresh();
+
+      return {
+        dispose: () => {
+          disposed = true;
+          if (timer) clearTimeout(timer);
+        },
+      };
+    },
   });
 
   if (!selection || selection.action === 'cancel') {
     if (isSettings) return { kind: 'pop' };
 
     const decision = await confirmDiscardProviderChanges(draft, existing);
-    if (decision === 'discard') return { kind: 'pop' };
+    if (decision === 'discard') {
+      await cleanupUnusedSecrets(ctx.secretStore);
+      return { kind: 'pop' };
+    }
     if (decision === 'save') {
       const saved = await saveProviderDraft({
         draft,
         store: ctx.store,
-        apiKeyStore: ctx.apiKeyStore,
+        secretStore: ctx.secretStore,
         existing,
         originalName,
       });
@@ -103,7 +210,7 @@ export async function runProviderFormScreen(
     const confirmed = await confirmDelete(existing.name, 'provider');
     if (confirmed) {
       await deleteProviderApiKeySecretIfUnused({
-        apiKeyStore: ctx.apiKeyStore,
+        secretStore: ctx.secretStore,
         providers: ctx.store.endpoints,
         providerName: existing.name,
       });
@@ -117,14 +224,14 @@ export async function runProviderFormScreen(
   if (!isSettings && selection.action === 'export') {
     await exportProviderConfigFromDraft({
       draft,
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       allowPartial: true,
     });
     return { kind: 'stay' };
   }
 
   if (!isSettings && selection.action === 'duplicate' && existing) {
-    await duplicateProvider(ctx.store, ctx.apiKeyStore, existing);
+    await duplicateProvider(ctx.store, ctx.secretStore, existing);
     return { kind: 'stay' };
   }
 
@@ -132,7 +239,7 @@ export async function runProviderFormScreen(
     const saved = await saveProviderDraft({
       draft,
       store: ctx.store,
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       existing,
       originalName,
     });
@@ -187,14 +294,19 @@ async function ensureInitialized(
   const providerName = route.providerName;
   const existing = providerName ? store.getProvider(providerName) : undefined;
   if (providerName && !existing) {
-    vscode.window.showErrorMessage(t('Provider "{0}" not found.', providerName));
+    vscode.window.showErrorMessage(
+      t('Provider "{0}" not found.', providerName),
+    );
     return;
   }
 
   const draft = createProviderDraft(existing);
 
   if (route.initialConfig && !existing) {
-    mergePartialProviderConfig(draft, route.initialConfig);
+    mergePartialProviderConfig(
+      draft,
+      normalizeLegacyApiKeyProviderConfig(route.initialConfig),
+    );
   }
 
   route.existing = existing;

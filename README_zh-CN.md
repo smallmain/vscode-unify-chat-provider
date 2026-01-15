@@ -111,9 +111,8 @@ Unify Chat Provider
    </div>
 
 2. 在列表中选择要添加的供应商。
-3. 根据提示输入 API Key，跳转到配置导入界面。
+3. 根据提示配置身份验证（通常是 API Key），跳转到配置导入界面。
 
-   - 如果供应商不需要 API Key，回车跳过即可。
    - 该界面用于检查和修改即将导入的配置。
    - 详细介绍可查看 [供应商配置](#供应商配置) 文档。
 
@@ -133,7 +132,7 @@ Unify Chat Provider
 
    - `API 格式`：接口格式，如 OpenAI Chat Completion、Anthropic Messages 等。
    - `API 基础 URL`：接口基础 URL 地址。
-   - `API Key`：通常是通过注册账号后在用户面板获取。
+   - `身份验证`：通常是 API Key，注册账号后在用户中心或控制台获取。
 
 1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 添加供应商`。
 
@@ -157,9 +156,10 @@ Unify Chat Provider
 
    - DeepSeek 的基础 URL 是 `https://api.deepseek.com`。
 
-5. 填写 API Key：`API Key`。
+5. 配置 `身份验证`。
 
-   - 将在 DeepSeek 控制台生成的 API Key 填写到该字段。
+   - DeepSeek 使用 API Key 进行身份验证，所以选择 `API Key`。
+   - 在输入框中填写在 DeepSeek 控制台生成的 API Key。
 
 6. 点击 `模型` 字段跳转到模型管理界面。
 
@@ -294,7 +294,7 @@ Unify Chat Provider
 | API 格式         | `type`                    | 供应商类型（决定 API 格式与兼容逻辑）。                                             |
 | 供应商名称       | `name`                    | 该供应商配置的唯一名称（用于列表展示与引用）。                                      |
 | API 基础 URL     | `baseUrl`                 | API 基础地址，例如 `https://api.anthropic.com`。                                    |
-| API Key          | `apiKey`                  | 鉴权用 Key。                                                                        |
+| 身份验证         | `auth`                    | 身份验证配置（`none` / `api-key` / `oauth2`）。                                     |
 | 模型列表         | `models`                  | 模型配置数组（`ModelConfig[]`）。                                                   |
 | 额外 Header      | `extraHeaders`            | 会附加到每次请求的 HTTP Header（`Record<string, string>`）。                        |
 | 额外 Body 字段   | `extraBody`               | 会附加到请求 body 的额外字段（`Record<string, unknown>`），用于对齐供应商私有参数。 |
@@ -366,10 +366,10 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>
 例如：
 
 ```
-vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&apiKey=my-api-key
+vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth={"method":"api-key","apiKey":"my-api-key"}
 ```
 
-导入时将会覆盖配置中的 `apiKey` 字段再导入。
+导入时将会覆盖配置中的 `auth` 字段再导入。
 
 ### 供应商倡议
 
@@ -383,13 +383,13 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&apiKe
 
 扩展配置存储在 `settings.json` 文件中，支持 VS Code 自带的设置云同步功能。
 
-但密钥等敏感信息默认通过 VS Code 的 secrets API 存储，当前还不支持云同步。
+但敏感信息（API Key、OAuth token、client secret）默认通过 VS Code 的 Secret Storage 存储，当前还不支持云同步。
 
-所以当配置同步到其它设备后，可能会要求你重新输入密钥。
+所以当配置同步到其它设备后，可能会要求你重新输入密钥或重新授权。
 
-如果你希望同步密钥等敏感信息，可以在设置中启用 [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings)，这将把密钥存储在 `settings.json` 中。
+如果你希望同步这类数据，可以在设置中启用 [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings)，这将把敏感信息存储在 `settings.json` 中。
 
-这可能会导致密钥泄露风险，你需要自行评估风险并决定是否启用该选项。
+这会有用户数据泄露风险，你需要自行评估并决定是否启用该选项。
 
 ## API 格式支持表
 
@@ -446,13 +446,13 @@ Google Cloud Vertex AI 共有三种身份验证方式：
 
 - Application Default Credentials (ADC)
 
-  不支持该方式。
+  支持，只需要将 `身份验证` 留空（或选择 `无`）即可。
 
 - Service Account JSON key
 
   支持，但是在配置时需要注意：
 
-  - 在 APIKey 字段中填写 JSON 文件路径，例如 `/path/to/your/keyfile.json`。
+  - 将 `身份验证` 选择为 `API Key`，然后在 `API Key` 字段中填写 JSON 文件路径，例如 `/path/to/your/keyfile.json`。
   - 根据在平台中获取的 `project` 和 `location` 信息，在 `API 基础 URL` 字段中填写如下格式的地址：
 
     ```
@@ -467,7 +467,7 @@ Google Cloud Vertex AI 共有三种身份验证方式：
 
 - Google Cloud API key
 
-  支持，只需要正确配置 `API Key` 即可。
+  支持，只需要正确配置 `身份验证`（API Key）即可。
 
 ## 模型支持表
 

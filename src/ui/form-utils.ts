@@ -9,16 +9,26 @@ import {
 } from '../config-ops';
 import { normalizeBaseUrlInput } from '../utils';
 import { showValidationErrors } from './component';
-import { ProviderConfig, ModelConfig } from '../types';
+import { ProviderConfig, ModelConfig, type DeprecatedProviderConfigKey } from '../types';
 
 /**
  * Draft type for provider form editing.
  */
-export type ProviderFormDraft = Omit<Partial<ProviderConfig>, 'models'> & {
+export type ProviderFormDraft = Omit<
+  Partial<ProviderConfig>,
+  'models' | DeprecatedProviderConfigKey
+> & {
   models: ModelConfig[];
-  /** Internal: Session ID for official models draft state (not persisted) */
-  _officialModelsSessionId?: string;
+  /** Internal: Session ID for draft-only state (official models, oauth2 token, etc.) (not persisted) */
+  _draftSessionId?: string;
 };
+
+type AssertNever<T extends never> = T;
+
+export type _AssertProviderDraftDoesNotExposeDeprecatedKeys = AssertNever<
+  Extract<DeprecatedProviderConfigKey, keyof ProviderFormDraft>
+>;
+
 
 /**
  * Clone a provider config for editing.
@@ -27,6 +37,18 @@ export function createProviderDraft(
   existing?: ProviderConfig,
 ): ProviderFormDraft {
   return existing ? deepClone(existing) : { models: [] };
+}
+
+function generateDraftSessionId(): string {
+  return `draft-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
+}
+
+/** Ensure draft has a stable session ID (used as key for all draft-only state). */
+export function ensureDraftSessionId(draft: ProviderFormDraft): string {
+  if (draft._draftSessionId) return draft._draftSessionId;
+  const id = generateDraftSessionId();
+  draft._draftSessionId = id;
+  return id;
 }
 
 /**
@@ -60,12 +82,13 @@ export function removeModel(models: ModelConfig[], id: string): void {
 export function normalizeProviderDraft(
   draft: ProviderFormDraft,
 ): ProviderConfig {
+  const cloned = deepClone(draft);
+  const { _draftSessionId: _, ...rest } = cloned;
   return {
-    ...deepClone(draft),
+    ...rest,
     type: draft.type!,
     name: draft.name!.trim(),
     baseUrl: normalizeBaseUrlInput(draft.baseUrl!),
-    apiKey: draft.apiKey?.trim() || undefined,
   };
 }
 
@@ -91,12 +114,11 @@ export function thinkingEqual(
 }
 
 function toComparableProviderDraft(draft: ProviderFormDraft): unknown {
-  const { _officialModelsSessionId: _, ...rest } = deepClone(draft);
+  const { _draftSessionId: _, ...rest } = deepClone(draft);
   return {
     ...rest,
     name: rest.name?.trim() ?? '',
     baseUrl: rest.baseUrl?.trim() ?? '',
-    apiKey: rest.apiKey?.trim() ?? '',
     models: rest.models.map(toComparableModelConfig),
   };
 }

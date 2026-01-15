@@ -208,10 +208,6 @@
                 "type": "string",
                 "description": "%configuration.endpoints.baseUrl.description%"
               },
-              "apiKey": {
-                "type": "string",
-                "description": "%configuration.endpoints.apiKey.description%"
-              },
               "extraHeaders": {
                 "type": "object",
                 "description": "%configuration.endpoints.extraHeaders.description%",
@@ -524,6 +520,8 @@
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p .",
     "watch": "tsc -watch -p .",
+    "l10n:check": "bun run scripts/l10n-audit.ts",
+    "l10n:sync": "bun run scripts/l10n-audit.ts --write",
     "count-loc": "bun run scripts/count-loc.ts",
     "release": "bun run scripts/release.ts"
   },

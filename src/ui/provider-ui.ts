@@ -6,32 +6,37 @@ import {
 } from './import-from-config';
 import { runUiStack } from './router/stack-router';
 import type { UiContext } from './router/types';
+import type { EventedUriHandler } from '../uri-handler';
 import { runRemoveProviderScreen } from './screens/remove-provider-screen';
-import type { ApiKeySecretStore } from '../api-key-secret-store';
-import { resolveProvidersForExportOrShowError } from '../api-key-utils';
+import { SecretStore } from '../secret';
+import { resolveProvidersForExportOrShowError } from '../auth/auth-transfer';
+import { promptForSensitiveDataInclusion } from './provider-ops';
 import { t } from '../i18n';
 
 export async function manageProviders(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  const ctx: UiContext = { store, apiKeyStore };
+  const ctx: UiContext = { store, secretStore, uriHandler };
   await runUiStack(ctx, { kind: 'providerList' });
 }
 
 export async function addProvider(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  const ctx: UiContext = { store, apiKeyStore };
+  const ctx: UiContext = { store, secretStore, uriHandler };
   await runUiStack(ctx, { kind: 'providerForm' });
 }
 
 export async function addProviderFromConfig(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  const ctx: UiContext = { store, apiKeyStore };
+  const ctx: UiContext = { store, secretStore, uriHandler };
   const imported = await promptForProviderImportConfig();
   if (!imported) return;
 
@@ -48,23 +53,26 @@ export async function addProviderFromConfig(
 
 export async function addProviderFromWellKnownList(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  const ctx: UiContext = { store, apiKeyStore };
+  const ctx: UiContext = { store, secretStore, uriHandler };
   await runUiStack(ctx, { kind: 'wellKnownProviderList' });
 }
 
 export async function importProviders(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  const ctx: UiContext = { store, apiKeyStore };
+  const ctx: UiContext = { store, secretStore, uriHandler };
   await runUiStack(ctx, { kind: 'importProviders' });
 }
 
 export async function exportAllProviders(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  _uriHandler?: EventedUriHandler,
 ): Promise<void> {
   const providers = store.endpoints;
   if (providers.length === 0) {
@@ -72,9 +80,13 @@ export async function exportAllProviders(
     return;
   }
 
+  const includeSensitive = await promptForSensitiveDataInclusion();
+  if (includeSensitive === undefined) return;
+
   const resolved = await resolveProvidersForExportOrShowError({
-    apiKeyStore,
+    secretStore,
     providers,
+    includeSensitive,
   });
   if (!resolved) return;
   await showCopiedBase64Config(resolved);
@@ -82,7 +94,8 @@ export async function exportAllProviders(
 
 export async function removeProvider(
   store: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
+  secretStore: SecretStore,
+  _uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  await runRemoveProviderScreen(store, apiKeyStore);
+  await runRemoveProviderScreen(store, secretStore);
 }

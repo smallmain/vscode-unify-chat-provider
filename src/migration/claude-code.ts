@@ -218,7 +218,10 @@ function buildClaudeCodeProvider(
     type: 'anthropic',
     name: settings.providerName || 'Claude Code',
     baseUrl,
-    apiKey,
+    auth: {
+      method: 'api-key',
+      apiKey,
+    },
     models: getClaudeCodeDefaultModels(),
   };
 

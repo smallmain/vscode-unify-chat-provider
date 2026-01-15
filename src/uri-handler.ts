@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import type { ConfigStore } from './config-store';
-import type { ApiKeySecretStore } from './api-key-secret-store';
+import type { SecretStore } from './secret';
 import {
   isValidHttpUrl,
   fetchConfigFromUrl,
@@ -12,11 +12,48 @@ import type { UiContext } from './ui/router/types';
 import type { ProviderConfig } from './types';
 import {
   isProviderConfigInput,
+  normalizeLegacyApiKeyProviderConfig,
   parseProviderConfigArray,
 } from './ui/import-config';
 import { t } from './i18n';
 
 const IMPORT_CONFIG_PATH = '/import-config';
+
+export interface EventedUriHandler extends vscode.UriHandler {
+  readonly onDidReceiveUri: vscode.Event<vscode.Uri>;
+  getOAuthRedirectUri(path?: string): string;
+}
+
+class UnifiedUriHandler implements EventedUriHandler, vscode.Disposable {
+  private readonly importConfigHandler: ImportConfigUriHandler;
+  private readonly _onDidReceiveUri = new vscode.EventEmitter<vscode.Uri>();
+  readonly onDidReceiveUri = this._onDidReceiveUri.event;
+
+  constructor(
+    private readonly extensionId: string,
+    configStore: ConfigStore,
+    secretStore: SecretStore,
+  ) {
+    this.importConfigHandler = new ImportConfigUriHandler(
+      configStore,
+      secretStore,
+    );
+  }
+
+  async handleUri(uri: vscode.Uri): Promise<void> {
+    this._onDidReceiveUri.fire(uri);
+    await this.importConfigHandler.handleUri(uri);
+  }
+
+  getOAuthRedirectUri(path = '/oauth/callback'): string {
+    const normalizedPath = path.startsWith('/') ? path : `/${path}`;
+    return `${vscode.env.uriScheme}://${this.extensionId}${normalizedPath}`;
+  }
+
+  dispose(): void {
+    this._onDidReceiveUri.dispose();
+  }
+}
 
 /**
  * Decode config parameter, supporting JSON, Base64, and URL.
@@ -29,7 +66,7 @@ async function decodeConfigParam(
     const result = await fetchConfigFromUrl(configParam);
     if (!result.ok) {
       vscode.window.showErrorMessage(
-        `Failed to fetch configuration: ${result.error}`,
+        t('Failed to fetch configuration: {0}', result.error),
       );
       return undefined;
     }
@@ -86,7 +123,7 @@ function applyOverrides<T extends Record<string, unknown>>(
 export class ImportConfigUriHandler implements vscode.UriHandler {
   constructor(
     private readonly configStore: ConfigStore,
-    private readonly apiKeyStore: ApiKeySecretStore,
+    private readonly secretStore: SecretStore,
   ) {}
 
   async handleUri(uri: vscode.Uri): Promise<void> {
@@ -126,7 +163,7 @@ export class ImportConfigUriHandler implements vscode.UriHandler {
     const overrides = extractOverrideFields(query);
     const ctx: UiContext = {
       store: this.configStore,
-      apiKeyStore: this.apiKeyStore,
+      secretStore: this.secretStore,
     };
 
     // Handle array of configs
@@ -139,7 +176,7 @@ export class ImportConfigUriHandler implements vscode.UriHandler {
 
       // Apply overrides to each config
       const mergedConfigs = configs.map((config) =>
-        applyOverrides(config, overrides),
+        normalizeLegacyApiKeyProviderConfig(applyOverrides(config, overrides)),
       );
 
       await runUiStack(ctx, {
@@ -155,9 +192,8 @@ export class ImportConfigUriHandler implements vscode.UriHandler {
       return;
     }
 
-    const mergedConfig = applyOverrides(
-      configValue as Partial<ProviderConfig>,
-      overrides,
+    const mergedConfig = normalizeLegacyApiKeyProviderConfig(
+      applyOverrides(configValue as Partial<ProviderConfig>, overrides),
     );
 
     await runUiStack(ctx, {
@@ -173,8 +209,14 @@ export class ImportConfigUriHandler implements vscode.UriHandler {
 export function registerUriHandler(
   context: vscode.ExtensionContext,
   configStore: ConfigStore,
-  apiKeyStore: ApiKeySecretStore,
-): void {
-  const handler = new ImportConfigUriHandler(configStore, apiKeyStore);
+  secretStore: SecretStore,
+): EventedUriHandler {
+  const handler = new UnifiedUriHandler(
+    context.extension.id,
+    configStore,
+    secretStore,
+  );
+  context.subscriptions.push(handler);
   context.subscriptions.push(vscode.window.registerUriHandler(handler));
+  return handler;
 }

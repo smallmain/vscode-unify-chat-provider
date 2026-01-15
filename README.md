@@ -111,9 +111,8 @@ See the [Provider Support Table](#provider-support-table) for providers supporte
    </div>
 
 2. Select the provider you want to add.
-3. Follow the prompts to input the API key, then you’ll be taken to the config import screen.
+3. Follow the prompts to configure authentication (usually an API key), then you’ll be taken to the config import screen.
 
-   - If the provider does not require an API key, press Enter to skip.
    - This screen lets you review and edit the config that will be imported.
    - For details, see the [Provider Settings](#provider-settings) section.
 
@@ -133,7 +132,7 @@ This section uses DeepSeek as an example, adding the provider and two models.
 
    - `API Format`: The API format (e.g., OpenAI Chat Completions, Anthropic Messages).
    - `API Base URL`: The base URL of the API.
-   - `API Key`: Usually generated in the provider’s console after account registration.
+   - `Authentication`: Usually an API key; obtained from the user center or console after registration.
 
 1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider`.
 
@@ -157,9 +156,10 @@ This section uses DeepSeek as an example, adding the provider and two models.
 
    - DeepSeek’s base URL is `https://api.deepseek.com`.
 
-5. Set the API key: `API Key`.
+5. Configure authentication: `Authentication`.
 
-   - Paste the API key generated in the DeepSeek console.
+   - DeepSeek uses API Key for authentication, so select `API Key`.
+   - Enter the API key generated from the DeepSeek console.
 
 6. Click `Models` to go to the model management screen.
 
@@ -294,7 +294,7 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | API Format                 | `type`                    | Provider type (determines the API format and compatibility logic).                                   |
 | Provider Name              | `name`                    | Unique name for this provider config (used for list display and references).                         |
 | API Base URL               | `baseUrl`                 | API base URL, e.g. `https://api.anthropic.com`.                                                      |
-| API Key                    | `apiKey`                  | Authentication key.                                                                                  |
+| Authentication             | `auth`                    | Authentication config object (`none` / `api-key` / `oauth2`).                                        |
 | Models                     | `models`                  | Array of model configurations (`ModelConfig[]`).                                                     |
 | Extra Headers              | `extraHeaders`            | HTTP headers appended to every request (`Record<string, string>`).                                   |
 | Extra Body Fields          | `extraBody`               | Extra fields appended to request body (`Record<string, unknown>`), for provider-specific parameters. |
@@ -302,6 +302,18 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | Connection Timeout         | `timeout.connection`      | Maximum time to wait for establishing a TCP connection; default `10000` (10 seconds).                |
 | Response Interval Timeout  | `timeout.response`        | Maximum time to wait between SSE chunks; default `120000` (2 minutes).                               |
 | Auto-Fetch Official Models | `autoFetchOfficialModels` | Whether to periodically fetch and auto-update the official model list from the provider API.         |
+
+#### Authentication (`auth`)
+
+`auth` is optional. Recommended configurations:
+
+```json
+{ "method": "none" }
+{ "method": "api-key", "apiKey": "<your-api-key-or-secret-ref>" }
+{ "method": "oauth2", "oauth": { "grantType": "authorization_code", "authorizationUrl": "...", "tokenUrl": "...", "clientId": "..." } }
+```
+
+Legacy note: `apiKey` (top-level) is deprecated but still supported for migration and will be normalized into `auth`.
 
 ### Model Parameters
 
@@ -366,10 +378,12 @@ You can add query parameters to override certain fields in the imported config.
 Example:
 
 ```
-vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&apiKey=my-api-key
+vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth={"method":"api-key","apiKey":"my-api-key"}
 ```
 
-The import will override the `apiKey` field before importing.
+The import will override the `auth` field before importing.
+
+Note: override values are parsed as JSON when possible. Legacy `apiKey` is still accepted and will be normalized into `auth`.
 
 ### Provider Advocacy
 
@@ -383,13 +397,13 @@ If you are a developer for an LLM provider, you can add a link like the followin
 
 Extension configs are stored in `settings.json`, so they work with VS Code Settings Sync.
 
-However, sensitive information such as API keys is stored in VS Code Secret Storage by default, which currently does not sync.
+However, sensitive information (API keys, OAuth tokens, client secrets) is stored in VS Code Secret Storage by default, which currently does not sync.
 
-So after syncing to another device, you may be prompted to re-enter keys.
+So after syncing to another device, you may be prompted to re-enter keys or re-authorize.
 
-If you want to sync sensitive info, enable [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings). This stores API keys in `settings.json`.
+If you want to sync such data, enable [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings). This stores sensitive information in `settings.json`.
 
-This can increase the risk of secret leakage, so evaluate the risk before enabling.
+This can increase the risk of user data leakage, so evaluate the risk before enabling.
 
 ## API Format Support Table
 
@@ -446,13 +460,13 @@ Google Cloud Vertex AI has three authentication methods:
 
 - Application Default Credentials (ADC)
 
-  Not supported.
+  Supported — just leave `Authentication` unset (or choose `No Authentication`).
 
 - Service Account JSON key
 
   Supported, but note:
 
-  - Fill the JSON key file path in the `API Key` field, e.g. `/path/to/your/keyfile.json`.
+  - Set `Authentication` to `API Key`, then fill the JSON key file path in the `API Key` field, e.g. `/path/to/your/keyfile.json`.
   - Based on the `project` and `location` from the platform, set `API Base URL` to:
 
     ```
@@ -467,7 +481,7 @@ Google Cloud Vertex AI has three authentication methods:
 
 - Google Cloud API key
 
-  Supported — just configure `API Key` correctly.
+  Supported — just configure `Authentication` (API Key).
 
 ## Model Support Table
 

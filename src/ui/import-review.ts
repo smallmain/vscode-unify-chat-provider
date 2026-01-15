@@ -92,7 +92,14 @@ export async function confirmFinalizeImport(options: {
       : options.itemLabel === 'provider'
         ? 'providers'
         : 'models';
-  const label = t(labelKey);
+  const label =
+    labelKey === 'provider'
+      ? t('provider')
+      : labelKey === 'providers'
+        ? t('providers')
+        : labelKey === 'model'
+          ? t('model')
+          : t('models');
   const choice = await vscode.window.showWarningMessage(
     t('Import {0} {1}?', options.count, label),
     { modal: true },

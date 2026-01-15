@@ -2,12 +2,14 @@ import type { ConfigStore } from '../../config-store';
 import type { ProviderType } from '../../client/definitions';
 import { ProviderConfig, ModelConfig, TimeoutConfig } from '../../types';
 import type { OfficialModelsFetchState } from '../../official-models-manager';
-import type { ApiKeySecretStore } from '../../api-key-secret-store';
+import type { SecretStore } from '../../secret';
+import type { EventedUriHandler } from '../../uri-handler';
 import type { ProviderFormDraft } from '../form-utils';
 
 export interface UiContext {
   store: ConfigStore;
-  apiKeyStore: ApiKeySecretStore;
+  secretStore: SecretStore;
+  uriHandler?: EventedUriHandler;
 }
 
 export interface ProviderListRoute {
@@ -34,8 +36,8 @@ export interface WellKnownProviderNameRoute {
   draft: ProviderFormDraft;
 }
 
-export interface WellKnownProviderApiKeyRoute {
-  kind: 'wellKnownProviderApiKey';
+export interface WellKnownProviderAuthRoute {
+  kind: 'wellKnownProviderAuth';
   provider: ProviderConfig;
   draft: ProviderFormDraft;
 }
@@ -126,7 +128,7 @@ export type UiRoute =
   | ProviderFormRoute
   | WellKnownProviderListRoute
   | WellKnownProviderNameRoute
-  | WellKnownProviderApiKeyRoute
+  | WellKnownProviderAuthRoute
   | ModelListRoute
   | ModelFormRoute
   | ModelViewRoute

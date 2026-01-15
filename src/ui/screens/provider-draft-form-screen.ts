@@ -3,6 +3,7 @@ import { editField } from '../field-editors';
 import { buildFormItems, type FormItem } from '../field-schema';
 import {
   confirmDiscardProviderChanges,
+  ensureDraftSessionId,
   type ProviderFormDraft,
 } from '../form-utils';
 import {
@@ -17,7 +18,9 @@ import type {
   UiResume,
 } from '../router/types';
 import { deepClone } from '../../config-ops';
+import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
 import { officialModelsManager } from '../../official-models-manager';
+import { cleanupUnusedSecrets } from '../../secret';
 import { t } from '../../i18n';
 
 export async function runProviderDraftFormScreen(
@@ -28,23 +31,19 @@ export async function runProviderDraftFormScreen(
   const draft = route.draft;
   const original = route.original;
 
-  const apiKeyStatus = await ctx.apiKeyStore.getStatus(draft.apiKey);
-
   const context: ProviderFieldContext = {
     store: ctx.store,
-    apiKeyStatus,
-    storeApiKeyInSettings: ctx.store.storeApiKeyInSettings,
     onEditModels: async () => {},
     onEditTimeout: async () => {},
+    secretStore: ctx.secretStore,
+    uriHandler: ctx.uriHandler,
   };
 
-  const selection = await pickQuickItem<FormItem<ProviderFormDraft>>({
-    title: draft.name?.trim()
-      ? t('Edit Provider ({0})', draft.name.trim())
-      : t('Edit Provider'),
-    placeholder: t('Select a field to edit'),
-    ignoreFocusOut: true,
-    items: buildFormItems(
+  let authDetail: string | undefined =
+    draft.auth && draft.auth.method !== 'none' ? t('Loading...') : undefined;
+
+  const buildItems = (): FormItem<ProviderFormDraft>[] => {
+    const items = buildFormItems(
       providerFormSchema,
       draft,
       {
@@ -54,26 +53,140 @@ export async function runProviderDraftFormScreen(
         saveLabel: '$(check) ' + t('Done'),
       },
       context,
-    ),
+    );
+
+    return items.map((item) => {
+      if (item.field !== 'auth') return item;
+      return { ...item, detail: authDetail };
+    });
+  };
+
+  const selection = await pickQuickItem<FormItem<ProviderFormDraft>>({
+    title: draft.name?.trim()
+      ? t('Edit Provider ({0})', draft.name.trim())
+      : t('Edit Provider'),
+    placeholder: t('Select a field to edit'),
+    ignoreFocusOut: true,
+    items: buildItems(),
+    onExternalRefresh: (refreshItems) => {
+      let disposed = false;
+      let refreshInFlight = false;
+      let timer: ReturnType<typeof setTimeout> | undefined;
+      let currentIntervalMs = 5_000;
+
+      const intervalFromSnapshot = (snapshot: AuthUiStatusSnapshot | undefined): number => {
+        if (snapshot?.kind !== 'valid' && snapshot?.kind !== 'expired') {
+          return 5_000;
+        }
+
+        const expiresAt = snapshot.expiresAt;
+        if (expiresAt === undefined) {
+          return 5_000;
+        }
+
+        const remainingMs = expiresAt - Date.now();
+        if (remainingMs > 0 && remainingMs < 60_000) {
+          return 1_000;
+        }
+
+        return 5_000;
+      };
+
+      const schedule = () => {
+        if (disposed) return;
+        if (timer) clearTimeout(timer);
+        timer = setTimeout(() => {
+          void refresh();
+        }, currentIntervalMs);
+      };
+
+      const refresh = async () => {
+        if (disposed) return;
+        if (refreshInFlight) return;
+        refreshInFlight = true;
+
+        try {
+          const auth = draft.auth;
+          if (!auth || auth.method === 'none') {
+            authDetail = undefined;
+            refreshItems(buildItems());
+            return;
+          }
+
+          const providerLabel = draft.name?.trim() || t('Provider');
+          const providerId = ensureDraftSessionId(draft);
+          const authProvider = createAuthProvider(
+            {
+              providerId,
+              providerLabel,
+              secretStore: ctx.secretStore,
+              uriHandler: ctx.uriHandler,
+            },
+            deepClone(auth),
+          );
+
+          if (!authProvider) {
+            authDetail = undefined;
+            refreshItems(buildItems());
+            return;
+          }
+
+          try {
+            authDetail = await authProvider.getSummaryDetail?.();
+            const snapshot = await authProvider.getStatusSnapshot?.();
+            const nextInterval = intervalFromSnapshot(snapshot);
+            if (nextInterval !== currentIntervalMs) {
+              currentIntervalMs = nextInterval;
+            }
+          } finally {
+            authProvider.dispose?.();
+          }
+
+          refreshItems(buildItems());
+        } finally {
+          refreshInFlight = false;
+          schedule();
+        }
+      };
+
+      schedule();
+      void refresh();
+
+      return {
+        dispose: () => {
+          disposed = true;
+          if (timer) clearTimeout(timer);
+        },
+      };
+    },
   });
 
   if (!selection || selection.action === 'cancel') {
     const decision = await confirmDiscardProviderChanges(draft, original);
-    if (decision === 'discard') {
-      const sessionId = draft._officialModelsSessionId;
-      const originalSessionId = original._officialModelsSessionId;
-      if (sessionId && sessionId !== originalSessionId) {
-        officialModelsManager.clearDraftSession(sessionId);
-      }
-      const result: ProviderDraftFormResult = { kind: 'cancelled' };
-      return { kind: 'pop', resume: { kind: 'providerDraftFormResult', result } };
+      if (decision === 'discard') {
+        const sessionId = draft._draftSessionId;
+        const originalSessionId = original._draftSessionId;
+        if (sessionId && sessionId !== originalSessionId) {
+          officialModelsManager.clearDraftSession(sessionId);
+        }
+
+        await cleanupUnusedSecrets(ctx.secretStore);
+
+        const result: ProviderDraftFormResult = { kind: 'cancelled' };
+      return {
+        kind: 'pop',
+        resume: { kind: 'providerDraftFormResult', result },
+      };
     }
     if (decision === 'save') {
       const result: ProviderDraftFormResult = {
         kind: 'saved',
         draft: deepClone(draft),
       };
-      return { kind: 'pop', resume: { kind: 'providerDraftFormResult', result } };
+      return {
+        kind: 'pop',
+        resume: { kind: 'providerDraftFormResult', result },
+      };
     }
     return { kind: 'stay' };
   }

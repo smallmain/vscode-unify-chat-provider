@@ -6,6 +6,7 @@ import type {
 } from 'vscode';
 import type { ModelConfig, PerformanceTrace, ProviderConfig } from '../types';
 import type { RequestLogger } from '../logger';
+import type { AuthTokenInfo } from '../auth/types';
 import { ProviderType } from './definitions';
 
 export interface ProviderDefinition {
@@ -30,6 +31,7 @@ export interface ApiProvider {
     performanceTrace: PerformanceTrace,
     token: CancellationToken,
     logger: RequestLogger,
+    credential: AuthTokenInfo,
   ): AsyncGenerator<LanguageModelResponsePart2>;
 
   /**
@@ -41,5 +43,5 @@ export interface ApiProvider {
    * Get available models from the provider
    * Returns a list of model configurations supported by this API client
    */
-  getAvailableModels?(): Promise<ModelConfig[]>;
+  getAvailableModels?(credential: AuthTokenInfo): Promise<ModelConfig[]>;
 }

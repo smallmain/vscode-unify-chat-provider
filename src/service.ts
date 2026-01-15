@@ -11,8 +11,12 @@ import { getBaseModelId } from './model-id-utils';
 import { createProvider } from './client/utils';
 import { formatModelDetail } from './ui/form-utils';
 import { getAllModelsForProvider } from './utils';
-import { ApiKeySecretStore } from './api-key-secret-store';
+import { SecretStore } from './secret';
+import { AuthManager } from './auth';
+import type { AuthCredential, AuthTokenInfo } from './auth/types';
 import { t } from './i18n';
+import { runUiStack } from './ui/router/stack-router';
+import type { UiContext } from './ui/router/types';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -24,7 +28,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
   constructor(
     private readonly configStore: ConfigStore,
-    private readonly apiKeyStore: ApiKeySecretStore,
+    private readonly secretStore: SecretStore,
+    private readonly authManager?: AuthManager,
   ) {}
 
   /**
@@ -163,55 +168,129 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     return client;
   }
 
-  private async resolveProvider(
-    provider: ProviderConfig,
-  ): Promise<ProviderConfig> {
-    const status = await this.apiKeyStore.getStatus(provider.apiKey);
-
-    if (status.kind === 'unset' || status.kind === 'plain') {
-      return provider;
+  private toAuthTokenInfo(credential: AuthCredential | undefined): AuthTokenInfo {
+    if (!credential?.value) {
+      return { kind: 'none' };
     }
 
-    if (status.kind === 'secret') {
-      return { ...provider, apiKey: status.apiKey };
-    }
+    return {
+      kind: 'token',
+      token: credential.value,
+      tokenType: credential.tokenType,
+      expiresAt: credential.expiresAt,
+    };
+  }
 
-    const confirm = await vscode.window.showErrorMessage(
-      t('API key for provider "{0}" is missing. Please re-enter it to continue.', provider.name),
-      { modal: true },
-      t('Re-enter API Key'),
-    );
-    if (confirm !== t('Re-enter API Key')) {
+  private async resolveCredential(provider: ProviderConfig): Promise<AuthTokenInfo> {
+    const auth = provider.auth;
+
+    // Prefer auth manager when auth config is present
+    if (auth && auth.method !== 'none') {
+      if (!this.authManager) {
+        throw new Error(
+          t('Authentication required for provider "{0}".', provider.name),
+        );
+      }
+
+
+      const credential = await this.authManager.getCredential(
+        provider.name,
+        auth,
+      );
+
+      if (credential) {
+        return this.toAuthTokenInfo(credential);
+      }
+
+      const lastError = this.authManager.getLastError(
+        provider.name,
+        auth.method,
+      );
+
+      if (lastError) {
+        const isAuthError = lastError.errorType === 'auth_error';
+        const buttons = isAuthError
+          ? [t('Re-authorize')]
+          : [t('Retry'), t('Re-authorize')];
+
+        const message = isAuthError
+          ? t(
+              'Authentication expired for "{0}". Please re-authorize.',
+              provider.name,
+            )
+          : t(
+              'Authentication error for "{0}": {1}',
+              provider.name,
+              lastError.error.message,
+            );
+
+        const action = await vscode.window.showErrorMessage(
+          message,
+          { modal: true },
+          ...buttons,
+        );
+
+        if (action === t('Retry')) {
+          const success = await this.authManager.retryRefresh(
+            provider.name,
+            auth,
+          );
+          if (success) {
+            const newCredential = await this.authManager.getCredential(
+              provider.name,
+              auth,
+            );
+            if (newCredential) {
+              return this.toAuthTokenInfo(newCredential);
+            }
+          }
+
+          return this.resolveCredential(provider);
+        }
+
+        if (action === t('Re-authorize')) {
+          const ctx: UiContext = {
+            store: this.configStore,
+            secretStore: this.secretStore,
+          };
+          await runUiStack(ctx, {
+            kind: 'providerForm',
+            providerName: provider.name,
+          });
+          // After user finishes editing, retry credential resolution
+          return this.resolveCredential(provider);
+        }
+
+        throw new Error(
+          t('Authentication required for provider "{0}".', provider.name),
+        );
+      }
+
+      const authProvider = this.authManager.getProvider(provider.name, auth);
+      if (authProvider) {
+        const confirm = await vscode.window.showErrorMessage(
+          t('Authentication for provider "{0}" is required.', provider.name),
+          { modal: true },
+          t('Authenticate'),
+        );
+        if (confirm === t('Authenticate')) {
+          const result = await authProvider.configure();
+          if (result.success) {
+            const newCredential = await authProvider.getCredential();
+            if (newCredential) {
+              return this.toAuthTokenInfo(newCredential);
+            }
+          }
+        }
+      }
+
       throw new Error(
-        t('API key for provider "{0}" is missing. Please re-enter it and try again.', provider.name),
+        t('Authentication required for provider "{0}".', provider.name),
       );
     }
 
-    const entered = await vscode.window.showInputBox({
-      title: t('API Key ({0})', provider.name),
-      prompt: t('Enter the API key for "{0}"', provider.name),
-      password: true,
-      ignoreFocusOut: true,
-    });
-    const apiKey = entered?.trim();
-    if (!apiKey) {
-      throw new Error(
-        t('API key for provider "{0}" is missing. Please re-enter it and try again.', provider.name),
-      );
-    }
-
-    if (this.configStore.storeApiKeyInSettings) {
-      const updated = this.configStore.endpoints.map((p) =>
-        p.name === provider.name ? { ...p, apiKey } : p,
-      );
-      await this.configStore.setEndpoints(updated);
-      this.clients.delete(provider.name);
-      return { ...provider, apiKey };
-    }
-
-    await this.apiKeyStore.set(status.ref, apiKey);
-    this.clients.delete(provider.name);
-    return { ...provider, apiKey };
+    // No auth configured
+    return { kind: 'none' };
   }
 
   /**
@@ -238,8 +317,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       throw new Error(`Model not found: ${model.id}`);
     }
 
-    const { provider: _provider, model: modelConfig } = found;
-    const provider = await this.resolveProvider(_provider);
+    const { provider, model: modelConfig } = found;
+    const credential = await this.resolveCredential(provider);
 
     logger.start({
       providerName: provider.name,
@@ -262,6 +341,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       performanceTrace,
       token,
       logger,
+      credential,
     );
 
     try {
@@ -311,8 +391,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
     // Use client's estimation if available, otherwise use default
     if (found) {
-      const provider = await this.resolveProvider(found.provider);
-      const client = this.getClient(provider);
+      const client = this.getClient(found.provider);
       return client.estimateTokenCount(content);
     }
 

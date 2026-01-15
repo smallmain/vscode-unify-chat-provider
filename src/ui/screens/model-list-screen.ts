@@ -10,6 +10,7 @@ import {
   confirmDiscardProviderChanges,
   formatModelDetail,
   removeModel,
+  ensureDraftSessionId as ensureDraftSessionIdForDraft,
 } from '../form-utils';
 import type {
   ModelListRoute,
@@ -29,39 +30,25 @@ import {
   OfficialModelsFetchState,
 } from '../../official-models-manager';
 import { t } from '../../i18n';
+import { isSecretRef } from '../../secret';
 
 /**
- * Generate a unique session ID for draft state management
+ * Ensure we have a session ID for draft-only state. Prefer the draft's
+ * `_draftSessionId` so auth + official models share the same stable key.
  */
-function generateSessionId(): string {
-  return `draft-${Date.now()}-${Math.random().toString(36).substring(2, 9)}`;
-}
-
-/**
- * Ensure draft has a session ID.
- * Session ID is stored on draft object to persist across route recreations.
- */
-function ensureDraftSessionId(route: ModelListRoute): string {
-  // Prefer draft's session ID (persists across route recreations)
-  if (route.draft?._officialModelsSessionId) {
-    route.draftSessionId = route.draft._officialModelsSessionId;
-    return route.draftSessionId;
-  }
-
-  // Fall back to route's session ID
-  if (route.draftSessionId) {
-    if (route.draft) {
-      route.draft._officialModelsSessionId = route.draftSessionId;
-    }
-    return route.draftSessionId;
-  }
-
-  // Generate new session ID
-  const newSessionId = generateSessionId();
-  route.draftSessionId = newSessionId;
+function ensureRouteDraftSessionId(route: ModelListRoute): string {
   if (route.draft) {
-    route.draft._officialModelsSessionId = newSessionId;
+    const id = ensureDraftSessionIdForDraft(route.draft);
+    route.draftSessionId = id;
+    return id;
   }
+
+  if (route.draftSessionId) return route.draftSessionId;
+
+  const newSessionId = `draft-${Date.now()}-${Math.random()
+    .toString(36)
+    .substring(2, 9)}`;
+  route.draftSessionId = newSessionId;
   return newSessionId;
 }
 
@@ -103,7 +90,7 @@ export async function runModelListScreen(
   await updateOfficialModelsDataForRoute(route);
 
   // Ensure we have a session ID for draft state management
-  const sessionId = ensureDraftSessionId(route);
+  const sessionId = ensureRouteDraftSessionId(route);
 
   const selection = await pickQuickItem<ModelListItem>({
     title,
@@ -189,7 +176,9 @@ export async function runModelListScreen(
       if (buttonIndex === 2) {
         if (mustKeepOne && route.models.length <= 1) {
           vscode.window.showWarningMessage(
-            t('Cannot delete the last model. A provider must have at least one model.'),
+            t(
+              'Cannot delete the last model. A provider must have at least one model.',
+            ),
           );
           return;
         }
@@ -214,6 +203,21 @@ export async function runModelListScreen(
       if (decision === 'discard') {
         // Clean up draft session when discarding changes
         officialModelsManager.clearDraftSession(sessionId);
+
+        if (route.invocation !== 'providerEdit') {
+          const tokenRef = (() => {
+            const auth = route.draft.auth;
+            if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
+              return undefined;
+            }
+            const record = auth as unknown as Record<string, unknown>;
+            const token = record['token'];
+            return typeof token === 'string' ? token.trim() : undefined;
+          })();
+          if (tokenRef && isSecretRef(tokenRef)) {
+            await ctx.secretStore.deleteOAuth2Token(tokenRef);
+          }
+        }
         return route.invocation === 'addFromWellKnownProvider'
           ? { kind: 'popToRoot' }
           : { kind: 'pop' };
@@ -227,7 +231,6 @@ export async function runModelListScreen(
         }
         const result = await route.onSave();
         if (result === 'saved') {
-          // Migration is handled by saveProviderDraft via draft._officialModelsSessionId
           const afterSave = route.afterSave ?? 'pop';
           return afterSave === 'popToRoot'
             ? { kind: 'popToRoot' }
@@ -266,7 +269,7 @@ export async function runModelListScreen(
     if (!route.draft) return { kind: 'stay' };
     await exportProviderConfigFromDraft({
       draft: route.draft,
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       allowPartial: true,
     });
     return { kind: 'stay' };
@@ -274,7 +277,7 @@ export async function runModelListScreen(
 
   if (selection.action === 'provider-duplicate') {
     if (!route.existing) return { kind: 'stay' };
-    await duplicateProvider(ctx.store, ctx.apiKeyStore, route.existing);
+    await duplicateProvider(ctx.store, ctx.secretStore, route.existing);
     return { kind: 'stay' };
   }
 
@@ -283,7 +286,7 @@ export async function runModelListScreen(
     const confirmed = await confirmDelete(route.originalName, 'provider');
     if (!confirmed) return { kind: 'stay' };
     await deleteProviderApiKeySecretIfUnused({
-      apiKeyStore: ctx.apiKeyStore,
+      secretStore: ctx.secretStore,
       providers: ctx.store.endpoints,
       providerName: route.originalName,
     });
@@ -306,7 +309,7 @@ export async function runModelListScreen(
 
   if (selection.action === 'save') {
     if (!includeSave || !didSave) return { kind: 'stay' };
-    // Migration is handled by saveProviderDraft via draft._officialModelsSessionId
+    // Migration is handled by saveProviderDraft via draft._draftSessionId
     const afterSave = route.afterSave ?? 'pop';
     return afterSave === 'popToRoot' ? { kind: 'popToRoot' } : { kind: 'pop' };
   }
@@ -563,8 +566,14 @@ function buildModelListItems(
     items.push({ label: `$(export) ${t('Export')}`, action: 'provider-copy' });
 
     if (route.existing && route.draft) {
-      items.push({ label: `$(files) ${t('Duplicate')}`, action: 'provider-duplicate' });
-      items.push({ label: `$(trash) ${t('Delete')}`, action: 'provider-delete' });
+      items.push({
+        label: `$(files) ${t('Duplicate')}`,
+        action: 'provider-duplicate',
+      });
+      items.push({
+        label: `$(trash) ${t('Delete')}`,
+        action: 'provider-delete',
+      });
     }
   }
 
@@ -641,7 +650,7 @@ async function updateOfficialModelsDataForRoute(
     return;
   }
 
-  const sessionId = ensureDraftSessionId(route);
+  const sessionId = ensureRouteDraftSessionId(route);
   const draftInput = buildOfficialModelsDraftInput(route);
 
   // When editing an existing provider, try to load persisted state first
@@ -670,7 +679,7 @@ function buildOfficialModelsDraftInput(
     type: draft.type,
     name: draft.name,
     baseUrl: draft.baseUrl,
-    apiKey: draft.apiKey,
+    auth: draft.auth,
     extraHeaders: draft.extraHeaders,
     extraBody: draft.extraBody,
     timeout: draft.timeout,
