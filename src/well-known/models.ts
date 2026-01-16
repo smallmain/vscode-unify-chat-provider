@@ -924,6 +924,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2.1',
+    alternativeIds: ['minimax-m2.1-free'],
     name: 'MiniMax-M2.1',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -1977,7 +1978,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-coder-480b-a35b-instruct',
-    alternativeIds: ['qwen3-coder:480b'],
+    alternativeIds: ['qwen3-coder:480b', 'qwen3-coder'],
     name: 'Qwen3 Coder 480B A35B Instruct',
     maxInputTokens: 262144,
     maxOutputTokens: 65536,
@@ -2160,6 +2161,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4.7',
+    alternativeIds: ['glm-4.7-free'],
     name: 'GLM-4.7',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,
@@ -2409,6 +2411,20 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'big-pickle',
+    name: 'Big Pickle',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
     id: 'grok-4-1-fast-reasoning',
     name: 'Grok 4.1 Fast (Reasoning)',
     maxInputTokens: 2000000,
@@ -2432,6 +2448,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'grok-code-fast-1',
+    alternativeIds: ['grok-code'],
     name: 'Grok Code Fast 1',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
@@ -2509,6 +2526,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-pro-preview',
+    alternativeIds: ['gemini-3-pro'],
     name: 'Gemini 3 Pro Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -2523,6 +2541,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-flash-preview',
+    alternativeIds: ['gemini-3-flash'],
     name: 'Gemini 3 Flash Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
