@@ -13,7 +13,7 @@ interface WellKnownModelConfig extends ModelConfig {
  */
 const _WELL_KNOWN_MODELS = [
   {
-    id: 'doubao-seed-1-8-251215',
+    id: 'doubao-seed-1-8-251228',
     alternativeIds: ['doubao-seed-1.8'],
     name: 'Doubao Seed 1.8',
     maxInputTokens: 256000,
@@ -1244,6 +1244,18 @@ const _WELL_KNOWN_MODELS = [
     name: 'Kimi K2 0905 Preview',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 0.6,
+  },
+  {
+    id: 'kimi-k2-0711-preview',
+    name: 'Kimi K2 0711 Preview',
+    maxInputTokens: 128000,
+    maxOutputTokens: 64000,
     stream: true,
     capabilities: {
       toolCalling: true,
