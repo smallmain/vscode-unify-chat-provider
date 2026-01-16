@@ -1,5 +1,14 @@
 # Changelog
 
+## v3.1.1 - 2026-01-16
+
+### Features
+- enhance normalization of well-known configs with declared IDs mapping (a768d4b, SmallMain)
+
+### Fixes
+- return empty string for undefined API key in getCredential method (f8ae3ce, SmallMain)
+- correct formatting of OpenCode Zen provider names in localization file (13ab94a, SmallMain)
+
 ## v3.1.0 - 2026-01-16
 
 ### Features
