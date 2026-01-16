@@ -282,6 +282,16 @@ export const WELL_KNOWN_PROVIDERS: ProviderConfig[] = [
     models: wellKnowns('MiniMax-M2.1', 'MiniMax-M2.1-lightning'),
   },
   {
+    name: 'LongCat',
+    type: 'anthropic',
+    baseUrl: 'https://api.longcat.chat/anthropic',
+    models: wellKnowns(
+      'LongCat-Flash-Chat',
+      'LongCat-Flash-Thinking',
+      'LongCat-Flash-Thinking-2601',
+    ),
+  },
+  {
     name: 'Moonshot AI (China)',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.moonshot.cn',

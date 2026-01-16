@@ -2655,6 +2655,45 @@ const _WELL_KNOWN_MODELS = [
       imageInput: true,
     },
   },
+  {
+    id: 'LongCat-Flash-Chat',
+    name: 'LongCat Flash Chat',
+    maxInputTokens: 256000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'LongCat-Flash-Thinking',
+    name: 'LongCat Flash Thinking',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'LongCat-Flash-Thinking-2601',
+    name: 'LongCat Flash Thinking 2601',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
 ] as const satisfies readonly WellKnownModelConfig[];
 export const WELL_KNOWN_MODELS: readonly WellKnownModelConfig[] =
   _WELL_KNOWN_MODELS;
