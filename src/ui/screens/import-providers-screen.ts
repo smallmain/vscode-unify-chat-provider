@@ -370,6 +370,12 @@ async function handleImportCandidates(
       ignoreFocusOut: true,
       showBackButton: true,
       validateInput: (value) => validateProviderNameUnique(value, ctx.store),
+      onWillAccept: (value) => {
+        if (!value.trim()) {
+          return false;
+        }
+        return true;
+      },
     });
     if (name === undefined) return { kind: 'pop' };
     initialConfig.name = name.trim();

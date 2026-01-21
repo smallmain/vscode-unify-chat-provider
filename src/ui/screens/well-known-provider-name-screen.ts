@@ -21,6 +21,12 @@ export async function runWellKnownProviderNameScreen(
     ignoreFocusOut: true,
     showBackButton: true,
     validateInput: (value) => validateProviderNameUnique(value, ctx.store),
+    onWillAccept: (value) => {
+      if (!value.trim()) {
+        return false;
+      }
+      return true;
+    },
   });
 
   if (name === undefined) {
@@ -38,4 +44,3 @@ export async function runWellKnownProviderNameScreen(
     },
   };
 }
-

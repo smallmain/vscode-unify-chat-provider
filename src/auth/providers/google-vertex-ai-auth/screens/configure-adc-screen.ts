@@ -29,6 +29,12 @@ export async function configureAdc(
       }
       return null;
     },
+    onWillAccept: (value) => {
+      if (!value.trim()) {
+        return false;
+      }
+      return true;
+    },
   });
 
   if (projectId === undefined) {
@@ -95,6 +101,12 @@ export async function selectLocation(
           return t('Location is required');
         }
         return null;
+      },
+      onWillAccept: (value) => {
+        if (!value.trim()) {
+          return false;
+        }
+        return true;
       },
     });
   }

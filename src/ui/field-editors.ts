@@ -58,6 +58,22 @@ async function editTextField<T>(
     ? field.getValue(draft, context)
     : (draft[field.key] as string | undefined) ?? '';
 
+  const onWillAccept = field.onWillAccept
+    ? (v: string) => {
+        if (field.required && !v.trim()) {
+          return false;
+        }
+        return field.onWillAccept!(v, draft, context);
+      }
+    : field.required
+      ? (v: string) => {
+          if (!v.trim()) {
+            return false;
+          }
+          return true;
+        }
+      : undefined;
+
   const val = await showInput({
     prompt: field.prompt,
     placeHolder: field.placeholder,
@@ -66,9 +82,7 @@ async function editTextField<T>(
     validateInput: field.validate
       ? (v: string) => field.validate!(v, draft, context)
       : undefined,
-    onWillAccept: field.onWillAccept
-      ? (v) => field.onWillAccept!(v, draft, context)
-      : undefined,
+    onWillAccept,
   });
 
   if (val !== undefined) {
