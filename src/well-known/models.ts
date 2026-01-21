@@ -2194,6 +2194,34 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'glm-4.7-flash',
+    name: 'GLM-4.7-Flash',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'glm-4.7-flashx',
+    name: 'GLM-4.7-FlashX',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
     id: 'glm-4.6',
     name: 'GLM-4.6',
     maxInputTokens: 200000,
