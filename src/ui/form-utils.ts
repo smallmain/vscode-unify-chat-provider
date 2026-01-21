@@ -14,6 +14,7 @@ import {
   ModelConfig,
   type DeprecatedProviderConfigKey,
 } from '../types';
+import { DEFAULT_PROVIDER_TYPE } from '../defaults';
 
 /**
  * Draft type for provider form editing.
@@ -39,7 +40,9 @@ export type _AssertProviderDraftDoesNotExposeDeprecatedKeys = AssertNever<
 export function createProviderDraft(
   existing?: ProviderConfig,
 ): ProviderFormDraft {
-  return existing ? deepClone(existing) : { models: [] };
+  return existing
+    ? deepClone(existing)
+    : { type: DEFAULT_PROVIDER_TYPE, models: [] };
 }
 
 function generateDraftSessionId(): string {

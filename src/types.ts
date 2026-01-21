@@ -1,12 +1,16 @@
 import { AuthConfig } from './auth/types';
-import { ProviderType } from './client/definitions';
+import { ApiType } from './client/definitions';
 
 /**
  * Configuration for a single provider endpoint
  */
 export interface ProviderConfig {
-  /** Provider type (determines API format) */
-  type: ProviderType;
+  /**
+   * API type (determines API format).
+   * Required. Specifies the API format for this provider.
+   * Can be overridden at the model level.
+   */
+  type: ApiType;
   /** Unique name for this provider */
   name: string;
   /** Base URL for the API (e.g., https://api.anthropic.com) */
@@ -44,6 +48,12 @@ export type ProviderConfigPersistedKey = Exclude<
 export interface ModelConfig {
   /** Model ID (e.g., claude-sonnet-4-20250514#thinking) */
   id: string;
+  /**
+   * API type (determines API format).
+   * Optional. If not specified, inherits from the provider configuration.
+   * Use this to override the provider's API type for a specific model.
+   */
+  type?: ApiType;
   /** Display name for the model */
   name?: string;
   /** Model family (e.g., gpt-4, claude-3) */

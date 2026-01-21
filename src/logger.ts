@@ -3,6 +3,7 @@ import type { PerformanceTrace } from './types';
 import type { BetaUsage } from '@anthropic-ai/sdk/resources/beta/messages';
 import type { CompletionUsage } from 'openai/resources/completions';
 import type { ResponseUsage } from 'openai/resources/responses/responses';
+import type { ApiType } from './client/definitions';
 
 const CHANNEL_NAME = 'Unify Chat Provider';
 
@@ -186,7 +187,7 @@ export class RequestLogger implements ProviderHttpLogger {
    */
   start(details: {
     providerName: string;
-    providerType: string;
+    actualApiType: ApiType;
     baseUrl: string;
     vscodeModelId: string;
     modelId: string;
@@ -197,7 +198,7 @@ export class RequestLogger implements ProviderHttpLogger {
       : details.modelId;
 
     this.ch.info(
-      `[${this.requestId}] ▶ Request started | Provider: ${details.providerName} (${details.providerType}) | Base URL: ${details.baseUrl} | VSCode Model ID: ${details.vscodeModelId} | Config Model: ${modelLabel}`,
+      `[${this.requestId}] ▶ Request started | Provider: ${details.providerName} | API Type: ${details.actualApiType} | Base URL: ${details.baseUrl} | VSCode Model ID: ${details.vscodeModelId} | Config Model: ${modelLabel}`,
     );
   }
 
@@ -522,7 +523,7 @@ export class SimpleHttpLogger implements ProviderHttpLogger {
     private readonly context: {
       purpose: string;
       providerName: string;
-      providerType: string;
+      actualApiType: string;
     },
   ) {}
 
@@ -547,7 +548,7 @@ export class SimpleHttpLogger implements ProviderHttpLogger {
     const maskedHeaders = maskSensitiveHeaders(details.headers ?? {});
 
     this.ch.info(
-      `[${this.requestId}] ${this.context.purpose} | Provider: ${this.context.providerName} (${this.context.providerType}) → ${method} ${details.endpoint}`,
+      `[${this.requestId}] ${this.context.purpose} | Provider: ${this.context.providerName} | API Type: ${this.context.actualApiType} → ${method} ${details.endpoint}`,
     );
     this.ch.info(
       `[${this.requestId}] Headers:\n${stringifyForLog(maskedHeaders)}`,
@@ -588,7 +589,7 @@ export function createRequestLogger(): RequestLogger {
 export function createSimpleHttpLogger(context: {
   purpose: string;
   providerName: string;
-  providerType: string;
+  actualApiType: string;
 }): SimpleHttpLogger {
   const id = `http-${nextHttpLogId++}`;
   return new SimpleHttpLogger(id, context);

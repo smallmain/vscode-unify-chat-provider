@@ -3,6 +3,7 @@ import { ConfigStore } from './config-store';
 import {
   DEFAULT_MAX_INPUT_TOKENS,
   DEFAULT_MAX_OUTPUT_TOKENS,
+  DEFAULT_PROVIDER_TYPE,
 } from './defaults';
 import { ApiProvider } from './client/interface';
 import { createRequestLogger } from './logger';
@@ -22,6 +23,7 @@ import type { AuthCredential, AuthTokenInfo } from './auth/types';
 import { t } from './i18n';
 import { runUiStack } from './ui/router/stack-router';
 import type { UiContext } from './ui/router/types';
+import { ApiType } from './client/definitions';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -36,6 +38,20 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
   ) {}
+
+  /**
+   * Get the actual API type for a model.
+   * Model-level type takes precedence over provider-level type.
+   * If neither is specified, returns the default API type.
+   */
+  private getActualApiType(
+    provider: ProviderConfig,
+    model: ModelConfig,
+  ): ApiType {
+    const modelApiType = model.type;
+    const providerApiType = provider.type;
+    return modelApiType ?? providerApiType ?? DEFAULT_PROVIDER_TYPE;
+  }
 
   /**
    * Provide information about available models (synchronous, non-blocking)
@@ -179,13 +195,27 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   /**
-   * Get or create client for a provider
+   * Get or create client for a provider with an optional model type override.
+   * Uses the provider's type, or the model's type if specified.
+   * Returns a cached client if available, or creates a new one.
    */
-  private getClient(provider: ProviderConfig): ApiProvider {
-    let client = this.clients.get(provider.name);
+  private getClient(provider: ProviderConfig, model?: ModelConfig): ApiProvider {
+    const actualApiType = model
+      ? this.getActualApiType(provider, model)
+      : (() => {
+          const providerApiType = provider.type;
+          return providerApiType ?? DEFAULT_PROVIDER_TYPE;
+        })();
+
+    const clientKey = `${provider.name}:${actualApiType}`;
+    let client = this.clients.get(clientKey);
     if (!client) {
-      client = createProvider(provider);
-      this.clients.set(provider.name, client);
+      const providerConfigWithType = {
+        ...provider,
+        type: actualApiType,
+      };
+      client = createProvider(providerConfigWithType);
+      this.clients.set(clientKey, client);
     }
     return client;
   }
@@ -345,9 +375,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     const { provider, model: modelConfig } = found;
     const credential = await this.resolveCredential(provider);
 
+    const actualApiType = this.getActualApiType(
+      provider,
+      modelConfig,
+    );
+
     logger.start({
       providerName: provider.name,
-      providerType: provider.type,
+      actualApiType: actualApiType,
       baseUrl: provider.baseUrl,
       vscodeModelId: model.id,
       modelId: modelConfig.id,
@@ -355,7 +390,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     });
     logger.vscodeInput(messages, options);
 
-    const client = this.getClient(provider);
+    const client = this.getClient(provider, modelConfig);
 
     // Stream the response
     const stream = client.streamChat(
@@ -420,7 +455,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
     // Use client's estimation if available, otherwise use default
     if (found) {
-      const client = this.getClient(found.provider);
+      const client = this.getClient(found.provider, found.model);
       return client.estimateTokenCount(content);
     }
 

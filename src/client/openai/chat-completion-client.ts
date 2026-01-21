@@ -57,6 +57,7 @@ import { CompletionUsage } from 'openai/resources/completions';
 import { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
 import { ThinkingBlockMetadata } from '../types';
 import { FeatureId } from '../definitions';
+import { DEFAULT_PROVIDER_TYPE } from '../../defaults';
 
 export class OpenAIChatCompletionProvider implements ApiProvider {
   protected readonly baseUrl: string;
@@ -70,6 +71,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       ensureSuffix: '/v1',
       skipSuffixIfMatch: /\/v\d+$/,
     });
+  }
+
+  private get providerApiType(): string {
+    const providerApiType = this.config.type;
+    return providerApiType ?? DEFAULT_PROVIDER_TYPE;
   }
 
   protected buildHeaders(
@@ -1236,7 +1242,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
-      providerType: this.config.type,
+      actualApiType: this.providerApiType,
     });
     try {
       const result: ModelConfig[] = [];
