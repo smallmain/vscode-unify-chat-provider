@@ -44,6 +44,18 @@ export const CODE_ASSIST_HEADERS = {
     '{"ideType":"IDE_UNSPECIFIED","platform":"PLATFORM_UNSPECIFIED","pluginType":"GEMINI"}',
 } as const;
 
+export const CODE_ASSIST_METADATA = {
+  ideType: 'ANTIGRAVITY',
+  platform: 'PLATFORM_UNSPECIFIED',
+  pluginType: 'GEMINI',
+} as const;
+
+export const CODE_ASSIST_LOAD_HEADERS = {
+  'User-Agent': 'google-api-nodejs-client/9.15.1',
+  'X-Goog-Api-Client': CODE_ASSIST_HEADERS['X-Goog-Api-Client'],
+  'Client-Metadata': CODE_ASSIST_HEADERS['Client-Metadata'],
+} as const;
+
 export const GEMINI_CLI_HEADERS = {
   'User-Agent': 'google-api-nodejs-client/10.3.0',
   'X-Goog-Api-Client': 'gl-node/22.18.0',

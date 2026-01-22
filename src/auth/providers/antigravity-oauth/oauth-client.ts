@@ -5,8 +5,9 @@ import {
   ANTIGRAVITY_REDIRECT_URI,
   ANTIGRAVITY_SCOPES,
   CODE_ASSIST_ENDPOINT_FALLBACKS,
-  CODE_ASSIST_HEADERS,
+  CODE_ASSIST_LOAD_HEADERS,
   CODE_ASSIST_LOAD_ENDPOINTS,
+  CODE_ASSIST_METADATA,
   GEMINI_CLI_HEADERS,
   GOOGLE_OAUTH_AUTH_URL,
   GOOGLE_OAUTH_TOKEN_URL,
@@ -20,6 +21,44 @@ import type {
   AntigravityTier,
 } from './types';
 import { authLog } from '../../../logger';
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function extractProjectId(value: unknown): string {
+  if (typeof value === 'string') {
+    return value.trim();
+  }
+  if (isRecord(value) && typeof value['id'] === 'string') {
+    return value['id'].trim();
+  }
+  return '';
+}
+
+function extractDefaultTierId(allowedTiers: unknown): string {
+  if (!Array.isArray(allowedTiers)) {
+    return 'legacy-tier';
+  }
+
+  const defaultTier = allowedTiers.find((tier) => {
+    return isRecord(tier) && tier['isDefault'] === true;
+  });
+
+  if (!defaultTier || !isRecord(defaultTier) || typeof defaultTier['id'] !== 'string') {
+    return 'legacy-tier';
+  }
+
+  const id = defaultTier['id'].trim();
+  return id ? id : 'legacy-tier';
+}
+
+async function sleep(ms: number): Promise<void> {
+  if (ms <= 0) {
+    return;
+  }
+  await new Promise<void>((resolve) => setTimeout(resolve, ms));
+}
 
 function base64UrlEncode(bytes: Uint8Array): string {
   return Buffer.from(bytes).toString('base64url');
@@ -87,6 +126,9 @@ type TokenResponse = {
 type UserInfo = { email?: string };
 
 const FETCH_TIMEOUT_MS = 10_000;
+const ONBOARD_TIMEOUT_MS = 30_000;
+const ONBOARD_MAX_ATTEMPTS = 5;
+const ONBOARD_POLL_DELAY_MS = 2_000;
 
 async function fetchWithTimeout(
   url: string,
@@ -109,9 +151,9 @@ export async function fetchAccountInfo(
   const headers: Record<string, string> = {
     Authorization: `Bearer ${accessToken}`,
     'Content-Type': 'application/json',
-    'User-Agent': GEMINI_CLI_HEADERS['User-Agent'],
-    'X-Goog-Api-Client': GEMINI_CLI_HEADERS['X-Goog-Api-Client'],
-    'Client-Metadata': CODE_ASSIST_HEADERS['Client-Metadata'],
+    'User-Agent': CODE_ASSIST_LOAD_HEADERS['User-Agent'],
+    'X-Goog-Api-Client': CODE_ASSIST_LOAD_HEADERS['X-Goog-Api-Client'],
+    'Client-Metadata': CODE_ASSIST_LOAD_HEADERS['Client-Metadata'],
   };
 
   let detectedTier: AntigravityTier = 'free';
@@ -127,11 +169,7 @@ export async function fetchAccountInfo(
         method: 'POST',
         headers,
         body: JSON.stringify({
-          metadata: {
-            ideType: 'IDE_UNSPECIFIED',
-            platform: 'PLATFORM_UNSPECIFIED',
-            pluginType: 'GEMINI',
-          },
+          metadata: CODE_ASSIST_METADATA,
         }),
       });
 
@@ -141,58 +179,26 @@ export async function fetchAccountInfo(
       }
 
       const data: unknown = await response.json();
-      if (!data || typeof data !== 'object' || Array.isArray(data)) {
+      if (!isRecord(data)) {
         continue;
       }
 
-      const record = data as Record<string, unknown>;
-      const projectField = record['cloudaicompanionProject'];
+      const projectId = extractProjectId(data['cloudaicompanionProject']);
 
-      let projectId = '';
-      if (typeof projectField === 'string') {
-        projectId = projectField;
-      } else if (
-        projectField &&
-        typeof projectField === 'object' &&
-        !Array.isArray(projectField) &&
-        typeof (projectField as Record<string, unknown>)['id'] === 'string'
-      ) {
-        projectId = (projectField as Record<string, unknown>)['id'] as string;
-      }
-
-      const allowedTiers = record['allowedTiers'];
-      if (Array.isArray(allowedTiers)) {
-        const defaultTier = allowedTiers.find((t) => {
-          return (
-            t &&
-            typeof t === 'object' &&
-            !Array.isArray(t) &&
-            (t as Record<string, unknown>)['isDefault'] === true
-          );
-        }) as Record<string, unknown> | undefined;
-
-        const tierId = defaultTier?.['id'];
-        if (typeof tierId === 'string') {
-          if (
-            tierId !== 'legacy-tier' &&
-            !tierId.includes('free') &&
-            !tierId.includes('zero')
-          ) {
-            detectedTier = 'paid';
-          } else if (tierId !== 'legacy-tier') {
-            detectedTier = 'free';
-          }
-        }
-      }
-
-      const paidTier = record['paidTier'];
+      const defaultTierId = extractDefaultTierId(data['allowedTiers']);
       if (
-        paidTier &&
-        typeof paidTier === 'object' &&
-        !Array.isArray(paidTier) &&
-        typeof (paidTier as Record<string, unknown>)['id'] === 'string'
+        defaultTierId !== 'legacy-tier' &&
+        !defaultTierId.includes('free') &&
+        !defaultTierId.includes('zero')
       ) {
-        const paidTierId = (paidTier as Record<string, unknown>)['id'] as string;
+        detectedTier = 'paid';
+      } else if (defaultTierId !== 'legacy-tier') {
+        detectedTier = 'free';
+      }
+
+      const paidTier = data['paidTier'];
+      if (isRecord(paidTier) && typeof paidTier['id'] === 'string') {
+        const paidTierId = paidTier['id'];
         if (!paidTierId.includes('free') && !paidTierId.includes('zero')) {
           detectedTier = 'paid';
         }
@@ -201,6 +207,67 @@ export async function fetchAccountInfo(
       if (projectId) {
         authLog.verbose('antigravity-client', `Account info fetched (projectId: ${projectId}, tier: ${detectedTier})`);
         return { projectId, tier: detectedTier };
+      }
+
+      authLog.verbose(
+        'antigravity-client',
+        `loadCodeAssist returned no projectId; attempting onboardUser (tierId: ${defaultTierId})`,
+      );
+
+      const requestBody = JSON.stringify({
+        tierId: defaultTierId,
+        metadata: CODE_ASSIST_METADATA,
+      });
+
+      for (let attempt = 1; attempt <= ONBOARD_MAX_ATTEMPTS; attempt++) {
+        authLog.verbose(
+          'antigravity-client',
+          `Polling onboardUser (${attempt}/${ONBOARD_MAX_ATTEMPTS}) via ${baseEndpoint}`,
+        );
+        const onboardResp = await fetchWithTimeout(
+          `${baseEndpoint}/v1internal:onboardUser`,
+          {
+            method: 'POST',
+            headers,
+            body: requestBody,
+          },
+          ONBOARD_TIMEOUT_MS,
+        );
+
+        if (!onboardResp.ok) {
+          const errorText = await onboardResp.text().catch(() => '');
+          throw new Error(
+            `onboardUser failed (status: ${onboardResp.status}): ${errorText}`,
+          );
+        }
+
+        const onboardData: unknown = await onboardResp.json();
+        if (!isRecord(onboardData)) {
+          continue;
+        }
+
+        const done = onboardData['done'];
+        if (done === true) {
+          const responsePayload = onboardData['response'];
+          if (!isRecord(responsePayload)) {
+            throw new Error('onboardUser response missing "response" object');
+          }
+
+          const onboardProjectId = extractProjectId(
+            responsePayload['cloudaicompanionProject'],
+          );
+          if (!onboardProjectId) {
+            throw new Error('onboardUser completed without projectId');
+          }
+
+          authLog.verbose(
+            'antigravity-client',
+            `onboardUser returned projectId: ${onboardProjectId}`,
+          );
+          return { projectId: onboardProjectId, tier: detectedTier };
+        }
+
+        await sleep(ONBOARD_POLL_DELAY_MS);
       }
     } catch (error) {
       authLog.verbose('antigravity-client', `Endpoint ${baseEndpoint} failed with error, trying next`);

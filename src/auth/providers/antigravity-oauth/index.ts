@@ -20,7 +20,7 @@ import type {
   AuthCredential,
   OAuth2TokenData,
 } from '../../types';
-import { exchangeAntigravity, refreshAccessToken } from './oauth-client';
+import { exchangeAntigravity, fetchAccountInfo, refreshAccessToken } from './oauth-client';
 import { performAntigravityAuthorization } from './screens/authorize-screen';
 import { authLog } from '../../../logger';
 
@@ -578,6 +578,31 @@ export class AntigravityOAuthProvider implements AuthProvider {
         ...toPersistableConfig(this.config),
         token: JSON.stringify(nextToken),
       });
+    }
+
+    if (!this.config?.projectId?.trim() || !this.config?.tier) {
+      authLog.verbose(
+        `${this.context.providerId}:antigravity-oauth`,
+        'Refreshing account info (projectId/tier)',
+      );
+
+      const accountInfo = await fetchAccountInfo(refreshed.accessToken);
+      const updates: Partial<AntigravityOAuthConfig> = {};
+
+      if (!this.config?.projectId?.trim() && accountInfo.projectId.trim()) {
+        updates.projectId = accountInfo.projectId.trim();
+      }
+
+      if (!this.config?.tier || this.config.tier !== accountInfo.tier) {
+        updates.tier = accountInfo.tier;
+      }
+
+      if (Object.keys(updates).length > 0) {
+        await this.persistConfig({
+          ...toPersistableConfig(this.config),
+          ...updates,
+        });
+      }
     }
 
     this._onDidChangeStatus.fire({ status: 'valid' });
