@@ -1,5 +1,40 @@
 # Changelog
 
+## v3.3.0 - 2026-01-22
+
+### Features
+- add Claude Code Cloak provider (2ba1c97, SmallMain)
+- antigravity: enhance Claude message conversion and thinking signature handling (c9d36bb, SmallMain)
+- antigravity: enhance message handling and parsing for Claude model integration (53396c3, SmallMain)
+- auth: enhance account info fetching and onboarding process (00a8f40, SmallMain)
+- add support for GLM-4.7-Flash (e646f12, SmallMain)
+- add authentication check for Google Antigravity provider (01bc279, SmallMain)
+- add OpenAI CodeX provider (e96351e, SmallMain)
+- enhance well-known provider auth handling and update provider configurations (d68a7d5, SmallMain)
+- enhance Antigravity client with project ID and schema merging functions (46b7e3f, SmallMain)
+- auth: add detailed logging for auth flows (091e8bd, SmallMain)
+- normalize system instruction handling and update model IDs in providers (160606f, SmallMain)
+
+### Fixes
+- enhance cleanJsonSchemaForAntigravity function for better schema handling (afd1abf, SmallMain)
+- antigravity support (5744467, SmallMain)
+- add content sanitization for Claude model to handle empty text fields (7a27eb6, SmallMain)
+- enhance Antigravity provider with endpoint resolution and retry logic (4d9b790, SmallMain)
+- update Antigravity model handling (796b77d, SmallMain)
+- simplify model family matching for OpenRouter Claude models (4b4dde1, SmallMain)
+- strip `include` param for volcengine provider (1f76de1, SmallMain)
+- supplemental null checks for certain fields (b00be09, SmallMain)
+- add cancellation checks before post-loop processing in multiple providers (82cc1e7, SmallMain)
+- update project ID prompt and remove preview suffixes for Antigravity models (da6898e, SmallMain)
+
+### Refactors
+- vertex ai auth process (f5dd396, SmallMain)
+- antigravity support (d5c54aa, SmallMain)
+
+### Chores
+- update ROADMAP.md (7c200a9, SmallMain)
+- update ROADMAP.md (05921a6, SmallMain)
+
 ## v3.2.0 - 2026-01-16
 
 ### Features
