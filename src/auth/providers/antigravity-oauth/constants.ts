@@ -20,7 +20,8 @@ export const ANTIGRAVITY_SCOPES = [
 
 export const CODE_ASSIST_ENDPOINT_FALLBACKS = [
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
-  'https://autopush-cloudcode-pa.sandbox.googleapis.com',
+  'https://daily-cloudcode-pa.googleapis.com',
+  // 'https://autopush-cloudcode-pa.sandbox.googleapis.com',
   'https://cloudcode-pa.googleapis.com',
 ] as const;
 
@@ -31,7 +32,8 @@ export const CODE_ASSIST_ENDPOINT_FALLBACKS = [
 export const CODE_ASSIST_LOAD_ENDPOINTS = [
   'https://cloudcode-pa.googleapis.com',
   'https://daily-cloudcode-pa.sandbox.googleapis.com',
-  'https://autopush-cloudcode-pa.sandbox.googleapis.com',
+  'https://daily-cloudcode-pa.googleapis.com',
+  // 'https://autopush-cloudcode-pa.sandbox.googleapis.com',
 ] as const;
 
 export const CODE_ASSIST_HEADERS = {
