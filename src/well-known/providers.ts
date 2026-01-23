@@ -136,6 +136,18 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
+    name: 'Cerebras',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.cerebras.ai',
+    authTypes: ['api-key'],
+    extraBody: {
+      reasoning_format: 'parsed',
+    },
+    models: [
+      // TODO
+    ],
+  },
+  {
     name: 'OpenCode Zen (OpenAI Chat Completion)',
     type: 'openai-chat-completion',
     baseUrl: 'https://opencode.ai/zen',

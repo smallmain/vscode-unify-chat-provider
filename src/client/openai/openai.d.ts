@@ -113,6 +113,15 @@ declare module 'openai/resources/chat/completions' {
      * @see https://modelstudio.console.alibabacloud.com/?tab=api#/api/?type=model&url=2712576
      */
     thinking_budget?: number;
+
+    /**
+     * Non-standard reasoning toggle supported by some OpenAI-compatible providers.
+     *
+     * Used by Cerebras for GLM-family models.
+     *
+     * @see https://inference-docs.cerebras.ai/capabilities/reasoning
+     */
+    disable_reasoning?: boolean;
   }
   interface ChatCompletionMessage {
     /**
@@ -149,6 +158,15 @@ declare module 'openai/resources/chat/completions' {
      * @see https://docs.bigmodel.cn/cn/guide/develop/openai/introduction
      */
     reasoning_content?: string;
+
+    /**
+     * Thinking reasoning content carried in a single `reasoning` field.
+     *
+     * Some OpenAI-compatible providers return reasoning in this field.
+     *
+     * @see https://inference-docs.cerebras.ai/capabilities/reasoning
+     */
+    reasoning?: string;
 
     /**
      * Structured reasoning blocks.

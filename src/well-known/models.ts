@@ -2180,7 +2180,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4.7',
-    alternativeIds: ['glm-4.7-free', 'z-ai/glm4.7'],
+    alternativeIds: ['glm-4.7-free', 'z-ai/glm4.7', 'zai-glm-4.7'],
     name: 'GLM-4.7',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,

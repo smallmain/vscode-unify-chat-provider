@@ -195,6 +195,21 @@ export enum FeatureId {
    */
   OpenAIUseReasoningDetails = 'openai_use-reasoning-details',
   /**
+   * Some OpenAI-compatible providers return reasoning text in the `reasoning` field.
+   *
+   * @see https://inference-docs.cerebras.ai/capabilities/reasoning
+   */
+  OpenAIUseReasoningField = 'openai_use-reasoning-field',
+  /**
+   * Use `disable_reasoning` parameter in OpenAI-compatible Chat Completion APIs.
+   *
+   * Some providers implement GLM-style reasoning toggles via a boolean field instead
+   * of OpenAI's `reasoning_effort`.
+   *
+   * @see https://inference-docs.cerebras.ai/capabilities/reasoning
+   */
+  OpenAIUseDisableReasoningParam = 'openai_use-disable-reasoning-param',
+  /**
    * @see https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode
    */
   OpenAIUseClearThinking = 'openai_use-clear-thinking',
@@ -259,6 +274,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedFamilys: ['claude-'],
   },
   [FeatureId.OpenAIOnlyMaxCompletionTokens]: {
+    supportedProviders: ['api.cerebras.ai'],
     supportedFamilys: [
       'codex-mini-latest',
       'gpt-5.1',
@@ -301,6 +317,17 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseReasoningDetails]: {
     supportedProviders: ['openrouter.ai', 'api.minimaxi.com', 'api.minimax.io'],
+  },
+  [FeatureId.OpenAIUseReasoningField]: {
+    supportedProviders: ['api.cerebras.ai'],
+  },
+  [FeatureId.OpenAIUseDisableReasoningParam]: {
+    customCheckers: [
+      // Checker for Cerebras GLM 4.7 model:
+      (model, provider) =>
+        matchProvider(provider.baseUrl, 'api.cerebras.ai') &&
+        matchModelFamily(getBaseModelId(model.id), ['zai-glm-4.7']),
+    ],
   },
   [FeatureId.OpenAIUseThinkingParam]: {
     supportedProviders: [
@@ -365,7 +392,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUseClearThinking]: {
-    supportedProviders: ['open.bigmodel.cn', 'api.z.ai'],
+    supportedProviders: ['open.bigmodel.cn', 'api.z.ai', 'api.cerebras.ai'],
   },
   [FeatureId.GeminiUseThinkingLevel]: {
     supportedFamilys: ['gemini-3-'],

@@ -119,7 +119,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     encodedModelId: string,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     shouldApplyCacheControl: boolean,
-    reasoningType: 'content' | 'details' | 'none',
+    reasoningType: 'content' | 'details' | 'field' | 'none',
   ): ChatCompletionMessageParam[] {
     const outMessages: ChatCompletionMessageParam[] = [];
     const rawMap = new Map<
@@ -242,7 +242,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
   convertPart(
     role: vscode.LanguageModelChatMessageRole | 'from_tool_result',
     part: vscode.LanguageModelInputPart | unknown,
-    reasoningType: 'content' | 'details' | 'none' = 'none',
+    reasoningType: 'content' | 'details' | 'field' | 'none' = 'none',
   ):
     | ChatCompletionToolMessageParam
     | ChatCompletionUserMessageParam
@@ -324,6 +324,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             })),
           };
         }
+      } else if (reasoningType === 'field') {
+        return {
+          role: 'assistant',
+          reasoning: contents.join(''),
+        };
       } else {
         return undefined;
       }
@@ -476,6 +481,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       | 'reasoning'
       | 'thinking'
       | 'official'
+      | 'disable_reasoning'
       | 'enable_thinking'
       | 'enable_thinking_with_budget',
   ): Partial<ChatCompletionCreateParamsBase> {
@@ -484,9 +490,16 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       return {};
     }
 
+    const shouldDisableReasoning =
+      thinking.type === 'disabled' ||
+      thinking.effort === 'none' ||
+      (thinking.budgetTokens !== undefined && thinking.budgetTokens <= 0);
+
     if (thinking.type === 'disabled') {
       return type === 'reasoning'
         ? { reasoning: { enabled: false } }
+        : type === 'disable_reasoning'
+          ? { disable_reasoning: true }
         : type === 'thinking'
           ? { thinking: { type: 'disabled' } }
           : type === 'enable_thinking' || type === 'enable_thinking_with_budget'
@@ -504,6 +517,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
               ),
             },
           }
+        : type === 'disable_reasoning'
+          ? { disable_reasoning: shouldDisableReasoning }
         : type === 'thinking'
           ? { thinking: { type: 'enabled' } }
           : type === 'enable_thinking_with_budget'
@@ -520,6 +535,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     if (thinking.effort !== undefined) {
       return type === 'reasoning'
         ? { reasoning: { effort: thinking.effort } }
+        : type === 'disable_reasoning'
+          ? { disable_reasoning: shouldDisableReasoning }
         : type === 'thinking'
           ? { thinking: { type: 'enabled' } }
           : type === 'enable_thinking' || type === 'enable_thinking_with_budget'
@@ -529,12 +546,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     return type === 'reasoning'
       ? { reasoning: { enabled: true } }
+      : type === 'disable_reasoning'
+        ? { disable_reasoning: false }
       : type === 'thinking'
         ? { thinking: { type: 'enabled' } }
-        : type === 'enable_thinking' || type === 'enable_thinking_with_budget'
-          ? { enable_thinking: true }
-          : // Defaults to 'medium' effort if not set effort or budget
-            { reasoning_effort: 'medium' };
+      : type === 'enable_thinking' || type === 'enable_thinking_with_budget'
+        ? { enable_thinking: true }
+        : // Defaults to 'medium' effort if not set effort or budget
+            {};
   }
 
   private normalizeReasoningMaxTokens(
@@ -612,6 +631,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       this.config,
       model,
     );
+    const useDisableReasoningParam = isFeatureSupported(
+      FeatureId.OpenAIUseDisableReasoningParam,
+      this.config,
+      model,
+    );
     const useClearThinking = isFeatureSupported(
       FeatureId.OpenAIUseClearThinking,
       this.config,
@@ -632,21 +656,32 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       | 'reasoning'
       | 'thinking'
       | 'official'
+      | 'disable_reasoning'
       | 'enable_thinking'
       | 'enable_thinking_with_budget' = useReasoningParam
       ? 'reasoning'
       : useThinkingParam
         ? 'thinking'
-        : useThinkingParam3
-          ? useThinkingBudgetParam
-            ? 'enable_thinking_with_budget'
-            : 'enable_thinking'
-          : 'official';
-    const reasoningType: 'content' | 'details' | 'none' = useReasoningDetails
-      ? 'details'
-      : useReasoningContent
-        ? 'content'
-        : 'none';
+        : useDisableReasoningParam
+          ? 'disable_reasoning'
+          : useThinkingParam3
+            ? useThinkingBudgetParam
+              ? 'enable_thinking_with_budget'
+              : 'enable_thinking'
+            : 'official';
+    const useReasoningField = isFeatureSupported(
+      FeatureId.OpenAIUseReasoningField,
+      this.config,
+      model,
+    );
+    const reasoningType: 'content' | 'details' | 'field' | 'none' =
+      useReasoningDetails
+        ? 'details'
+        : useReasoningContent
+          ? 'content'
+          : useReasoningField
+            ? 'field'
+            : 'none';
 
     const convertedMessages = this.convertMessages(
       encodedModelId,
