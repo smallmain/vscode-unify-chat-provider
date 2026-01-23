@@ -283,6 +283,7 @@ export class RequestLogger implements ProviderHttpLogger {
     if (!response.ok) {
       this.logProviderContext();
       this.ch.error(message);
+      this.logResponseBody(response);
       return;
     }
 
@@ -458,6 +459,59 @@ export class RequestLogger implements ProviderHttpLogger {
     );
     ctx.logged = true;
   }
+
+  private logResponseBody(response: Response): void {
+    try {
+      const clone = response.clone();
+      void clone.text().then(
+        (body) => {
+          const trimmed = body.trim();
+          if (!trimmed) {
+            this.ch.error(
+              `[${this.requestId}] Provider Response Body: (empty)`,
+            );
+            return;
+          }
+
+          const parsed = this.tryParseJson(trimmed);
+          if (parsed !== undefined) {
+            this.ch.error(
+              `[${this.requestId}] Provider Response Body (parsed):\n${stringifyForLog(
+                parsed,
+              )}`,
+            );
+            return;
+          }
+
+          this.ch.error(
+            `[${this.requestId}] Provider Response Body (text, ${trimmed.length} chars):\n${trimmed}`,
+          );
+        },
+        (error) => {
+          this.ch.error(
+            `[${this.requestId}] Provider Response Body: Failed to read payload: ${
+              error instanceof Error ? error.message : String(error)
+            }`,
+          );
+        },
+      );
+    } catch (error) {
+      this.ch.error(
+        `[${this.requestId}] Provider Response Body: Unable to clone response: ${
+          error instanceof Error ? error.message : String(error)
+        }`,
+      );
+    }
+  }
+
+  private tryParseJson(text: string): unknown | undefined {
+    try {
+      return JSON.parse(text);
+    } catch {
+      return undefined;
+    }
+  }
+
 }
 
 export class SimpleHttpLogger implements ProviderHttpLogger {
