@@ -107,7 +107,7 @@ export class QwenCodeProvider extends OpenAIChatCompletionProvider {
     return headers;
   }
 
-  async getAvailablxeModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
     const visionModel = mergeWithWellKnownModel({ id: 'qwen3-vl-plus' });
     visionModel.id = 'vision-model';
     return [
