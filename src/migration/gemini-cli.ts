@@ -8,7 +8,11 @@ import {
   firstExistingFilePath,
   normalizeConfigFilePathInput,
 } from './fs-utils';
-import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import {
+  WELL_KNOWN_MODELS,
+  WellKnownModelId,
+  normalizeWellKnownConfigs,
+} from '../well-known/models';
 import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
@@ -19,17 +23,16 @@ const GEMINI_CLI_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
   'gemini-2.5-flash',
 ] as const;
 
-function getGeminiCliDefaultModels(): ModelConfig[] {
-  const models: ModelConfig[] = [];
+function getGeminiCliDefaultModels(provider: ProviderConfig): ModelConfig[] {
+  const models: (typeof WELL_KNOWN_MODELS)[number][] = [];
   for (const id of GEMINI_CLI_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
       throw new Error(t('Well-known model not found: {0}', id));
     }
-    const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
-    models.push(withoutAlternativeIds);
+    models.push(model);
   }
-  return models;
+  return normalizeWellKnownConfigs(models, undefined, provider);
 }
 
 function getString(value: unknown): string | undefined {
@@ -223,7 +226,7 @@ function buildGeminiCliProvider(
       );
     }
 
-    const provider: Partial<ProviderConfig> = {
+    const providerForMatching: ProviderConfig = {
       type: 'google-vertex-ai',
       name: 'Gemini CLI',
       baseUrl: `https://${location}-aiplatform.googleapis.com/v1/projects/${project}/locations/${location}`,
@@ -231,14 +234,18 @@ function buildGeminiCliProvider(
         method: 'api-key',
         apiKey: applicationCredentials,
       },
-      models: getGeminiCliDefaultModels(),
+      models: [],
     };
 
+    const provider: Partial<ProviderConfig> = {
+      ...providerForMatching,
+      models: getGeminiCliDefaultModels(providerForMatching),
+    };
     return { provider };
   }
 
   if (googleApiKey) {
-    const provider: Partial<ProviderConfig> = {
+    const providerForMatching: ProviderConfig = {
       type: 'google-vertex-ai',
       name: 'Gemini CLI',
       baseUrl: 'https://aiplatform.googleapis.com',
@@ -246,13 +253,17 @@ function buildGeminiCliProvider(
         method: 'api-key',
         apiKey: googleApiKey,
       },
-      models: getGeminiCliDefaultModels(),
+      models: [],
+    };
+    const provider: Partial<ProviderConfig> = {
+      ...providerForMatching,
+      models: getGeminiCliDefaultModels(providerForMatching),
     };
     return { provider };
   }
 
   if (geminiApiKey) {
-    const provider: Partial<ProviderConfig> = {
+    const providerForMatching: ProviderConfig = {
       type: 'google-ai-studio',
       name: 'Gemini CLI',
       baseUrl: 'https://generativelanguage.googleapis.com',
@@ -260,7 +271,11 @@ function buildGeminiCliProvider(
         method: 'api-key',
         apiKey: geminiApiKey,
       },
-      models: getGeminiCliDefaultModels(),
+      models: [],
+    };
+    const provider: Partial<ProviderConfig> = {
+      ...providerForMatching,
+      models: getGeminiCliDefaultModels(providerForMatching),
     };
     return { provider };
   }

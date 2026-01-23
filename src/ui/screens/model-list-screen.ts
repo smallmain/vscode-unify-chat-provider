@@ -18,7 +18,7 @@ import type {
   UiNavAction,
   UiResume,
 } from '../router/types';
-import { ModelConfig } from '../../types';
+import { ModelConfig, ProviderConfig } from '../../types';
 import {
   duplicateProvider,
   exportProviderConfigFromDraft,
@@ -31,6 +31,7 @@ import {
 } from '../../official-models-manager';
 import { t } from '../../i18n';
 import { isSecretRef } from '../../secret';
+import { normalizeBaseUrlInput } from '../../utils';
 
 /**
  * Ensure we have a session ID for draft-only state. Prefer the draft's
@@ -50,6 +51,29 @@ function ensureRouteDraftSessionId(route: ModelListRoute): string {
     .substring(2, 9)}`;
   route.draftSessionId = newSessionId;
   return newSessionId;
+}
+
+function getProviderForWellKnownModelMatching(
+  route: ModelListRoute,
+): ProviderConfig | undefined {
+  const draft = route.draft;
+  if (draft?.type && draft.baseUrl?.trim()) {
+    const name =
+      draft.name?.trim() || route.providerLabel?.trim() || 'Provider';
+
+    return {
+      type: draft.type,
+      name,
+      baseUrl: normalizeBaseUrlInput(draft.baseUrl),
+      models: [],
+      extraHeaders: draft.extraHeaders,
+      extraBody: draft.extraBody,
+      timeout: draft.timeout,
+      autoFetchOfficialModels: draft.autoFetchOfficialModels,
+    };
+  }
+
+  return route.existing;
 }
 
 type ModelListItem = vscode.QuickPickItem & {
@@ -367,13 +391,19 @@ export async function runModelListScreen(
   }
 
   if (selection.action === 'add-from-wellknown') {
+    const providerForMatching = getProviderForWellKnownModelMatching(route);
     return {
       kind: 'push',
       route: {
         kind: 'modelSelection',
         title: t('Add From Well-Known Model List'),
         existingModels: route.models,
-        fetchModels: async () => normalizeWellKnownConfigs(WELL_KNOWN_MODELS),
+        fetchModels: async () =>
+          normalizeWellKnownConfigs(
+            WELL_KNOWN_MODELS,
+            undefined,
+            providerForMatching,
+          ),
       },
     };
   }

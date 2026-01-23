@@ -10,7 +10,11 @@ import {
   firstExistingFilePath,
   normalizeConfigFilePathInput,
 } from './fs-utils';
-import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import {
+  WELL_KNOWN_MODELS,
+  WellKnownModelId,
+  normalizeWellKnownConfigs,
+} from '../well-known/models';
 import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
@@ -21,17 +25,16 @@ const CODEX_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
   'gpt-5.2',
 ] as const;
 
-function getCodexDefaultModels(): ModelConfig[] {
-  const models: ModelConfig[] = [];
+function getCodexDefaultModels(provider: ProviderConfig): ModelConfig[] {
+  const models: (typeof WELL_KNOWN_MODELS)[number][] = [];
   for (const id of CODEX_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
       throw new Error(t('Well-known model not found: {0}', id));
     }
-    const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
-    models.push(withoutAlternativeIds);
+    models.push(model);
   }
-  return models;
+  return normalizeWellKnownConfigs(models, undefined, provider);
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -141,33 +144,6 @@ async function buildCodexProviderFromToml(
   const providerType: ProviderConfig['type'] =
     providerWireApi === 'chat' ? 'openai-chat-completion' : 'openai-responses';
 
-  const models: ModelConfig[] = [];
-  if (modelId) {
-    const known = WELL_KNOWN_MODELS.find((m) => m.id === modelId);
-    if (known) {
-      const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } =
-        known;
-      models.push(withoutAlternativeIds);
-    } else {
-      models.push({ id: modelId });
-    }
-  }
-
-  // Only add OpenAI/Codex defaults when it looks like the user is using OpenAI models.
-  const shouldAddCodexDefaults =
-    effectiveProviderId === 'openai' ||
-    (modelId ? isLikelyOpenAIModelId(modelId) : false) ||
-    (providerBaseUrl ? providerBaseUrl.includes('openai.com') : false);
-
-  if (shouldAddCodexDefaults) {
-    const defaults = getCodexDefaultModels();
-    for (const m of defaults) {
-      if (!models.some((existing) => existing.id === m.id)) {
-        models.push(m);
-      }
-    }
-  }
-
   if (!providerBaseUrl) {
     throw new Error(
       effectiveProviderId === 'openai'
@@ -206,7 +182,7 @@ async function buildCodexProviderFromToml(
 
   const baseUrl = providerBaseUrl;
 
-  const provider: Partial<ProviderConfig> = {
+  const providerForMatching: ProviderConfig = {
     type: providerType,
     name: providerDisplayName,
     baseUrl,
@@ -214,6 +190,45 @@ async function buildCodexProviderFromToml(
       method: 'api-key',
       apiKey,
     },
+    models: [],
+  };
+
+  const models: ModelConfig[] = [];
+  if (modelId) {
+    const known = WELL_KNOWN_MODELS.find((m) => m.id === modelId);
+    if (known) {
+      const declaredIds = new Map<string, string>();
+      declaredIds.set(known.id, modelId);
+      const [normalizedKnown] = normalizeWellKnownConfigs(
+        [known],
+        declaredIds,
+        providerForMatching,
+      );
+      if (normalizedKnown) {
+        models.push(normalizedKnown);
+      }
+    } else {
+      models.push({ id: modelId });
+    }
+  }
+
+  // Only add OpenAI/Codex defaults when it looks like the user is using OpenAI models.
+  const shouldAddCodexDefaults =
+    effectiveProviderId === 'openai' ||
+    (modelId ? isLikelyOpenAIModelId(modelId) : false) ||
+    baseUrl.includes('openai.com');
+
+  if (shouldAddCodexDefaults) {
+    const defaults = getCodexDefaultModels(providerForMatching);
+    for (const m of defaults) {
+      if (!models.some((existing) => existing.id === m.id)) {
+        models.push(m);
+      }
+    }
+  }
+
+  const provider: Partial<ProviderConfig> = {
+    ...providerForMatching,
     models,
   };
 

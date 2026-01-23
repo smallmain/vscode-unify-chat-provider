@@ -8,7 +8,11 @@ import {
   firstExistingFilePath,
   normalizeConfigFilePathInput,
 } from './fs-utils';
-import { WELL_KNOWN_MODELS, WellKnownModelId } from '../well-known/models';
+import {
+  WELL_KNOWN_MODELS,
+  WellKnownModelId,
+  normalizeWellKnownConfigs,
+} from '../well-known/models';
 import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 
@@ -18,17 +22,16 @@ const CLAUDE_CODE_DEFAULT_MODEL_IDS: WellKnownModelId[] = [
   'claude-haiku-4-5',
 ] as const;
 
-function getClaudeCodeDefaultModels(): ModelConfig[] {
-  const models: ModelConfig[] = [];
+function getClaudeCodeDefaultModels(provider: ProviderConfig): ModelConfig[] {
+  const models: (typeof WELL_KNOWN_MODELS)[number][] = [];
   for (const id of CLAUDE_CODE_DEFAULT_MODEL_IDS) {
     const model = WELL_KNOWN_MODELS.find((m) => m.id === id);
     if (!model) {
       throw new Error(t('Well-known model not found: {0}', id));
     }
-    const { alternativeIds: _alternativeIds, ...withoutAlternativeIds } = model;
-    models.push(withoutAlternativeIds);
+    models.push(model);
   }
-  return models;
+  return normalizeWellKnownConfigs(models, undefined, provider);
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -214,7 +217,7 @@ function buildClaudeCodeProvider(
     );
   }
 
-  const provider: Partial<ProviderConfig> = {
+  const providerForMatching: ProviderConfig = {
     type: 'anthropic',
     name: settings.providerName || 'Claude Code',
     baseUrl,
@@ -222,7 +225,12 @@ function buildClaudeCodeProvider(
       method: 'api-key',
       apiKey,
     },
-    models: getClaudeCodeDefaultModels(),
+    models: [],
+  };
+
+  const provider: Partial<ProviderConfig> = {
+    ...providerForMatching,
+    models: getClaudeCodeDefaultModels(providerForMatching),
   };
 
   return { provider };

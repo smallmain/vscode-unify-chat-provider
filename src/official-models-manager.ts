@@ -381,7 +381,7 @@ export class OfficialModelsManager {
       }
 
       const rawModels = await client.getAvailableModels(credential);
-      const models = mergeWithWellKnownModels(rawModels);
+      const models = mergeWithWellKnownModels(rawModels, provider);
       const modelsHash = this.hashModels(models);
 
       const isIdentical = state.modelsHash === modelsHash;
@@ -846,7 +846,7 @@ export class OfficialModelsManager {
       }
 
       const rawModels = await client.getAvailableModels(credential);
-      const models = mergeWithWellKnownModels(rawModels);
+      const models = mergeWithWellKnownModels(rawModels, provider);
       const now = Date.now();
 
       session.state.models = models;

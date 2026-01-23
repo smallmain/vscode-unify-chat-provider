@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import { WELL_KNOWN_PROVIDERS, type WellKnownProviderConfig } from '../../well-known/providers';
+import {
+  WELL_KNOWN_PROVIDERS,
+  resolveProviderModels,
+  type WellKnownProviderConfig,
+} from '../../well-known/providers';
 import { pickQuickItem } from '../component';
 import { createProviderDraft, validateProviderNameUnique } from '../form-utils';
 import type {
@@ -42,8 +46,12 @@ export async function runWellKnownProviderListScreen(
     return { kind: 'pop' };
   }
 
-  const { authTypes: _authTypes, ...providerConfig } = picked.provider;
-  const draft = createProviderDraft(providerConfig);
+  const { authTypes: _authTypes, models: _modelIds, ...providerConfig } =
+    picked.provider;
+  const draft = createProviderDraft({
+    ...providerConfig,
+    models: resolveProviderModels(picked.provider),
+  });
   const suggestedName = draft.name ?? picked.provider.name;
   if (validateProviderNameUnique(suggestedName, ctx.store) === null) {
     draft.name = suggestedName.trim();

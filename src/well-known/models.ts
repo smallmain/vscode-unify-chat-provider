@@ -1,12 +1,6 @@
-import { ModelConfig } from '../types';
-
-/**
- * Well-known model configuration with additional matching options
- */
-interface WellKnownModelConfig extends ModelConfig {
-  /** Alternative IDs for matching (e.g., aliases or legacy IDs) */
-  alternativeIds?: readonly string[];
-}
+import type { ModelConfig, ProviderConfig } from '../types';
+import type { ProviderPattern } from '../client/types';
+import { matchProvider } from '../client/utils';
 
 /**
  * Well-known models configuration
@@ -14,7 +8,7 @@ interface WellKnownModelConfig extends ModelConfig {
 const _WELL_KNOWN_MODELS = [
   {
     id: 'doubao-seed-1-8-251228',
-    alternativeIds: ['doubao-seed-1.8'],
+    overrides: ['doubao-seed-1.8'],
     name: 'Doubao Seed 1.8',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -30,10 +24,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-code-preview-251028',
-    alternativeIds: [
-      'doubao-seed-code-preview',
-      'doubao-seed-code-preview-latest',
-    ],
+    overrides: ['doubao-seed-code-preview', 'doubao-seed-code-preview-latest'],
     name: 'Doubao Seed Code Preview',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -49,7 +40,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-lite-251015',
-    alternativeIds: ['doubao-seed-1.6-lite'],
+    overrides: ['doubao-seed-1.6-lite'],
     name: 'Doubao Seed 1.6 Lite',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -64,7 +55,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-flash-250828',
-    alternativeIds: ['doubao-seed-1.6-flash'],
+    overrides: ['doubao-seed-1.6-flash'],
     name: 'Doubao Seed 1.6 Flash',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -79,7 +70,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-vision-250815',
-    alternativeIds: ['doubao-seed-1.6-vision'],
+    overrides: ['doubao-seed-1.6-vision'],
     name: 'Doubao Seed 1.6 Vision',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -94,7 +85,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-251015',
-    alternativeIds: ['doubao-seed-1.6'],
+    overrides: ['doubao-seed-1.6'],
     name: 'Doubao Seed 1.6',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -109,7 +100,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-250615',
-    alternativeIds: ['doubao-seed-1.6'],
+    overrides: ['doubao-seed-1.6'],
     name: 'Doubao Seed 1.6',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -124,7 +115,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-1-6-flash-250615',
-    alternativeIds: ['doubao-seed-1.6-flash'],
+    overrides: ['doubao-seed-1.6-flash'],
     name: 'Doubao Seed 1.6 Flash',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
@@ -139,7 +130,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-1-5-pro-32k-250115',
-    alternativeIds: ['doubao-1.5-pro-32k'],
+    overrides: ['doubao-1.5-pro-32k'],
     name: 'Doubao 1.5 Pro 32k',
     maxInputTokens: 128000,
     maxOutputTokens: 16000,
@@ -151,7 +142,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-1-5-pro-32k-character-250228',
-    alternativeIds: ['doubao-1.5-pro-32k-character'],
+    overrides: ['doubao-1.5-pro-32k-character'],
     name: 'Doubao 1.5 Pro 32k Character',
     maxInputTokens: 32000,
     maxOutputTokens: 12000,
@@ -163,7 +154,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-1-5-pro-32k-character-250715',
-    alternativeIds: ['doubao-1.5-pro-32k-character'],
+    overrides: ['doubao-1.5-pro-32k-character'],
     name: 'Doubao 1.5 Pro 32k Character',
     maxInputTokens: 32000,
     maxOutputTokens: 12000,
@@ -175,7 +166,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-1-5-lite-32k-250115',
-    alternativeIds: ['doubao-1.5-lite-32k'],
+    overrides: ['doubao-1.5-lite-32k'],
     name: 'Doubao 1.5 Lite 32k',
     maxInputTokens: 32000,
     maxOutputTokens: 12000,
@@ -187,7 +178,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-lite-32k-character-250228',
-    alternativeIds: ['doubao-lite-32k-character'],
+    overrides: ['doubao-lite-32k-character'],
     name: 'Doubao Lite 32k Character',
     maxInputTokens: 32000,
     maxOutputTokens: 4000,
@@ -199,7 +190,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-sonnet-4-5',
-    alternativeIds: ['claude-sonnet-4.5', 'claude-sonnet-4-5-thinking'],
+    overrides: ['claude-sonnet-4.5', 'claude-sonnet-4-5-thinking'],
     name: 'Claude Sonnet 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -215,7 +206,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-haiku-4-5',
-    alternativeIds: ['claude-haiku-4.5'],
+    overrides: ['claude-haiku-4.5'],
     name: 'Claude Haiku 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -227,7 +218,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-opus-4-5',
-    alternativeIds: ['claude-opus-4.5', 'claude-opus-4-5-thinking'],
+    overrides: ['claude-opus-4.5', 'claude-opus-4-5-thinking'],
     name: 'Claude Opus 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -243,7 +234,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-opus-4-1',
-    alternativeIds: ['claude-opus-4.1'],
+    overrides: ['claude-opus-4.1'],
     name: 'Claude Opus 4.1',
     maxInputTokens: 200000,
     maxOutputTokens: 32000,
@@ -274,7 +265,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-3-7-sonnet',
-    alternativeIds: ['claude-3.7-sonnet'],
+    overrides: ['claude-3.7-sonnet'],
     name: 'Claude Sonnet 3.7',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -305,7 +296,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-3-5-sonnet',
-    alternativeIds: ['claude-3.5-sonnet'],
+    overrides: ['claude-3.5-sonnet'],
     name: 'Claude Sonnet 3.5',
     maxInputTokens: 200000,
     maxOutputTokens: 8192,
@@ -317,7 +308,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-3-5-haiku',
-    alternativeIds: ['claude-3.5-haiku'],
+    overrides: ['claude-3.5-haiku'],
     name: 'Claude Haiku 3.5',
     maxInputTokens: 200000,
     maxOutputTokens: 8000,
@@ -616,7 +607,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gpt-oss-120b',
-    alternativeIds: ['gpt-oss:120b', 'openai/gpt-oss-120b'],
+    overrides: ['gpt-oss:120b', 'openai/gpt-oss-120b'],
     name: 'GPT-OSS 120B',
     maxInputTokens: 131072,
     maxOutputTokens: 131072,
@@ -632,7 +623,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gpt-oss-20b',
-    alternativeIds: ['gpt-oss:20b', 'gpt-oss:latest', 'openai/gpt-oss-20b'],
+    overrides: ['gpt-oss:20b', 'gpt-oss:latest', 'openai/gpt-oss-20b'],
     name: 'GPT-OSS 20B',
     maxInputTokens: 131072,
     maxOutputTokens: 131072,
@@ -924,7 +915,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2.1',
-    alternativeIds: ['minimax-m2.1-free', 'minimaxai/minimax-m2.1'],
+    overrides: ['minimax-m2.1-free', 'minimaxai/minimax-m2.1'],
     name: 'MiniMax-M2.1',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -955,7 +946,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2',
-    alternativeIds: ['minimaxai/minimax-m2'],
+    overrides: ['minimaxai/minimax-m2'],
     name: 'MiniMax-M2',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -998,7 +989,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3.2',
-    alternativeIds: ['ark-code-latest', 'deepseek-ai/deepseek-v3.2'],
+    overrides: ['ark-code-latest', 'deepseek-ai/deepseek-v3.2'],
     name: 'DeepSeek V3.2',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1044,7 +1035,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3.1',
-    alternativeIds: ['deepseek-ai/deepseek-v3.1'],
+    overrides: ['deepseek-ai/deepseek-v3.1'],
     name: 'DeepSeek V3.1',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1060,7 +1051,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3.1-terminus',
-    alternativeIds: ['deepseek-ai/deepseek-v3.1-terminus'],
+    overrides: ['deepseek-ai/deepseek-v3.1-terminus'],
     name: 'DeepSeek V3.1 Terminus',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1100,7 +1091,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-r1',
-    alternativeIds: ['deepseek-ai/deepseek-r1'],
+    overrides: ['deepseek-ai/deepseek-r1'],
     name: 'DeepSeek R1',
     maxInputTokens: 128000,
     maxOutputTokens: 32768,
@@ -1116,7 +1107,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-r1-0528',
-    alternativeIds: ['deepseek-ai/deepseek-r1-0528'],
+    overrides: ['deepseek-ai/deepseek-r1-0528'],
     name: 'DeepSeek R1 (0528)',
     maxInputTokens: 128000,
     maxOutputTokens: 32768,
@@ -1216,7 +1207,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'kimi-k2-thinking',
-    alternativeIds: ['moonshotai/kimi-k2-thinking'],
+    overrides: ['moonshotai/kimi-k2-thinking'],
     name: 'Kimi K2 Thinking',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
@@ -1247,7 +1238,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'kimi-k2-0905-preview',
-    alternativeIds: [
+    overrides: [
       'kimi-k2',
       'moonshotai/kimi-k2-instruct',
       'moonshotai/kimi-k2-instruct-0905',
@@ -1600,7 +1591,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwq-32b',
-    alternativeIds: ['qwq:32b', 'qwq:latest', 'qwen/qwq-32b'],
+    overrides: ['qwq:32b', 'qwq:latest', 'qwen/qwq-32b'],
     name: 'QwQ 32B',
     maxInputTokens: 131072,
     maxOutputTokens: 8192,
@@ -1643,43 +1634,43 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen1.5-7b-chat',
-    alternativeIds: ['qwen:7b'],
+    overrides: ['qwen:7b'],
     name: 'Qwen1.5 7B Chat',
     stream: true,
   },
   {
     id: 'qwen1.5-14b-chat',
-    alternativeIds: ['qwen:14b'],
+    overrides: ['qwen:14b'],
     name: 'Qwen1.5 14B Chat',
     stream: true,
   },
   {
     id: 'qwen1.5-32b-chat',
-    alternativeIds: ['qwen:32b'],
+    overrides: ['qwen:32b'],
     name: 'Qwen1.5 32B Chat',
     stream: true,
   },
   {
     id: 'qwen1.5-72b-chat',
-    alternativeIds: ['qwen:72b'],
+    overrides: ['qwen:72b'],
     name: 'Qwen1.5 72B Chat',
     stream: true,
   },
   {
     id: 'qwen1.5-110b-chat',
-    alternativeIds: ['qwen:110b'],
+    overrides: ['qwen:110b'],
     name: 'Qwen1.5 110B Chat',
     stream: true,
   },
   {
     id: 'qwen2-7b-instruct',
-    alternativeIds: ['qwen2:7b', 'qwen/qwen2-7b-instruct'],
+    overrides: ['qwen2:7b', 'qwen/qwen2-7b-instruct'],
     name: 'Qwen2 7B Instruct',
     stream: true,
   },
   {
     id: 'qwen2-72b-instruct',
-    alternativeIds: ['qwen2:72b'],
+    overrides: ['qwen2:72b'],
     name: 'Qwen2 72B Instruct',
     stream: true,
   },
@@ -1690,7 +1681,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2-vl-72b-instruct',
-    alternativeIds: ['qwen2-vl:72b'],
+    overrides: ['qwen2-vl:72b'],
     name: 'Qwen2-VL 72B Instruct',
     stream: true,
     capabilities: {
@@ -1700,29 +1691,25 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-0.5b-instruct',
-    alternativeIds: ['qwen2.5:0.5b'],
+    overrides: ['qwen2.5:0.5b'],
     name: 'Qwen2.5 0.5B Instruct',
     stream: true,
   },
   {
     id: 'qwen2.5-1.5b-instruct',
-    alternativeIds: ['qwen2.5:1.5b'],
+    overrides: ['qwen2.5:1.5b'],
     name: 'Qwen2.5 1.5B Instruct',
     stream: true,
   },
   {
     id: 'qwen2.5-3b-instruct',
-    alternativeIds: ['qwen2.5:3b'],
+    overrides: ['qwen2.5:3b'],
     name: 'Qwen2.5 3B Instruct',
     stream: true,
   },
   {
     id: 'qwen2.5-7b-instruct',
-    alternativeIds: [
-      'qwen2.5:7b',
-      'qwen2.5:latest',
-      'qwen/qwen2.5-7b-instruct',
-    ],
+    overrides: ['qwen2.5:7b', 'qwen2.5:latest', 'qwen/qwen2.5-7b-instruct'],
     name: 'Qwen2.5 7B Instruct',
     stream: true,
   },
@@ -1734,7 +1721,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-14b-instruct',
-    alternativeIds: ['qwen2.5:14b'],
+    overrides: ['qwen2.5:14b'],
     name: 'Qwen2.5 14B Instruct',
     stream: true,
   },
@@ -1746,19 +1733,19 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-32b-instruct',
-    alternativeIds: ['qwen2.5:32b'],
+    overrides: ['qwen2.5:32b'],
     name: 'Qwen2.5 32B Instruct',
     stream: true,
   },
   {
     id: 'qwen2.5-72b-instruct',
-    alternativeIds: ['qwen2.5:72b'],
+    overrides: ['qwen2.5:72b'],
     name: 'Qwen2.5 72B Instruct',
     stream: true,
   },
   {
     id: 'qwen2.5-coder-0.5b-instruct',
-    alternativeIds: ['qwen2.5-coder:0.5b'],
+    overrides: ['qwen2.5-coder:0.5b'],
     name: 'Qwen2.5 Coder 0.5B Instruct',
     stream: true,
     capabilities: {
@@ -1768,7 +1755,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-coder-1.5b-instruct',
-    alternativeIds: ['qwen2.5-coder:1.5b'],
+    overrides: ['qwen2.5-coder:1.5b'],
     name: 'Qwen2.5 Coder 1.5B Instruct',
     stream: true,
     capabilities: {
@@ -1778,7 +1765,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-coder-3b-instruct',
-    alternativeIds: ['qwen2.5-coder:3b'],
+    overrides: ['qwen2.5-coder:3b'],
     name: 'Qwen2.5 Coder 3B Instruct',
     stream: true,
     capabilities: {
@@ -1788,7 +1775,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-coder-7b-instruct',
-    alternativeIds: ['qwen2.5-coder:7b', 'qwen/qwen2.5-coder-7b-instruct'],
+    overrides: ['qwen2.5-coder:7b', 'qwen/qwen2.5-coder-7b-instruct'],
     name: 'Qwen2.5 Coder 7B Instruct',
     stream: true,
     capabilities: {
@@ -1798,7 +1785,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-coder-14b-instruct',
-    alternativeIds: ['qwen2.5-coder:14b'],
+    overrides: ['qwen2.5-coder:14b'],
     name: 'Qwen2.5 Coder 14B Instruct',
     stream: true,
     capabilities: {
@@ -1808,7 +1795,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-coder-32b-instruct',
-    alternativeIds: ['qwen2.5-coder:32b', 'qwen/qwen2.5-coder-32b-instruct'],
+    overrides: ['qwen2.5-coder:32b', 'qwen/qwen2.5-coder-32b-instruct'],
     name: 'Qwen2.5 Coder 32B Instruct',
     stream: true,
     capabilities: {
@@ -1833,7 +1820,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-vl-3b-instruct',
-    alternativeIds: ['qwen2.5vl:3b', 'qwen2.5-vl:3b'],
+    overrides: ['qwen2.5vl:3b', 'qwen2.5-vl:3b'],
     name: 'Qwen2.5-VL 3B Instruct',
     stream: true,
     capabilities: {
@@ -1843,7 +1830,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-vl-7b-instruct',
-    alternativeIds: ['qwen2.5vl:7b', 'qwen2.5-vl:7b'],
+    overrides: ['qwen2.5vl:7b', 'qwen2.5-vl:7b'],
     name: 'Qwen2.5-VL 7B Instruct',
     stream: true,
     capabilities: {
@@ -1853,7 +1840,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen2.5-vl-32b-instruct',
-    alternativeIds: ['qwen2.5vl:32b', 'qwen2.5-vl:32b'],
+    overrides: ['qwen2.5vl:32b', 'qwen2.5-vl:32b'],
     name: 'Qwen2.5-VL 32B Instruct',
     stream: true,
     capabilities: {
@@ -1863,7 +1850,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-0.6b',
-    alternativeIds: ['qwen3:0.6b'],
+    overrides: ['qwen3:0.6b'],
     name: 'Qwen3 0.6B',
     maxInputTokens: 30720,
     stream: true,
@@ -1873,7 +1860,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-1.7b',
-    alternativeIds: ['qwen3:1.7b'],
+    overrides: ['qwen3:1.7b'],
     name: 'Qwen3 1.7B',
     maxInputTokens: 32768,
     stream: true,
@@ -1883,7 +1870,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-4b',
-    alternativeIds: ['qwen3:4b'],
+    overrides: ['qwen3:4b'],
     name: 'Qwen3 4B',
     maxInputTokens: 129024,
     stream: true,
@@ -1893,7 +1880,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-8b',
-    alternativeIds: ['qwen3:8b', 'qwen3:latest'],
+    overrides: ['qwen3:8b', 'qwen3:latest'],
     name: 'Qwen3 8B',
     maxInputTokens: 129024,
     stream: true,
@@ -1903,7 +1890,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-14b',
-    alternativeIds: ['qwen3:14b'],
+    overrides: ['qwen3:14b'],
     name: 'Qwen3 14B',
     maxInputTokens: 129024,
     stream: true,
@@ -1913,7 +1900,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-32b',
-    alternativeIds: ['qwen3:32b'],
+    overrides: ['qwen3:32b'],
     name: 'Qwen3 32B',
     maxInputTokens: 129024,
     stream: true,
@@ -1923,7 +1910,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-30b-a3b',
-    alternativeIds: ['qwen3:30b'],
+    overrides: ['qwen3:30b'],
     name: 'Qwen3 30B A3B',
     maxInputTokens: 129024,
     stream: true,
@@ -1933,7 +1920,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-235b-a22b',
-    alternativeIds: ['qwen3:235b', 'qwen/qwen3-235b-a22b'],
+    overrides: ['qwen3:235b', 'qwen/qwen3-235b-a22b'],
     name: 'Qwen3 235B A22B',
     maxInputTokens: 129024,
     stream: true,
@@ -1943,7 +1930,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-next-80b-a3b-thinking',
-    alternativeIds: ['qwen/qwen3-next-80b-a3b-thinking'],
+    overrides: ['qwen/qwen3-next-80b-a3b-thinking'],
     name: 'Qwen3 Next 80B A3B Thinking',
     maxInputTokens: 131072,
     maxOutputTokens: 32768,
@@ -1954,7 +1941,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-next-80b-a3b-instruct',
-    alternativeIds: ['qwen3-next:80b', 'qwen/qwen3-next-80b-a3b-instruct'],
+    overrides: ['qwen3-next:80b', 'qwen/qwen3-next-80b-a3b-instruct'],
     name: 'Qwen3 Next 80B A3B Instruct',
     maxInputTokens: 129024,
     stream: true,
@@ -1993,7 +1980,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-coder-480b-a35b-instruct',
-    alternativeIds: [
+    overrides: [
       'qwen3-coder:480b',
       'qwen3-coder',
       'qwen/qwen3-coder-480b-a35b-instruct',
@@ -2009,7 +1996,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-coder-30b-a3b-instruct',
-    alternativeIds: ['qwen3-coder:30b', 'qwen3-coder:latest'],
+    overrides: ['qwen3-coder:30b', 'qwen3-coder:latest'],
     name: 'Qwen3 Coder 30B A3B Instruct',
     stream: true,
     capabilities: {
@@ -2031,7 +2018,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-vl-235b-a22b-instruct',
-    alternativeIds: ['qwen3-vl:235b'],
+    overrides: ['qwen3-vl:235b'],
     name: 'Qwen3-VL 235B A22B Instruct',
     stream: true,
     capabilities: {
@@ -2041,7 +2028,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-vl-32b-thinking',
-    alternativeIds: ['qwen3-vl:32b'],
+    overrides: ['qwen3-vl:32b'],
     name: 'Qwen3-VL 32B Thinking',
     stream: true,
     thinking: {
@@ -2066,7 +2053,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-vl-30b-a3b-instruct',
-    alternativeIds: ['qwen3-vl:30b'],
+    overrides: ['qwen3-vl:30b'],
     name: 'Qwen3-VL 30B A3B Instruct',
     stream: true,
     capabilities: {
@@ -2088,7 +2075,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-vl-8b-instruct',
-    alternativeIds: ['qwen3-vl:8b', 'qwen3-vl:latest'],
+    overrides: ['qwen3-vl:8b', 'qwen3-vl:latest'],
     name: 'Qwen3-VL 8B Instruct',
     stream: true,
     capabilities: {
@@ -2180,7 +2167,17 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4.7',
-    alternativeIds: ['glm-4.7-free', 'z-ai/glm4.7', 'zai-glm-4.7'],
+    overrides: [
+      'z-ai/glm4.7',
+      'glm-4.7-free',
+      {
+        matchers: ['api.cerebras.ai'],
+        config: {
+          id: 'zai-glm-4.7',
+          maxInputTokens: 128000,
+        },
+      },
+    ],
     name: 'GLM-4.7',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,
@@ -2304,7 +2301,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4-air-250414',
-    alternativeIds: ['glm-4-air'],
+    overrides: ['glm-4-air'],
     name: 'GLM-4-Air-250414',
     maxInputTokens: 128000,
     maxOutputTokens: 16384,
@@ -2338,7 +2335,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4-flashx-250414',
-    alternativeIds: ['glm-4-flashx'],
+    overrides: ['glm-4-flashx'],
     name: 'GLM-4-FlashX-250414',
     maxInputTokens: 128000,
     maxOutputTokens: 16384,
@@ -2361,7 +2358,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-4-flash-250414',
-    alternativeIds: ['glm-4-flash'],
+    overrides: ['glm-4-flash'],
     name: 'GLM-4-Flash-250414',
     maxInputTokens: 128000,
     maxOutputTokens: 16384,
@@ -2495,7 +2492,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'grok-code-fast-1',
-    alternativeIds: ['grok-code'],
+    overrides: ['grok-code'],
     name: 'Grok Code Fast 1',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
@@ -2573,7 +2570,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-pro-preview',
-    alternativeIds: ['gemini-3-pro'],
+    overrides: ['gemini-3-pro'],
     name: 'Gemini 3 Pro Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -2588,7 +2585,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-flash-preview',
-    alternativeIds: ['gemini-3-flash'],
+    overrides: ['gemini-3-flash'],
     name: 'Gemini 3 Flash Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -2645,7 +2642,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.0-flash',
-    alternativeIds: ['gemini-2.0-flash-001', 'gemini-2.0-flash-exp'],
+    overrides: ['gemini-2.0-flash-001', 'gemini-2.0-flash-exp'],
     name: 'Gemini 2.0 Flash',
     maxInputTokens: 1048576,
     maxOutputTokens: 8192,
@@ -2657,7 +2654,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.0-flash-lite',
-    alternativeIds: ['gemini-2.0-flash-lite-001'],
+    overrides: ['gemini-2.0-flash-lite-001'],
     name: 'Gemini 2.0 Flash-Lite',
     maxInputTokens: 1048576,
     maxOutputTokens: 8192,
@@ -2669,7 +2666,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'hunyuan-2.0-thinking-20251109',
-    alternativeIds: ['hunyuan-2.0-think'],
+    overrides: ['hunyuan-2.0-think'],
     name: 'HY 2.0 Think',
     maxInputTokens: 128000,
     maxOutputTokens: 64000,
@@ -2681,7 +2678,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'hunyuan-2.0-instruct-20251111',
-    alternativeIds: ['hunyuan-2.0-instruct'],
+    overrides: ['hunyuan-2.0-instruct'],
     name: 'HY 2.0 Instruct',
     maxInputTokens: 128000,
     maxOutputTokens: 16000,
@@ -2779,16 +2776,89 @@ export const WELL_KNOWN_MODELS: readonly WellKnownModelConfig[] =
   _WELL_KNOWN_MODELS;
 
 type WellKnownModelPrimaryId = (typeof _WELL_KNOWN_MODELS)[number]['id'];
-type WellKnownModelAlternativeId =
+type OverrideToAltId<O> = O extends string
+  ? O
+  : O extends { config: { id: infer Id } }
+    ? Id extends string
+      ? Id
+      : never
+    : never;
+
+type WellKnownModelOverrideId =
   (typeof _WELL_KNOWN_MODELS)[number] extends infer M
-    ? M extends { alternativeIds: readonly (infer AltId)[] }
-      ? AltId
+    ? M extends { overrides: readonly (infer O)[] }
+      ? OverrideToAltId<O>
       : never
     : never;
 
 export type WellKnownModelId =
   | WellKnownModelPrimaryId
-  | WellKnownModelAlternativeId;
+  | WellKnownModelOverrideId;
+
+/**
+ * Well-known model configuration with additional matching options
+ */
+interface WellKnownModelConfig extends ModelConfig {
+  /**
+   * Overrides:
+   * - `string`: alternative model id (alias) for matching
+   * - `{ matchers, config }`: provider-specific override (first match wins)
+   */
+  overrides?: readonly (WellKnownModelOverride | string)[];
+}
+
+type WellKnownModelOverrideChecker = (provider: ProviderConfig) => boolean;
+
+interface WellKnownModelOverride {
+  /** Provider matchers - any match triggers this override */
+  matchers: (ProviderPattern | WellKnownModelOverrideChecker)[];
+  /** Override configuration fields (including id) */
+  config: Partial<ModelConfig>;
+}
+
+/**
+ * Get all alternative IDs (including `overrides` string entries and `override.config.id`).
+ */
+export function getAlternativeIds(model: WellKnownModelConfig): string[] {
+  if (!model.overrides) return [];
+
+  const ids: string[] = [];
+  for (const override of model.overrides) {
+    if (typeof override === 'string') {
+      ids.push(override);
+      continue;
+    }
+
+    const overrideId = override.config.id;
+    if (typeof overrideId === 'string' && overrideId.trim()) {
+      ids.push(overrideId);
+    }
+  }
+  return ids;
+}
+
+function getProviderOverrides(
+  model: WellKnownModelConfig,
+): WellKnownModelOverride[] {
+  if (!model.overrides) return [];
+  return model.overrides.filter(
+    (o): o is WellKnownModelOverride => typeof o !== 'string',
+  );
+}
+
+function findMatchingOverride(
+  overrides: WellKnownModelOverride[],
+  provider: ProviderConfig,
+): WellKnownModelOverride | undefined {
+  return overrides.find((override) =>
+    override.matchers.some((matcher) => {
+      if (typeof matcher === 'function') {
+        return matcher(provider);
+      }
+      return matchProvider(provider.baseUrl, matcher);
+    }),
+  );
+}
 
 /**
  * Check if two IDs match using includes-based comparison
@@ -2814,19 +2884,17 @@ function getMatchScore(apiModelId: string, knownId: string): number {
 }
 
 /**
- * Get all IDs to match against for a model (primary ID + alternativeIds)
+ * Get all IDs to match against for a model (primary ID + alternative IDs from overrides)
  */
 function getAllMatchableIds(model: WellKnownModelConfig): string[] {
   const ids = [model.id];
-  if (model.alternativeIds) {
-    ids.push(...model.alternativeIds);
-  }
+  ids.push(...getAlternativeIds(model));
   return ids;
 }
 
 /**
  * Calculate the best match score for a model against an API model ID
- * Considers both primary ID and alternativeIds
+ * Considers both primary ID and override-based alternative IDs
  */
 function calculateBestMatchScore(
   apiModelId: string,
@@ -2848,11 +2916,11 @@ function calculateBestMatchScore(
 /**
  * Find the best matching well-known model for a given API model ID
  * Uses includes-based filtering and selects the most similar match
- * Supports matching against both primary ID and alternativeIds
+ * Supports matching against both primary ID and override-based alternative IDs
  */
 export function findBestMatchingWellKnownModel(
   apiModelId: string,
-): ModelConfig | undefined {
+): WellKnownModelConfig | undefined {
   // Filter models that have at least one matching ID
   const candidates = WELL_KNOWN_MODELS.filter(
     (model) => calculateBestMatchScore(apiModelId, model) > 0,
@@ -2881,13 +2949,34 @@ export function findBestMatchingWellKnownModel(
  * Merge API model with well-known model configuration
  * API model fields take precedence over well-known fields
  */
-export function mergeWithWellKnownModel(apiModel: ModelConfig): ModelConfig {
+export function mergeWithWellKnownModel(
+  apiModel: ModelConfig,
+  provider?: ProviderConfig,
+): ModelConfig {
   const wellKnown = findBestMatchingWellKnownModel(apiModel.id);
+
   const filteredApiModel = Object.fromEntries(
     Object.entries(apiModel).filter(([, value]) => value !== undefined),
   ) as ModelConfig;
+
   const defaultCapabilities = { capabilities: { toolCalling: true } };
-  return Object.assign(defaultCapabilities, wellKnown ?? {}, filteredApiModel);
+
+  if (!wellKnown) {
+    return Object.assign(defaultCapabilities, filteredApiModel);
+  }
+
+  const { overrides: _overrides, ...wellKnownBase } = wellKnown;
+  let baseConfig: ModelConfig = { ...wellKnownBase };
+
+  if (provider && _overrides) {
+    const providerOverrides = getProviderOverrides(wellKnown);
+    const matchedOverride = findMatchingOverride(providerOverrides, provider);
+    if (matchedOverride) {
+      baseConfig = { ...baseConfig, ...matchedOverride.config };
+    }
+  }
+
+  return Object.assign(defaultCapabilities, baseConfig, filteredApiModel);
 }
 
 /**
@@ -2896,16 +2985,37 @@ export function mergeWithWellKnownModel(apiModel: ModelConfig): ModelConfig {
  */
 export function mergeWithWellKnownModels(
   apiModels: ModelConfig[],
+  provider?: ProviderConfig,
 ): ModelConfig[] {
-  return apiModels.map((model) => mergeWithWellKnownModel(model));
+  return apiModels.map((model) => mergeWithWellKnownModel(model, provider));
 }
 
 export function normalizeWellKnownConfigs(
   models: readonly WellKnownModelConfig[],
   declaredIds?: Map<string, string>,
+  provider?: ProviderConfig,
 ): ModelConfig[] {
-  return models.map(({ alternativeIds, ...config }) => {
+  return models.map(({ overrides, ...config }) => {
+    let finalConfig: ModelConfig = { ...config };
+    let finalId = config.id;
+
+    if (provider && overrides) {
+      const providerOverrides = getProviderOverrides({ ...config, overrides });
+      const matchedOverride = findMatchingOverride(providerOverrides, provider);
+
+      if (matchedOverride) {
+        finalConfig = { ...finalConfig, ...matchedOverride.config };
+        if (matchedOverride.config.id) {
+          finalId = matchedOverride.config.id;
+        }
+      }
+    }
+
     const declaredId = declaredIds?.get(config.id);
-    return declaredId ? { ...config, id: declaredId } : config;
+    if (declaredId) {
+      finalId = declaredId;
+    }
+
+    return { ...finalConfig, id: finalId };
   });
 }
