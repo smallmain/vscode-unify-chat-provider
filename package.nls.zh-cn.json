@@ -26,6 +26,7 @@
   "configuration.endpoints.type.enumDescriptions.8": "Google Gemini CLI",
   "configuration.endpoints.type.enumDescriptions.9": "Anthropic Claude Code Cloak",
   "configuration.endpoints.type.enumDescriptions.10": "GitHub Copilot",
+  "configuration.endpoints.type.enumDescriptions.11": "Qwen Code",
   "configuration.endpoints.name.description": "此供应商的显示名称。",
   "configuration.endpoints.baseUrl.description": "API 基础 URL（例如：https://api.anthropic.com）。",
   "configuration.endpoints.extraHeaders.description": "请求中要附加的额外 Header。Header 值支持使用 `${APIKEY}` 引用该供应商的凭据。",

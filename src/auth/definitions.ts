@@ -7,6 +7,7 @@ import { AntigravityOAuthProvider } from './providers/antigravity-oauth';
 import { GitHubCopilotAuthProvider } from './providers/github-copilot';
 import { GoogleVertexAIAuthProvider } from './providers/google-vertex-ai-auth';
 import { OpenAICodexAuthProvider } from './providers/openai-codex';
+import { QwenCodeAuthProvider } from './providers/qwen-code';
 import { OAuth2AuthProvider } from './providers/oauth2';
 import { AuthConfig } from './types';
 
@@ -72,6 +73,12 @@ export const AUTH_METHODS = {
     label: t('OpenAI CodeX'),
     description: t('Authenticate using OpenAI CodeX OAuth (ChatGPT Plus/Pro)'),
     ctor: OpenAICodexAuthProvider,
+  },
+  'qwen-code': {
+    id: 'qwen-code',
+    label: t('Qwen Code'),
+    description: t('Authenticate using Qwen Code device authorization flow'),
+    ctor: QwenCodeAuthProvider,
   },
   'github-copilot': {
     id: 'github-copilot',

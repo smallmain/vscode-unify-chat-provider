@@ -7,6 +7,7 @@ export type AuthMethod =
   | 'antigravity-oauth'
   | 'google-vertex-ai-auth'
   | 'openai-codex'
+  | 'qwen-code'
   | 'github-copilot';
 
 export type AuthTokenInfo =
@@ -154,6 +155,18 @@ export interface OpenAICodexAuthConfig {
   email?: string;
 }
 
+export interface QwenCodeAuthConfig {
+  method: 'qwen-code';
+  label?: string;
+  description?: string;
+  identityId?: string;
+  token?: string;
+  /** Optional user label (email/alias) for display */
+  email?: string;
+  /** Resource hostname returned by Qwen OAuth (e.g. portal.qwen.ai) */
+  resourceUrl?: string;
+}
+
 export interface GitHubCopilotAuthConfig {
   method: 'github-copilot';
   label?: string;
@@ -233,6 +246,7 @@ export type AuthConfig =
   | IFlowCliAuthConfig
   | AntigravityOAuthConfig
   | OpenAICodexAuthConfig
+  | QwenCodeAuthConfig
   | GitHubCopilotAuthConfig
   | GoogleVertexAIAuthConfig;
 

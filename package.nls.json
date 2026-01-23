@@ -26,6 +26,7 @@
   "configuration.endpoints.type.enumDescriptions.8": "Google Gemini CLI",
   "configuration.endpoints.type.enumDescriptions.9": "Anthropic Claude Code Cloak",
   "configuration.endpoints.type.enumDescriptions.10": "GitHub Copilot",
+  "configuration.endpoints.type.enumDescriptions.11": "Qwen Code",
   "configuration.endpoints.name.description": "Display name for this provider.",
   "configuration.endpoints.baseUrl.description": "API base URL (e.g., https://api.anthropic.com).",
   "configuration.endpoints.extraHeaders.description": "Extra headers to include in requests. Header values support `${APIKEY}` to reference the provider credential.",

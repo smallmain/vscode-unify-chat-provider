@@ -12,6 +12,7 @@ import { OllamaProvider } from './ollama/client';
 import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
 import { OpenAICodeXProvider } from './openai/codex-client';
 import { OpenAIResponsesProvider } from './openai/responses-client';
+import { QwenCodeProvider } from './qwen/qwen-code-client';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
@@ -24,6 +25,7 @@ export type ProviderType =
   | 'google-gemini-cli'
   | 'github-copilot'
   | 'openai-chat-completion'
+  | 'qwen-code'
   | 'openai-codex'
   | 'openai-responses'
   | 'ollama';
@@ -76,6 +78,12 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     label: t('OpenAI Chat Completion API'),
     description: '/v1/chat/completions',
     class: OpenAIChatCompletionProvider,
+  },
+  'qwen-code': {
+    type: 'qwen-code',
+    label: t('Qwen Code'),
+    description: '/v1/chat/completions',
+    class: QwenCodeProvider,
   },
   'openai-codex': {
     type: 'openai-codex',
@@ -314,7 +322,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIOnlyMaxTokens]: {
-    supportedProviders: ['router.huggingface.co'],
+    supportedProviders: ['router.huggingface.co', 'portal.qwen.ai'],
   },
   [FeatureId.OpenAICacheControl]: {
     customCheckers: [

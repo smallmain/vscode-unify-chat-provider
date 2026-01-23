@@ -49,6 +49,13 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
+    name: 'Qwen Code',
+    type: 'qwen-code',
+    baseUrl: 'https://portal.qwen.ai',
+    authTypes: ['qwen-code'],
+    models: [],
+  },
+  {
     name: 'GitHub Copilot',
     type: 'github-copilot',
     baseUrl: 'https://api.githubcopilot.com',
