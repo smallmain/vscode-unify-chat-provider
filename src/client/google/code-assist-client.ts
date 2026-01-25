@@ -16,11 +16,14 @@ import type { RequestLogger } from '../../logger';
 import type { AuthTokenInfo } from '../../auth/types';
 import { ModelConfig, PerformanceTrace } from '../../types';
 import {
+  DEFAULT_CHAT_RETRY_CONFIG,
   DEFAULT_CHAT_TIMEOUT_CONFIG,
   decodeStatefulMarkerPart,
+  isAbortError,
   isCacheControlMarker,
   isImageMarker,
   isInternalMarker,
+  isRetryableStatusCode,
   normalizeImageMimeType,
   withIdleTimeout,
   type RetryConfig,
@@ -47,6 +50,7 @@ import {
   buildFingerprintHeaders,
   getSessionFingerprint,
 } from './antigravity-fingerprint';
+import { extractServerSuggestedRetryDelayMs } from './retry-info';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -132,6 +136,125 @@ function extractAntigravityResponsePayload(
 }
 
 const PLUGIN_SESSION_ID = `-${randomUUID()}`;
+
+function abortSignalToError(signal: AbortSignal): Error {
+  const reason: unknown = signal.reason;
+  if (reason instanceof Error) {
+    return reason;
+  }
+  return new Error(reason === undefined ? 'The operation was aborted.' : String(reason));
+}
+
+function throwIfAborted(signal: AbortSignal | undefined): void {
+  if (!signal) {
+    return;
+  }
+  if (signal.aborted) {
+    throw abortSignalToError(signal);
+  }
+}
+
+function delay(ms: number, abortSignal: AbortSignal): Promise<void> {
+  if (ms <= 0) {
+    return Promise.resolve();
+  }
+
+  if (abortSignal.aborted) {
+    return Promise.reject(abortSignalToError(abortSignal));
+  }
+
+  return new Promise((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    const onAbort = (): void => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+      reject(abortSignalToError(abortSignal));
+    };
+
+    abortSignal.addEventListener('abort', onAbort, { once: true });
+    timeoutId = setTimeout(() => {
+      abortSignal.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+  });
+}
+
+function calculateBackoffDelay(
+  attempt: number,
+  config: {
+    initialDelayMs: number;
+    maxDelayMs: number;
+    backoffMultiplier: number;
+    jitterFactor: number;
+  },
+): number {
+  const exponentialDelay =
+    config.initialDelayMs * Math.pow(config.backoffMultiplier, attempt);
+  const cappedDelay = Math.min(exponentialDelay, config.maxDelayMs);
+  const jitterRange = cappedDelay * config.jitterFactor;
+  const jitter = (Math.random() * 2 - 1) * jitterRange;
+  return Math.round(cappedDelay + jitter);
+}
+
+function isRetryableNetworkError(error: unknown): boolean {
+  const retryableCodes = new Set<string>([
+    'ECONNRESET',
+    'ETIMEDOUT',
+    'ECONNREFUSED',
+    'EAI_AGAIN',
+    'ENOTFOUND',
+    // undici / fetch (Node) internal error codes
+    'UND_ERR_CONNECT_TIMEOUT',
+    'UND_ERR_HEADERS_TIMEOUT',
+    'UND_ERR_BODY_TIMEOUT',
+    'UND_ERR_SOCKET',
+  ]);
+
+  const hasCause = (value: unknown): value is { cause: unknown } =>
+    typeof value === 'object' && value !== null && 'cause' in value;
+
+  const tryGetErrorCode = (value: unknown): string | undefined => {
+    if (typeof value !== 'object' || value === null) {
+      return undefined;
+    }
+    if (!('code' in value)) {
+      return undefined;
+    }
+    const code = (value as { code: unknown }).code;
+    return typeof code === 'string' ? code : undefined;
+  };
+
+  if (!error) {
+    return false;
+  }
+
+  const directCode = tryGetErrorCode(error);
+  if (directCode && retryableCodes.has(directCode)) {
+    return true;
+  }
+
+  if (hasCause(error)) {
+    const causeCode = tryGetErrorCode(error.cause);
+    if (causeCode && retryableCodes.has(causeCode)) {
+      return true;
+    }
+  }
+
+  if (error instanceof Error) {
+    const message = error.message.toLowerCase();
+    if (
+      message.includes('connection timeout') ||
+      message.includes('fetch failed') ||
+      message.includes('network error') ||
+      message.includes('socket hang up')
+    ) {
+      return true;
+    }
+  }
+
+  return false;
+}
 
 function hashConversationSeed(seed: string): string {
   return createHash('sha256').update(seed, 'utf8').digest('hex').slice(0, 16);
@@ -2260,13 +2383,108 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         ? CODE_ASSIST_MULTI_ENDPOINT_RETRY_CONFIG
         : undefined; // Use default retry config for single endpoint
 
-      const fetcher = createCustomFetch({
+      const effectiveRetryConfig = retryConfig ?? DEFAULT_CHAT_RETRY_CONFIG;
+      const baseFetcher = createCustomFetch({
         connectionTimeoutMs: requestTimeoutMs,
         logger,
-        retryConfig,
+        retryConfig: { ...effectiveRetryConfig, maxRetries: 0 },
         type: 'chat',
         abortSignal: abortController.signal,
       });
+
+      const fetchWithRetryInfo = async (
+        url: string,
+        init: RequestInit,
+      ): Promise<Response> => {
+        const maxRetries =
+          effectiveRetryConfig.maxRetries ?? DEFAULT_CHAT_RETRY_CONFIG.maxRetries;
+        const initialDelayMs =
+          effectiveRetryConfig.initialDelayMs ??
+          DEFAULT_CHAT_RETRY_CONFIG.initialDelayMs;
+        const maxDelayMs =
+          effectiveRetryConfig.maxDelayMs ?? DEFAULT_CHAT_RETRY_CONFIG.maxDelayMs;
+        const backoffMultiplier =
+          effectiveRetryConfig.backoffMultiplier ??
+          DEFAULT_CHAT_RETRY_CONFIG.backoffMultiplier;
+        const jitterFactor =
+          effectiveRetryConfig.jitterFactor ?? DEFAULT_CHAT_RETRY_CONFIG.jitterFactor;
+
+        let lastResponse: Response | undefined;
+        let lastError: Error | undefined;
+        let attempt = 0;
+
+        while (attempt <= maxRetries) {
+          throwIfAborted(abortController.signal);
+
+          try {
+            const response = await baseFetcher(url, init);
+
+            if (response.ok || !isRetryableStatusCode(response.status)) {
+              return response;
+            }
+
+            lastResponse = response;
+
+            if (attempt < maxRetries) {
+              const backoffMs = calculateBackoffDelay(attempt, {
+                initialDelayMs,
+                maxDelayMs,
+                backoffMultiplier,
+                jitterFactor,
+              });
+
+              const serverDelayMs = await extractServerSuggestedRetryDelayMs(
+                response,
+                { parseBody: true },
+              );
+
+              const MAX_SERVER_RETRY_DELAY_MS = 30 * 60 * 1000;
+              const cappedServerDelayMs =
+                typeof serverDelayMs === 'number' && Number.isFinite(serverDelayMs)
+                  ? Math.min(serverDelayMs, MAX_SERVER_RETRY_DELAY_MS)
+                  : null;
+
+              const delayMs =
+                cappedServerDelayMs == null
+                  ? backoffMs
+                  : Math.max(backoffMs, cappedServerDelayMs);
+
+              logger?.retry(attempt + 1, maxRetries, response.status, delayMs);
+              await response.body?.cancel().catch(() => {});
+              await delay(delayMs, abortController.signal);
+            }
+
+            attempt++;
+          } catch (error) {
+            throwIfAborted(abortController.signal);
+
+            if (isAbortError(error)) {
+              throw error;
+            }
+
+            if (!isRetryableNetworkError(error) || attempt >= maxRetries) {
+              throw error;
+            }
+
+            lastError = error instanceof Error ? error : new Error(String(error));
+
+            const delayMs = calculateBackoffDelay(attempt, {
+              initialDelayMs,
+              maxDelayMs,
+              backoffMultiplier,
+              jitterFactor,
+            });
+            logger?.retry(attempt + 1, maxRetries, 0, delayMs);
+            await delay(delayMs, abortController.signal);
+            attempt++;
+          }
+        }
+
+        if (lastError) {
+          throw lastError;
+        }
+        return lastResponse!;
+      };
 
       let response: Response | undefined;
       let responseEndpointBase: string | undefined;
@@ -2282,7 +2500,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         const endpoint = `${endpointBase}/v1internal:${streamEnabled ? 'streamGenerateContent' : 'generateContent'}${streamEnabled ? '?alt=sse' : ''}`;
 
         try {
-          const attemptResponse = await fetcher(endpoint, {
+          const attemptResponse = await fetchWithRetryInfo(endpoint, {
             method: 'POST',
             headers,
             body: JSON.stringify(body),
