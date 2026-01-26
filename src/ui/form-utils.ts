@@ -9,7 +9,11 @@ import {
 } from '../config-ops';
 import { normalizeBaseUrlInput } from '../utils';
 import { showValidationErrors } from './component';
-import { ProviderConfig, ModelConfig, type DeprecatedProviderConfigKey } from '../types';
+import {
+  ProviderConfig,
+  ModelConfig,
+  type DeprecatedProviderConfigKey,
+} from '../types';
 
 /**
  * Draft type for provider form editing.
@@ -28,7 +32,6 @@ type AssertNever<T extends never> = T;
 export type _AssertProviderDraftDoesNotExposeDeprecatedKeys = AssertNever<
   Extract<DeprecatedProviderConfigKey, keyof ProviderFormDraft>
 >;
-
 
 /**
  * Clone a provider config for editing.
@@ -225,6 +228,7 @@ export async function confirmDiscardModelChanges(
  */
 export function formatModelDetail(model: ModelConfig): string | undefined {
   const parts: string[] = [];
+  parts.push(model.id);
   if (model.maxInputTokens) {
     parts.push(t('Input: {0}', model.maxInputTokens.toLocaleString()));
   }
