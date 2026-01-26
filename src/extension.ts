@@ -65,6 +65,9 @@ export async function activate(
   context.subscriptions.push(providerRegistration);
   context.subscriptions.push(chatProvider);
 
+  // Trigger initial model cache refresh
+  chatProvider.handleConfigurationChange();
+
   // Register commands
   registerCommands(context, configStore, secretStore, uriHandler);
 

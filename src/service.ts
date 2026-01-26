@@ -22,6 +22,9 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
   private readonly onDidChangeModelInfoEmitter =
     new vscode.EventEmitter<void>();
+  private modelInfoCache: vscode.LanguageModelChatInformation[] = [];
+  private refreshInProgress: Promise<void> | null = null;
+  private needsRefreshAgain = false;
 
   readonly onDidChangeLanguageModelChatInformation =
     this.onDidChangeModelInfoEmitter.event;
@@ -33,27 +36,26 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   ) {}
 
   /**
-   * Provide information about available models
+   * Provide information about available models (returns cached models immediately)
    */
   async provideLanguageModelChatInformation(
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    const models: vscode.LanguageModelChatInformation[] = [];
+    // Return cached models immediately (non-blocking)
 
-    for (const provider of this.configStore.endpoints) {
-      const allModels = await getAllModelsForProvider(provider);
-      for (const model of allModels) {
-        models.push(this.createModelInfo(provider, model));
-      }
-    }
+    // Check if user has configured any providers with models or auto-fetch enabled
+    const hasConfiguredProviders = this.configStore.endpoints.some(
+      (provider) =>
+        provider.models.length > 0 || provider.autoFetchOfficialModels,
+    );
 
-    // If no models configured and not silent, prompt user to add a provider
-    if (models.length === 0 && !options.silent) {
+    // If no providers configured and not silent, prompt user to add a provider
+    if (!hasConfiguredProviders && !options.silent) {
       vscode.commands.executeCommand('unifyChatProvider.manageProviders');
     }
 
-    return models;
+    return this.modelInfoCache;
   }
 
   /**
@@ -91,6 +93,53 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
    */
   private createModelId(providerName: string, modelId: string): string {
     return `${this.encodeProviderName(providerName)}/${modelId}`;
+  }
+
+  /**
+   * Refresh model cache in background
+   */
+  private async refreshModelCache(): Promise<void> {
+    // If refresh is in progress, mark that we need to refresh again
+    if (this.refreshInProgress) {
+      this.needsRefreshAgain = true;
+      return this.refreshInProgress;
+    }
+
+    this.refreshInProgress = (async () => {
+      try {
+        // Keep refreshing until no more refresh requests come in
+        do {
+          this.needsRefreshAgain = false;
+
+          const models: vscode.LanguageModelChatInformation[] = [];
+
+          for (const provider of this.configStore.endpoints) {
+            try {
+              const allModels = await getAllModelsForProvider(provider);
+              for (const model of allModels) {
+                models.push(this.createModelInfo(provider, model));
+              }
+            } catch (error) {
+              // Log error but continue with other providers
+              console.error(
+                `Failed to fetch models for provider ${provider.name}:`,
+                error,
+              );
+            }
+          }
+
+          // Update cache atomically
+          this.modelInfoCache = models;
+
+          // Notify VSCode to re-fetch model information
+          this.onDidChangeModelInfoEmitter.fire();
+        } while (this.needsRefreshAgain);
+      } finally {
+        this.refreshInProgress = null;
+      }
+    })();
+
+    return this.refreshInProgress;
   }
 
   /**
@@ -414,16 +463,19 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   /**
-   * Handle configuration change by clearing cached clients and notifying VS Code
-   * that the available language model information has changed.
+   * Handle configuration change by clearing cached clients and triggering
+   * background refresh of model information.
    */
   handleConfigurationChange(): void {
     this.clearClients();
-    this.onDidChangeModelInfoEmitter.fire();
+
+    // Trigger background refresh (non-blocking)
+    void this.refreshModelCache();
   }
 
   dispose(): void {
     this.clearClients();
+    this.modelInfoCache = [];
     this.onDidChangeModelInfoEmitter.dispose();
   }
 }
