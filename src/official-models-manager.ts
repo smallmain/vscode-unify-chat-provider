@@ -621,6 +621,15 @@ export class OfficialModelsManager {
   }
 
   /**
+   * Trigger a background fetch for a provider without blocking.
+   * Returns immediately, fetch happens asynchronously.
+   * The onDidUpdate event will fire when the fetch completes.
+   */
+  triggerBackgroundFetch(provider: ProviderConfig): void {
+    void this.getOfficialModels(provider, false);
+  }
+
+  /**
    * Clear state for a provider
    */
   async clearProviderState(providerName: string): Promise<void> {

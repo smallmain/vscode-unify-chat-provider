@@ -10,7 +10,12 @@ import { ModelConfig, PerformanceTrace, ProviderConfig } from './types';
 import { getBaseModelId } from './model-id-utils';
 import { createProvider } from './client/utils';
 import { formatModelDetail } from './ui/form-utils';
-import { getAllModelsForProvider, isAbortError } from './utils';
+import {
+  getAllModelsForProvider,
+  getAllModelsForProviderSync,
+  isAbortError,
+  isPlaceholderModelId,
+} from './utils';
 import { SecretStore } from './secret';
 import { AuthManager } from './auth';
 import type { AuthCredential, AuthTokenInfo } from './auth/types';
@@ -22,9 +27,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
   private readonly onDidChangeModelInfoEmitter =
     new vscode.EventEmitter<void>();
-  private modelInfoCache: vscode.LanguageModelChatInformation[] = [];
-  private refreshInProgress: Promise<void> | null = null;
-  private needsRefreshAgain = false;
 
   readonly onDidChangeLanguageModelChatInformation =
     this.onDidChangeModelInfoEmitter.event;
@@ -36,14 +38,12 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   ) {}
 
   /**
-   * Provide information about available models (returns cached models immediately)
+   * Provide information about available models (synchronous, non-blocking)
    */
   async provideLanguageModelChatInformation(
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
-    // Return cached models immediately (non-blocking)
-
     // Check if user has configured any providers with models or auto-fetch enabled
     const hasConfiguredProviders = this.configStore.endpoints.some(
       (provider) =>
@@ -55,7 +55,18 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       vscode.commands.executeCommand('unifyChatProvider.manageProviders');
     }
 
-    return this.modelInfoCache;
+    // Build model list synchronously
+    const models: vscode.LanguageModelChatInformation[] = [];
+
+    for (const provider of this.configStore.endpoints) {
+      const allModels = getAllModelsForProviderSync(provider);
+
+      for (const model of allModels) {
+        models.push(this.createModelInfo(provider, model));
+      }
+    }
+
+    return models;
   }
 
   /**
@@ -96,53 +107,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   /**
-   * Refresh model cache in background
-   */
-  private async refreshModelCache(): Promise<void> {
-    // If refresh is in progress, mark that we need to refresh again
-    if (this.refreshInProgress) {
-      this.needsRefreshAgain = true;
-      return this.refreshInProgress;
-    }
-
-    this.refreshInProgress = (async () => {
-      try {
-        // Keep refreshing until no more refresh requests come in
-        do {
-          this.needsRefreshAgain = false;
-
-          const models: vscode.LanguageModelChatInformation[] = [];
-
-          for (const provider of this.configStore.endpoints) {
-            try {
-              const allModels = await getAllModelsForProvider(provider);
-              for (const model of allModels) {
-                models.push(this.createModelInfo(provider, model));
-              }
-            } catch (error) {
-              // Log error but continue with other providers
-              console.error(
-                `Failed to fetch models for provider ${provider.name}:`,
-                error,
-              );
-            }
-          }
-
-          // Update cache atomically
-          this.modelInfoCache = models;
-
-          // Notify VSCode to re-fetch model information
-          this.onDidChangeModelInfoEmitter.fire();
-        } while (this.needsRefreshAgain);
-      } finally {
-        this.refreshInProgress = null;
-      }
-    })();
-
-    return this.refreshInProgress;
-  }
-
-  /**
    * Parse model ID to extract provider and model names
    */
   private parseModelId(
@@ -179,6 +143,15 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private async findProviderAndModel(
     modelId: string,
   ): Promise<{ provider: ProviderConfig; model: ModelConfig } | null> {
+    // Check for placeholder model ID
+    if (isPlaceholderModelId(modelId)) {
+      throw new Error(
+        t(
+          'This is a placeholder model while official models are loading. Please select a different model or wait for the models to finish loading.',
+        ),
+      );
+    }
+
     const parsed = this.parseModelId(modelId);
     if (!parsed) {
       return null;
@@ -463,19 +436,17 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   /**
-   * Handle configuration change by clearing cached clients and triggering
-   * background refresh of model information.
+   * Handle configuration change by clearing cached clients and notifying
+   * VSCode to re-fetch model information.
    */
   handleConfigurationChange(): void {
     this.clearClients();
-
-    // Trigger background refresh (non-blocking)
-    void this.refreshModelCache();
+    // Notify VSCode to re-fetch model information
+    this.onDidChangeModelInfoEmitter.fire();
   }
 
   dispose(): void {
     this.clearClients();
-    this.modelInfoCache = [];
     this.onDidChangeModelInfoEmitter.dispose();
   }
 }

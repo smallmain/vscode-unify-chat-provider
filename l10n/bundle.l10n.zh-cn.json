@@ -292,6 +292,8 @@
   "Edit Provider ({0})": "编辑供应商（{0}）",
   "Done": "完成",
   "Loading models...": "正在加载模型...",
+  "Loading official models...": "加载官方模型中...",
+  "This is a placeholder model while official models are loading. Please select a different model or wait for the models to finish loading.": "这是官方模型加载时的占位符模型。请选择其他模型或等待模型加载完成。",
   "Select models to add": "选择要添加的模型",
   "No models available": "没有可用模型",
   "The API returned no models": "API 未返回任何模型",

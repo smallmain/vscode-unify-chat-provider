@@ -527,5 +527,7 @@
   "Project ID (optional)": "Project ID (optional)",
   "Refresh access token": "Refresh access token",
   "Refresh token": "Refresh token",
-  "Well-known": "Well-known"
+  "Well-known": "Well-known",
+  "Loading official models...": "Loading official models...",
+  "This is a placeholder model while official models are loading. Please select a different model or wait for the models to finish loading.": "This is a placeholder model while official models are loading. Please select a different model or wait for the models to finish loading.",
 }

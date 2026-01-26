@@ -6,6 +6,22 @@ import * as vscode from 'vscode';
 import { t } from './i18n';
 
 /**
+ * Placeholder model ID used when official models are loading.
+ * Uses double underscores to clearly distinguish from real model IDs.
+ */
+export const PLACEHOLDER_MODEL_ID = '__PLACEHOLDER__';
+
+/**
+ * Check if a model ID is a placeholder.
+ * Works with both raw model ID and full model ID format (provider/model).
+ */
+export function isPlaceholderModelId(modelId: string): boolean {
+  const slashIndex = modelId.indexOf('/');
+  const modelName = slashIndex === -1 ? modelId : modelId.slice(slashIndex + 1);
+  return modelName === PLACEHOLDER_MODEL_ID;
+}
+
+/**
  * HTTP status codes that should trigger a retry.
  * - 408: Request Timeout
  * - 409: Request Lock
@@ -759,6 +775,55 @@ export async function getAllModelsForProvider(
       provider,
       options?.forceFetch,
     );
+  }
+
+  // Filter out official models that conflict with user models
+  const filteredOfficialModels = officialModels.filter(
+    (m) => !userModelIds.has(m.id),
+  );
+
+  return [...userModels, ...filteredOfficialModels];
+}
+
+/**
+ * Synchronous version of getAllModelsForProvider.
+ * Returns cached models immediately and triggers background fetch if needed.
+ *
+ * Behavior:
+ * - Always returns user-defined models immediately
+ * - If autoFetchOfficialModels is enabled:
+ *   - Returns cached official models if available
+ *   - Returns placeholder model if no cache exists
+ *   - Automatically triggers background fetch when needed
+ */
+export function getAllModelsForProviderSync(
+  provider: ProviderConfig,
+): ModelConfig[] {
+  const userModels = provider.models;
+  const userModelIds = new Set(userModels.map((m) => m.id));
+
+  let officialModels: ModelConfig[] = [];
+
+  if (provider.autoFetchOfficialModels) {
+    // Get cached state synchronously
+    const state = officialModelsManager.getProviderState(provider.name);
+
+    if (state && state.models.length > 0) {
+      // Cache exists - use it
+      officialModels = state.models;
+    } else {
+      // No cache - return placeholder
+      officialModels = [
+        {
+          id: PLACEHOLDER_MODEL_ID,
+          name: t('Loading official models...'),
+          capabilities: { toolCalling: true, imageInput: true },
+        },
+      ];
+    }
+
+    // Trigger background fetch (non-blocking)
+    officialModelsManager.triggerBackgroundFetch(provider);
   }
 
   // Filter out official models that conflict with user models
