@@ -516,10 +516,10 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers) |                                                                |                       |
 | [OpenRouter](https://openrouter.ai/)                                                  | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails       | [详情](#openrouter)   |
 | [Cerebras](https://www.cerebras.ai/)                                                  | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking | [详情](#cerebras)     |
-| [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                         | <li>ReasoningContent                                           |                       |
-| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                               | <li>ReasoningContent                                           |                       |
-| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                             | <li>InterleavedThinking <li>FineGrainedToolStreaming           |                       |
-| [OpenCode Zen (Gemini)](https://opencode.ai/)                                         |                                                                |                       |
+| [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                         | <li>ReasoningContent                                           | [详情](#opencode-zen) |
+| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                               | <li>ReasoningContent                                           | [详情](#opencode-zen) |
+| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                             | <li>InterleavedThinking <li>FineGrainedToolStreaming           | [详情](#opencode-zen) |
+| [OpenCode Zen (Gemini)](https://opencode.ai/)                                         |                                                                | [详情](#opencode-zen) |
 | [英伟达](https://build.nvidia.com/)                                                   |                                                                | [详情](#英伟达)       |
 | [阿里云百炼平台 (中国站)](https://www.aliyun.com/product/bailian)                     | <li>ThinkingParam3 <li>ReasoningContent                        |                       |
 | [阿里云百炼平台 (Coding Plan)](https://www.aliyun.com/product/bailian)                | <li>ThinkingParam3 <li>ReasoningContent                        |                       |
@@ -648,6 +648,11 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 #### OpenRouter
 
 - 部分模型有一定的免费额度，按时间刷新额度。
+- 支持模型：变动频繁，名称中带 free 的模型。
+
+#### OpenCode Zen
+
+- 部分模型完全免费。
 - 支持模型：变动频繁，名称中带 free 的模型。
 
 </details>

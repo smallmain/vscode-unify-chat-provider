@@ -522,10 +522,10 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)           |                                                                |                            |
 | [OpenRouter](https://openrouter.ai/)                                                            | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails       | [Details](#openrouter)     |
 | [Cerebras](https://www.cerebras.ai/)                                                            | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking | [Details](#cerebras)       |
-| [OpenCode Zen (OpenAI Chat Completions)](https://opencode.ai/)                                  | <li>ReasoningContent                                           |                            |
-| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                         | <li>ReasoningContent                                           |                            |
-| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming           |                            |
-| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                |                            |
+| [OpenCode Zen (OpenAI Chat Completions)](https://opencode.ai/)                                  | <li>ReasoningContent                                           | [Details](#opencode-zen)   |
+| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                         | <li>ReasoningContent                                           | [Details](#opencode-zen)   |
+| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming           | [Details](#opencode-zen)   |
+| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                | [Details](#opencode-zen)   |
 | [Nvidia](https://build.nvidia.com/)                                                             |                                                                | [Details](#nvidia)         |
 | [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                    | <li>ThinkingParam3 <li>ReasoningContent                        |                            |
 | [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                        |                            |
@@ -654,6 +654,11 @@ Long-Term Free Quotas:
 #### OpenRouter
 
 - Some models have certain free quotas, refreshing over time.
+- Supported models: Frequently changing, models with 'free' in the name.
+
+#### OpenCode Zen
+
+- Some models are completely free.
 - Supported models: Frequently changing, models with 'free' in the name.
 
 </details>
