@@ -11,4 +11,5 @@ out-tests/**
 tsconfig*.json
 AGENTS.md
 .git/**
-icon-large.png
+icon_large.png
+icon_square.png
