@@ -1,5 +1,58 @@
 # Changelog
 
+## v4.0.0 - 2026-01-27
+
+### Breaking Changes
+- storeApiKeyInSettings no longer support some methods of authentication (c7de0c2, SmallMain)
+
+### Features
+- add 'MiniMax-M2.1' model to iFlow provider (15324a4, SmallMain)
+- add 'glm-4.7' model to iFlow provider configuration (08501c5, SmallMain)
+- update Cerebras's default model list (30bfecb, SmallMain)
+- add model id to model detail display (107e91d, SmallMain)
+- add category support for authentication methods and providers (b2ead9d, SmallMain)
+- implement retry logic and delay handling for network requests (d5c15bc, SmallMain)
+- enhance Antigravity OAuth flow and client integration (976a8a5, SmallMain)
+- enhance request handling with stable user ID and credential support (c3fa025, SmallMain)
+- enhance session management and header handling in OpenAI responses provider (f027eea, SmallMain)
+- enhance authentication handling for AnthropicProvider (8818738, SmallMain)
+- added support for the Claude Code provider, and integrated Claude Code Cloak into it (ee1751a, SmallMain)
+- update timeout configurations and fetch modes for providers (1d7f564, SmallMain)
+- add new models and update overrides for better compatibility (2b7d0f3, SmallMain)
+- add authentication checks for GitHub Copilot and Qwen Code providers (eae4639, SmallMain)
+- optimize the default model lists for some providers (49845e9, SmallMain)
+- add Qwen Code provider support (2c77c4c, SmallMain)
+- add iFlow provider support (75810fb, SmallMain)
+- add Github Copilot provider support (b02b48b, SmallMain)
+- enhance well-known models feature (0c8575d, SmallMain)
+- add Cerebras provider support (51b44e4, SmallMain)
+- add Gemini CLI provider (611b966, SmallMain)
+
+### Fixes
+- features support for iFlow and Nvidia models (cd6e597, SmallMain)
+- update l10n translations for new strings (491e7d1, SmallMain)
+- trailing comma (f9087ee, SmallMain)
+- trying to resolve the issue where a restart results in no custom models being available (cd905e4, SmallMain)
+- enhance GoogleAIStudioProvider and AntigravityClient tool call ID handling and parsing logic (f2cf04d, SmallMain)
+- enhance error printing for better debugging (4d54461, SmallMain)
+- can't get Qwen Code official models (7453ad8, SmallMain)
+- only GLM 4.7 model use clear thinking (2dc21dd, SmallMain)
+- update base URL for Google Vertex AI provider (fc93fb8, SmallMain)
+- enhance abort signal support to API providers and fetch utilities (1c92f71, SmallMain)
+
+### Refactors
+- provider official models background fetching (f038609, SmallMain)
+
+### Chores
+- update icon (0636ad8, SmallMain)
+- update README and SEO metadata (5a91484, SmallMain)
+- update ROADMAP.md (7e17bf4, SmallMain)
+- update README.md (aff86a9, SmallMain)
+- update l10n sync script to include write-locales option (111b785, SmallMain)
+- update README.md (5175675, SmallMain)
+- update vscode dts (91bb736, SmallMain)
+- update ROADMAP.md (1fa0fec, SmallMain)
+
 ## v3.3.0 - 2026-01-22
 
 ### Features
