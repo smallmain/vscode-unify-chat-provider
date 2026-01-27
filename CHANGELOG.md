@@ -1,5 +1,13 @@
 # Changelog
 
+## v4.1.0 - 2026-01-27
+
+### Features
+- add Kimi K2.5 model support (7f9cc82, SmallMain)
+
+### Chores
+- update README.md (da9f385, SmallMain)
+
 ## v4.0.0 - 2026-01-27
 
 ### Breaking Changes
