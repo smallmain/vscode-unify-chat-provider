@@ -1,5 +1,5 @@
 import type { ConfigStore } from '../../config-store';
-import type { ProviderType } from '../../client/definitions';
+import type { ApiType } from '../../client/definitions';
 import { ProviderConfig, ModelConfig, TimeoutConfig } from '../../types';
 import type { WellKnownProviderConfig } from '../../well-known/providers';
 import type { OfficialModelsFetchState } from '../../official-models-manager';
@@ -67,7 +67,7 @@ export interface ModelFormRoute {
   kind: 'modelForm';
   mode?: 'full' | 'import';
   providerLabel?: string;
-  providerType?: ProviderType;
+  providerType?: ApiType;
   model?: ModelConfig;
   models: ModelConfig[];
   initialConfig?: Partial<ModelConfig>;
@@ -78,7 +78,7 @@ export interface ModelFormRoute {
 export interface ModelViewRoute {
   kind: 'modelView';
   providerLabel?: string;
-  providerType?: ProviderType;
+  providerType?: ApiType;
   model: ModelConfig;
 }
 
@@ -119,7 +119,7 @@ export interface ImportModelConfigArrayRoute {
   /** Existing models to check conflicts against and append into on completion. */
   targetModels: ModelConfig[];
   providerLabel: string;
-  providerType?: ProviderType;
+  providerType?: ApiType;
   selectedIds?: Set<number>;
   editingEntryId?: number;
 }

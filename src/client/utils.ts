@@ -13,14 +13,16 @@ import {
   normalizeBaseUrlInput,
   type RetryConfig,
 } from '../utils';
-import { FeatureId, FEATURES, PROVIDER_TYPES } from './definitions';
+import { FeatureId, FEATURES, API_TYPES } from './definitions';
 import { ApiProvider } from './interface';
 import { ProviderPattern } from './types';
+import { DEFAULT_PROVIDER_TYPE } from '../defaults';
 
 export function createProvider(provider: ProviderConfig): ApiProvider {
-  const definition = PROVIDER_TYPES[provider.type];
+  const providerApiType = provider.type ?? DEFAULT_PROVIDER_TYPE;
+  const definition = API_TYPES[providerApiType];
   if (!definition) {
-    throw new Error(`Unsupported provider type: ${provider.type}`);
+    throw new Error(`Unsupported API type: ${providerApiType}`);
   }
   return new definition.class(provider);
 }

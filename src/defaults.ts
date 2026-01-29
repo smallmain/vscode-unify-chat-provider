@@ -1,3 +1,10 @@
+import { ApiType } from './client/definitions';
+
+/**
+ * Default API type when not specified
+ */
+export const DEFAULT_PROVIDER_TYPE: ApiType = 'openai-chat-completion';
+
 /**
  * Default token limits for models
  */

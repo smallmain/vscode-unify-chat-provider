@@ -9,7 +9,7 @@ import {
   type ProviderFormDraft,
 } from './form-utils';
 import { normalizeBaseUrlInput } from '../utils';
-import { ProviderType, PROVIDER_TYPES } from '../client/definitions';
+import { ApiType, API_TYPES } from '../client/definitions';
 import { type SecretStore } from '../secret';
 import type { EventedUriHandler } from '../uri-handler';
 import {
@@ -77,12 +77,12 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       section: 'primary',
       edit: async (draft) => {
         const { pickQuickItem } = await import('./component');
-        type ProviderTypePickItem = vscode.QuickPickItem & {
-          typeValue?: ProviderType;
+        type ApiTypePickItem = vscode.QuickPickItem & {
+          typeValue?: ApiType;
         };
 
-        const items: ProviderTypePickItem[] = [];
-        const defs = Object.values(PROVIDER_TYPES);
+        const items: ApiTypePickItem[] = [];
+        const defs = Object.values(API_TYPES);
         const byCategory = new Map<string, typeof defs>();
         const categories: string[] = [];
         for (const def of defs) {
@@ -111,7 +111,7 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
           }
         }
 
-        const picked = await pickQuickItem<ProviderTypePickItem>({
+        const picked = await pickQuickItem<ApiTypePickItem>({
           title: t('API Format'),
           placeholder: t('Select the API format'),
           items,
@@ -121,7 +121,7 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
         }
       },
       getDescription: (draft) =>
-        Object.values(PROVIDER_TYPES).find((o) => o.type === draft.type)
+        Object.values(API_TYPES).find((o) => o.type === draft.type)
           ?.label || t('(required)'),
     },
     // Base URL field

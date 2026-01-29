@@ -16,7 +16,7 @@ import { QwenCodeProvider } from './qwen/qwen-code-client';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
-export type ProviderType =
+export type ApiType =
   | 'anthropic'
   | 'claude-code'
   | 'google-ai-studio'
@@ -30,7 +30,7 @@ export type ProviderType =
   | 'openai-responses'
   | 'ollama';
 
-export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
+export const API_TYPES: Record<ApiType, ProviderDefinition> = {
   anthropic: {
     type: 'anthropic',
     label: t('Anthropic Messages API'),
@@ -118,9 +118,9 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
 };
 
 /**
- * Valid provider types
+ * Valid API types
  */
-export const PROVIDER_KEYS = Object.keys(PROVIDER_TYPES) as ProviderType[];
+export const API_TYPE_KEYS = Object.keys(API_TYPES) as ApiType[];
 
 export enum FeatureId {
   /**

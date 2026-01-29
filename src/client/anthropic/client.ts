@@ -32,7 +32,7 @@ import {
   withIdleTimeout,
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
-import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
+import { DEFAULT_MAX_OUTPUT_TOKENS, DEFAULT_PROVIDER_TYPE } from '../../defaults';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../../types';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import { ThinkingBlockMetadata } from '../types';
@@ -64,6 +64,11 @@ export class AnthropicProvider implements ApiProvider {
     this.baseUrl = buildBaseUrl(config.baseUrl, { stripPattern: /\/v1$/i });
   }
 
+  private get providerApiType(): string {
+    const providerApiType = this.config.type;
+    return providerApiType ?? DEFAULT_PROVIDER_TYPE;
+  }
+
   protected toProviderToolName(name: string): string {
     return name;
   }
@@ -76,7 +81,7 @@ export class AnthropicProvider implements ApiProvider {
    * Create an Anthropic client with custom fetch for retry support.
    * A new client is created per request to enable per-request logging.
    */
-  protected createClient(
+  private createClient(
     logger: ProviderHttpLogger | undefined,
     stream: boolean,
     credential?: AuthTokenInfo,
@@ -1272,7 +1277,7 @@ export class AnthropicProvider implements ApiProvider {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
-      providerType: this.config.type,
+      actualApiType: this.providerApiType,
     });
     const allModels: ModelConfig[] = [];
     let afterId: string | undefined;

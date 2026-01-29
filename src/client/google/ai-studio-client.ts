@@ -48,6 +48,7 @@ import {
 } from '../utils';
 import { randomUUID } from 'node:crypto';
 import { FeatureId } from '../definitions';
+import { DEFAULT_PROVIDER_TYPE } from '../../defaults';
 
 const TOOL_CALL_ID_PREFIX = 'google-tool:';
 
@@ -70,6 +71,11 @@ export class GoogleAIStudioProvider implements ApiProvider {
       );
     }
     this.baseUrl = normalized.toString().replace(/\/+$/, '');
+  }
+
+  protected get providerApiType(): string {
+    const providerApiType = this.config.type;
+    return providerApiType ?? DEFAULT_PROVIDER_TYPE;
   }
 
   protected buildHeaders(
@@ -944,7 +950,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
-      providerType: this.config.type,
+      actualApiType: this.providerApiType,
     });
     try {
       const client = this.createClient(undefined, false, credential, 'normal');

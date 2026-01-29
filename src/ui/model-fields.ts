@@ -13,7 +13,7 @@ import {
   generateAutoVersionedId,
   MODEL_VERSION_DELIMITER,
 } from '../model-id-utils';
-import type { ProviderType } from '../client/definitions';
+import type { ApiType } from '../client/definitions';
 import { ModelConfig } from '../types';
 
 /**
@@ -22,7 +22,7 @@ import { ModelConfig } from '../types';
 export interface ModelFieldContext extends FieldContext {
   models: ModelConfig[];
   originalId?: string;
-  providerType?: ProviderType;
+  providerType?: ApiType;
 }
 
 /**

@@ -7,10 +7,10 @@ import type {
 import type { ModelConfig, PerformanceTrace, ProviderConfig } from '../types';
 import type { RequestLogger } from '../logger';
 import type { AuthTokenInfo } from '../auth/types';
-import { ProviderType } from './definitions';
+import { ApiType } from './definitions';
 
 export interface ProviderDefinition {
-  type: ProviderType;
+  type: ApiType;
   label: string;
   description: string;
   /**

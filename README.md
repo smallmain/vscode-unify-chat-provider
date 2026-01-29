@@ -388,7 +388,7 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 
 | Name                       | ID                        | Description                                                                                          |
 | -------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------- |
-| API Format                 | `type`                    | Provider type (determines the API format and compatibility logic).                                   |
+| API Format                 | `type`                    | API type (determines the API format and compatibility logic).                                        |
 | Provider Name              | `name`                    | Unique name for this provider config (used for list display and references).                         |
 | API Base URL               | `baseUrl`                 | API base URL, e.g. `https://api.anthropic.com`.                                                      |
 | Authentication             | `auth`                    | Authentication config object (`none` / `api-key` / `oauth2`).                                        |

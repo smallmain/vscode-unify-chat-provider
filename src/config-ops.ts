@@ -2,6 +2,7 @@ import { ModelConfig, ProviderConfig, type ProviderConfigPersistedKey } from './
 
 export const MODEL_CONFIG_KEYS = [
   'id',
+  'type',
   'name',
   'family',
   'maxInputTokens',

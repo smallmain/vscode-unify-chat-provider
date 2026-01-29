@@ -7,8 +7,8 @@ import {
 } from './config-ops';
 import { normalizeBaseUrlInput } from './utils';
 import {
-  PROVIDER_KEYS,
-  ProviderType,
+  API_TYPE_KEYS,
+  ApiType,
 } from './client/definitions';
 import { ProviderConfig, ModelConfig } from './types';
 
@@ -121,14 +121,14 @@ export class ConfigStore {
       .map((m: unknown) => this.normalizeModelConfig(m))
       .filter((m): m is ModelConfig => m !== null);
 
-    // Parse and validate type
-    if (
-      typeof obj.type !== 'string' ||
-      !PROVIDER_KEYS.includes(obj.type as ProviderType)
-    ) {
+    // Parse and validate type (required)
+    if (typeof obj.type !== 'string' || !obj.type) {
       return null;
     }
-    const type = obj.type as ProviderType;
+    if (!API_TYPE_KEYS.includes(obj.type as ApiType)) {
+      return null;
+    }
+    const type = obj.type as ApiType;
 
     const provider: ProviderConfig = {
       type,

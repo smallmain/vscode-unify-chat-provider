@@ -10,6 +10,7 @@ import type { AuthConfig, AuthCredential, AuthTokenInfo } from './auth/types';
 import { createAuthProvider } from './auth/create-auth-provider';
 import type { AuthProviderContext } from './auth/auth-provider';
 import { getAuthMethodCtor, type AuthManager } from './auth';
+import { DEFAULT_PROVIDER_TYPE } from './defaults';
 
 /**
  * State for a single provider's official models fetch
@@ -416,7 +417,8 @@ export class OfficialModelsManager {
     const missing: string[] = [];
 
     if (!provider.name.trim()) missing.push(t('Name'));
-    if (!provider.type) missing.push(t('API Format'));
+    const providerApiType = provider.type;
+    if (!providerApiType) missing.push(t('API Format'));
     if (!provider.baseUrl.trim()) missing.push(t('API Base URL'));
 
     if (missing.length === 0) return undefined;
@@ -643,9 +645,10 @@ export class OfficialModelsManager {
     const auth = provider.auth;
     const authMethod = auth?.method ?? 'none';
     const authHash = this.computeAuthHash(auth);
+    const providerApiType = provider.type;
 
     return {
-      type: provider.type,
+      type: providerApiType ?? DEFAULT_PROVIDER_TYPE,
       baseUrl: provider.baseUrl,
       authMethod,
       authHash,

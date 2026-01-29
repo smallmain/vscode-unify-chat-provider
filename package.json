@@ -198,6 +198,7 @@
               "type": {
                 "type": "string",
                 "description": "%configuration.endpoints.type.description%",
+                "default": "openai-chat-completion",
                 "enum": [
                   "anthropic",
                   "google-ai-studio",
@@ -286,6 +287,30 @@
                         "id": {
                           "type": "string",
                           "description": "%configuration.endpoints.models.id.description%"
+                        },
+                        "type": {
+                          "type": "string",
+                          "description": "%configuration.endpoints.models.type.description%",
+                          "enum": [
+                            "anthropic",
+                            "google-ai-studio",
+                            "google-vertex-ai",
+                            "google-antigravity",
+                            "openai-chat-completion",
+                            "openai-responses",
+                            "openai-codex",
+                            "ollama"
+                          ],
+                          "enumDescriptions": [
+                            "%configuration.endpoints.models.type.enumDescriptions.0%",
+                            "%configuration.endpoints.models.type.enumDescriptions.1%",
+                            "%configuration.endpoints.models.type.enumDescriptions.2%",
+                            "%configuration.endpoints.models.type.enumDescriptions.3%",
+                            "%configuration.endpoints.models.type.enumDescriptions.4%",
+                            "%configuration.endpoints.models.type.enumDescriptions.5%",
+                            "%configuration.endpoints.models.type.enumDescriptions.6%",
+                            "%configuration.endpoints.models.type.enumDescriptions.7%"
+                          ]
                         },
                         "name": {
                           "type": "string",

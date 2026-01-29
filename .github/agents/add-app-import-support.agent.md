@@ -37,8 +37,8 @@ tools:
 1. 目标应用名称（用于 `displayName`、文件命名）。
 2. 官方文档链接（配置文件位置 + 字段说明）。
 3. 一份可脱敏的示例配置（最好来自用户机器），或至少关键片段。
-4. 期望导入到本扩展的 Provider 类型：
-   - 参考 `ProviderType`（见 [`src/client/definitions.ts`](../../src/client/definitions.ts)）
+4. 期望导入到本扩展的 API 类型：
+   - 参考 `ApiType`（见 [`src/client/definitions.ts`](../../src/client/definitions.ts)）
 5. 是否需要强校验：例如必须包含 `APIURL` + `APIKEY`（缺失就拒绝导入）。
 
 > 如果用户给了 URL：先用 `#tool:fetch` 拉取页面并阅读；页面里出现的“配置参考/路径说明/示例”链接，继续 fetch（只递归与配置相关的链接）。
@@ -88,7 +88,7 @@ tools:
 你需要把“第三方应用配置”映射成 `Partial<ProviderConfig>`（见 [`src/types.ts`](../../src/types.ts)）：
 
 - `name`: 建议默认用应用名/配置中的 profile 名称；但要注意 UI 里会做重名校验。
-- `type`: 必须来自 `ProviderType`（见 [`src/client/definitions.ts`](../../src/client/definitions.ts)）
+- `type`: 必须来自 `ApiType`（见 [`src/client/definitions.ts`](../../src/client/definitions.ts)）
 - `baseUrl`: API URL（如果你的导入规则要求必须存在，则缺失直接报错）
 - `apiKey`: API Key（同上）
 - `models`: 合理给出默认模型列表
