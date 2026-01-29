@@ -177,10 +177,10 @@ export class OpenAICodeXProvider extends OpenAIResponsesProvider {
   ): Promise<ModelConfig[]> {
     this.assertCodexAuth();
     return [
-      { id: 'gpt-5.1-codex-max' },
-      { id: 'gpt-5.1-codex-mini' },
-      { id: 'gpt-5.2' },
-      { id: 'gpt-5.2-codex' },
+      { id: 'gpt-5.1-codex-max', maxOutputTokens: undefined },
+      { id: 'gpt-5.1-codex-mini', maxOutputTokens: undefined },
+      { id: 'gpt-5.2', maxOutputTokens: undefined },
+      { id: 'gpt-5.2-codex', maxOutputTokens: undefined },
     ];
   }
 
