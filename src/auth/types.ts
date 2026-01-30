@@ -5,6 +5,7 @@ export type AuthMethod =
   | 'oauth2'
   | 'iflow-cli'
   | 'antigravity-oauth'
+  | 'google-gemini-oauth'
   | 'google-vertex-ai-auth'
   | 'claude-code'
   | 'openai-codex'
@@ -150,6 +151,24 @@ export interface AntigravityOAuthConfig {
   email?: string;
 }
 
+/**
+ * Gemini CLI OAuth authentication configuration.
+ * Uses the official Google Gemini CLI OAuth credentials.
+ */
+export interface GeminiCliOAuthConfig {
+  method: 'google-gemini-oauth';
+  label?: string;
+  description?: string;
+  identityId?: string;
+  token?: string;
+  /** Cloud Code Assist managed project id (cloudaicompanionProject) */
+  managedProjectId?: string;
+  tier?: 'free' | 'paid';
+  /** More precise tier identifier (e.g. current_tier.id / paid_tier.id) */
+  tierId?: string;
+  email?: string;
+}
+
 export interface OpenAICodexAuthConfig {
   method: 'openai-codex';
   label?: string;
@@ -260,6 +279,7 @@ export type AuthConfig =
   | OAuth2AuthConfig
   | IFlowCliAuthConfig
   | AntigravityOAuthConfig
+  | GeminiCliOAuthConfig
   | OpenAICodexAuthConfig
   | ClaudeCodeAuthConfig
   | QwenCodeAuthConfig

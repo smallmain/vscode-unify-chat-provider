@@ -1,6 +1,9 @@
 import type { AuthTokenInfo } from '../../auth/types';
 import type { ModelConfig } from '../../types';
-import { GEMINI_CLI_HEADERS } from '../../auth/providers/antigravity-oauth/constants';
+import {
+  GEMINI_CLI_API_HEADERS,
+  GEMINI_CLI_ENDPOINT_FALLBACKS,
+} from '../../auth/providers/google-gemini-oauth/constants';
 import {
   type Gemini3ThinkingLevel,
   GoogleCodeAssistProvider,
@@ -10,9 +13,33 @@ const GEMINI_3_TIER_SUFFIX = /-(minimal|low|medium|high)$/i;
 
 export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
   protected readonly codeAssistName = 'Gemini CLI';
-  protected readonly codeAssistHeaders = GEMINI_CLI_HEADERS;
+  protected readonly codeAssistHeaders = GEMINI_CLI_API_HEADERS;
   protected readonly codeAssistHeaderStyle = 'gemini-cli';
-  protected readonly codeAssistEndpointFallbacks: readonly string[] = [];
+  protected readonly codeAssistEndpointFallbacks = GEMINI_CLI_ENDPOINT_FALLBACKS;
+
+  /**
+   * Override to support google-gemini-oauth authentication method.
+   */
+  protected override validateAuth(): void {
+    const authMethod = this.config.auth?.method;
+    if (authMethod !== 'google-gemini-oauth') {
+      throw new Error(
+        `Google ${this.codeAssistName} provider requires auth method "google-gemini-oauth".`,
+      );
+    }
+  }
+
+  protected override resolveProjectId(): string {
+    const auth = this.config.auth;
+    if (auth?.method === 'google-gemini-oauth') {
+      const managedProjectId = auth.managedProjectId?.trim();
+      if (managedProjectId) {
+        return managedProjectId;
+      }
+    }
+    // Do not fallback to default ID, return empty string to trigger validation error later
+    return '';
+  }
 
   protected resolveModelForRequest(
     modelId: string,
@@ -65,12 +92,13 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
   override async getAvailableModels(
     _credential: AuthTokenInfo,
   ): Promise<ModelConfig[]> {
-    this.assertAntigravityAuth();
+    this.validateAuth();
     return [
       { id: 'gemini-3-pro-preview' },
       { id: 'gemini-3-flash-preview' },
       { id: 'gemini-2.5-pro' },
       { id: 'gemini-2.5-flash' },
+      { id: 'gemini-2.0-flash' },
     ];
   }
 }

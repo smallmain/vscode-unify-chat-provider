@@ -475,7 +475,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'Experimental',
     type: 'google-gemini-cli',
     baseUrl: 'https://cloudcode-pa.googleapis.com',
-    authTypes: ['antigravity-oauth'],
+    authTypes: ['google-gemini-oauth'],
     models: [],
     autoFetchOfficialModels: true,
   },
