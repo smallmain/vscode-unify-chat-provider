@@ -1099,7 +1099,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     }
   }
 
-  protected assertAntigravityAuth(): void {
+  protected validateAuth(): void {
     if (this.config.auth?.method !== 'antigravity-oauth') {
       throw new Error(
         `Google ${this.codeAssistName} provider requires auth method "antigravity-oauth".`,
@@ -1164,14 +1164,14 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     return ordered;
   }
 
-  private resolveProjectId(): string {
+  protected resolveProjectId(): string {
     const auth = this.config.auth;
-    if (auth?.method === 'antigravity-oauth') {
+    if (auth?.method === 'antigravity-oauth' || auth?.method === 'google-gemini-oauth') {
       const managedProjectId = auth.managedProjectId?.trim();
       if (managedProjectId) {
         return managedProjectId;
       }
-      const projectId = auth.projectId?.trim();
+      const projectId = (auth as any).projectId?.trim();
       if (projectId) {
         return projectId;
       }
@@ -1241,6 +1241,18 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     // Fingerprint headers override randomized headers and add quota/device IDs.
     const fingerprintHeaders = buildFingerprintHeaders(getSessionFingerprint());
     for (const [key, value] of Object.entries(fingerprintHeaders)) {
+      // For gemini-cli style, do not overwrite critical headers with Antigravity-specific values.
+      if (this.codeAssistHeaderStyle === 'gemini-cli') {
+        const lowerKey = key.toLowerCase();
+        if (
+          lowerKey === 'user-agent' ||
+          lowerKey === 'x-goog-api-client' ||
+          lowerKey === 'client-metadata'
+        ) {
+          continue;
+        }
+      }
+
       if (typeof value === 'string' && value.trim()) {
         headers[key] = value;
       }
@@ -1559,7 +1571,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     logger: RequestLogger,
     credential: AuthTokenInfo,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
-    this.assertAntigravityAuth();
+    this.validateAuth();
 
     const abortController = new AbortController();
     const cancellationListener = token.onCancellationRequested(() => {
@@ -1725,14 +1737,35 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         : {}),
     };
 
-    const body: Record<string, unknown> = {
-      project: projectId,
-      model: resolvedModel.requestModelId,
-      request: requestPayload,
-      requestType: 'agent',
-      userAgent: 'antigravity',
-      requestId: `agent-${randomUUID()}`,
-    };
+    let body: Record<string, unknown>;
+
+    if (this.codeAssistHeaderStyle === 'gemini-cli') {
+      if (!projectId) {
+        throw new Error(
+          'No project ID found for Gemini CLI. Please try signing out and signing in again to provision a project.',
+        );
+      }
+
+      const cliPayload = { ...requestPayload };
+      delete cliPayload['sessionId'];
+      cliPayload['session_id'] = sessionId;
+
+      body = {
+        project: projectId,
+        model: resolvedModel.requestModelId,
+        user_prompt_id: `${randomUUID()}########0`,
+        request: cliPayload,
+      };
+    } else {
+      body = {
+        project: projectId,
+        model: resolvedModel.requestModelId,
+        request: requestPayload,
+        requestType: 'agent',
+        userAgent: 'antigravity',
+        requestId: `agent-${randomUUID()}`,
+      };
+    }
 
     Object.assign(body, this.config.extraBody, model.extraBody);
     deleteSafetySettings(body);
@@ -1895,8 +1928,10 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
             }
 
             const text = await attemptResponse.text().catch(() => '');
+            const debugProjectId = (body as any).project;
+            const projectInfo = debugProjectId ? ` (project: ${debugProjectId})` : '';
             lastError = new Error(
-              `${this.codeAssistName} request failed (${attemptResponse.status}): ${
+              `${this.codeAssistName} request failed (${attemptResponse.status})${projectInfo}: ${
                 text || attemptResponse.statusText || 'Unknown error'
               }`,
             );

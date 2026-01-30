@@ -41,7 +41,7 @@ export class GoogleAntigravityProvider extends GoogleCodeAssistProvider {
   override async getAvailableModels(
     _credential: AuthTokenInfo,
   ): Promise<ModelConfig[]> {
-    this.assertAntigravityAuth();
+    this.validateAuth();
     return [
       { id: 'gemini-3-pro' },
       { id: 'gemini-3-flash' },

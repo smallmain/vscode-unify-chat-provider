@@ -4,6 +4,7 @@ import type { AuthProvider, AuthProviderContext } from './auth-provider';
 import { ApiKeyAuthProvider } from './providers/api-key';
 import { IFlowCliAuthProvider } from './providers/iflow-cli';
 import { AntigravityOAuthProvider } from './providers/antigravity-oauth';
+import { GeminiCliOAuthProvider } from './providers/google-gemini-oauth';
 import { GitHubCopilotAuthProvider } from './providers/github-copilot';
 import { GoogleVertexAIAuthProvider } from './providers/google-vertex-ai-auth';
 import { ClaudeCodeAuthProvider } from './providers/claude-code';
@@ -86,6 +87,13 @@ export const AUTH_METHODS = {
     description: t('Authenticate using Google OAuth (Antigravity)'),
     category: 'Experimental',
     ctor: AntigravityOAuthProvider,
+  },
+  'google-gemini-oauth': {
+    id: 'google-gemini-oauth',
+    label: t('Google Gemini CLI'),
+    description: t('Authenticate using Google OAuth (Gemini CLI)'),
+    category: 'Experimental',
+    ctor: GeminiCliOAuthProvider,
   },
   'openai-codex': {
     id: 'openai-codex',
