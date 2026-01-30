@@ -75,11 +75,7 @@ export const CODE_ASSIST_HEADERS = {
 export const CODE_ASSIST_HEADERS_POOL = {
   'User-Agent': [
     CODE_ASSIST_HEADERS['User-Agent'],
-    'antigravity/1.11.5 windows/amd64',
-    'antigravity/1.11.4 darwin/arm64',
-    'antigravity/1.11.3 linux/amd64',
-    'antigravity/1.10.9 windows/amd64',
-    'antigravity/1.10.8 darwin/amd64',
+    'antigravity/1.15.8',
   ],
   'X-Goog-Api-Client': [
     'google-cloud-sdk vscode_cloudshelleditor/0.1',

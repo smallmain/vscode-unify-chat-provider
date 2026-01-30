@@ -16,13 +16,7 @@ const OS_VERSIONS: Record<'darwin' | 'win32' | 'linux', readonly string[]> = {
 const ARCHITECTURES = ['x64', 'arm64'] as const;
 
 const ANTIGRAVITY_VERSIONS = [
-  '1.10.0',
-  '1.10.5',
-  '1.11.0',
-  '1.11.2',
-  '1.11.5',
-  '1.12.0',
-  '1.12.1',
+  '1.15.8',
 ] as const;
 
 const IDE_TYPES = [
