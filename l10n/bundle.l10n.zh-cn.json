@@ -486,8 +486,6 @@
   "Obtaining access token...": "正在获取 access token...",
   "Ollama Chat API": "Ollama Chat API",
   "Google Antigravity": "Google Antigravity",
-  "Google Gemini CLI": "Google Gemini CLI",
-  "Google (Antigravity)": "Google（Antigravity）",
   "Authenticate using Google OAuth (Antigravity)": "使用 Google OAuth（Antigravity）进行认证",
   "Authenticate using Google OAuth (Gemini CLI)": "使用 Google OAuth（Gemini CLI）进行认证",
   "Authenticate with Google OAuth for Antigravity": "通过 Google OAuth 认证以用于 Antigravity",

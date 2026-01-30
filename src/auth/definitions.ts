@@ -83,7 +83,7 @@ export const AUTH_METHODS = {
   },
   'antigravity-oauth': {
     id: 'antigravity-oauth',
-    label: t('Google (Antigravity)'),
+    label: t('Google Antigravity'),
     description: t('Authenticate using Google OAuth (Antigravity)'),
     category: 'Experimental',
     ctor: AntigravityOAuthProvider,

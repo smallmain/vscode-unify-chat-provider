@@ -63,7 +63,9 @@ async function cleanupLegacyClientSecret(
 }
 
 export class AntigravityOAuthProvider implements AuthProvider {
-  static supportsSensitiveDataInSettings(_auth: AntigravityOAuthConfig): boolean {
+  static supportsSensitiveDataInSettings(
+    _auth: AntigravityOAuthConfig,
+  ): boolean {
     return false;
   }
 
@@ -204,7 +206,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
   get definition(): AuthProviderDefinition {
     return {
       id: 'antigravity-oauth',
-      label: this.config?.label ?? 'Google (Antigravity)',
+      label: this.config?.label ?? 'Google Antigravity',
       description:
         this.config?.description ??
         t('Authenticate with Google OAuth for Antigravity'),
@@ -547,9 +549,12 @@ export class AntigravityOAuthProvider implements AuthProvider {
       `${this.context.providerId}:antigravity-oauth`,
       'Calling refresh API',
     );
-    let refreshed:
-      | { accessToken: string; expiresAt?: number; tokenType?: string; refreshToken?: string }
-      | null;
+    let refreshed: {
+      accessToken: string;
+      expiresAt?: number;
+      tokenType?: string;
+      refreshToken?: string;
+    } | null;
     try {
       refreshed = await refreshAccessToken({
         refreshToken: existingRefreshToken,
@@ -566,7 +571,9 @@ export class AntigravityOAuthProvider implements AuthProvider {
         await this.revoke();
         this._onDidChangeStatus.fire({ status: 'revoked' });
         vscode.window.showWarningMessage(
-          t('Google revoked your Antigravity refresh token. Please sign in again.'),
+          t(
+            'Google revoked your Antigravity refresh token. Please sign in again.',
+          ),
         );
         return false;
       }
@@ -628,8 +635,11 @@ export class AntigravityOAuthProvider implements AuthProvider {
       });
     }
 
-    const refreshTokenForParsing = nextToken.refreshToken ?? existingRefreshToken;
-    const cachedParts = parseAntigravityRefreshTokenParts(refreshTokenForParsing);
+    const refreshTokenForParsing =
+      nextToken.refreshToken ?? existingRefreshToken;
+    const cachedParts = parseAntigravityRefreshTokenParts(
+      refreshTokenForParsing,
+    );
     const shouldRefreshAccountInfo =
       !this.config?.tier ||
       !this.config?.tierId ||
