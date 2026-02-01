@@ -13,10 +13,15 @@ import { AnthropicProvider } from './client';
 const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.5';
 const DEFAULT_CLAUDE_SDK_VERSION = '0.71.2';
 
-const CLAUDE_CODE_SYSTEM_PROMPT: BetaTextBlockParam = {
-  type: 'text',
-  text: "You are Claude Code, Anthropic's official CLI for Claude.",
-};
+const CLAUDE_CODE_SYSTEM_PROMPT_TEXT =
+  "You are Claude Code, Anthropic's official CLI for Claude.";
+
+function createClaudeCodeSystemPrompt(): BetaTextBlockParam {
+  return {
+    type: 'text',
+    text: CLAUDE_CODE_SYSTEM_PROMPT_TEXT,
+  };
+}
 
 const MCP_TOOL_PREFIX = 'mcp_';
 const NON_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
@@ -201,9 +206,16 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     // - Ensure metadata.user_id is stable across turns (Claude Code format)
     // - Strip top_p (only when NORMALIZE_PARAMS=true)
     const systemBlocks = toTextBlocks(requestBase.system);
+    const claudeSystemPrompt = createClaudeCodeSystemPrompt();
     const mergedSystem = strictMode
-      ? [CLAUDE_CODE_SYSTEM_PROMPT]
-      : [CLAUDE_CODE_SYSTEM_PROMPT, ...systemBlocks];
+      ? [claudeSystemPrompt]
+      : [
+          claudeSystemPrompt,
+          ...systemBlocks.map((v) => {
+            v.text = `${CLAUDE_CODE_SYSTEM_PROMPT_TEXT}\n\n${v.text}`;
+            return v;
+          }),
+        ];
 
     // Sanitize system prompt - server may block "GitHub Copilot" string.
     for (const block of mergedSystem) {

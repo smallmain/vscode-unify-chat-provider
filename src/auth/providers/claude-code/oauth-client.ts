@@ -14,10 +14,6 @@ function generatePkce(): { verifier: string; challenge: string } {
   return { verifier, challenge };
 }
 
-function generateState(): string {
-  return randomBytes(32).toString('base64url');
-}
-
 function normalizeTokenType(raw: string | undefined): string {
   const trimmed = raw?.trim();
   if (!trimmed) {
@@ -103,7 +99,7 @@ export interface ClaudeCodeAuthorization {
 
 export function authorizeClaudeCode(): ClaudeCodeAuthorization {
   const pkce = generatePkce();
-  const state = generateState();
+  const state = pkce.verifier;
   const redirectUri = CLAUDE_CODE_REDIRECT_URI;
 
   const url = new URL(CLAUDE_CODE_AUTH_URL);
