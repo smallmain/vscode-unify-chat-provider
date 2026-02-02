@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.3.5 - 2026-02-02
+
+### Features
+- add support for 'opencode.ai' and 'gpt-5.2' in OpenAI feature (e96bdd6, SmallMain)
+
 ## v4.3.4 - 2026-02-01
 
 ### Features
