@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.4.1 - 2026-02-02
+
+### Features
+- add thinking/think tag content parsing support (eec3771, SmallMain)
+- enhance logging with response body on retry attempts (803de07, SmallMain)
+
+### Fixes
+- correct type references for ChatCompletionMessageParam in parsing logic (c00457a, SmallMain)
+
 ## v4.4.0 - 2026-02-02
 
 ### Features
