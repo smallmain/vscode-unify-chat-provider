@@ -36,39 +36,13 @@ function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function normalizeKey(raw: string): string {
-  return raw.toLowerCase().replace(/[^a-z0-9]/g, '');
-}
+type ClaudeCodeAuthMethod = 'api-key' | 'oauth' | 'unknown';
 
-type StringEntry = { keyNorm: string; value: string };
-
-function collectStringEntries(
-  value: unknown,
-  out: StringEntry[],
-  options: { maxDepth: number },
-  depth = 0,
-  seen = new Set<object>(),
-): void {
-  if (depth > options.maxDepth) return;
-
-  if (Array.isArray(value)) {
-    for (const item of value) {
-      collectStringEntries(item, out, options, depth + 1, seen);
-    }
-    return;
-  }
-
-  if (!isObjectRecord(value)) return;
-  if (seen.has(value)) return;
-  seen.add(value);
-
-  for (const [key, nested] of Object.entries(value)) {
-    if (typeof nested === 'string') {
-      out.push({ keyNorm: normalizeKey(key), value: nested });
-      continue;
-    }
-    collectStringEntries(nested, out, options, depth + 1, seen);
-  }
+interface ClaudeCodeSettings {
+  authMethod: ClaudeCodeAuthMethod;
+  apiKey?: string;
+  baseUrl?: string;
+  oauthEmail?: string;
 }
 
 function tryParseJson(content: string): unknown | undefined {
@@ -79,37 +53,6 @@ function tryParseJson(content: string): unknown | undefined {
     // ignore
   }
   return undefined;
-}
-
-function parseKeyValuePairs(content: string): Record<string, string> {
-  const result: Record<string, string> = {};
-  const lines = content.split(/\r?\n/);
-  for (const rawLine of lines) {
-    let line = rawLine.trim();
-    if (!line) continue;
-    if (line.startsWith('#')) continue;
-    if (line.startsWith('//')) continue;
-    if (line.startsWith('export ')) line = line.slice('export '.length).trim();
-
-    const equalsIndex = line.indexOf('=');
-    if (equalsIndex <= 0) continue;
-
-    const key = line.slice(0, equalsIndex).trim();
-    if (!key) continue;
-
-    let value = line.slice(equalsIndex + 1).trim();
-    if (!value) continue;
-
-    if (
-      (value.startsWith('"') && value.endsWith('"')) ||
-      (value.startsWith("'") && value.endsWith("'"))
-    ) {
-      value = value.slice(1, -1);
-    }
-
-    result[key] = value;
-  }
-  return result;
 }
 
 function normalizeUrlCandidate(raw: string): string | undefined {
@@ -126,78 +69,65 @@ function normalizeUrlCandidate(raw: string): string | undefined {
   }
 }
 
-function pickValueByKey(
-  entries: readonly StringEntry[],
-  keyNormsExact: readonly string[],
-  keyNormSuffixes: readonly string[],
-): string | undefined {
-  for (const keyNorm of keyNormsExact) {
-    for (const entry of entries) {
-      if (entry.keyNorm === keyNorm) {
-        const trimmed = entry.value.trim();
-        if (trimmed) return trimmed;
-      }
+function extractSettingsFromJson(json: unknown): ClaudeCodeSettings {
+  if (!isObjectRecord(json)) {
+    return { authMethod: 'unknown' };
+  }
+
+  let apiKey: string | undefined;
+  let authToken: string | undefined;
+  let baseUrl: string | undefined;
+  let oauthEmail: string | undefined;
+  let hasOAuthSession = false;
+
+  const env = json['env'];
+  if (isObjectRecord(env)) {
+    const rawApiKey = env['ANTHROPIC_API_KEY'];
+    if (typeof rawApiKey === 'string' && rawApiKey.trim()) {
+      apiKey = rawApiKey.trim();
+    }
+
+    const rawAuthToken = env['ANTHROPIC_AUTH_TOKEN'];
+    if (typeof rawAuthToken === 'string' && rawAuthToken.trim()) {
+      authToken = rawAuthToken.trim();
+    }
+
+    const rawBaseUrl = env['ANTHROPIC_BASE_URL'];
+    if (typeof rawBaseUrl === 'string' && rawBaseUrl.trim()) {
+      baseUrl = normalizeUrlCandidate(rawBaseUrl) ?? rawBaseUrl.trim();
     }
   }
 
-  for (const suffix of keyNormSuffixes) {
-    for (const entry of entries) {
-      if (entry.keyNorm.endsWith(suffix)) {
-        const trimmed = entry.value.trim();
-        if (trimmed) return trimmed;
-      }
+  const oauthSession = json['oauthSession'];
+  if (isObjectRecord(oauthSession)) {
+    hasOAuthSession = true;
+    const email = oauthSession['email'];
+    if (typeof email === 'string' && email.trim()) {
+      oauthEmail = email.trim();
     }
   }
 
-  return undefined;
+  let authMethod: ClaudeCodeAuthMethod = 'unknown';
+  if (apiKey || authToken) {
+    authMethod = 'api-key';
+  } else if (hasOAuthSession) {
+    authMethod = 'oauth';
+  }
+
+  return {
+    authMethod,
+    apiKey: apiKey ?? authToken,
+    baseUrl,
+    oauthEmail,
+  };
 }
 
-function extractClaudeCodeSettings(content: string): {
-  baseUrl?: string;
-  apiKey?: string;
-  modelId?: string;
-  providerName?: string;
-} {
+function extractClaudeCodeSettings(content: string): ClaudeCodeSettings {
   const json = tryParseJson(content.trim());
-  const entries: StringEntry[] = [];
   if (json !== undefined) {
-    collectStringEntries(json, entries, { maxDepth: 12 });
+    return extractSettingsFromJson(json);
   }
-
-  const env = parseKeyValuePairs(content);
-  for (const [key, value] of Object.entries(env)) {
-    entries.push({ keyNorm: normalizeKey(key), value });
-  }
-
-  const baseUrlRaw = pickValueByKey(
-    entries,
-    ['url', 'baseurl', 'apiurl'],
-    ['baseurl', 'apiurl', 'url'],
-  );
-  const apiKeyRaw = pickValueByKey(
-    entries,
-    ['token', 'apikey'],
-    ['apikey', 'token'],
-  );
-  const modelIdRaw = pickValueByKey(
-    entries,
-    ['model', 'modelid', 'defaultmodel'],
-    ['model'],
-  );
-  const providerNameRaw = pickValueByKey(
-    entries,
-    ['name', 'providername'],
-    ['providername'],
-  );
-
-  const baseUrl = baseUrlRaw
-    ? (normalizeUrlCandidate(baseUrlRaw) ?? baseUrlRaw)
-    : undefined;
-  const apiKey = apiKeyRaw?.trim() || undefined;
-  const modelId = modelIdRaw?.trim() || undefined;
-  const providerName = providerNameRaw?.trim() || undefined;
-
-  return { baseUrl, apiKey, modelId, providerName };
+  return { authMethod: 'unknown' };
 }
 
 function buildClaudeCodeProvider(
@@ -220,7 +150,7 @@ function buildClaudeCodeProvider(
 
   const providerForMatching: ProviderConfig = {
     type: 'anthropic',
-    name: settings.providerName || 'Claude Code',
+    name: 'Claude Code',
     baseUrl,
     auth: {
       method: 'api-key',
@@ -270,10 +200,10 @@ export const claudeCodeMigrationSource: ProviderMigrationSource = {
     migrationLog.info('claude-code', 'Parsing config content');
     const settings = extractClaudeCodeSettings(content);
     migrationLog.info('claude-code', 'Extracted settings', {
+      authMethod: settings.authMethod,
       baseUrl: settings.baseUrl,
       apiKey: settings.apiKey ? '***' : undefined,
-      modelId: settings.modelId,
-      providerName: settings.providerName,
+      oauthEmail: settings.oauthEmail,
     });
     const candidate = buildClaudeCodeProvider(settings);
     migrationLog.info('claude-code', 'Built provider candidate', {
