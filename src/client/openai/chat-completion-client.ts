@@ -19,7 +19,7 @@ import {
   isImageMarker,
   isInternalMarker,
   normalizeImageMimeType,
-parseThinkingTags,
+  parseThinkingTags,
   StreamingThinkingTagParser,
   withIdleTimeout,
 } from '../../utils';
@@ -140,7 +140,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const outMessages: ChatCompletionMessageParam[] = [];
     const rawMap = new Map<
       ChatCompletionAssistantMessageParam,
-      ChatCompletionMessage
+      ChatCompletionMessageParam
     >();
 
     for (const msg of messages) {
@@ -170,7 +170,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           ) as vscode.LanguageModelDataPart | undefined;
           if (rawPart) {
             try {
-              const raw = decodeStatefulMarkerPart<ChatCompletionMessage>(
+              const raw = decodeStatefulMarkerPart<ChatCompletionMessageParam>(
                 encodedModelId,
                 rawPart,
               );
@@ -837,12 +837,12 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     yield* this.extractThinkingParts(raw);
 
     if (content) {
-for (const segment of parseThinkingTags(content)) {
+      for (const segment of parseThinkingTags(content)) {
         if (segment.type === 'thinking') {
           yield new vscode.LanguageModelThinkingPart(segment.content);
         } else {
-      yield new vscode.LanguageModelTextPart(segment.content);
-}
+          yield new vscode.LanguageModelTextPart(segment.content);
+        }
       }
     }
 
@@ -860,7 +860,7 @@ for (const segment of parseThinkingTags(content)) {
       }
     }
 
-    yield encodeStatefulMarkerPart<ChatCompletionMessage>(raw);
+    yield encodeStatefulMarkerPart<ChatCompletionMessageParam>(raw);
 
     if (message.usage) {
       this.processUsage(message.usage, performanceTrace, logger);
@@ -995,7 +995,7 @@ for (const segment of parseThinkingTags(content)) {
     let usage: CompletionUsage | null | undefined;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
-const thinkingTagParser = new StreamingThinkingTagParser();
+    const thinkingTagParser = new StreamingThinkingTagParser();
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -1019,12 +1019,12 @@ const thinkingTagParser = new StreamingThinkingTagParser();
       yield* this.extractThinkingParts(choice.delta, 'content-only');
 
       if (content) {
-for (const segment of thinkingTagParser.push(content)) {
+        for (const segment of thinkingTagParser.push(content)) {
           if (segment.type === 'thinking') {
             yield new vscode.LanguageModelThinkingPart(segment.content);
           } else {
-        yield new vscode.LanguageModelTextPart(segment.content);
-}
+            yield new vscode.LanguageModelTextPart(segment.content);
+          }
         }
       }
 
@@ -1054,14 +1054,14 @@ for (const segment of thinkingTagParser.push(content)) {
           }
         }
 
-        yield encodeStatefulMarkerPart<ChatCompletionMessage>({
+        yield encodeStatefulMarkerPart<ChatCompletionMessageParam>({
           role: 'assistant',
-          content: content ?? null,
-          refusal: refusal ?? null,
-          tool_calls: tool_calls ?? undefined,
-          reasoning,
-          reasoning_content,
-          reasoning_details,
+          ...(content ? { content } : {}),
+          ...(refusal ? { refusal } : {}),
+          ...(tool_calls ? { tool_calls } : {}),
+          ...(reasoning ? { reasoning } : {}),
+          ...(reasoning_content ? { reasoning_content } : {}),
+          ...(reasoning_details ? { reasoning_details } : {}),
         });
       }
     }
