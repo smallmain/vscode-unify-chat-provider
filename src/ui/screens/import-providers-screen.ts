@@ -9,9 +9,10 @@ import type {
   ProviderMigrationCandidate,
   ProviderMigrationSource,
 } from '../../migration';
+import { ClaudeCodeOAuthDetectedError } from '../../migration/errors';
 import type { ProviderConfig } from '../../types';
 import { pickQuickItem, showInput } from '../component';
-import { validateProviderNameUnique } from '../form-utils';
+import { createProviderDraft, validateProviderNameUnique } from '../form-utils';
 import type {
   ImportProvidersRoute,
   UiContext,
@@ -21,6 +22,7 @@ import type {
 import { migrationLog } from '../../logger';
 import { promises as fs } from 'fs';
 import { t } from '../../i18n';
+import { WELL_KNOWN_PROVIDERS } from '../../well-known/providers';
 
 type SourcePickItem = vscode.QuickPickItem & {
   sourceId: string;
@@ -318,6 +320,9 @@ async function importProvidersFromContent(
     const candidates = await source.importFromConfigContent(content);
     return handleImportCandidates(ctx, source.displayName, candidates);
   } catch (error) {
+    if (error instanceof ClaudeCodeOAuthDetectedError) {
+      return handleClaudeCodeOAuthDetected(error);
+    }
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(
       t('Failed to import from {0}: {1}', source.displayName, message),
@@ -339,6 +344,9 @@ async function importProvidersFromPath(
     });
     return handleImportCandidates(ctx, source.displayName, candidates);
   } catch (error) {
+    if (error instanceof ClaudeCodeOAuthDetectedError) {
+      return handleClaudeCodeOAuthDetected(error);
+    }
     const message = error instanceof Error ? error.message : String(error);
     vscode.window.showErrorMessage(
       t('Failed to import from {0}: {1}', source.displayName, message),
@@ -389,5 +397,43 @@ async function handleImportCandidates(
   return {
     kind: 'replace',
     route: { kind: 'providerForm', initialConfig },
+  };
+}
+
+function handleClaudeCodeOAuthDetected(
+  error: ClaudeCodeOAuthDetectedError,
+): UiNavAction {
+  const claudeCodeProvider = WELL_KNOWN_PROVIDERS.find(
+    (p) => p.type === 'claude-code',
+  );
+
+  if (!claudeCodeProvider) {
+    vscode.window.showErrorMessage(
+      t('Claude Code provider not found in well-known providers.'),
+      { modal: true },
+    );
+    return { kind: 'stay' };
+  }
+
+  const emailInfo = error.email ? ` (${error.email})` : '';
+  vscode.window.showInformationMessage(
+    t(
+      'Claude Code OAuth detected{0}. Please re-authenticate.',
+      emailInfo,
+    ),
+  );
+
+  const draft = createProviderDraft();
+  draft.type = claudeCodeProvider.type;
+  draft.name = claudeCodeProvider.name;
+  draft.baseUrl = claudeCodeProvider.baseUrl;
+
+  return {
+    kind: 'replace',
+    route: {
+      kind: 'wellKnownProviderAuth',
+      provider: claudeCodeProvider,
+      draft,
+    },
   };
 }
