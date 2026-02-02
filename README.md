@@ -535,48 +535,49 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 
 <details>
 
-| Provider                                                                                        | Supported Features                                             | Free Quota                 |
-| :---------------------------------------------------------------------------------------------- | :------------------------------------------------------------- | :------------------------- |
-| [Open AI](https://openai.com/)                                                                  |                                                                |                            |
-| [Google AI Studio](https://aistudio.google.com/)                                                |                                                                |                            |
-| [Google Vertex AI](https://cloud.google.com/vertex-ai)                                          | <li>Authentication                                             |                            |
-| [Anthropic](https://www.anthropic.com/)                                                         | <li>InterleavedThinking <li>FineGrainedToolStreaming           |                            |
-| [xAI](https://docs.x.ai/)                                                                       |                                                                |                            |
-| [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)           |                                                                |                            |
-| [OpenRouter](https://openrouter.ai/)                                                            | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails       | [Details](#openrouter)     |
-| [Cerebras](https://www.cerebras.ai/)                                                            | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking | [Details](#cerebras)       |
-| [OpenCode Zen (OpenAI Chat Completions)](https://opencode.ai/)                                  | <li>ReasoningContent                                           | [Details](#opencode-zen)   |
-| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                         | <li>ReasoningContent                                           | [Details](#opencode-zen)   |
-| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming           | [Details](#opencode-zen)   |
-| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                | [Details](#opencode-zen)   |
-| [Nvidia](https://build.nvidia.com/)                                                             |                                                                | [Details](#nvidia)         |
-| [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                    | <li>ThinkingParam3 <li>ReasoningContent                        |                            |
-| [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                        |                            |
-| [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio) | <li>ThinkingParam3 <li>ReasoningContent                        |                            |
-| [Model Scope (API-Inference)](https://modelscope.cn/)                                           | <li>ThinkingParam3 <li>ReasoningContent                        | [Details](#model-scope)    |
-| [Volcano Engine](https://www.volcengine.com/product/ark)                                        | <li>AutoThinking <li>ThinkingParam2                            | [Details](#volcano-engine) |
-| [Volcano Engine (Coding Plan)](https://www.volcengine.com/activity/codingplan)                  | <li>AutoThinking <li>ThinkingParam2                            |                            |
-| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                       | <li>AutoThinking <li>ThinkingParam2                            |                            |
-| [Tencent Cloud (China)](https://cloud.tencent.com/product/hunyuan)                              |                                                                |                            |
-| [DeepSeek](https://www.deepseek.com/)                                                           | <li>ThinkingParam <li>ReasoningContent                         |                            |
-| [Xiaomi MiMo](https://mimo.xiaomi.com/)                                                         | <li>ThinkingParam <li>ReasoningContent                         |                            |
-| [Ollama Local](https://ollama.com/)                                                             |                                                                |                            |
-| [Ollama Cloud](https://ollama.com/)                                                             |                                                                |                            |
-| [ZhiPu AI](https://open.bigmodel.cn/)                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking       | [Details](#zhipu-ai--zai)  |
-| [ZhiPu AI (Coding Plan)](https://open.bigmodel.cn/)                                             | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking       |                            |
-| [Z.AI](https://z.ai/)                                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking       | [Details](#zhipu-ai--zai)  |
-| [Z.AI (Coding Plan)](https://z.ai/)                                                             | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking       |                            |
-| [MiniMax (China)](https://www.minimaxi.com/)                                                    | <li>ReasoningDetails                                           |                            |
-| [MiniMax (International)](https://www.minimax.io/)                                              | <li>ReasoningDetails                                           |                            |
-| [LongCat](https://longcat.chat/)                                                                |                                                                | [Details](#longcat)        |
-| [Moonshot AI (China)](https://www.moonshot.cn/)                                                 | <li>ReasoningContent                                           |                            |
-| [Moonshot AI (International)](https://www.moonshot.ai/)                                         | <li>ReasoningContent                                           |                            |
-| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                        | <li>ReasoningContent                                           |                            |
-| [StreamLake Vanchin (China)](https://streamlake.com/)                                           |                                                                | [Details](#streamlake)     |
-| [StreamLake Vanchin (China, Coding Plan)](https://streamlake.com/)                              |                                                                |                            |
-| [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                |                                                                | [Details](#streamlake)     |
-| [StreamLake Vanchin (International, Coding Plan)](https://www.streamlake.ai/)                   |                                                                |                            |
-| [iFlow](https://platform.iflow.cn/)                                                             | <li>ThinkingParam3 <li>ClearThinking <li>ReasoningSplitParam   | [Details](#iflow)          |
+| Provider                                                                                        | Supported Features                                              | Free Quota                 |
+| :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------- | :------------------------- |
+| [Open AI](https://openai.com/)                                                                  |                                                                 |                            |
+| [Google AI Studio](https://aistudio.google.com/)                                                |                                                                 |                            |
+| [Google Vertex AI](https://cloud.google.com/vertex-ai)                                          | <li>Authentication                                              |                            |
+| [Anthropic](https://www.anthropic.com/)                                                         | <li>InterleavedThinking <li>FineGrainedToolStreaming            |                            |
+| [xAI](https://docs.x.ai/)                                                                       |                                                                 |                            |
+| [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)           |                                                                 |                            |
+| [OpenRouter](https://openrouter.ai/)                                                            | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails        | [Details](#openrouter)     |
+| [Cerebras](https://www.cerebras.ai/)                                                            | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking  | [Details](#cerebras)       |
+| [OpenCode Zen (OpenAI Chat Completions)](https://opencode.ai/)                                  | <li>ReasoningContent                                            | [Details](#opencode-zen)   |
+| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                         | <li>ReasoningContent                                            | [Details](#opencode-zen)   |
+| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming            | [Details](#opencode-zen)   |
+| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                 | [Details](#opencode-zen)   |
+| [Nvidia](https://build.nvidia.com/)                                                             |                                                                 | [Details](#nvidia)         |
+| [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                    | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
+| [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
+| [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio) | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
+| [Model Scope (API-Inference)](https://modelscope.cn/)                                           | <li>ThinkingParam3 <li>ReasoningContent                         | [Details](#model-scope)    |
+| [Volcano Engine](https://www.volcengine.com/product/ark)                                        | <li>AutoThinking <li>ThinkingParam2                             | [Details](#volcano-engine) |
+| [Volcano Engine (Coding Plan)](https://www.volcengine.com/activity/codingplan)                  | <li>AutoThinking <li>ThinkingParam2                             |                            |
+| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                       | <li>AutoThinking <li>ThinkingParam2                             |                            |
+| [Tencent Cloud (China)](https://cloud.tencent.com/product/hunyuan)                              |                                                                 |                            |
+| [DeepSeek](https://www.deepseek.com/)                                                           | <li>ThinkingParam <li>ReasoningContent                          |                            |
+| [Gitee AI](https://ai.gitee.com/)                                                               |                                                                 |                            |
+| [Xiaomi MiMo](https://mimo.xiaomi.com/)                                                         | <li>ThinkingParam <li>ReasoningContent                          |                            |
+| [Ollama Local](https://ollama.com/)                                                             |                                                                 |                            |
+| [Ollama Cloud](https://ollama.com/)                                                             |                                                                 |                            |
+| [ZhiPu AI](https://open.bigmodel.cn/)                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking        | [Details](#zhipu-ai--zai)  |
+| [ZhiPu AI (Coding Plan)](https://open.bigmodel.cn/)                                             | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking        |                            |
+| [Z.AI](https://z.ai/)                                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking        | [Details](#zhipu-ai--zai)  |
+| [Z.AI (Coding Plan)](https://z.ai/)                                                             | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking        |                            |
+| [MiniMax (China)](https://www.minimaxi.com/)                                                    | <li>ReasoningDetails                                            |                            |
+| [MiniMax (International)](https://www.minimax.io/)                                              | <li>ReasoningDetails                                            |                            |
+| [LongCat](https://longcat.chat/)                                                                |                                                                 | [Details](#longcat)        |
+| [Moonshot AI (China)](https://www.moonshot.cn/)                                                 | <li>ReasoningContent                                            |                            |
+| [Moonshot AI (International)](https://www.moonshot.ai/)                                         | <li>ReasoningContent                                            |                            |
+| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                        | <li>ReasoningContent                                            |                            |
+| [StreamLake Vanchin (China)](https://streamlake.com/)                                           |                                                                 | [Details](#streamlake)     |
+| [StreamLake Vanchin (China, Coding Plan)](https://streamlake.com/)                              |                                                                 |                            |
+| [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                |                                                                 | [Details](#streamlake)     |
+| [StreamLake Vanchin (International, Coding Plan)](https://www.streamlake.ai/)                   |                                                                 |                            |
+| [iFlow](https://platform.iflow.cn/)                                                             | <li>ThinkingParam3 <li>ClearThinking <li>ReasoningSplitParam    | [Details](#iflow)          |
 | [SiliconFlow (China)](https://siliconflow.cn/)                                                  | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [Details](#siliconflow)    |
 | [SiliconFlow (International)](https://siliconflow.com/)                                         | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [Details](#siliconflow)    |
 

@@ -268,6 +268,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: ['deepseek-chat', 'deepseek-reasoner'],
   },
   {
+    name: 'Gitee AI',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://ai.gitee.com/v1',
+    authTypes: ['api-key'],
+    models: [],
+  },
+  {
     name: 'Xiaomi MIMO',
     category: 'General',
     type: 'openai-chat-completion',
