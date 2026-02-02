@@ -52,6 +52,7 @@ function parseCallbackFromUrl(url: URL, expectedState: string): CallbackResult {
 export async function performIFlowAuthorization(options: {
   url: string;
   expectedState: string;
+  cancellationToken?: vscode.CancellationToken;
 }): Promise<CallbackResult | null> {
   const manualFallback = async (): Promise<CallbackResult | null> => {
     const pasted = await vscode.window.showInputBox({
@@ -79,6 +80,20 @@ export async function performIFlowAuthorization(options: {
   };
 
   return await new Promise<CallbackResult | null>((resolve) => {
+    let resolved = false;
+    let cancelSubscription: vscode.Disposable | undefined;
+
+    const doResolve = (result: CallbackResult | null): void => {
+      if (resolved) return;
+      resolved = true;
+      cancelSubscription?.dispose();
+      resolve(result);
+    };
+
+    cancelSubscription = options.cancellationToken?.onCancellationRequested(() => {
+      server.close(() => doResolve({ type: 'cancel' }));
+    });
+
     const server = createServer((req, res) => {
       const reqUrl = req.url ?? '';
       const parsed = parseUrlOrNull(`http://localhost${reqUrl}`);
@@ -93,7 +108,7 @@ export async function performIFlowAuthorization(options: {
         res.statusCode = 200;
         res.setHeader('Content-Type', 'text/plain; charset=utf-8');
         res.end('Login cancelled');
-        server.close(() => resolve({ type: 'cancel' }));
+        server.close(() => doResolve({ type: 'cancel' }));
         return;
       }
 
@@ -116,12 +131,12 @@ export async function performIFlowAuthorization(options: {
         ),
       );
 
-      server.close(() => resolve(result));
+      server.close(() => doResolve(result));
     });
 
     server.on('error', async () => {
       server.close();
-      resolve(await manualFallback());
+      doResolve(await manualFallback());
     });
 
     server.listen(IFLOW_CALLBACK_PORT, 'localhost', async () => {
@@ -133,7 +148,7 @@ export async function performIFlowAuthorization(options: {
         vscode.window.showErrorMessage(
           t('Failed to open browser for authorization'),
         );
-        resolve(null);
+        doResolve(null);
       }
     });
   });

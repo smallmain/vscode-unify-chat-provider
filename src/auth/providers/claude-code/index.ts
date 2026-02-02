@@ -376,10 +376,11 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
         title: t('Waiting for authorization...'),
         cancellable: true,
       },
-      async (_progress, _token) => {
+      async (_progress, token) => {
         return performClaudeCodeAuthorization({
           url: authorization.url,
           expectedState: authorization.state,
+          cancellationToken: token,
         });
       },
     );

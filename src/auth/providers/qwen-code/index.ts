@@ -764,6 +764,7 @@ export class QwenCodeAuthProvider implements AuthProvider {
       );
 
       if (!token) {
+        authLog.verbose(`${this.context.providerId}:qwen-code`, 'Authorization cancelled by user');
         return {
           success: false,
           error: t('Authorization failed or was cancelled'),
