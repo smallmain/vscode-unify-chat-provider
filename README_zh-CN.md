@@ -577,6 +577,8 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [快手万擎 (国际站)](https://www.streamlake.ai/)                                       |                                                                | [详情](#快手万擎)     |
 | [快手万擎 (国际站, Coding Plan)](https://www.streamlake.ai/)                          |                                                                |                       |
 | [iFlow](https://platform.iflow.cn/)                                                   | <li>ThinkingParam3 <li>ClearThinking <li>ReasoningSplitParam   | [详情](#iflow)        |
+| [硅基流动 (中国站)](https://siliconflow.cn/)                                          | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [详情](#硅基流动)     |
+| [硅基流动 (国际站)](https://siliconflow.com/)                                         | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [详情](#硅基流动)     |
 
 实验性支持的供应商：
 

@@ -335,7 +335,12 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIOnlyMaxTokens]: {
-    supportedProviders: ['router.huggingface.co', 'portal.qwen.ai'],
+    supportedProviders: [
+      'router.huggingface.co',
+      'portal.qwen.ai',
+      'api.siliconflow.cn',
+      'api.siliconflow.com',
+    ],
   },
   [FeatureId.OpenAICacheControl]: {
     customCheckers: [
@@ -415,6 +420,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'dashscope.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
       'api-inference.modelscope.cn',
+      'api.siliconflow.cn',
+      'api.siliconflow.com',
     ],
   },
   [FeatureId.OpenAIUseThinkingBudgetParam]: {
@@ -422,6 +429,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'dashscope-intl.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
       'api-inference.modelscope.cn',
+      'api.siliconflow.cn',
+      'api.siliconflow.com',
     ],
   },
   [FeatureId.OpenAIUseReasoningContent]: {
@@ -436,6 +445,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'dashscope-intl.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
       'api-inference.modelscope.cn',
+      'api.siliconflow.cn',
+      'api.siliconflow.com',
     ],
     customCheckers: [
       // Checker for iFlow GLM models:

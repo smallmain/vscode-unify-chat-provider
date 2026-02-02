@@ -401,6 +401,22 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: ['kimi-for-coding'],
   },
   {
+    name: 'SiliconFlow (China)',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.siliconflow.cn/v1',
+    authTypes: ['api-key'],
+    models: [],
+  },
+  {
+    name: 'SiliconFlow (International)',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.siliconflow.com/v1',
+    authTypes: ['api-key'],
+    models: [],
+  },
+  {
     name: 'StreamLake Vanchin (China)',
     category: 'General',
     type: 'openai-chat-completion',

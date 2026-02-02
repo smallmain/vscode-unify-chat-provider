@@ -266,6 +266,8 @@
   "Google Gemini CLI": "Google Gemini CLI",
   "Claude Code": "Claude Code",
   "iFlow": "iFlow",
+  "SiliconFlow (China)": "硅基流动 (中国站)",
+  "SiliconFlow (International)": "硅基流动 (国际站)",
   "Connection Timeout": "连接超时",
   "Maximum time to wait for TCP connection to be established": "等待 TCP 连接建立的最长时间",
   "Response Timeout": "响应超时",

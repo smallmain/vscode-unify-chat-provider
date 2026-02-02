@@ -266,6 +266,8 @@
   "Google Gemini CLI": "Google Gemini CLI",
   "Claude Code": "Claude Code",
   "iFlow": "iFlow",
+  "SiliconFlow (China)": "SiliconFlow (China)",
+  "SiliconFlow (International)": "SiliconFlow (International)",
   "Connection Timeout": "Connection Timeout",
   "Maximum time to wait for TCP connection to be established": "Maximum time to wait for TCP connection to be established",
   "Response Timeout": "Response Timeout",

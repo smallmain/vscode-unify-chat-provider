@@ -577,6 +577,8 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                |                                                                | [Details](#streamlake)     |
 | [StreamLake Vanchin (International, Coding Plan)](https://www.streamlake.ai/)                   |                                                                |                            |
 | [iFlow](https://platform.iflow.cn/)                                                             | <li>ThinkingParam3 <li>ClearThinking <li>ReasoningSplitParam   | [Details](#iflow)          |
+| [SiliconFlow (China)](https://siliconflow.cn/)                                                  | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [Details](#siliconflow)    |
+| [SiliconFlow (International)](https://siliconflow.com/)                                         | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent | [Details](#siliconflow)    |
 
 Experimental Supported Providers:
 
