@@ -915,3 +915,147 @@ export function validatePKCE(
   const generatedChallenge = generatePkceChallenge(verifier, method);
   return timingSafeEqualStrings(generatedChallenge, challenge);
 }
+
+export interface ThinkingTagSegment {
+  type: 'text' | 'thinking';
+  content: string;
+}
+
+export function parseThinkingTags(text: string): ThinkingTagSegment[] {
+  const segments: ThinkingTagSegment[] = [];
+  // regex: match <think>...</think> or <thinking>...</thinking>
+  const regex = /<(think(?:ing)?)>([\s\S]*?)<\/\1>/g;
+
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = regex.exec(text)) !== null) {
+    if (match.index > lastIndex) {
+      const textContent = text.slice(lastIndex, match.index);
+      if (textContent) {
+        segments.push({ type: 'text', content: textContent });
+      }
+    }
+
+    const thinkingContent = match[2];
+    if (thinkingContent) {
+      segments.push({ type: 'thinking', content: thinkingContent });
+    }
+
+    lastIndex = match.index + match[0].length;
+  }
+
+  if (lastIndex < text.length) {
+    const textContent = text.slice(lastIndex);
+    if (textContent) {
+      segments.push({ type: 'text', content: textContent });
+    }
+  }
+
+  return segments;
+}
+
+export class StreamingThinkingTagParser {
+  private buffer = '';
+  private inThinkingBlock = false;
+  private tagType: 'think' | 'thinking' | null = null;
+
+  push(chunk: string): ThinkingTagSegment[] {
+    this.buffer += chunk;
+    return this.processBuffer(false);
+  }
+
+  flush(): ThinkingTagSegment[] {
+    return this.processBuffer(true);
+  }
+
+  private processBuffer(flush: boolean): ThinkingTagSegment[] {
+    const segments: ThinkingTagSegment[] = [];
+
+    while (this.buffer.length > 0) {
+      if (this.inThinkingBlock) {
+        segments.push(...this.processThinkingBlock(flush));
+        if (!flush && this.inThinkingBlock) break;
+      } else {
+        segments.push(...this.processTextBlock(flush));
+        if (!flush && !this.inThinkingBlock) break;
+      }
+    }
+
+    return segments;
+  }
+
+  private processThinkingBlock(flush: boolean): ThinkingTagSegment[] {
+    const segments: ThinkingTagSegment[] = [];
+    const closeTag = this.tagType === 'think' ? '</think>' : '</thinking>';
+    const closeIndex = this.buffer.indexOf(closeTag);
+
+    if (closeIndex !== -1) {
+      const thinkingContent = this.buffer.slice(0, closeIndex);
+      if (thinkingContent) {
+        segments.push({ type: 'thinking', content: thinkingContent });
+      }
+      this.buffer = this.buffer.slice(closeIndex + closeTag.length);
+      this.inThinkingBlock = false;
+      this.tagType = null;
+    } else if (flush) {
+      if (this.buffer) {
+        segments.push({ type: 'thinking', content: this.buffer });
+      }
+      this.buffer = '';
+    } else {
+      const maxPartialLen = '</thinking>'.length - 1;
+      const safeLen = Math.max(0, this.buffer.length - maxPartialLen);
+      if (safeLen > 0) {
+        segments.push({ type: 'thinking', content: this.buffer.slice(0, safeLen) });
+        this.buffer = this.buffer.slice(safeLen);
+      }
+    }
+
+    return segments;
+  }
+
+  private processTextBlock(flush: boolean): ThinkingTagSegment[] {
+    const segments: ThinkingTagSegment[] = [];
+    const thinkIndex = this.buffer.indexOf('<think>');
+    const thinkingIndex = this.buffer.indexOf('<thinking>');
+
+    let openIndex = -1;
+    let openTag = '';
+    let tagType: 'think' | 'thinking' | null = null;
+
+    if (thinkIndex !== -1 && (thinkingIndex === -1 || thinkIndex < thinkingIndex)) {
+      openIndex = thinkIndex;
+      openTag = '<think>';
+      tagType = 'think';
+    } else if (thinkingIndex !== -1) {
+      openIndex = thinkingIndex;
+      openTag = '<thinking>';
+      tagType = 'thinking';
+    }
+
+    if (openIndex !== -1) {
+      const textContent = this.buffer.slice(0, openIndex);
+      if (textContent) {
+        segments.push({ type: 'text', content: textContent });
+      }
+      this.buffer = this.buffer.slice(openIndex + openTag.length);
+      this.inThinkingBlock = true;
+      this.tagType = tagType;
+    } else if (flush) {
+      if (this.buffer) {
+        segments.push({ type: 'text', content: this.buffer });
+      }
+      this.buffer = '';
+    } else {
+      const maxPartialLen = '<thinking>'.length - 1;
+      const safeLen = Math.max(0, this.buffer.length - maxPartialLen);
+      if (safeLen > 0) {
+        segments.push({ type: 'text', content: this.buffer.slice(0, safeLen) });
+        this.buffer = this.buffer.slice(safeLen);
+      }
+    }
+
+    return segments;
+  }
+}

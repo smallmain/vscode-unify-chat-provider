@@ -29,6 +29,8 @@ import {
   encodeStatefulMarkerPart,
   decodeStatefulMarkerPart,
   normalizeImageMimeType,
+  parseThinkingTags,
+  StreamingThinkingTagParser,
   withIdleTimeout,
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
@@ -898,7 +900,13 @@ export class AnthropicProvider implements ApiProvider {
     for (const block of message.content) {
       switch (block.type) {
         case 'text':
-          yield new vscode.LanguageModelTextPart(block.text);
+          for (const segment of parseThinkingTags(block.text)) {
+            if (segment.type === 'thinking') {
+              yield new vscode.LanguageModelThinkingPart(segment.content);
+            } else {
+              yield new vscode.LanguageModelTextPart(segment.content);
+            }
+          }
           break;
 
         case 'thinking':
@@ -956,6 +964,7 @@ export class AnthropicProvider implements ApiProvider {
     let raw: BetaMessage | undefined;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
+    const thinkingTagParser = new StreamingThinkingTagParser();
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -976,7 +985,13 @@ export class AnthropicProvider implements ApiProvider {
           const block = event.content_block;
           switch (block.type) {
             case 'text':
-              yield new vscode.LanguageModelTextPart(block.text);
+              for (const segment of thinkingTagParser.push(block.text)) {
+                if (segment.type === 'thinking') {
+                  yield new vscode.LanguageModelThinkingPart(segment.content);
+                } else {
+                  yield new vscode.LanguageModelTextPart(segment.content);
+                }
+              }
               break;
 
             case 'thinking':
@@ -1000,7 +1015,13 @@ export class AnthropicProvider implements ApiProvider {
           const block = event.delta;
           switch (block.type) {
             case 'text_delta':
-              yield new vscode.LanguageModelTextPart(block.text);
+              for (const segment of thinkingTagParser.push(block.text)) {
+                if (segment.type === 'thinking') {
+                  yield new vscode.LanguageModelThinkingPart(segment.content);
+                } else {
+                  yield new vscode.LanguageModelTextPart(segment.content);
+                }
+              }
               break;
 
             case 'thinking_delta':
@@ -1077,6 +1098,14 @@ export class AnthropicProvider implements ApiProvider {
             );
           }
         }
+      }
+    }
+
+    for (const segment of thinkingTagParser.flush()) {
+      if (segment.type === 'thinking') {
+        yield new vscode.LanguageModelThinkingPart(segment.content);
+      } else {
+        yield new vscode.LanguageModelTextPart(segment.content);
       }
     }
 

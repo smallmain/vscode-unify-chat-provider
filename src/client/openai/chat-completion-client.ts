@@ -19,6 +19,8 @@ import {
   isImageMarker,
   isInternalMarker,
   normalizeImageMimeType,
+parseThinkingTags,
+  StreamingThinkingTagParser,
   withIdleTimeout,
 } from '../../utils';
 import {
@@ -835,7 +837,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     yield* this.extractThinkingParts(raw);
 
     if (content) {
-      yield new vscode.LanguageModelTextPart(content);
+for (const segment of parseThinkingTags(content)) {
+        if (segment.type === 'thinking') {
+          yield new vscode.LanguageModelThinkingPart(segment.content);
+        } else {
+      yield new vscode.LanguageModelTextPart(segment.content);
+}
+      }
     }
 
     if (tool_calls) {
@@ -987,6 +995,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     let usage: CompletionUsage | null | undefined;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
+const thinkingTagParser = new StreamingThinkingTagParser();
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -1010,7 +1019,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       yield* this.extractThinkingParts(choice.delta, 'content-only');
 
       if (content) {
-        yield new vscode.LanguageModelTextPart(content);
+for (const segment of thinkingTagParser.push(content)) {
+          if (segment.type === 'thinking') {
+            yield new vscode.LanguageModelThinkingPart(segment.content);
+          } else {
+        yield new vscode.LanguageModelTextPart(segment.content);
+}
+        }
       }
 
       if (choice.finish_reason) {
@@ -1048,6 +1063,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           reasoning_content,
           reasoning_details,
         });
+      }
+    }
+
+    for (const segment of thinkingTagParser.flush()) {
+      if (segment.type === 'thinking') {
+        yield new vscode.LanguageModelThinkingPart(segment.content);
+      } else {
+        yield new vscode.LanguageModelTextPart(segment.content);
       }
     }
 
