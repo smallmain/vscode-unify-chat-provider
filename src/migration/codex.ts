@@ -7,8 +7,14 @@ import type {
   ProviderMigrationSource,
 } from './types';
 import { firstExistingFilePath } from './fs-utils';
-import { WELL_KNOWN_MODELS, normalizeWellKnownConfigs } from '../well-known/models';
-import { WELL_KNOWN_PROVIDERS, resolveProviderModels } from '../well-known/providers';
+import {
+  WELL_KNOWN_MODELS,
+  normalizeWellKnownConfigs,
+} from '../well-known/models';
+import {
+  WELL_KNOWN_PROVIDERS,
+  resolveProviderModels,
+} from '../well-known/providers';
 import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
@@ -24,7 +30,8 @@ function findWellKnownProvider(
 ): (typeof WELL_KNOWN_PROVIDERS)[number] | undefined {
   const normalized = normalizeBaseUrlForCompare(baseUrl);
   const exact = WELL_KNOWN_PROVIDERS.find(
-    (p) => p.type === type && normalizeBaseUrlForCompare(p.baseUrl) === normalized,
+    (p) =>
+      p.type === type && normalizeBaseUrlForCompare(p.baseUrl) === normalized,
   );
   return exact ?? WELL_KNOWN_PROVIDERS.find((p) => p.type === type);
 }
@@ -74,10 +81,6 @@ function parseWireApi(value: unknown): CodexWireApi | undefined {
   return undefined;
 }
 
-function isLikelyOpenAIModelId(modelId: string): boolean {
-  return /^(gpt-|o\d|o-|codex)/i.test(modelId);
-}
-
 async function readAuthJsonApiKey(): Promise<string | undefined> {
   const home = os.homedir();
   const codexHome = process.env.CODEX_HOME?.trim() || path.join(home, '.codex');
@@ -115,12 +118,6 @@ async function buildCodexProviderFromToml(
   const modelProviders = getRecord(parsed['model_providers']);
   const providerConfig = getRecordByKey(modelProviders, effectiveProviderId);
 
-  const providerDisplayName =
-    getString(providerConfig?.['name']) ??
-    (effectiveProviderId === 'openai'
-      ? 'Codex'
-      : `Codex (${effectiveProviderId})`);
-
   // Built-in provider wire_api is not configurable in config.toml; assume responses for "openai".
   const providerWireApi =
     parseWireApi(providerConfig?.['wire_api']) ??
@@ -135,9 +132,9 @@ async function buildCodexProviderFromToml(
   const providerBaseUrl =
     getString(providerConfig?.['base_url']) ??
     (effectiveProviderId === 'openai'
-      ? getString(process.env.OPENAI_BASE_URL) ??
+      ? (getString(process.env.OPENAI_BASE_URL) ??
         getWellKnownBaseUrl(providerType) ??
-        'https://api.openai.com'
+        'https://api.openai.com')
       : undefined);
 
   // Priority order for API key resolution:
@@ -146,12 +143,8 @@ async function buildCodexProviderFromToml(
   // 3. OPENAI_API_KEY from environment variable
   const envKey = getString(providerConfig?.['env_key']);
   const apiKeyFromEnvKey = envKey ? getString(process.env[envKey]) : undefined;
-  const apiKeyFromAuthJson =
-    effectiveProviderId === 'openai' ? await readAuthJsonApiKey() : undefined;
-  const apiKeyFromOpenAI =
-    effectiveProviderId === 'openai'
-      ? getString(process.env.OPENAI_API_KEY)
-      : undefined;
+  const apiKeyFromAuthJson = await readAuthJsonApiKey();
+  const apiKeyFromOpenAI = getString(process.env.OPENAI_API_KEY);
   const apiKey = apiKeyFromEnvKey ?? apiKeyFromAuthJson ?? apiKeyFromOpenAI;
 
   if (!apiKey) {
@@ -194,7 +187,7 @@ async function buildCodexProviderFromToml(
 
   const providerForMatching: ProviderConfig = {
     type: providerType,
-    name: providerDisplayName,
+    name: 'Codex',
     baseUrl,
     auth: {
       method: 'api-key',
@@ -222,18 +215,10 @@ async function buildCodexProviderFromToml(
     }
   }
 
-  // Only add OpenAI/Codex defaults when it looks like the user is using OpenAI models.
-  const shouldAddCodexDefaults =
-    effectiveProviderId === 'openai' ||
-    (modelId ? isLikelyOpenAIModelId(modelId) : false) ||
-    baseUrl.includes('openai.com');
-
-  if (shouldAddCodexDefaults) {
-    const defaults = getDefaultModelsFromWellKnown(providerType, baseUrl);
-    for (const m of defaults) {
-      if (!models.some((existing) => existing.id === m.id)) {
-        models.push(m);
-      }
+  const defaults = getDefaultModelsFromWellKnown(providerType, baseUrl);
+  for (const m of defaults) {
+    if (!models.some((existing) => existing.id === m.id)) {
+      models.push(m);
     }
   }
 
