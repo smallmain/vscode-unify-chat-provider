@@ -1430,6 +1430,17 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'qwen3-coder-next',
+    name: 'Qwen3-Coder-Next',
+    maxInputTokens: 262144,
+    maxOutputTokens: 65536,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
     id: 'qwen3-coder-plus',
     name: 'Qwen3-Coder-Plus',
     maxInputTokens: 1000000,
