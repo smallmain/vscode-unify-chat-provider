@@ -1229,22 +1229,40 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       headers['User-Agent'] =
         randomized['User-Agent'] ?? this.codeAssistHeaders['User-Agent'];
     }
-    if (
-      !Object.keys(headers).some((k) => k.toLowerCase() === 'x-goog-api-client')
-    ) {
-      headers['X-Goog-Api-Client'] =
-        randomized['X-Goog-Api-Client'] ??
-        this.codeAssistHeaders['X-Goog-Api-Client'];
-    }
-    if (
-      !Object.keys(headers).some((k) => k.toLowerCase() === 'client-metadata')
-    ) {
-      headers['Client-Metadata'] =
-        randomized['Client-Metadata'] ??
-        this.codeAssistHeaders['Client-Metadata'];
+
+    if (this.codeAssistHeaderStyle === 'gemini-cli') {
+      if (
+        !Object.keys(headers).some(
+          (k) => k.toLowerCase() === 'x-goog-api-client',
+        )
+      ) {
+        headers['X-Goog-Api-Client'] =
+          randomized['X-Goog-Api-Client'] ??
+          this.codeAssistHeaders['X-Goog-Api-Client'];
+      }
+      if (
+        !Object.keys(headers).some((k) => k.toLowerCase() === 'client-metadata')
+      ) {
+        headers['Client-Metadata'] =
+          randomized['Client-Metadata'] ??
+          this.codeAssistHeaders['Client-Metadata'];
+      }
+    } else {
+      // Match Antigravity Manager behavior for content requests: User-Agent only.
+      for (const key of Object.keys(headers)) {
+        const lower = key.toLowerCase();
+        if (
+          lower === 'x-goog-api-client' ||
+          lower === 'client-metadata' ||
+          lower === 'x-goog-quotauser' ||
+          lower === 'x-client-device-id'
+        ) {
+          delete headers[key];
+        }
+      }
     }
 
-    // Fingerprint headers override randomized headers and add quota/device IDs.
+    // Fingerprint headers override runtime headers where applicable.
     const fingerprintHeaders = buildFingerprintHeaders(getSessionFingerprint());
     for (const [key, value] of Object.entries(fingerprintHeaders)) {
       // For gemini-cli style, do not overwrite critical headers with Antigravity-specific values.
