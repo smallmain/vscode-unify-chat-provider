@@ -1,5 +1,25 @@
 # Changelog
 
+## v4.6.0 - 2026-02-11
+
+### Features
+- add network global settings and per-provider override for chat requests (connection/response timeouts and retry settings) (e05cd33, SmallMain)
+- Codex client support another auth method (97c5ff9, SmallMain)
+- Support switching models to continue conversations (including those initiated by other extensions; for rounds of dialogue with non-identical models, only text content will be retained) (063e930, SmallMain)
+- add new iFlow Client and provider definition (42fd7dc, SmallMain)
+- update compatibility with Antigravity and GeminiCLI (e54391b, SmallMain)
+- update LongCat provider support and add LongCat-Flash-Lite model support (3ae122a, SmallMain)
+- add kimi-k2.5 model to iFlow provider (1add6fd, SmallMain)
+
+### Fixes
+- improving the timeout error message (a083a39, SmallMain)
+- update description of network settings configuration (f0ce477, SmallMain)
+- update response content structure for OpenAI provider (59bc8a7, SmallMain)
+- enforce max output tokens for Claude Opus models in Antigravity (91a3b77, SmallMain)
+
+### Chores
+- add update cli clients agent (5e90fd4, SmallMain)
+
 ## v4.5.1 - 2026-02-06
 
 ### Features
