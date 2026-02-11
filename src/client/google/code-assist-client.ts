@@ -903,6 +903,9 @@ function normalizeToolParametersSchema(
 export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 const IMAGE_MODEL_PATTERN = /image|imagen/i;
+const CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY = 32768;
+const CLAUDE_OPUS_LOW_THINKING_BUDGET_ANTIGRAVITY = 8192;
+const CLAUDE_OPUS_MAX_OUTPUT_TOKENS_ANTIGRAVITY = 64000;
 
 function mapThinkingEffortToGemini3ThinkingLevel(
   effort: NonNullable<NonNullable<ModelConfig['thinking']>['effort']>,
@@ -919,6 +922,27 @@ function mapThinkingEffortToGemini3ThinkingLevel(
       return 'high';
     case 'none':
       return undefined;
+  }
+}
+
+function resolveClaudeOpusThinkingBudgetForAntigravity(
+  effort:
+    | NonNullable<NonNullable<ModelConfig['thinking']>['effort']>
+    | undefined,
+): number | undefined {
+  switch (effort) {
+    case 'minimal':
+    case 'none':
+      return undefined;
+    case 'low':
+    case 'medium':
+      return CLAUDE_OPUS_LOW_THINKING_BUDGET_ANTIGRAVITY;
+    case 'high':
+    case 'xhigh':
+      return CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY;
+    case undefined:
+    default:
+      return CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY;
   }
 }
 
@@ -1634,6 +1658,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
 
     const modelIdLower = resolvedModel.requestModelId.toLowerCase();
     const isClaudeModel = modelIdLower.includes('claude');
+    const isClaudeOpusModel = modelIdLower.includes('claude-opus');
 
     const expectedIdentity = createStatefulMarkerIdentity(this.config, model);
     const sanitizedMessages = sanitizeMessagesForModelSwitch(messages, {
@@ -1655,17 +1680,17 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       this.sanitizeClaudeContents(contents);
     }
 
-    const hasFinalPositionThinking =
-      contents
-        .filter((v) => v.role === 'model')
-        .at(-1)
-        ?.parts?.find((v) => v.thought) ?? false;
-    const disableThinkingConfig = isClaudeModel
-      ? !hasFinalPositionThinking
-      : false;
+    // const hasFinalPositionThinking =
+    //   contents
+    //     .filter((v) => v.role === 'model')
+    //     .at(-1)
+    //     ?.parts?.find((v) => v.thought) ?? false;
+    // const disableThinkingConfig = isClaudeModel
+    //   ? !hasFinalPositionThinking
+    //   : false;
     const claudeThinkingRequested =
       isClaudeModel && (thinkingEnabled || modelIdLower.includes('thinking'));
-    const isClaudeThinking = claudeThinkingRequested && !disableThinkingConfig;
+    const isClaudeThinking = claudeThinkingRequested; // && !disableThinkingConfig;
 
     const sdkTools = this.convertTools(options.tools);
     const tools = this.normalizeTools(sdkTools, {
@@ -1707,7 +1732,8 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       generationConfig.frequencyPenalty = model.frequencyPenalty;
     }
 
-    if (model.thinking && !disableThinkingConfig) {
+    // !disableThinkingConfig
+    if (model.thinking) {
       const thinkingDisabled =
         model.thinking.type === 'disabled' || model.thinking.effort === 'none';
 
@@ -1721,7 +1747,14 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
           includeThoughts: !thinkingDisabled,
         };
 
-        const budgetTokens = model.thinking.budgetTokens;
+        const opusThinkingBudget =
+          !thinkingDisabled && isClaudeOpusModel
+            ? resolveClaudeOpusThinkingBudgetForAntigravity(
+                model.thinking.effort,
+              )
+            : undefined;
+
+        const budgetTokens = opusThinkingBudget ?? model.thinking.budgetTokens;
         const hasPositiveBudget =
           typeof budgetTokens === 'number' &&
           Number.isFinite(budgetTokens) &&
@@ -1752,6 +1785,16 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     ) {
       generationConfig.maxOutputTokens =
         GEMINI_3_PRO_MAX_OUTPUT_TOKENS_ANTIGRAVITY;
+    }
+
+    if (
+      typeof generationConfig.maxOutputTokens === 'number' &&
+      isClaudeOpusModel &&
+      generationConfig.maxOutputTokens >
+        CLAUDE_OPUS_MAX_OUTPUT_TOKENS_ANTIGRAVITY
+    ) {
+      generationConfig.maxOutputTokens =
+        CLAUDE_OPUS_MAX_OUTPUT_TOKENS_ANTIGRAVITY;
     }
 
     const projectId = this.resolveProjectId();
