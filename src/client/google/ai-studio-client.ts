@@ -24,16 +24,18 @@ import {
   bodyInitToLoggableValue,
   decodeStatefulMarkerPart,
   createStatefulMarkerIdentity,
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
   encodeStatefulMarkerPart,
+  fetchWithRetryUsingFetch,
   headersInitToRecord,
   isCacheControlMarker,
   isImageMarker,
   isInternalMarker,
   normalizeImageMimeType,
+  resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
+  type RetryConfig,
   withIdleTimeout,
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
@@ -104,14 +106,14 @@ export class GoogleAIStudioProvider implements ApiProvider {
     credential?: AuthTokenInfo,
     mode: FetchMode = 'chat',
   ): GoogleGenAI {
-    const fallbackTimeout =
-      mode === 'chat'
-        ? DEFAULT_CHAT_TIMEOUT_CONFIG
-        : DEFAULT_NORMAL_TIMEOUT_CONFIG;
+    const chatNetwork =
+      mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
+    const effectiveTimeout =
+      chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
     const requestTimeoutMs = streamEnabled
-      ? (this.config.timeout?.connection ?? fallbackTimeout.connection)
-      : (this.config.timeout?.response ?? fallbackTimeout.response);
+      ? effectiveTimeout.connection
+      : effectiveTimeout.response;
 
     const credentialValue = getToken(credential);
 
@@ -753,9 +755,13 @@ export class GoogleAIStudioProvider implements ApiProvider {
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 
     try {
+      const chatNetwork = resolveChatNetwork(this.config);
+      const requestTimeoutMs = streamEnabled
+        ? chatNetwork.timeout.connection
+        : chatNetwork.timeout.response;
+
       if (streamEnabled) {
-        const responseTimeoutMs =
-          this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response;
+        const responseTimeoutMs = chatNetwork.timeout.response;
 
         const stream = await withGoogleFetchLogger(logger, async () => {
           return client.models.generateContentStream({
@@ -763,7 +769,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
             contents,
             config: generateConfig,
           });
-        });
+        }, { connectionTimeoutMs: requestTimeoutMs, retryConfig: chatNetwork.retry });
 
         const timedStream = withIdleTimeout(
           stream,
@@ -785,7 +791,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
             contents,
             config: generateConfig,
           });
-        });
+        }, { connectionTimeoutMs: requestTimeoutMs, retryConfig: chatNetwork.retry });
         yield* this.parseMessage(data, performanceTrace, logger, expectedIdentity);
       }
     } finally {
@@ -995,6 +1001,8 @@ export class GoogleAIStudioProvider implements ApiProvider {
 
 type FetchLoggerContext = {
   logger: ProviderHttpLogger;
+  connectionTimeoutMs?: number;
+  retryConfig?: RetryConfig;
 };
 
 const fetchLoggerContext = new AsyncLocalStorage<FetchLoggerContext>();
@@ -1064,7 +1072,24 @@ function ensureInstalled(): void {
       body: bodyInitToLoggableValue(init?.body, requestHeaders),
     });
 
-    const response = await baseFetch(input, init);
+    const upstreamSignal: AbortSignal | undefined =
+      init?.signal ??
+      (typeof Request !== 'undefined' && input instanceof Request
+        ? input.signal
+        : undefined);
+
+    const useRetry =
+      ctx.retryConfig !== undefined || ctx.connectionTimeoutMs !== undefined;
+
+    const response = useRetry
+      ? await fetchWithRetryUsingFetch(baseFetch, input, {
+          ...(init ?? {}),
+          signal: upstreamSignal,
+          logger: ctx.logger,
+          retryConfig: ctx.retryConfig,
+          connectionTimeoutMs: ctx.connectionTimeoutMs,
+        })
+      : await baseFetch(input, init);
 
     ctx.logger.providerResponseMeta(response);
 
@@ -1097,7 +1122,8 @@ function ensureInstalled(): void {
 async function withGoogleFetchLogger<T>(
   logger: ProviderHttpLogger,
   fn: () => Promise<T>,
+  options?: Pick<FetchLoggerContext, 'connectionTimeoutMs' | 'retryConfig'>,
 ): Promise<T> {
   ensureInstalled();
-  return fetchLoggerContext.run({ logger }, fn);
+  return fetchLoggerContext.run({ logger, ...options }, fn);
 }

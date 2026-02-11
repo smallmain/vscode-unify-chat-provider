@@ -21,7 +21,6 @@ import type {
 import {
   decodeStatefulMarkerPart,
   createStatefulMarkerIdentity,
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
   encodeStatefulMarkerPart,
@@ -29,6 +28,7 @@ import {
   isImageMarker,
   isInternalMarker,
   normalizeImageMimeType,
+  resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
   withIdleTimeout,
 } from '../../utils';
@@ -87,20 +87,21 @@ export class OllamaProvider implements ApiProvider {
     mode: FetchMode = 'chat',
   ): Ollama {
     const streamEnabled = stream ?? true;
-    const fallbackTimeout =
-      mode === 'chat'
-        ? DEFAULT_CHAT_TIMEOUT_CONFIG
-        : DEFAULT_NORMAL_TIMEOUT_CONFIG;
+    const chatNetwork =
+      mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
+    const effectiveTimeout =
+      chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
     const requestTimeoutMs = streamEnabled
-      ? (this.config.timeout?.connection ?? fallbackTimeout.connection)
-      : (this.config.timeout?.response ?? fallbackTimeout.response);
+      ? effectiveTimeout.connection
+      : effectiveTimeout.response;
 
     return new Ollama({
       host: this.baseUrl,
       fetch: createCustomFetch({
         connectionTimeoutMs: requestTimeoutMs,
         logger,
+        retryConfig: chatNetwork?.retry,
         type: mode,
         abortSignal,
       }),
@@ -513,8 +514,7 @@ export class OllamaProvider implements ApiProvider {
 
     try {
       if (streamEnabled) {
-        const responseTimeoutMs =
-          this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response;
+        const responseTimeoutMs = resolveChatNetwork(this.config).timeout.response;
 
         stream = await client.chat({ ...baseBody, stream: true });
         const timedStream = withIdleTimeout(

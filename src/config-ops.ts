@@ -31,6 +31,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'extraHeaders',
   'extraBody',
   'timeout',
+  'retry',
   'autoFetchOfficialModels',
 ] as const satisfies ReadonlyArray<ProviderConfigPersistedKey>;
 

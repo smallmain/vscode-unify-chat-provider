@@ -2,7 +2,7 @@ import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
 import { DataPartMimeTypes, StatefulMarkerData } from './client/types';
 import type { ProviderHttpLogger } from './logger';
 import { officialModelsManager } from './official-models-manager';
-import type { ModelConfig, ProviderConfig } from './types';
+import type { ModelConfig, ProviderConfig, TimeoutConfig } from './types';
 import * as vscode from 'vscode';
 import { t } from './i18n';
 
@@ -94,6 +94,157 @@ export interface RetryConfig {
   maxDelayMs?: number;
   backoffMultiplier?: number;
   jitterFactor?: number;
+}
+
+export interface ResolvedChatTimeoutConfig {
+  connection: number;
+  response: number;
+}
+
+export interface ResolvedChatRetryConfig {
+  maxRetries: number;
+  initialDelayMs: number;
+  maxDelayMs: number;
+  backoffMultiplier: number;
+  jitterFactor: number;
+}
+
+export interface ResolvedChatNetworkConfig {
+  timeout: ResolvedChatTimeoutConfig;
+  retry: ResolvedChatRetryConfig;
+}
+
+export interface ChatNetworkOverrides {
+  timeout?: TimeoutConfig;
+  retry?: RetryConfig;
+}
+
+const CHAT_NETWORK_CONFIG_NAMESPACE = 'unifyChatProvider';
+
+function readFiniteNumber(value: unknown): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function readNonNegativeInteger(value: unknown): number | undefined {
+  const n = readFiniteNumber(value);
+  if (n === undefined || !Number.isInteger(n) || n < 0) {
+    return undefined;
+  }
+  return n;
+}
+
+function readPositiveInteger(value: unknown): number | undefined {
+  const n = readFiniteNumber(value);
+  if (n === undefined || !Number.isInteger(n) || n <= 0) {
+    return undefined;
+  }
+  return n;
+}
+
+function readBackoffMultiplier(value: unknown): number | undefined {
+  const n = readFiniteNumber(value);
+  if (n === undefined || n < 1) {
+    return undefined;
+  }
+  return n;
+}
+
+function readJitterFactor(value: unknown): number | undefined {
+  const n = readFiniteNumber(value);
+  if (n === undefined || n < 0 || n > 1) {
+    return undefined;
+  }
+  return n;
+}
+
+function applyTimeoutOverrides(
+  target: ResolvedChatTimeoutConfig,
+  raw: unknown,
+): void {
+  if (!isRecord(raw)) return;
+
+  const connection = readPositiveInteger(raw['connection']);
+  if (connection !== undefined) target.connection = connection;
+
+  const response = readPositiveInteger(raw['response']);
+  if (response !== undefined) target.response = response;
+}
+
+function applyRetryOverrides(
+  target: ResolvedChatRetryConfig,
+  raw: unknown,
+): void {
+  if (!isRecord(raw)) return;
+
+  const maxRetries = readNonNegativeInteger(raw['maxRetries']);
+  if (maxRetries !== undefined) target.maxRetries = maxRetries;
+
+  const initialDelayMs = readNonNegativeInteger(raw['initialDelayMs']);
+  if (initialDelayMs !== undefined) target.initialDelayMs = initialDelayMs;
+
+  const maxDelayMs = readPositiveInteger(raw['maxDelayMs']);
+  if (maxDelayMs !== undefined) target.maxDelayMs = maxDelayMs;
+
+  const backoffMultiplier = readBackoffMultiplier(raw['backoffMultiplier']);
+  if (backoffMultiplier !== undefined) {
+    target.backoffMultiplier = backoffMultiplier;
+  }
+
+  const jitterFactor = readJitterFactor(raw['jitterFactor']);
+  if (jitterFactor !== undefined) target.jitterFactor = jitterFactor;
+}
+
+function readGlobalChatNetworkOverrides(): {
+  timeout?: unknown;
+  retry?: unknown;
+} {
+  const config = vscode.workspace.getConfiguration(
+    CHAT_NETWORK_CONFIG_NAMESPACE,
+  );
+  const raw = config.get<unknown>('networkSettings');
+  if (!isRecord(raw)) return {};
+
+  const timeout = raw['timeout'];
+  const retry = raw['retry'];
+
+  return { timeout, retry };
+}
+
+/**
+ * Resolve effective network settings for *chat requests*.
+ *
+ * Merge order:
+ * 1) Built-in defaults (DEFAULT_CHAT_*)
+ * 2) Global settings: `unifyChatProvider.networkSettings`
+ * 3) Provider overrides (stored in the provider config)
+ */
+export function resolveChatNetwork(
+  overrides: ChatNetworkOverrides | undefined,
+): ResolvedChatNetworkConfig {
+  const resolved: ResolvedChatNetworkConfig = {
+    timeout: {
+      connection: DEFAULT_CHAT_TIMEOUT_CONFIG.connection,
+      response: DEFAULT_CHAT_TIMEOUT_CONFIG.response,
+    },
+    retry: {
+      maxRetries: DEFAULT_CHAT_RETRY_CONFIG.maxRetries,
+      initialDelayMs: DEFAULT_CHAT_RETRY_CONFIG.initialDelayMs,
+      maxDelayMs: DEFAULT_CHAT_RETRY_CONFIG.maxDelayMs,
+      backoffMultiplier: DEFAULT_CHAT_RETRY_CONFIG.backoffMultiplier,
+      jitterFactor: DEFAULT_CHAT_RETRY_CONFIG.jitterFactor,
+    },
+  };
+
+  const global = readGlobalChatNetworkOverrides();
+  applyTimeoutOverrides(resolved.timeout, global.timeout);
+  applyRetryOverrides(resolved.retry, global.retry);
+
+  applyTimeoutOverrides(resolved.timeout, overrides?.timeout);
+  applyRetryOverrides(resolved.retry, overrides?.retry);
+
+  return resolved;
 }
 
 export interface FetchWithRetryOptions extends RequestInit {
@@ -351,7 +502,15 @@ function calculateBackoffDelay(
  * Only logs retry attempts - does not return any text to VSCode for display.
  */
 export async function fetchWithRetry(
-  url: string,
+  input: RequestInfo | URL,
+  options: FetchWithRetryOptions = {},
+): Promise<Response> {
+  return fetchWithRetryUsingFetch(fetch, input, options);
+}
+
+export async function fetchWithRetryUsingFetch(
+  fetcher: typeof fetch,
+  input: RequestInfo | URL,
   options: FetchWithRetryOptions = {},
 ): Promise<Response> {
   const { retryConfig, logger, connectionTimeoutMs, ...fetchOptions } = options;
@@ -466,7 +625,7 @@ export async function fetchWithRetry(
     }, connTimeout);
 
     try {
-      const response = await fetch(url, {
+      const response = await fetcher(input, {
         ...fetchOptions,
         signal: timeoutController.signal,
       });
@@ -1186,7 +1345,10 @@ export class StreamingThinkingTagParser {
       const maxPartialLen = '</thinking>'.length - 1;
       const safeLen = Math.max(0, this.buffer.length - maxPartialLen);
       if (safeLen > 0) {
-        segments.push({ type: 'thinking', content: this.buffer.slice(0, safeLen) });
+        segments.push({
+          type: 'thinking',
+          content: this.buffer.slice(0, safeLen),
+        });
         this.buffer = this.buffer.slice(safeLen);
       }
     }
@@ -1203,7 +1365,10 @@ export class StreamingThinkingTagParser {
     let openTag = '';
     let tagType: 'think' | 'thinking' | null = null;
 
-    if (thinkIndex !== -1 && (thinkingIndex === -1 || thinkIndex < thinkingIndex)) {
+    if (
+      thinkIndex !== -1 &&
+      (thinkingIndex === -1 || thinkIndex < thinkingIndex)
+    ) {
       openIndex = thinkIndex;
       openTag = '<think>';
       tagType = 'think';

@@ -232,24 +232,43 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
     {
       key: 'timeout',
       type: 'custom',
-      label: t('Network Timeout'),
-      icon: 'clock',
+      label: t('Network Settings'),
+      icon: 'globe',
       section: 'others',
       edit: async (draft, context) => {
         const ctx = context as ProviderFieldContext;
         await ctx.onEditTimeout(draft);
       },
       getDescription: (draft) => {
-        if (!draft.timeout?.connection && !draft.timeout?.response) {
-          return t('default');
-        }
+        const hasTimeout =
+          draft.timeout?.connection !== undefined ||
+          draft.timeout?.response !== undefined;
+        const hasRetry =
+          draft.retry?.maxRetries !== undefined ||
+          draft.retry?.initialDelayMs !== undefined ||
+          draft.retry?.maxDelayMs !== undefined ||
+          draft.retry?.backoffMultiplier !== undefined ||
+          draft.retry?.jitterFactor !== undefined;
+
+        if (!hasTimeout && !hasRetry) return t('default');
+
         const parts: string[] = [];
-        if (draft.timeout?.connection) {
+        if (draft.timeout?.connection !== undefined) {
           parts.push(t('conn: {0}ms', draft.timeout.connection));
         }
-        if (draft.timeout?.response) {
+        if (draft.timeout?.response !== undefined) {
           parts.push(t('resp: {0}ms', draft.timeout.response));
         }
+
+        if (
+          draft.type === 'google-antigravity' ||
+          draft.type === 'google-gemini-cli'
+        ) {
+          parts.push(t('retry: internal'));
+        } else if (hasRetry) {
+          parts.push(t('retry: custom'));
+        }
+
         return parts.join(', ');
       },
     },

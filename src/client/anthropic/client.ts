@@ -21,7 +21,6 @@ import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
 import {
   createStatefulMarkerIdentity,
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
   isCacheControlMarker,
@@ -31,6 +30,7 @@ import {
   decodeStatefulMarkerPart,
   normalizeImageMimeType,
   parseThinkingTags,
+  resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
   withIdleTimeout,
@@ -87,14 +87,14 @@ export class AnthropicProvider implements ApiProvider {
     abortSignal?: AbortSignal,
     mode: FetchMode = 'chat',
   ): Anthropic {
-    const fallbackTimeout =
-      mode === 'chat'
-        ? DEFAULT_CHAT_TIMEOUT_CONFIG
-        : DEFAULT_NORMAL_TIMEOUT_CONFIG;
+    const chatNetwork =
+      mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
+    const effectiveTimeout =
+      chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
     const requestTimeoutMs = stream
-      ? (this.config.timeout?.connection ?? fallbackTimeout.connection)
-      : (this.config.timeout?.response ?? fallbackTimeout.response);
+      ? effectiveTimeout.connection
+      : effectiveTimeout.response;
 
     const token = getToken(credential);
 
@@ -116,6 +116,7 @@ export class AnthropicProvider implements ApiProvider {
       fetch: createCustomFetch({
         connectionTimeoutMs: requestTimeoutMs,
         logger,
+        retryConfig: chatNetwork?.retry,
         type: mode,
         abortSignal,
       }),
@@ -871,8 +872,7 @@ export class AnthropicProvider implements ApiProvider {
         );
 
         // Wrap stream with idle timeout
-        const responseTimeoutMs =
-          this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response;
+        const responseTimeoutMs = resolveChatNetwork(this.config).timeout.response;
         const timedStream = withIdleTimeout(
           sdkStream,
           responseTimeoutMs,

@@ -394,6 +394,18 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
 ## 调整参数
 
+### 全局设置
+
+<details>
+
+| 名称                 | ID                      | 介绍                                        |
+| -------------------- | ----------------------- | ------------------------------------------- |
+| 全局网络设置         | `networkSettings`       | 网络超时/重试设置，这些设置仅影响聊天请求。 |
+| 在设置中存储 Api Key | `storeApiKeyInSettings` | 请查看 [云同步兼容](#云同步兼容) 了解详情。 |
+| 启用详细日志         | `verbose`               | 启用更详细的日志以排查错误。                |
+
+</details>
+
 ### 供应商参数
 
 <details>
@@ -410,8 +422,14 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | 额外 Header      | `extraHeaders`            | 会附加到每次请求的 HTTP Header（`Record<string, string>`）。                        |
 | 额外 Body 字段   | `extraBody`               | 会附加到请求 body 的额外字段（`Record<string, unknown>`），用于对齐供应商私有参数。 |
 | 超时配置         | `timeout`                 | HTTP 请求与 SSE 流式的超时配置（毫秒）。                                            |
-| 建连超时         | `timeout.connection`      | TCP 建立连接的最大等待时间；默认 `10000`（10 秒）。                                 |
-| 响应间隔超时     | `timeout.response`        | SSE 流式接收数据块之间的最大等待时间；默认 `120000`（2 分钟）。                     |
+| 建连超时         | `timeout.connection`      | TCP 建立连接的最大等待时间；默认 `60000`（60 秒）。                                 |
+| 响应间隔超时     | `timeout.response`        | SSE 流式接收数据块之间的最大等待时间；默认 `300000`（5 分钟）。                     |
+| 重试配置         | `retry`                   | 临时错误的重试设置（仅 chat）。                                                     |
+| 最大重试次数     | `retry.maxRetries`        | 最大重试次数；默认 `10`。                                                           |
+| 初始延迟         | `retry.initialDelayMs`    | 首次重试前的延迟（毫秒）；默认 `1000`。                                             |
+| 最大延迟         | `retry.maxDelayMs`        | 重试延迟上限（毫秒）；默认 `60000`。                                                |
+| 退避倍数         | `retry.backoffMultiplier` | 指数退避倍数；默认 `2`。                                                            |
+| 抖动因子         | `retry.jitterFactor`      | 抖动因子（0-1）用于随机化延迟；默认 `0.1`。                                         |
 | 自动拉取官方模型 | `autoFetchOfficialModels` | 是否定期从供应商 API 拉取官方模型列表并自动更新。                                   |
 
 </details>

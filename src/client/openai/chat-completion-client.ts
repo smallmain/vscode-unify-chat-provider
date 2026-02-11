@@ -12,7 +12,6 @@ import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
   createStatefulMarkerIdentity,
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   encodeStatefulMarkerPart,
   FetchMode,
@@ -21,6 +20,7 @@ import {
   isInternalMarker,
   normalizeImageMimeType,
   parseThinkingTags,
+  resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
   withIdleTimeout,
@@ -109,14 +109,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     abortSignal?: AbortSignal,
     mode: FetchMode = 'chat',
   ): OpenAI {
-    const fallbackTimeout =
-      mode === 'chat'
-        ? DEFAULT_CHAT_TIMEOUT_CONFIG
-        : DEFAULT_NORMAL_TIMEOUT_CONFIG;
+    const chatNetwork =
+      mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
+    const effectiveTimeout =
+      chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
     const requestTimeoutMs = stream
-      ? (this.config.timeout?.connection ?? fallbackTimeout.connection)
-      : (this.config.timeout?.response ?? fallbackTimeout.response);
+      ? effectiveTimeout.connection
+      : effectiveTimeout.response;
 
     const token = getToken(credential);
 
@@ -127,6 +127,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       fetch: createCustomFetch({
         connectionTimeoutMs: requestTimeoutMs,
         logger,
+        retryConfig: chatNetwork?.retry,
         type: mode,
         abortSignal,
       }),
@@ -789,8 +790,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     try {
       if (streamEnabled) {
-        const responseTimeoutMs =
-          this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response;
+        const responseTimeoutMs = resolveChatNetwork(this.config).timeout.response;
 
         const stream = await client.chat.completions.create(
           { ...baseBody, stream: true },

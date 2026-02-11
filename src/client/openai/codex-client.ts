@@ -3,10 +3,10 @@ import * as vscode from 'vscode';
 import type { AuthTokenInfo } from '../../auth/types';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import {
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
   buildOpencodeUserAgent,
+  resolveChatNetwork,
 } from '../../utils';
 import type { ModelConfig, PerformanceTrace } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
@@ -123,20 +123,21 @@ export class OpenAICodeXProvider extends OpenAIResponsesProvider {
     abortSignal?: AbortSignal,
     mode: FetchMode = 'chat',
   ): OpenAI {
-    const fallbackTimeout =
-      mode === 'chat'
-        ? DEFAULT_CHAT_TIMEOUT_CONFIG
-        : DEFAULT_NORMAL_TIMEOUT_CONFIG;
+    const chatNetwork =
+      mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
+    const effectiveTimeout =
+      chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
     const requestTimeoutMs = stream
-      ? (this.config.timeout?.connection ?? fallbackTimeout.connection)
-      : (this.config.timeout?.response ?? fallbackTimeout.response);
+      ? effectiveTimeout.connection
+      : effectiveTimeout.response;
 
     const token = getToken(credential);
 
     const baseFetch = createCustomFetch({
       connectionTimeoutMs: requestTimeoutMs,
       logger,
+      retryConfig: chatNetwork?.retry,
       urlTransformer:
         this.config.auth?.method === 'openai-codex'
           ? rewriteToCodexEndpoint

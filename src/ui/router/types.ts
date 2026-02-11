@@ -1,6 +1,7 @@
 import type { ConfigStore } from '../../config-store';
 import type { ProviderType } from '../../client/definitions';
 import { ProviderConfig, ModelConfig, TimeoutConfig } from '../../types';
+import type { RetryConfig } from '../../utils';
 import type { WellKnownProviderConfig } from '../../well-known/providers';
 import type { OfficialModelsFetchState } from '../../official-models-manager';
 import type { SecretStore } from '../../secret';
@@ -92,6 +93,7 @@ export interface ModelSelectionRoute {
 export interface TimeoutFormRoute {
   kind: 'timeoutForm';
   timeout: TimeoutConfig;
+  retry: RetryConfig;
   draft: ProviderFormDraft;
 }
 

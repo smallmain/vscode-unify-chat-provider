@@ -1,5 +1,6 @@
 import { AuthConfig } from './auth/types';
 import { ProviderType } from './client/definitions';
+import type { RetryConfig } from './utils';
 
 /**
  * Configuration for a single provider endpoint
@@ -28,6 +29,8 @@ export interface ProviderConfig {
   extraBody?: Record<string, unknown>;
   /** Timeout configuration */
   timeout?: TimeoutConfig;
+  /** Retry configuration */
+  retry?: RetryConfig;
   /** Whether to auto-fetch official models from the provider API */
   autoFetchOfficialModels?: boolean;
 }
@@ -140,13 +143,13 @@ export interface ModelCapabilities {
 export interface TimeoutConfig {
   /**
    * Maximum time to wait for the TCP connection to be established.
-   * Default: 10000 (10 seconds)
+   * Default: 60000 (60 seconds)
    */
   connection?: number;
   /**
    * Maximum time to wait between receiving data chunks during SSE streaming.
    * Resets each time new data is received (token, SSE ping, keep-alive, etc.).
-   * Default: 120000 (2 minutes)
+   * Default: 300000 (5 minutes)
    */
   response?: number;
 }

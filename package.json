@@ -183,6 +183,59 @@
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
         },
+        "unifyChatProvider.networkSettings": {
+          "type": "object",
+          "description": "%configuration.networkSettings.description%",
+          "properties": {
+            "timeout": {
+              "type": "object",
+              "description": "%configuration.networkSettings.timeout.description%",
+              "properties": {
+                "connection": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.timeout.connection.description%",
+                  "default": 60000
+                },
+                "response": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.timeout.response.description%",
+                  "default": 300000
+                }
+              }
+            },
+            "retry": {
+              "type": "object",
+              "description": "%configuration.networkSettings.retry.description%",
+              "properties": {
+                "maxRetries": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.retry.maxRetries.description%",
+                  "default": 10
+                },
+                "initialDelayMs": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.retry.initialDelayMs.description%",
+                  "default": 1000
+                },
+                "maxDelayMs": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.retry.maxDelayMs.description%",
+                  "default": 60000
+                },
+                "backoffMultiplier": {
+                  "type": "number",
+                  "description": "%configuration.networkSettings.retry.backoffMultiplier.description%",
+                  "default": 2
+                },
+                "jitterFactor": {
+                  "type": "number",
+                  "description": "%configuration.networkSettings.retry.jitterFactor.description%",
+                  "default": 0.1
+                }
+              }
+            }
+          }
+        },
         "unifyChatProvider.endpoints": {
           "type": "array",
           "description": "%configuration.endpoints.description%",
@@ -254,12 +307,43 @@
                   "connection": {
                     "type": "integer",
                     "description": "%configuration.endpoints.timeout.connection.description%",
-                    "default": 10000
+                    "default": 60000
                   },
                   "response": {
                     "type": "integer",
                     "description": "%configuration.endpoints.timeout.response.description%",
-                    "default": 120000
+                    "default": 300000
+                  }
+                }
+              },
+              "retry": {
+                "type": "object",
+                "description": "%configuration.endpoints.retry.description%",
+                "properties": {
+                  "maxRetries": {
+                    "type": "integer",
+                    "description": "%configuration.endpoints.retry.maxRetries.description%",
+                    "default": 10
+                  },
+                  "initialDelayMs": {
+                    "type": "integer",
+                    "description": "%configuration.endpoints.retry.initialDelayMs.description%",
+                    "default": 1000
+                  },
+                  "maxDelayMs": {
+                    "type": "integer",
+                    "description": "%configuration.endpoints.retry.maxDelayMs.description%",
+                    "default": 60000
+                  },
+                  "backoffMultiplier": {
+                    "type": "number",
+                    "description": "%configuration.endpoints.retry.backoffMultiplier.description%",
+                    "default": 2
+                  },
+                  "jitterFactor": {
+                    "type": "number",
+                    "description": "%configuration.endpoints.retry.jitterFactor.description%",
+                    "default": 0.1
                   }
                 }
               },

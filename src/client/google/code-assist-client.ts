@@ -18,9 +18,9 @@ import { ModelConfig, PerformanceTrace } from '../../types';
 import {
   createStatefulMarkerIdentity,
   DEFAULT_CHAT_RETRY_CONFIG,
-  DEFAULT_CHAT_TIMEOUT_CONFIG,
   isAbortError,
   isRetryableStatusCode,
+  resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
   withIdleTimeout,
   type RetryConfig,
@@ -1634,10 +1634,10 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     }
 
     const streamEnabled = model.stream ?? true;
+    const chatNetwork = resolveChatNetwork(this.config);
     const requestTimeoutMs = streamEnabled
-      ? (this.config.timeout?.connection ??
-        DEFAULT_CHAT_TIMEOUT_CONFIG.connection)
-      : (this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response);
+      ? chatNetwork.timeout.connection
+      : chatNetwork.timeout.response;
 
     const requestedModelId = getBaseModelId(model.id);
     const preferredGemini3ThinkingLevel =
@@ -2061,8 +2061,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       this.activeEndpointBaseUrl = responseEndpointBase;
 
       if (streamEnabled) {
-        const responseTimeoutMs =
-          this.config.timeout?.response ?? DEFAULT_CHAT_TIMEOUT_CONFIG.response;
+        const responseTimeoutMs = chatNetwork.timeout.response;
 
         const stream = this.streamAntigravitySse(
           response,

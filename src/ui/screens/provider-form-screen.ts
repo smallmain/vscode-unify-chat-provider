@@ -269,6 +269,7 @@ export async function runProviderFormScreen(
         route: {
           kind: 'timeoutForm',
           timeout: draft.timeout ?? {},
+          retry: draft.retry ?? {},
           draft,
         },
       };

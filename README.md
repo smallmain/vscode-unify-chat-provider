@@ -394,6 +394,18 @@ This screen shows all configuration fields for the model. For field details, see
 
 ## Adjust Parameters
 
+### Global Settings
+
+<details>
+
+| Name                      | ID                      | Description                                                                   |
+| ------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
+| Global Network Settings   | `networkSettings`       | Network timeout/retry settings, which only affect chat requests.              |
+| Store API Key in Settings | `storeApiKeyInSettings` | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details. |
+| Enable Detailed Logging   | `verbose`               | Enables more detailed logging for troubleshooting errors.                     |
+
+</details>
+
 ### Provider Parameters
 
 <details>
@@ -410,8 +422,14 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | Extra Headers              | `extraHeaders`            | HTTP headers appended to every request (`Record<string, string>`).                                   |
 | Extra Body Fields          | `extraBody`               | Extra fields appended to request body (`Record<string, unknown>`), for provider-specific parameters. |
 | Timeout                    | `timeout`                 | Timeout settings for HTTP requests and SSE streaming (milliseconds).                                 |
-| Connection Timeout         | `timeout.connection`      | Maximum time to wait for establishing a TCP connection; default `10000` (10 seconds).                |
-| Response Interval Timeout  | `timeout.response`        | Maximum time to wait between SSE chunks; default `120000` (2 minutes).                               |
+| Connection Timeout         | `timeout.connection`      | Maximum time to wait for establishing a TCP connection; default `60000` (60 seconds).                |
+| Response Interval Timeout  | `timeout.response`        | Maximum time to wait between SSE chunks; default `300000` (5 minutes).                               |
+| Retry                      | `retry`                   | Retry settings for transient errors (chat requests only).                                            |
+| Max Retries                | `retry.maxRetries`        | Maximum number of retry attempts; default `10`.                                                      |
+| Initial Delay              | `retry.initialDelayMs`    | Initial delay before the first retry (milliseconds); default `1000`.                                 |
+| Max Delay                  | `retry.maxDelayMs`        | Maximum delay cap for retries (milliseconds); default `60000`.                                       |
+| Backoff Multiplier         | `retry.backoffMultiplier` | Exponential backoff multiplier; default `2`.                                                         |
+| Jitter Factor              | `retry.jitterFactor`      | Jitter factor (0-1) to randomize delay; default `0.1`.                                               |
 | Auto-Fetch Official Models | `autoFetchOfficialModels` | Whether to periodically fetch and auto-update the official model list from the provider API.         |
 
 </details>
