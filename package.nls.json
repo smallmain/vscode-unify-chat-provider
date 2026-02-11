@@ -13,7 +13,7 @@
   "configuration.title": "Unify Chat Provider",
   "configuration.verbose.description": "Enable verbose logging of requests and responses.",
   "configuration.storeApiKeyInSettings.description": "Store sync-safe sensitive data (e.g., API keys) in settings.json instead of VS Code Secret Storage.\n\nOAuth credentials are always kept in Secret Storage to avoid multi-device token refresh conflicts.\n\nDANGER: Changing this setting will migrate existing data between storage locations (may expose secrets in plain text).",
-  "configuration.networkSettings.description": "Global network settings for chat requests.\n\nThese settings do not affect non-chat requests (e.g., listing/fetching models).",
+  "configuration.networkSettings.description": "Global network settings for chat requests.",
   "configuration.networkSettings.timeout.description": "Timeout settings for chat requests (milliseconds).",
   "configuration.networkSettings.timeout.connection.description": "TCP connection timeout in milliseconds (chat requests).",
   "configuration.networkSettings.timeout.response.description": "Maximum time between SSE data chunks in milliseconds (chat requests).",

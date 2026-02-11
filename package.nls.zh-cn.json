@@ -13,7 +13,7 @@
   "configuration.title": "Unify Chat Provider",
   "configuration.verbose.description": "启用请求与响应的详细日志。",
   "configuration.storeApiKeyInSettings.description": "将支持多设备同步的敏感数据（例如 API Key）存储在 settings.json 中，而不是 VS Code Secret Storage 中。\n\n为避免多设备同步导致 token 刷新冲突，OAuth 凭证将始终保存在 Secret Storage 中。\n\n危险：修改此设置会在存储位置之间迁移已有的数据（可能会以明文形式暴露密钥）。",
-  "configuration.networkSettings.description": "聊天请求的全局网络设置。\n\n这些设置不会影响非聊天请求（例如列出/拉取模型）。",
+  "configuration.networkSettings.description": "聊天请求的全局网络设置。",
   "configuration.networkSettings.timeout.description": "聊天请求的超时设置（毫秒）。",
   "configuration.networkSettings.timeout.connection.description": "TCP 连接超时（毫秒）（聊天请求）。",
   "configuration.networkSettings.timeout.response.description": "SSE 流式传输期间，两次数据分片之间的最大等待时间（毫秒）（聊天请求）。",
