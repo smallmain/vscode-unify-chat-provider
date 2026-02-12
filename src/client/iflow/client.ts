@@ -5,6 +5,8 @@ import type { ModelConfig } from '../../types';
 import { getToken } from '../utils';
 import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
 
+const IFLOW_USER_AGENT = 'iFlow-Cli';
+
 export class IFlowCLIProvider extends OpenAIChatCompletionProvider {
   protected override buildHeaders(
     credential?: AuthTokenInfo,
@@ -18,21 +20,16 @@ export class IFlowCLIProvider extends OpenAIChatCompletionProvider {
       return headers;
     }
 
-    const userAgentHeaderKey = Object.keys(headers).find(
-      (key) => key.toLowerCase() === 'user-agent',
-    );
-    if (!userAgentHeaderKey) {
-      return headers;
+    for (const key of Object.keys(headers)) {
+      if (key.toLowerCase() === 'user-agent') {
+        delete headers[key];
+      }
     }
-
-    const userAgent = headers[userAgentHeaderKey]?.trim();
-    if (!userAgent) {
-      return headers;
-    }
+    headers['User-Agent'] = IFLOW_USER_AGENT;
 
     const sessionId = `session-${randomUUID()}`;
     const timestamp = Date.now();
-    const payload = `${userAgent}:${sessionId}:${timestamp}`;
+    const payload = `${IFLOW_USER_AGENT}:${sessionId}:${timestamp}`;
 
     headers['session-id'] = sessionId;
     headers['x-iflow-timestamp'] = String(timestamp);
