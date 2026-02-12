@@ -1,5 +1,14 @@
 # Changelog
 
+## v4.6.2 - 2026-02-12
+
+### Features
+- add GLM-5 model support (bb9758f, SmallMain)
+
+### Fixes
+- empty flow retry & optimization of retry logs (b23f8a9, SmallMain)
+- iFlow CLI mock user agent (99cd17f, SmallMain)
+
 ## v4.6.1 - 2026-02-11
 
 ### Fixes
@@ -511,4 +520,5 @@
 ### Features
 
 - Initial release of the project.
+
 
