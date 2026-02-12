@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.6.4 - 2026-02-12
+
+### Features
+- enhance OpenAI reasoning processing and volcano engine support (f1d328e, SmallMain)
+
 ## v4.6.3 - 2026-02-12
 
 ### Features
