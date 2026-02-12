@@ -236,7 +236,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'openai-responses',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     authTypes: ['api-key'],
-    models: ['doubao-seed-code-preview-latest', 'ark-code-latest'],
+    models: [
+      'ark-code-latest',
+      'doubao-seed-code',
+      'glm-4.7',
+      'deepseek-v3.2',
+      'kimi-k2-thinking',
+      'kimi-k2.5',
+    ],
   },
   {
     name: 'Byte Plus',

@@ -179,8 +179,15 @@ export enum FeatureId {
   /**
    * @see https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api
    * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
+   * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
    */
   OpenAIUseThinkingParam = 'openai_use-thinking-param',
+  /**
+   * Use `reasoning_effort` parameter in OpenAI-compatible Chat Completion APIs.
+   *
+   * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
+   */
+  OpenAIUseReasoningEffortParam = 'openai_use-reasoning-effort-param',
   /**
    * Using both the unofficial `thinking` and the `reasoning` fields in the OpenAI Responses API.
    *
@@ -345,6 +352,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIOnlyMaxTokens]: {
     supportedProviders: [
+      'ark.cn-beijing.volces.com',
+      'ark.ap-southeast.bytepluses.com',
       'router.huggingface.co',
       'portal.qwen.ai',
       'api.siliconflow.cn',
@@ -386,6 +395,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseThinkingParam]: {
     supportedProviders: [
+      'ark.cn-beijing.volces.com',
+      'ark.ap-southeast.bytepluses.com',
       'api.deepseek.com',
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
@@ -414,6 +425,12 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
+    supportedProviders: [
+      'ark.cn-beijing.volces.com',
+      'ark.ap-southeast.bytepluses.com',
+    ],
+  },
+  [FeatureId.OpenAIUseReasoningEffortParam]: {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
@@ -461,6 +478,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseReasoningContent]: {
     supportedProviders: [
+      'ark.cn-beijing.volces.com',
+      'ark.ap-southeast.bytepluses.com',
       'api.deepseek.com',
       'api.xiaomimimo.com',
       'open.bigmodel.cn',

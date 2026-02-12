@@ -24,7 +24,11 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'doubao-seed-code-preview-251028',
-    overrides: ['doubao-seed-code-preview', 'doubao-seed-code-preview-latest'],
+    overrides: [
+      'doubao-seed-code',
+      'doubao-seed-code-preview',
+      'doubao-seed-code-preview-latest',
+    ],
     name: 'Doubao Seed Code Preview',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,

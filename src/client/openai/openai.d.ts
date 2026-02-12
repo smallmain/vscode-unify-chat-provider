@@ -78,8 +78,9 @@ declare module 'openai/resources/chat/completions' {
      * @see https://platform.xiaomimimo.com/#/docs/api/text-generation/openai-api
      * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
      * @see https://modelstudio.console.alibabacloud.com/?tab=api#/api/?type=model&url=2712576
+     * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
      */
-    thinking?: { type: 'enabled' | 'disabled' };
+    thinking?: { type: 'enabled' | 'disabled' | 'auto' };
 
     /**
      * @see https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode
