@@ -576,7 +576,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       // @see https://www.volcengine.com/docs/82379/1569618
       case 'thinking_with_reasoning_effort': {
         if (!thinking) {
-          return { thinking: { type: 'auto' }, reasoning_effort: 'medium' };
+          return {};
         }
         if (thinking.type === 'disabled') {
           return {
@@ -586,9 +586,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         }
         return {
           thinking: { type: thinking.type },
-          reasoning_effort: this.normalizeReasoningEffortForThinking(
-            thinking.effort,
-          ),
+          ...(thinking.effort == null
+            ? {}
+            : {
+                reasoning_effort: this.normalizeReasoningEffortForThinking(
+                  thinking.effort,
+                ),
+              }),
         };
       }
 
