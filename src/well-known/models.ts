@@ -954,6 +954,37 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'MiniMax-M2.5',
+    overrides: ['minimax-m2.5-free', 'minimaxai/minimax-m2.5'],
+    name: 'MiniMax-M2.5',
+    maxInputTokens: 204800,
+    maxOutputTokens: 102400,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+  },
+  {
+    id: 'MiniMax-M2.5-lightning',
+    name: 'MiniMax-M2.5-Lightning',
+    maxInputTokens: 204800,
+    maxOutputTokens: 102400,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+  },
+  {
     id: 'MiniMax-M2.1',
     overrides: ['minimax-m2.1-free', 'minimaxai/minimax-m2.1'],
     name: 'MiniMax-M2.1',

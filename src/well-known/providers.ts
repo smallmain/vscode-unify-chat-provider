@@ -380,7 +380,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'anthropic',
     baseUrl: 'https://api.minimaxi.com/anthropic',
     authTypes: ['api-key'],
-    models: ['MiniMax-M2.1', 'MiniMax-M2.1-lightning'],
+    models: ['MiniMax-M2.5', 'MiniMax-M2.5-lightning'],
   },
   {
     name: 'MiniMax (International)',
@@ -388,7 +388,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'anthropic',
     baseUrl: 'https://api.minimax.io/anthropic',
     authTypes: ['api-key'],
-    models: ['MiniMax-M2.1', 'MiniMax-M2.1-lightning'],
+    models: ['MiniMax-M2.5', 'MiniMax-M2.5-lightning'],
   },
   {
     name: 'LongCat',
