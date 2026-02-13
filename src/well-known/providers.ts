@@ -233,7 +233,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
   {
     name: 'Volcano Engine (Coding Plan)',
     category: 'General',
-    type: 'openai-responses',
+    type: 'openai-chat-completion',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     authTypes: ['api-key'],
     models: [

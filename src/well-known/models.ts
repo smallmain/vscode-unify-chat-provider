@@ -33,6 +33,9 @@ const _WELL_KNOWN_MODELS = [
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
     stream: true,
+    thinking: {
+      type: 'enabled',
+    },
     capabilities: {
       toolCalling: true,
       imageInput: true,
@@ -955,7 +958,20 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2.5',
-    overrides: ['minimax-m2.5-free', 'minimaxai/minimax-m2.5'],
+    overrides: [
+      'minimax-m2.5-free',
+      'minimaxai/minimax-m2.5',
+      {
+        matchers: [
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'MiniMax-M2.5',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -986,7 +1002,20 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2.1',
-    overrides: ['minimax-m2.1-free', 'minimaxai/minimax-m2.1'],
+    overrides: [
+      'minimax-m2.1-free',
+      'minimaxai/minimax-m2.1',
+      {
+        matchers: [
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'MiniMax-M2.1',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -1017,7 +1046,19 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'MiniMax-M2',
-    overrides: ['minimaxai/minimax-m2'],
+    overrides: [
+      'minimaxai/minimax-m2',
+      {
+        matchers: [
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'MiniMax-M2',
     maxInputTokens: 204800,
     maxOutputTokens: 102400,
@@ -1286,6 +1327,18 @@ const _WELL_KNOWN_MODELS = [
           id: 'moonshotai/kimi-k2.5',
         },
       },
+      {
+        matchers: [
+          'ark.cn-beijing.volces.com',
+          'ark.ap-southeast.bytepluses.com',
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
     ],
     name: 'Kimi K2.5',
     maxInputTokens: 262144,
@@ -1301,7 +1354,21 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'kimi-k2-thinking',
-    overrides: ['moonshotai/kimi-k2-thinking'],
+    overrides: [
+      'moonshotai/kimi-k2-thinking',
+      {
+        matchers: [
+          'ark.cn-beijing.volces.com',
+          'ark.ap-southeast.bytepluses.com',
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'Kimi K2 Thinking',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
