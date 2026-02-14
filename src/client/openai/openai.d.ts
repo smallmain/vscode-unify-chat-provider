@@ -243,6 +243,18 @@ declare module 'openai/resources/responses/responses' {
      * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
      */
     thinking?: { type: 'enabled' | 'disabled' | 'auto' };
+    /**
+     * Context caching configuration for VolcEngine / BytePlus Responses API.
+     *
+     * @see https://www.volcengine.com/docs/82379/1602228
+     */
+    caching?: { type: 'enabled' | 'disabled'; prefix?: boolean };
+    /**
+     * Expiration timestamp (UTC Unix seconds) for cached/stored context.
+     *
+     * @see https://www.volcengine.com/docs/82379/1602228
+     */
+    expire_at?: number;
   }
 }
 

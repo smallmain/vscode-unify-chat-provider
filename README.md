@@ -596,9 +596,9 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio) | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Model Scope (API-Inference)](https://modelscope.cn/)                                           | <li>ThinkingParam3 <li>ReasoningContent                         | [Details](#model-scope)    |
-| [Volcano Engine](https://www.volcengine.com/product/ark)                                        | <li>AutoThinking <li>ThinkingParam2                             | [Details](#volcano-engine) |
+| [Volcano Engine](https://www.volcengine.com/product/ark)                                        | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching      | [Details](#volcano-engine) |
 | [Volcano Engine (Coding Plan)](https://www.volcengine.com/activity/codingplan)                  | <li>AutoThinking <li>ThinkingParam2                             |                            |
-| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                       | <li>AutoThinking <li>ThinkingParam2                             |                            |
+| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                       | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching      |                            |
 | [Tencent Cloud (China)](https://cloud.tencent.com/product/hunyuan)                              |                                                                 |                            |
 | [DeepSeek](https://www.deepseek.com/)                                                           | <li>ThinkingParam <li>ReasoningContent                          |                            |       ✅        |
 | [Gitee AI](https://ai.gitee.com/)                                                               |                                                                 |                            |

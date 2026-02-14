@@ -201,6 +201,10 @@ export enum FeatureId {
    */
   OpenAIStripIncludeParam = 'openai_strip-include-param',
   /**
+   * Enable VolcEngine / BytePlus context caching on OpenAI Responses API.
+   */
+  OpenAIUseVolcContextCaching = 'openai_use-volc-context-caching',
+  /**
    * Use `top_k` parameter in OpenAI-compatible Chat Completion APIs.
    *
    * @see https://modelstudio.console.alibabacloud.com/?tab=api#/api/?type=model&url=2712576
@@ -440,6 +444,12 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+    ],
+  },
+  [FeatureId.OpenAIUseVolcContextCaching]: {
+    supportedProviders: [
+      'ark.cn-beijing.volces.com/api/v3*',
+      'ark.ap-southeast.bytepluses.com/api/v3*',
     ],
   },
   [FeatureId.OpenAIUseTopK]: {

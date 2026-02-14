@@ -596,9 +596,9 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [阿里云百炼平台 (Coding Plan)](https://www.aliyun.com/product/bailian)                | <li>ThinkingParam3 <li>ReasoningContent                         |                       |
 | [阿里云百炼平台 (国际站)](https://www.alibabacloud.com/help/en/model-studio)          | <li>ThinkingParam3 <li>ReasoningContent                         |                       |
 | [魔搭社区 (API-Inference)](https://modelscope.cn/)                                    | <li>ThinkingParam3 <li>ReasoningContent                         | [详情](#魔搭社区)     |
-| [火山引擎](https://www.volcengine.com/product/ark)                                    | <li>AutoThinking <li>ThinkingParam2                             | [详情](#火山引擎)     |
+| [火山引擎](https://www.volcengine.com/product/ark)                                    | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching      | [详情](#火山引擎)     |
 | [火山引擎 (Coding Plan)](https://www.volcengine.com/activity/codingplan)              | <li>AutoThinking <li>ThinkingParam2                             |                       |
-| [Byte Plus](https://www.byteplus.com/en/product/modelark)                             | <li>AutoThinking <li>ThinkingParam2                             |                       |
+| [Byte Plus](https://www.byteplus.com/en/product/modelark)                             | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching      |                       |
 | [腾讯云 (中国站)](https://cloud.tencent.com/product/hunyuan)                          |                                                                 |                       |
 | [DeepSeek](https://www.deepseek.com/)                                                 | <li>ThinkingParam <li>ReasoningContent                          |                       |    ✅    |
 | [模力方舟](https://ai.gitee.com/)                                                     |                                                                 |                       |
