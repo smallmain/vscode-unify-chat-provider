@@ -392,17 +392,29 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
 界面会展示当前供应商的所有配置字段，具体字段说明可查看 [模型参数](#模型参数)。
 
+## 余额监控
+
+可在 `供应商配置` 中启用并查看供应商余额监控。
+
+- 通过 `余额监控` 字段进行配置。
+- 当前内置方式：
+  - `Moonshot AI 余额`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。
+  - `New API 余额`：默认显示 API Key 余额；用户余额为可选，需配置 `userId` + `systemToken`（敏感数据）。
+- 可通过 VS Code 命令 `Unify Chat Provider: 刷新所有供应商余额` 强制刷新所有已配置余额监控的供应商。
+
 ## 调整参数
 
 ### 全局设置
 
 <details>
 
-| 名称                 | ID                      | 介绍                                        |
-| -------------------- | ----------------------- | ------------------------------------------- |
-| 全局网络设置         | `networkSettings`       | 网络超时/重试设置，这些设置仅影响聊天请求。 |
-| 在设置中存储 Api Key | `storeApiKeyInSettings` | 请查看 [云同步兼容](#云同步兼容) 了解详情。 |
-| 启用详细日志         | `verbose`               | 启用更详细的日志以排查错误。                |
+| 名称                 | ID                         | 介绍                                        |
+| -------------------- | -------------------------- | ------------------------------------------- |
+| 全局网络设置         | `networkSettings`          | 网络超时/重试设置，这些设置仅影响聊天请求。 |
+| 余额刷新间隔         | `balanceRefreshIntervalMs` | 供应商余额的定时刷新间隔（毫秒）。          |
+| 余额节流窗口         | `balanceThrottleWindowMs`  | 请求后余额刷新的节流窗口（毫秒）。          |
+| 在设置中存储 Api Key | `storeApiKeyInSettings`    | 请查看 [云同步兼容](#云同步兼容) 了解详情。 |
+| 启用详细日志         | `verbose`                  | 启用更详细的日志以排查错误。                |
 
 </details>
 
@@ -417,7 +429,8 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | API 格式         | `type`                    | 供应商类型（决定 API 格式与兼容逻辑）。                                             |
 | 供应商名称       | `name`                    | 该供应商配置的唯一名称（用于列表展示与引用）。                                      |
 | API 基础 URL     | `baseUrl`                 | API 基础地址，例如 `https://api.anthropic.com`。                                    |
-| 身份验证         | `auth`                    | 身份验证配置（`none` / `api-key` / `oauth2`）。                                     |
+| 身份验证         | `auth`                    | 身份验证配置。                                                                      |
+| 余额监控         | `balanceProvider`         | 供应商级余额监控配置。                                                              |
 | 模型列表         | `models`                  | 模型配置数组（`ModelConfig[]`）。                                                   |
 | 额外 Header      | `extraHeaders`            | 会附加到每次请求的 HTTP Header（`Record<string, string>`）。                        |
 | 额外 Body 字段   | `extraBody`               | 会附加到请求 body 的额外字段（`Record<string, unknown>`），用于对齐供应商私有参数。 |
@@ -555,8 +568,8 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 
 <details>
 
-| 供应商                                                                                | 支持特性                                                        | 免费额度              |
-| :------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------- |
+| 供应商                                                                                | 支持特性                                                        | 免费额度              | 余额监控 |
+| :------------------------------------------------------------------------------------ | --------------------------------------------------------------- | --------------------- | :------: |
 | [Open AI](https://openai.com/)                                                        |                                                                 |                       |
 | [Google AI Studio](https://aistudio.google.com/)                                      |                                                                 |                       |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                | <li>Authentication                                              |                       |
@@ -592,9 +605,9 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [MiniMax (中国站)](https://www.minimaxi.com/)                                         | <li>ReasoningDetails                                            |                       |
 | [MiniMax (国际站)](https://www.minimax.io/)                                           | <li>ReasoningDetails                                            |                       |
 | [LongCat](https://longcat.chat/)                                                      |                                                                 | [详情](#longcat)      |
-| [Moonshot AI (中国站)](https://www.moonshot.cn/)                                      | <li>ReasoningContent                                            |                       |
-| [Moonshot AI (国际站)](https://www.moonshot.ai/)                                      | <li>ReasoningContent                                            |                       |
-| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                              | <li>ReasoningContent                                            |                       |
+| [Moonshot AI (中国站)](https://www.moonshot.cn/)                                      | <li>ReasoningContent                                            |                       |    ✅    |
+| [Moonshot AI (国际站)](https://www.moonshot.ai/)                                      | <li>ReasoningContent                                            |                       |    ✅    |
+| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                              | <li>ReasoningContent                                            |                       |    ✅    |
 | [快手万擎 (中国站)](https://streamlake.com/)                                          |                                                                 | [详情](#快手万擎)     |
 | [快手万擎 (中国站, Coding Plan)](https://streamlake.com/)                             |                                                                 |                       |
 | [快手万擎 (国际站)](https://www.streamlake.ai/)                                       |                                                                 | [详情](#快手万擎)     |
@@ -610,8 +623,8 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 > - 你的账户可能会被暂停或永久封禁。
 > - 你需要自行权衡，所有风险都将由你自己承担。
 
-| 供应商                                                 | 免费额度                    |
-| :----------------------------------------------------- | --------------------------- |
+| 供应商                                                 | 免费额度                    | 余额监控 |
+| :----------------------------------------------------- | --------------------------- | :------: |
 | [OpenAI Codex (ChatGPT Plus/Pro)](https://openai.com/) |                             |
 | [Qwen Code](https://github.com/QwenLM/qwen-code)       | [详情](#qwen-code)          |
 | [GitHub Copilot](https://github.com/features/copilot)  | [详情](#github-copilot)     |

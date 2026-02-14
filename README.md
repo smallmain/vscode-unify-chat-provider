@@ -392,17 +392,29 @@ This feature periodically fetches the latest official model list from the provid
 
 This screen shows all configuration fields for the model. For field details, see [Model Parameters](#model-parameters).
 
+## Balance Monitoring
+
+Use this feature to monitor provider balances in `Provider Settings`.
+
+- Configure it from the `Balance Monitor` field.
+- Built-in methods:
+  - `Moonshot AI Balance`: no extra config required; uses provider `baseUrl` and API key.
+  - `New API Balance`: always shows API key balance; user balance is optional and requires `userId` + `systemToken` (sensitive data).
+- Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balances` to force refresh balances for all configured providers.
+
 ## Adjust Parameters
 
 ### Global Settings
 
 <details>
 
-| Name                      | ID                      | Description                                                                   |
-| ------------------------- | ----------------------- | ----------------------------------------------------------------------------- |
-| Global Network Settings   | `networkSettings`       | Network timeout/retry settings, which only affect chat requests.              |
-| Store API Key in Settings | `storeApiKeyInSettings` | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details. |
-| Enable Detailed Logging   | `verbose`               | Enables more detailed logging for troubleshooting errors.                     |
+| Name                      | ID                         | Description                                                                   |
+| ------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
+| Global Network Settings   | `networkSettings`          | Network timeout/retry settings, which only affect chat requests.              |
+| Balance Refresh Interval  | `balanceRefreshIntervalMs` | Periodic refresh interval for provider balances (milliseconds).               |
+| Balance Throttle Window   | `balanceThrottleWindowMs`  | Throttle window for post-request balance refresh (milliseconds).              |
+| Store API Key in Settings | `storeApiKeyInSettings`    | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details. |
+| Enable Detailed Logging   | `verbose`                  | Enables more detailed logging for troubleshooting errors.                     |
 
 </details>
 
@@ -417,7 +429,8 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | API Format                 | `type`                    | Provider type (determines the API format and compatibility logic).                                   |
 | Provider Name              | `name`                    | Unique name for this provider config (used for list display and references).                         |
 | API Base URL               | `baseUrl`                 | API base URL, e.g. `https://api.anthropic.com`.                                                      |
-| Authentication             | `auth`                    | Authentication config object (`none` / `api-key` / `oauth2`).                                        |
+| Authentication             | `auth`                    | Authentication config object.                                                                        |
+| Balance Monitor            | `balanceProvider`         | Provider-level balance monitoring config.                                                            |
 | Models                     | `models`                  | Array of model configurations (`ModelConfig[]`).                                                     |
 | Extra Headers              | `extraHeaders`            | HTTP headers appended to every request (`Record<string, string>`).                                   |
 | Extra Body Fields          | `extraBody`               | Extra fields appended to request body (`Record<string, unknown>`), for provider-specific parameters. |
@@ -555,8 +568,8 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 
 <details>
 
-| Provider                                                                                        | Supported Features                                              | Free Quota                 |
-| :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------- | :------------------------- |
+| Provider                                                                                        | Supported Features                                              | Free Quota                 | Balance Monitor |
+| :---------------------------------------------------------------------------------------------- | :-------------------------------------------------------------- | :------------------------- | :-------------: |
 | [Open AI](https://openai.com/)                                                                  |                                                                 |                            |
 | [Google AI Studio](https://aistudio.google.com/)                                                |                                                                 |                            |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                          | <li>Authentication                                              |                            |
@@ -592,9 +605,9 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [MiniMax (China)](https://www.minimaxi.com/)                                                    | <li>ReasoningDetails                                            |                            |
 | [MiniMax (International)](https://www.minimax.io/)                                              | <li>ReasoningDetails                                            |                            |
 | [LongCat](https://longcat.chat/)                                                                |                                                                 | [Details](#longcat)        |
-| [Moonshot AI (China)](https://www.moonshot.cn/)                                                 | <li>ReasoningContent                                            |                            |
-| [Moonshot AI (International)](https://www.moonshot.ai/)                                         | <li>ReasoningContent                                            |                            |
-| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                        | <li>ReasoningContent                                            |                            |
+| [Moonshot AI (China)](https://www.moonshot.cn/)                                                 | <li>ReasoningContent                                            |                            |       ✅        |
+| [Moonshot AI (International)](https://www.moonshot.ai/)                                         | <li>ReasoningContent                                            |                            |       ✅        |
+| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                        | <li>ReasoningContent                                            |                            |       ✅        |
 | [StreamLake Vanchin (China)](https://streamlake.com/)                                           |                                                                 | [Details](#streamlake)     |
 | [StreamLake Vanchin (China, Coding Plan)](https://streamlake.com/)                              |                                                                 |                            |
 | [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                |                                                                 | [Details](#streamlake)     |
@@ -610,8 +623,8 @@ Experimental Supported Providers:
 > - Your account may be suspended or permanently banned.
 > - You need to accept the risks yourself; all risks are borne by you.
 
-| Provider                                               | Free Quota                     |
-| :----------------------------------------------------- | :----------------------------- |
+| Provider                                               | Free Quota                     | Balance Monitor |
+| :----------------------------------------------------- | :----------------------------- | :-------------: |
 | [OpenAI Codex (ChatGPT Plus/Pro)](https://openai.com/) |                                |
 | [Qwen Code](https://github.com/QwenLM/qwen-code)       | [Details](#qwen-code)          |
 | [GitHub Copilot](https://github.com/features/copilot)  | [Details](#github-copilot)     |
