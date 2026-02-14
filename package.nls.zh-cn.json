@@ -59,7 +59,7 @@
   "configuration.endpoints.contextCache.type.description": "是否仅在免费时使用上下文缓存（only-free），或即使可能产生费用也使用（allow-paid）。",
   "configuration.endpoints.contextCache.type.enumDescriptions.0": "仅在免费时使用上下文缓存。",
   "configuration.endpoints.contextCache.type.enumDescriptions.1": "即使可能产生费用也使用上下文缓存。",
-  "configuration.endpoints.contextCache.ttl.description": "缓存 TTL（秒）。部分供应商可能会映射到其支持的 TTL 档位；可能产生费用的档位可能需要 allow-paid。",
+  "configuration.endpoints.contextCache.ttl.description": "缓存 TTL（秒）。留空时使用供应商默认 TTL。部分供应商可能会映射到其支持的 TTL 档位；可能产生费用的档位可能需要 allow-paid。",
   "configuration.endpoints.extraHeaders.description": "请求中要附加的额外 Header。Header 值支持使用 `${APIKEY}` 引用该供应商的凭据。",
   "configuration.endpoints.extraBody.description": "请求中要附加的额外 Body 参数。",
   "configuration.endpoints.timeout.description": "聊天请求的超时设置（毫秒）。",

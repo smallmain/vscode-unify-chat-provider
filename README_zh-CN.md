@@ -429,12 +429,12 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | API 格式         | `type`                    | 供应商类型（决定 API 格式与兼容逻辑）。                                             |
 | 供应商名称       | `name`                    | 该供应商配置的唯一名称（用于列表展示与引用）。                                      |
 | API 基础 URL     | `baseUrl`                 | API 基础地址，例如 `https://api.anthropic.com`。                                    |
+| 上下文缓存       | `contextCache`            | 上下文缓存配置（对支持 Prompt Caching 的供应商生效）。                              |
+| 缓存类型         | `contextCache.type`       | `only-free`（默认）：仅在免费时使用上下文缓存。`allow-paid`：即使可能产生费用也使用。 |
+| 缓存 TTL（秒）   | `contextCache.ttl`        | TTL 单位秒。留空时使用供应商默认 TTL。部分供应商可能会映射到其支持的 TTL 档位；可能产生费用的档位可能需要 `allow-paid`。 |
 | 身份验证         | `auth`                    | 身份验证配置。                                                                      |
 | 余额监控         | `balanceProvider`         | 供应商级余额监控配置。                                                              |
 | 模型列表         | `models`                  | 模型配置数组（`ModelConfig[]`）。                                                   |
-| 上下文缓存       | `contextCache`            | 上下文缓存配置（对支持 Prompt Caching 的供应商生效）。                              |
-| 缓存类型         | `contextCache.type`       | `only-free`（默认）：仅在免费时使用上下文缓存。`allow-paid`：即使可能产生费用也使用。 |
-| 缓存 TTL（秒）   | `contextCache.ttl`        | TTL 单位秒；默认 `300`（5 分钟）。部分供应商可能会映射到其支持的 TTL 档位；可能产生费用的档位可能需要 `allow-paid`。 |
 | 额外 Header      | `extraHeaders`            | 会附加到每次请求的 HTTP Header（`Record<string, string>`）。                        |
 | 额外 Body 字段   | `extraBody`               | 会附加到请求 body 的额外字段（`Record<string, unknown>`），用于对齐供应商私有参数。 |
 | 超时配置         | `timeout`                 | HTTP 请求与 SSE 流式的超时配置（毫秒）。                                            |

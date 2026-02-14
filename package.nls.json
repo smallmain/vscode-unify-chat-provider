@@ -59,7 +59,7 @@
   "configuration.endpoints.contextCache.type.description": "Whether to use context cache only when it's free ('only-free'), or also when it may incur cost ('allow-paid').",
   "configuration.endpoints.contextCache.type.enumDescriptions.0": "Use context cache only when it's free.",
   "configuration.endpoints.contextCache.type.enumDescriptions.1": "Use context cache even if it may incur cost.",
-  "configuration.endpoints.contextCache.ttl.description": "Cache TTL in seconds. Some providers may quantize this to supported TTL presets; paid presets may require 'allow-paid'.",
+  "configuration.endpoints.contextCache.ttl.description": "Cache TTL in seconds. Leave empty to use the provider default TTL. Some providers may quantize this to supported TTL presets; paid presets may require 'allow-paid'.",
   "configuration.endpoints.extraHeaders.description": "Extra headers to include in requests. Header values support `${APIKEY}` to reference the provider credential.",
   "configuration.endpoints.extraBody.description": "Extra body parameters to include in requests.",
   "configuration.endpoints.timeout.description": "Timeout settings for chat requests (milliseconds).",

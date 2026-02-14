@@ -419,7 +419,6 @@
                   "ttl": {
                     "type": "integer",
                     "description": "%configuration.endpoints.contextCache.ttl.description%",
-                    "default": 300,
                     "minimum": 1
                   }
                 }

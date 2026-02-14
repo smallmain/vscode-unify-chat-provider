@@ -157,6 +157,31 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       transform: (value) => normalizeBaseUrlInput(value),
       getDescription: (draft) => draft.baseUrl || t('(required)'),
     },
+    {
+      key: 'contextCache',
+      type: 'custom',
+      label: t('Context Cache'),
+      icon: 'database',
+      section: 'primary',
+      edit: async (draft) => {
+        await editContextCacheField(draft);
+      },
+      getDescription: (draft) => {
+        const resolved = resolveContextCacheConfig(draft.contextCache);
+        const typeLabel =
+          resolved.type === 'only-free' ? t('Only Free') : t('Allow Paid');
+        const hasCustomTtl =
+          typeof draft.contextCache?.ttl === 'number' &&
+          Number.isFinite(draft.contextCache.ttl) &&
+          Number.isInteger(draft.contextCache.ttl) &&
+          draft.contextCache.ttl > 0;
+        const ttlLabel = hasCustomTtl ? `${resolved.ttlSeconds}s` : t('default');
+        const summary = `${typeLabel}, ${ttlLabel}`;
+        const isDefault =
+          resolved.type === DEFAULT_CONTEXT_CACHE_TYPE && !hasCustomTtl;
+        return isDefault ? t('default') : summary;
+      },
+    },
     // Authentication field (new unified auth system)
     {
       key: 'auth',
@@ -206,26 +231,6 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
         draft.models.length > 0
           ? draft.models.map((m) => m.name || m.id).join(', ')
           : t('(No models configured)'),
-    },
-    {
-      key: 'contextCache',
-      type: 'custom',
-      label: t('Context Cache'),
-      icon: 'database',
-      section: 'content',
-      edit: async (draft) => {
-        await editContextCacheField(draft);
-      },
-      getDescription: (draft) => {
-        const resolved = resolveContextCacheConfig(draft.contextCache);
-        const typeLabel =
-          resolved.type === 'only-free' ? t('Only Free') : t('Allow Paid');
-        const summary = `${typeLabel}, ${resolved.ttlSeconds}s`;
-        const isDefault =
-          resolved.type === DEFAULT_CONTEXT_CACHE_TYPE &&
-          resolved.ttlSeconds === DEFAULT_CONTEXT_CACHE_TTL_SECONDS;
-        return isDefault ? t('default ({0})', summary) : summary;
-      },
     },
     // Extra Headers
     {
@@ -364,9 +369,12 @@ async function editContextCacheField(draft: ProviderFormDraft): Promise<void> {
         : resolvedTypeLabel;
 
     const ttlDesc =
-      resolved.ttlSeconds === DEFAULT_CONTEXT_CACHE_TTL_SECONDS
-        ? t('default ({0})', `${DEFAULT_CONTEXT_CACHE_TTL_SECONDS}s`)
-        : `${resolved.ttlSeconds}s`;
+      typeof ttlValue === 'number' &&
+      Number.isFinite(ttlValue) &&
+      Number.isInteger(ttlValue) &&
+      ttlValue > 0
+        ? `${resolved.ttlSeconds}s`
+        : t('default');
 
     return [
       { label: `$(arrow-left) ${t('Back')}`, action: 'back' },

@@ -429,12 +429,12 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | API Format                 | `type`                    | Provider type (determines the API format and compatibility logic).                                   |
 | Provider Name              | `name`                    | Unique name for this provider config (used for list display and references).                         |
 | API Base URL               | `baseUrl`                 | API base URL, e.g. `https://api.anthropic.com`.                                                      |
+| Context Cache              | `contextCache`            | Context cache configuration (used by providers that support prompt caching).                         |
+| Context Cache Type         | `contextCache.type`       | `only-free` (default): use context cache only when it's free. `allow-paid`: use it even if it may incur cost. |
+| Context Cache TTL (seconds) | `contextCache.ttl`       | TTL in seconds. Leave empty to use the provider's default TTL. Some providers may quantize this to supported TTL presets; paid presets may require `allow-paid`. |
 | Authentication             | `auth`                    | Authentication config object.                                                                        |
 | Balance Monitor            | `balanceProvider`         | Provider-level balance monitoring config.                                                            |
 | Models                     | `models`                  | Array of model configurations (`ModelConfig[]`).                                                     |
-| Context Cache              | `contextCache`            | Context cache configuration (used by providers that support prompt caching).                         |
-| Context Cache Type         | `contextCache.type`       | `only-free` (default): use context cache only when it's free. `allow-paid`: use it even if it may incur cost. |
-| Context Cache TTL (seconds) | `contextCache.ttl`       | TTL in seconds; default `300` (5 minutes). Some providers may quantize this to supported TTL presets; paid presets may require `allow-paid`. |
 | Extra Headers              | `extraHeaders`            | HTTP headers appended to every request (`Record<string, string>`).                                   |
 | Extra Body Fields          | `extraBody`               | Extra fields appended to request body (`Record<string, unknown>`), for provider-specific parameters. |
 | Timeout                    | `timeout`                 | Timeout settings for HTTP requests and SSE streaming (milliseconds).                                 |
