@@ -336,6 +336,18 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "kimi-code",
+                        "description": "%configuration.endpoints.balanceProvider.method.kimiCode.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "newapi",
                         "description": "%configuration.endpoints.balanceProvider.method.newapi.description%"
                       },

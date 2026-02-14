@@ -45,6 +45,7 @@
   "configuration.endpoints.balanceProvider.description": "供应商余额监控配置。",
   "configuration.endpoints.balanceProvider.method.none.description": "禁用余额监控。",
   "configuration.endpoints.balanceProvider.method.moonshot.description": "使用 Moonshot AI 余额监控。",
+  "configuration.endpoints.balanceProvider.method.kimiCode.description": "使用 Kimi Code 用量监控。",
   "configuration.endpoints.balanceProvider.method.newapi.description": "使用 New API 余额监控。",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API 用户 ID。",
   "configuration.endpoints.balanceProvider.newapi.systemToken.description": "New API 系统访问令牌。",

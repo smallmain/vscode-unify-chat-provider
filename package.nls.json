@@ -45,6 +45,7 @@
   "configuration.endpoints.balanceProvider.description": "Provider balance monitoring configuration.",
   "configuration.endpoints.balanceProvider.method.none.description": "Disable balance monitoring.",
   "configuration.endpoints.balanceProvider.method.moonshot.description": "Use Moonshot AI balance monitor.",
+  "configuration.endpoints.balanceProvider.method.kimiCode.description": "Use Kimi Code usage monitor.",
   "configuration.endpoints.balanceProvider.method.newapi.description": "Use New API balance monitor.",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API user ID.",
   "configuration.endpoints.balanceProvider.newapi.systemToken.description": "New API system token.",

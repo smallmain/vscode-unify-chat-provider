@@ -438,6 +438,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'anthropic',
     baseUrl: 'https://api.kimi.com/coding',
+    balanceProvider: { method: 'kimi-code' },
     authTypes: ['api-key'],
     models: ['kimi-for-coding'],
   },

@@ -2,7 +2,7 @@ import * as vscode from 'vscode';
 import type { AuthTokenInfo } from '../auth/types';
 import type { ProviderConfig } from '../types';
 
-export type BalanceMethod = 'none' | 'moonshot-ai' | 'newapi';
+export type BalanceMethod = 'none' | 'moonshot-ai' | 'kimi-code' | 'newapi';
 
 export interface NoBalanceConfig {
   method: 'none';
@@ -10,6 +10,10 @@ export interface NoBalanceConfig {
 
 export interface MoonshotAIBalanceConfig {
   method: 'moonshot-ai';
+}
+
+export interface KimiCodeBalanceConfig {
+  method: 'kimi-code';
 }
 
 export interface NewAPIBalanceConfig {
@@ -23,6 +27,7 @@ export interface NewAPIBalanceConfig {
 export type BalanceConfig =
   | NoBalanceConfig
   | MoonshotAIBalanceConfig
+  | KimiCodeBalanceConfig
   | NewAPIBalanceConfig;
 
 export interface BalanceSnapshot {
@@ -77,4 +82,10 @@ export function isNewAPIBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is NewAPIBalanceConfig {
   return config?.method === 'newapi';
+}
+
+export function isKimiCodeBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is KimiCodeBalanceConfig {
+  return config?.method === 'kimi-code';
 }

@@ -3,6 +3,7 @@ import type { SecretStore } from '../secret';
 import type { BalanceProvider, BalanceProviderContext } from './balance-provider';
 import type { BalanceConfig, BalanceMethod } from './types';
 import { MoonshotAIBalanceProvider } from './providers/moonshot-ai';
+import { KimiCodeBalanceProvider } from './providers/kimi-code';
 import { NewAPIBalanceProvider } from './providers/newapi';
 
 export interface BalanceMethodDefinition {
@@ -54,6 +55,19 @@ export const BALANCE_METHODS = {
     resolveForExport: MoonshotAIBalanceProvider.resolveForExport,
     normalizeOnImport: MoonshotAIBalanceProvider.normalizeOnImport,
     prepareForDuplicate: MoonshotAIBalanceProvider.prepareForDuplicate,
+  },
+  'kimi-code': {
+    id: 'kimi-code',
+    label: t('Kimi Code Usage'),
+    description: t('Monitor usage and quotas via Kimi Code usages API'),
+    category: 'General',
+    ctor: KimiCodeBalanceProvider,
+    supportsSensitiveDataInSettings:
+      KimiCodeBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: KimiCodeBalanceProvider.redactForExport,
+    resolveForExport: KimiCodeBalanceProvider.resolveForExport,
+    normalizeOnImport: KimiCodeBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: KimiCodeBalanceProvider.prepareForDuplicate,
   },
   newapi: {
     id: 'newapi',
