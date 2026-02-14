@@ -550,10 +550,7 @@ export class OfficialModelsManager {
       return undefined;
     }
 
-    const credential = await this.authManager.getCredential(
-      provider.name,
-      auth,
-    );
+    const credential = await this.authManager.getCredential(provider.name);
     return this.toAuthTokenInfo(credential);
   }
 

@@ -2,6 +2,7 @@ import { AuthConfig } from './auth/types';
 import { ProviderType } from './client/definitions';
 import type { RetryConfig } from './utils';
 import type { TokenizerId } from './tokenizer/tokenizers';
+import { BalanceConfig } from './balance/types';
 
 /**
  * Configuration for a single provider endpoint
@@ -17,6 +18,10 @@ export interface ProviderConfig {
    * Unified authentication configuration.
    */
   auth?: AuthConfig;
+  /**
+   * Optional provider-level balance monitoring configuration.
+   */
+  balanceProvider?: BalanceConfig;
   /**
    * @deprecated Use `auth` field instead. This field is kept for configuration migration
    * and will be removed in a future version.

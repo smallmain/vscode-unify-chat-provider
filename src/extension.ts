@@ -23,6 +23,7 @@ import { t } from './i18n';
 import {
   AuthManager,
 } from './auth';
+import { balanceManager } from './balance';
 
 const VENDOR_ID = 'unify-chat-provider';
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -50,7 +51,19 @@ export async function activate(
   await migrateProviderTypes(configStore);
   await migrateApiKeyToAuth(configStore);
 
-  const chatProvider = new UnifyChatService(configStore, secretStore, authManager);
+  balanceManager.initialize({
+    configStore,
+    secretStore,
+    authManager,
+  });
+  context.subscriptions.push(balanceManager);
+
+  const chatProvider = new UnifyChatService(
+    configStore,
+    secretStore,
+    authManager,
+    balanceManager,
+  );
 
 
   // Initialize official models manager
@@ -155,6 +168,37 @@ export function registerCommands(
         );
         vscode.window.showInformationMessage(
           t('Refreshed official models for {0} provider(s).', enabledCount),
+        );
+      },
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.refreshAllProvidersBalance',
+      async () => {
+        const providers = configStore.endpoints;
+        const enabledCount = providers.filter(
+          (p) => p.balanceProvider && p.balanceProvider.method !== 'none',
+        ).length;
+
+        if (enabledCount === 0) {
+          vscode.window.showInformationMessage(
+            t('No providers have balance monitoring configured.'),
+          );
+          return;
+        }
+
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: t('Refreshing provider balances...'),
+            cancellable: false,
+          },
+          async () => {
+            await balanceManager.forceRefreshAll();
+          },
+        );
+
+        vscode.window.showInformationMessage(
+          t('Refreshed balances for {0} provider(s).', enabledCount),
         );
       },
     ),

@@ -30,6 +30,7 @@ import {
   resolveTokenCountMultiplier,
   resolveTokenizerId,
 } from './tokenizer/tokenizers';
+import type { BalanceManager } from './balance';
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -43,6 +44,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly configStore: ConfigStore,
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
+    private readonly balanceManager?: BalanceManager,
   ) {}
 
   /**
@@ -90,7 +92,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       id: modelId,
       name: model.name ?? model.id,
       family: model.family ?? getBaseModelId(model.id),
-      version: '1.0.0',
+      version: '',
       maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
       maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       capabilities: {
@@ -214,31 +216,32 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   private async resolveCredential(
-    provider: ProviderConfig,
+    providerName: string,
   ): Promise<AuthTokenInfo> {
-    const auth = provider.auth;
+    while (true) {
+      const provider = this.configStore.getProvider(providerName);
+      if (!provider) {
+        throw new Error(t('Provider "{0}" not found.', providerName));
+      }
 
-    // Prefer auth manager when auth config is present
-    if (auth && auth.method !== 'none') {
+      const auth = provider.auth;
+      if (!auth || auth.method === 'none') {
+        return { kind: 'none' };
+      }
+
       if (!this.authManager) {
         throw new Error(
           t('Authentication required for provider "{0}".', provider.name),
         );
       }
 
-      const credential = await this.authManager.getCredential(
-        provider.name,
-        auth,
-      );
+      const credential = await this.authManager.getCredential(providerName);
 
       if (credential) {
         return this.toAuthTokenInfo(credential);
       }
 
-      const lastError = this.authManager.getLastError(
-        provider.name,
-        auth.method,
-      );
+      const lastError = this.authManager.getLastError(providerName);
 
       if (lastError) {
         const isAuthError = lastError.errorType === 'auth_error';
@@ -264,21 +267,15 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         );
 
         if (action === t('Retry')) {
-          const success = await this.authManager.retryRefresh(
-            provider.name,
-            auth,
-          );
+          const success = await this.authManager.retryRefresh(providerName);
           if (success) {
-            const newCredential = await this.authManager.getCredential(
-              provider.name,
-              auth,
-            );
+            const newCredential =
+              await this.authManager.getCredential(providerName);
             if (newCredential) {
               return this.toAuthTokenInfo(newCredential);
             }
           }
-
-          return this.resolveCredential(provider);
+          continue;
         }
 
         if (action === t('Re-authorize')) {
@@ -288,18 +285,26 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           };
           await runUiStack(ctx, {
             kind: 'providerForm',
-            providerName: provider.name,
+            providerName,
           });
-          // After user finishes editing, retry credential resolution
-          return this.resolveCredential(provider);
+
+          const newCredential =
+            await this.authManager.getCredential(providerName);
+          if (newCredential) {
+            return this.toAuthTokenInfo(newCredential);
+          }
+
+          throw new Error(
+            t('Authentication required for provider "{0}".', providerName),
+          );
         }
 
         throw new Error(
-          t('Authentication required for provider "{0}".', provider.name),
+          t('Authentication required for provider "{0}".', providerName),
         );
       }
 
-      const authProvider = this.authManager.getProvider(provider.name, auth);
+      const authProvider = this.authManager.getProvider(providerName);
       if (authProvider) {
         const confirm = await vscode.window.showErrorMessage(
           t('Authentication for provider "{0}" is required.', provider.name),
@@ -309,7 +314,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         if (confirm === t('Authenticate')) {
           const result = await authProvider.configure();
           if (result.success) {
-            const newCredential = await authProvider.getCredential();
+            const newCredential =
+              await this.authManager.getCredential(providerName);
             if (newCredential) {
               return this.toAuthTokenInfo(newCredential);
             }
@@ -321,9 +327,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         t('Authentication required for provider "{0}".', provider.name),
       );
     }
-
-    // No auth configured
-    return { kind: 'none' };
   }
 
   /**
@@ -345,97 +348,128 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       ttft: 0,
     };
 
-    const found = await this.findProviderAndModel(model.id);
-    if (!found) {
-      throw new Error(`Model not found: ${model.id}`);
-    }
+    let providerForBalance: ProviderConfig | undefined;
+    let outcome: 'success' | 'error' | 'cancelled' = 'success';
 
-    const { provider, model: modelConfig } = found;
-    const credential = await this.resolveCredential(provider);
-
-    logger.start({
-      providerName: provider.name,
-      providerType: provider.type,
-      baseUrl: provider.baseUrl,
-      vscodeModelId: model.id,
-      modelId: modelConfig.id,
-      modelName: modelConfig.name,
-    });
-    logger.vscodeInput(messages, options);
-
-    const client = this.getClient(provider);
-    const retryConfig = resolveChatNetwork(provider).retry;
-
-    let emptyStreamAttempt = 0;
-
-    // eslint-disable-next-line no-constant-condition
-    while (true) {
-      if (emptyStreamAttempt > 0) {
-        // Reset performance trace for retry
-        performanceTrace.tts = Date.now();
-        performanceTrace.ttf = 0;
-        performanceTrace.ttft = 0;
-        performanceTrace.tps = 0;
-        performanceTrace.tl = 0;
+    try {
+      const found = await this.findProviderAndModel(model.id);
+      if (!found) {
+        throw new Error(`Model not found: ${model.id}`);
       }
 
-      let partCount = 0;
+      const { provider } = found;
+      const credential = await this.resolveCredential(provider.name);
 
-      // Stream the response
-      const stream = client.streamChat(
-        model.id,
-        modelConfig,
-        messages,
-        options,
-        performanceTrace,
-        token,
-        logger,
-        credential,
-      );
+      const resolved = await this.findProviderAndModel(model.id);
+      if (!resolved) {
+        throw new Error(`Model not found: ${model.id}`);
+      }
 
-      try {
-        for await (const part of stream) {
-          if (token.isCancellationRequested) {
-            break;
+      const { provider: resolvedProvider, model: resolvedModel } = resolved;
+      providerForBalance = resolvedProvider;
+
+      logger.start({
+        providerName: resolvedProvider.name,
+        providerType: resolvedProvider.type,
+        baseUrl: resolvedProvider.baseUrl,
+        vscodeModelId: model.id,
+        modelId: resolvedModel.id,
+        modelName: resolvedModel.name,
+      });
+      logger.vscodeInput(messages, options);
+
+      const client = this.getClient(resolvedProvider);
+      const retryConfig = resolveChatNetwork(resolvedProvider).retry;
+
+      let emptyStreamAttempt = 0;
+
+      // eslint-disable-next-line no-constant-condition
+      while (true) {
+        if (emptyStreamAttempt > 0) {
+          // Reset performance trace for retry
+          performanceTrace.tts = Date.now();
+          performanceTrace.ttf = 0;
+          performanceTrace.ttft = 0;
+          performanceTrace.tps = 0;
+          performanceTrace.tl = 0;
+        }
+
+        let partCount = 0;
+
+        // Stream the response
+        const stream = client.streamChat(
+          model.id,
+          resolvedModel,
+          messages,
+          options,
+          performanceTrace,
+          token,
+          logger,
+          credential,
+        );
+
+        try {
+          for await (const part of stream) {
+            if (token.isCancellationRequested) {
+              outcome = 'cancelled';
+              break;
+            }
+            partCount++;
+            // Log VSCode output (verbose only)
+            logger.vscodeOutput(part);
+            progress.report(part);
           }
-          partCount++;
-          // Log VSCode output (verbose only)
-          logger.vscodeOutput(part);
-          progress.report(part);
+        } catch (error) {
+          if (token.isCancellationRequested && isAbortError(error)) {
+            // User cancelled the request; treat provider abort errors as expected.
+            outcome = 'cancelled';
+          } else {
+            outcome = 'error';
+            // sometimes, the chat panel in VSCode does not display the specific error,
+            // but instead shows the output from `stackTrace.format`.
+            logger.error(error);
+            throw error;
+          }
         }
-      } catch (error) {
-        if (token.isCancellationRequested && isAbortError(error)) {
-          // User cancelled the request; treat provider abort errors as expected.
-        } else {
-          // sometimes, the chat panel in VSCode does not display the specific error,
-          // but instead shows the output from `stackTrace.format`.
-          logger.error(error);
-          throw error;
+
+        // If the stream produced data or was cancelled, we're done
+        if (partCount > 0 || token.isCancellationRequested) {
+          if (token.isCancellationRequested) {
+            outcome = 'cancelled';
+          }
+          break;
         }
+
+        // Empty stream (200 OK but no data) — treat as transient and retry
+        if (emptyStreamAttempt >= retryConfig.maxRetries) {
+          break;
+        }
+
+        const delayMs = calculateBackoffDelay(emptyStreamAttempt, retryConfig);
+        logger.emptyStreamRetry(
+          emptyStreamAttempt + 1,
+          retryConfig.maxRetries,
+          delayMs,
+        );
+        await delay(delayMs);
+        emptyStreamAttempt++;
       }
 
-      // If the stream produced data or was cancelled, we're done
-      if (partCount > 0 || token.isCancellationRequested) {
-        break;
+      performanceTrace.tl = Date.now() - performanceTrace.tts;
+      logger.complete(performanceTrace);
+    } catch (error) {
+      if (outcome !== 'cancelled') {
+        outcome = 'error';
       }
-
-      // Empty stream (200 OK but no data) — treat as transient and retry
-      if (emptyStreamAttempt >= retryConfig.maxRetries) {
-        break;
+      throw error;
+    } finally {
+      if (providerForBalance) {
+        this.balanceManager?.notifyChatRequestFinished(
+          providerForBalance.name,
+          outcome,
+        );
       }
-
-      const delayMs = calculateBackoffDelay(emptyStreamAttempt, retryConfig);
-      logger.emptyStreamRetry(
-        emptyStreamAttempt + 1,
-        retryConfig.maxRetries,
-        delayMs,
-      );
-      await delay(delayMs);
-      emptyStreamAttempt++;
     }
-
-    performanceTrace.tl = Date.now() - performanceTrace.tts;
-    logger.complete(performanceTrace);
   }
 
   /**

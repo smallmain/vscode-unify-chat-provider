@@ -30,6 +30,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'name',
   'baseUrl',
   'auth',
+  'balanceProvider',
   'models',
   'extraHeaders',
   'extraBody',

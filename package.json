@@ -168,6 +168,10 @@
       {
         "command": "unifyChatProvider.refreshAllProvidersOfficialModels",
         "title": "%command.refreshAllProvidersOfficialModels.title%"
+      },
+      {
+        "command": "unifyChatProvider.refreshAllProvidersBalance",
+        "title": "%command.refreshAllProvidersBalance.title%"
       }
     ],
     "configuration": {
@@ -287,6 +291,56 @@
               "baseUrl": {
                 "type": "string",
                 "description": "%configuration.endpoints.baseUrl.description%"
+              },
+              "balanceProvider": {
+                "type": "object",
+                "description": "%configuration.endpoints.balanceProvider.description%",
+                "oneOf": [
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "none",
+                        "description": "%configuration.endpoints.balanceProvider.method.none.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "moonshot-ai",
+                        "description": "%configuration.endpoints.balanceProvider.method.moonshot.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "newapi",
+                        "description": "%configuration.endpoints.balanceProvider.method.newapi.description%"
+                      },
+                      "userId": {
+                        "type": "string",
+                        "description": "%configuration.endpoints.balanceProvider.newapi.userId.description%"
+                      },
+                      "systemToken": {
+                        "type": "string",
+                        "description": "%configuration.endpoints.balanceProvider.newapi.systemToken.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  }
+                ]
               },
               "extraHeaders": {
                 "type": "object",

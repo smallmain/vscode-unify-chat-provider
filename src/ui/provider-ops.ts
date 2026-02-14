@@ -10,6 +10,7 @@ import { showValidationErrors } from './component';
 import { SecretStore } from '../secret';
 import { resolveAuthForExportOrShowError } from '../auth/auth-transfer';
 import { showCopiedBase64Config } from './base64-config';
+import { resolveBalanceForExportOrShowError } from '../balance/balance-transfer';
 import {
   normalizeProviderDraft,
   validateProviderForm,
@@ -23,6 +24,7 @@ import {
   generateUniqueProviderName,
 } from './conflict-resolution';
 import { getAuthMethodCtor } from '../auth';
+import { getBalanceMethodDefinition } from '../balance';
 
 async function applyAuthStoragePolicy(options: {
   store: ConfigStore;
@@ -52,6 +54,41 @@ async function applyAuthStoragePolicy(options: {
     existing: existingAuth?.method === auth.method ? existingAuth : undefined,
   });
   next.auth = normalized;
+  return next;
+}
+
+async function applyBalanceStoragePolicy(options: {
+  store: ConfigStore;
+  secretStore: SecretStore;
+  provider: ProviderConfig;
+  existing?: ProviderConfig;
+}): Promise<ProviderConfig> {
+  const next = options.provider;
+  const balanceProvider = next.balanceProvider;
+  if (!balanceProvider || balanceProvider.method === 'none') {
+    return next;
+  }
+
+  const definition = getBalanceMethodDefinition(balanceProvider.method);
+  if (!definition) {
+    return next;
+  }
+
+  const storeSecretsInSettings =
+    options.store.storeApiKeyInSettings &&
+    definition.supportsSensitiveDataInSettings(balanceProvider);
+  const existingBalanceProvider = options.existing?.balanceProvider;
+
+  const normalized = await definition.normalizeOnImport(balanceProvider, {
+    secretStore: options.secretStore,
+    storeSecretsInSettings,
+    existing:
+      existingBalanceProvider?.method === balanceProvider.method
+        ? existingBalanceProvider
+        : undefined,
+  });
+
+  next.balanceProvider = normalized;
   return next;
 }
 
@@ -117,10 +154,16 @@ export async function saveProviderDraft(options: {
     existingToOverwrite = options.store.getProvider(options.draft.name!.trim());
   }
 
-  const provider = await applyAuthStoragePolicy({
+  const providerWithAuth = await applyAuthStoragePolicy({
     store: options.store,
     secretStore: options.secretStore,
     provider: normalizeProviderDraft(finalDraft),
+    existing: options.existing ?? existingToOverwrite,
+  });
+  const provider = await applyBalanceStoragePolicy({
+    store: options.store,
+    secretStore: options.secretStore,
+    provider: providerWithAuth,
     existing: options.existing ?? existingToOverwrite,
   });
 
@@ -191,6 +234,41 @@ export async function duplicateProvider(
       vscode.window.showErrorMessage(
         t(
           'Provider "{0}" authentication data is missing. Please re-enter it before duplicating.',
+          provider.name,
+        ),
+        { modal: true },
+      );
+      return;
+    }
+  }
+
+  const balanceProvider = duplicated.balanceProvider;
+  if (balanceProvider && balanceProvider.method !== 'none') {
+    const definition = getBalanceMethodDefinition(balanceProvider.method);
+    if (!definition) {
+      vscode.window.showErrorMessage(
+        t('Unsupported balance monitor: {0}', balanceProvider.method),
+        { modal: true },
+      );
+      return;
+    }
+
+    const storeSecretsInSettings =
+      store.storeApiKeyInSettings &&
+      definition.supportsSensitiveDataInSettings(balanceProvider);
+
+    try {
+      duplicated.balanceProvider = await definition.prepareForDuplicate(
+        balanceProvider,
+        {
+          secretStore,
+          storeSecretsInSettings,
+        },
+      );
+    } catch {
+      vscode.window.showErrorMessage(
+        t(
+          'Provider \"{0}\" balance monitor data is missing. Please reconfigure it before duplicating.',
           provider.name,
         ),
         { modal: true },
@@ -288,14 +366,16 @@ export async function promptForSensitiveDataInclusion(): Promise<
     [
       {
         label: '$(lock) ' + t('Exclude Sensitive Data (Safer)'),
-        detail: t('API keys, OAuth tokens, and client secrets will be removed'),
+        detail: t(
+          'API keys, OAuth tokens, balance system tokens, and client secrets will be removed',
+        ),
         picked: true,
         value: false,
       },
       {
         label: '$(unlock) ' + t('Include Sensitive Data (Riskier)'),
         detail: t(
-          'API keys, OAuth tokens, and client secrets will be included in plain text',
+          'API keys, OAuth tokens, balance system tokens, and client secrets will be included in plain text',
         ),
         value: true,
       },
@@ -340,6 +420,12 @@ export async function exportProviderConfigFromDraft(options: {
       { includeSensitive },
     );
     if (!ok) return;
+    const balanceOk = await resolveBalanceForExportOrShowError(
+      options.secretStore,
+      settingsOnly,
+      { includeSensitive },
+    );
+    if (!balanceOk) return;
     await showCopiedBase64Config(settingsOnly);
     return;
   }
@@ -350,5 +436,11 @@ export async function exportProviderConfigFromDraft(options: {
     { includeSensitive },
   );
   if (!ok) return;
+  const balanceOk = await resolveBalanceForExportOrShowError(
+    options.secretStore,
+    config,
+    { includeSensitive },
+  );
+  if (!balanceOk) return;
   await showCopiedBase64Config(config);
 }

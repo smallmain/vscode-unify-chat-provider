@@ -105,6 +105,7 @@ export interface ProviderDraftFormRoute {
   kind: 'providerDraftForm';
   draft: ProviderFormDraft;
   original: ProviderFormDraft;
+  skipSecretCleanupOnDiscard?: boolean;
 }
 
 export interface ImportProviderConfigArrayRoute {

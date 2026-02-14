@@ -22,6 +22,7 @@ import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
 import { officialModelsManager } from '../../official-models-manager';
 import { cleanupUnusedSecrets } from '../../secret';
 import { t } from '../../i18n';
+import { resolveBalanceFieldDetail } from '../balance-detail';
 
 export async function runProviderDraftFormScreen(
   ctx: UiContext,
@@ -41,6 +42,10 @@ export async function runProviderDraftFormScreen(
 
   let authDetail: string | undefined =
     draft.auth && draft.auth.method !== 'none' ? t('Loading...') : undefined;
+  let balanceDetail: string | undefined =
+    draft.balanceProvider && draft.balanceProvider.method !== 'none'
+      ? t('Loading...')
+      : undefined;
 
   const buildItems = (): FormItem<ProviderFormDraft>[] => {
     const items = buildFormItems(
@@ -56,8 +61,13 @@ export async function runProviderDraftFormScreen(
     );
 
     return items.map((item) => {
-      if (item.field !== 'auth') return item;
-      return { ...item, detail: authDetail };
+      if (item.field === 'auth') {
+        return { ...item, detail: authDetail };
+      }
+      if (item.field === 'balanceProvider') {
+        return { ...item, detail: balanceDetail };
+      }
+      return item;
     });
   };
 
@@ -109,37 +119,44 @@ export async function runProviderDraftFormScreen(
           const auth = draft.auth;
           if (!auth || auth.method === 'none') {
             authDetail = undefined;
-            refreshItems(buildItems());
-            return;
-          }
+          } else {
+            const providerLabel = draft.name?.trim() || t('Provider');
+            const providerId = ensureDraftSessionId(draft);
+            const authProvider = createAuthProvider(
+              {
+                providerId,
+                providerLabel,
+                secretStore: ctx.secretStore,
+                uriHandler: ctx.uriHandler,
+              },
+              deepClone(auth),
+            );
 
-          const providerLabel = draft.name?.trim() || t('Provider');
-          const providerId = ensureDraftSessionId(draft);
-          const authProvider = createAuthProvider(
-            {
-              providerId,
-              providerLabel,
-              secretStore: ctx.secretStore,
-              uriHandler: ctx.uriHandler,
-            },
-            deepClone(auth),
-          );
-
-          if (!authProvider) {
-            authDetail = undefined;
-            refreshItems(buildItems());
-            return;
-          }
-
-          try {
-            authDetail = await authProvider.getSummaryDetail?.();
-            const snapshot = await authProvider.getStatusSnapshot?.();
-            const nextInterval = intervalFromSnapshot(snapshot);
-            if (nextInterval !== currentIntervalMs) {
-              currentIntervalMs = nextInterval;
+            if (!authProvider) {
+              authDetail = undefined;
+            } else {
+              try {
+                authDetail = await authProvider.getSummaryDetail?.();
+                const snapshot = await authProvider.getStatusSnapshot?.();
+                const nextInterval = intervalFromSnapshot(snapshot);
+                if (nextInterval !== currentIntervalMs) {
+                  currentIntervalMs = nextInterval;
+                }
+              } finally {
+                authProvider.dispose?.();
+              }
             }
-          } finally {
-            authProvider.dispose?.();
+          }
+
+          const balanceProvider = draft.balanceProvider;
+          if (!balanceProvider || balanceProvider.method === 'none') {
+            balanceDetail = undefined;
+          } else {
+            balanceDetail = await resolveBalanceFieldDetail({
+              draft,
+              store: ctx.store,
+              secretStore: ctx.secretStore,
+            });
           }
 
           refreshItems(buildItems());
@@ -170,7 +187,9 @@ export async function runProviderDraftFormScreen(
           officialModelsManager.clearDraftSession(sessionId);
         }
 
-        await cleanupUnusedSecrets(ctx.secretStore);
+        if (!route.skipSecretCleanupOnDiscard) {
+          await cleanupUnusedSecrets(ctx.secretStore);
+        }
 
         const result: ProviderDraftFormResult = { kind: 'cancelled' };
       return {

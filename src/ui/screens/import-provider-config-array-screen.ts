@@ -221,6 +221,7 @@ export async function runImportProviderConfigArrayScreen(
         kind: 'providerDraftForm',
         draft: editable,
         original: deepClone(editable),
+        skipSecretCleanupOnDiscard: true,
       },
     };
   }
@@ -288,6 +289,8 @@ export async function runImportProviderConfigArrayScreen(
       return { kind: 'stay' };
     }
   }
+
+  await cleanupUnusedSecrets(ctx.secretStore);
 
   return { kind: 'pop' };
 }

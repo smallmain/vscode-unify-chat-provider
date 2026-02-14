@@ -408,6 +408,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.moonshot.cn',
+    balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
     models: [
       'kimi-k2.5',
@@ -422,6 +423,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.moonshot.ai',
+    balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
     models: [
       'kimi-k2.5',
@@ -585,6 +587,7 @@ export function resolveProviderModels(
     name: provider.name,
     baseUrl: provider.baseUrl,
     models: [],
+    balanceProvider: provider.balanceProvider,
     extraHeaders: provider.extraHeaders,
     extraBody: provider.extraBody,
     timeout: provider.timeout,
