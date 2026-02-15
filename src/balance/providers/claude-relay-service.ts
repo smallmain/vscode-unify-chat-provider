@@ -29,6 +29,13 @@ interface CrsUsageSnapshot {
     };
     tokens: number;
   };
+  weekly: {
+    cost: {
+      used: number;
+      total: number;
+    };
+    tokens: number;
+  };
   monthly: {
     cost: {
       used: number;
@@ -42,6 +49,12 @@ interface CrsUsageSnapshot {
       total: number;
     };
     tokens: number;
+  };
+  groupWeekly?: {
+    cost: {
+      used?: number;
+      total?: number;
+    };
   };
 }
 
@@ -177,6 +190,11 @@ function resolveMostConstrainedWindow(
       total: usage.daily.cost.total,
     },
     {
+      summaryPrefix: t('This week quota'),
+      used: usage.weekly.cost.used,
+      total: usage.weekly.cost.total,
+    },
+    {
       summaryPrefix: t('This month quota'),
       used: usage.monthly.cost.used,
       total: usage.monthly.cost.total,
@@ -187,6 +205,24 @@ function resolveMostConstrainedWindow(
       total: usage.total.cost.total,
     },
   ];
+
+  const groupUsed = usage.groupWeekly?.cost.used;
+  const groupTotal = usage.groupWeekly?.cost.total;
+  const groupOverLimit =
+    typeof groupUsed === 'number' &&
+    Number.isFinite(groupUsed) &&
+    typeof groupTotal === 'number' &&
+    Number.isFinite(groupTotal) &&
+    groupTotal > 0 &&
+    groupUsed >= groupTotal;
+
+  if (groupOverLimit) {
+    windows.push({
+      summaryPrefix: t('Group weekly quota'),
+      used: groupUsed,
+      total: groupTotal,
+    });
+  }
 
   const constrained = windows.filter((window) => window.total > 0);
   if (constrained.length === 0) {
@@ -248,6 +284,10 @@ function buildSnapshot(usage: CrsUsageSnapshot): {
     usage.monthly.cost.total > 0
       ? `${formatCurrency(usage.monthly.cost.used)} / ${formatCurrency(usage.monthly.cost.total)}`
       : formatCurrency(usage.monthly.cost.used);
+  const weeklyCostText =
+    usage.weekly.cost.total > 0
+      ? `${formatCurrency(usage.weekly.cost.used)} / ${formatCurrency(usage.weekly.cost.total)}`
+      : formatCurrency(usage.weekly.cost.used);
   const totalCostText =
     usage.total.cost.total > 0
       ? `${formatCurrency(usage.total.cost.used)} / ${formatCurrency(usage.total.cost.total)}`
@@ -258,6 +298,11 @@ function buildSnapshot(usage: CrsUsageSnapshot): {
       'Today usage: {0}, Tokens: {1}',
       dailyCostText,
       formatTokenCountCompact(usage.daily.tokens),
+    ),
+    t(
+      'This week usage: {0}, Tokens: {1}',
+      weeklyCostText,
+      formatTokenCountCompact(usage.weekly.tokens),
     ),
     t(
       'This month usage: {0}, Tokens: {1}',
@@ -271,6 +316,31 @@ function buildSnapshot(usage: CrsUsageSnapshot): {
     ),
   ];
 
+  const groupUsed = usage.groupWeekly?.cost.used;
+  const groupTotal = usage.groupWeekly?.cost.total;
+  const hasGroupUsed =
+    typeof groupUsed === 'number' && Number.isFinite(groupUsed);
+  const hasGroupTotal =
+    typeof groupTotal === 'number' &&
+    Number.isFinite(groupTotal) &&
+    groupTotal > 0;
+  if (hasGroupUsed || hasGroupTotal) {
+    const groupUsedValue =
+      typeof groupUsed === 'number' && Number.isFinite(groupUsed) ? groupUsed : 0;
+    const groupTotalValue =
+      typeof groupTotal === 'number' &&
+      Number.isFinite(groupTotal) &&
+      groupTotal > 0
+        ? groupTotal
+        : undefined;
+    const groupLabel = t('Group weekly usage');
+    const groupCostText =
+      groupTotalValue !== undefined
+        ? `${formatCurrency(groupUsedValue)} / ${formatCurrency(groupTotalValue)}`
+        : formatCurrency(groupUsedValue);
+    details.push(t('{0}: {1}', groupLabel, groupCostText));
+  }
+
   return {
     summary,
     details,
@@ -282,13 +352,20 @@ type CrsUserStatsPayload = {
   usage?: {
     total?: {
       allTokens?: number;
+      tokens?: number;
     };
   };
   limits: {
     currentDailyCost?: number;
     dailyCostLimit?: number;
+    currentWeeklyCost?: number;
+    weeklyCostLimit?: number;
     currentTotalCost?: number;
     totalCostLimit?: number;
+  };
+  group?: {
+    weeklyCost?: number;
+    weeklyCostLimit?: number;
   };
 };
 
@@ -298,6 +375,8 @@ type CrsModelStatsPayload = {
     total?: number;
   };
 };
+
+type CrsModelStatsPeriod = 'daily' | 'natural_weekly' | 'monthly';
 
 export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
   static supportsSensitiveDataInSettings(_config: BalanceConfig): boolean {
@@ -453,12 +532,19 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
 
     try {
       const apiId = await this.fetchApiId(baseUrl, apiKey, logger);
-      const [userStats, monthlyStats] = await Promise.all([
-        this.fetchUserStats(baseUrl, apiId, logger),
-        this.fetchUserModelStats(baseUrl, apiId, logger),
-      ]);
+      const [userStats, dailyStats, weeklyStats, monthlyStats] =
+        await Promise.all([
+          this.fetchUserStats(baseUrl, apiId, logger),
+          this.fetchUserModelStats(baseUrl, apiId, 'daily', logger),
+          this.fetchUserModelStats(baseUrl, apiId, 'natural_weekly', logger),
+          this.fetchUserModelStats(baseUrl, apiId, 'monthly', logger),
+        ]);
 
-      const usage = this.aggregateUsage(userStats, monthlyStats);
+      const usage = this.aggregateUsage(userStats, {
+        daily: dailyStats,
+        weekly: weeklyStats,
+        monthly: monthlyStats,
+      });
       const snapshot = buildSnapshot(usage);
 
       return {
@@ -478,47 +564,82 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
 
   private aggregateUsage(
     userStats: CrsUserStatsPayload,
-    monthlyStats: CrsModelStatsPayload[],
+    modelStats: {
+      daily: CrsModelStatsPayload[];
+      weekly: CrsModelStatsPayload[];
+      monthly: CrsModelStatsPayload[];
+    },
   ): CrsUsageSnapshot {
-    const monthlyTotals = monthlyStats.reduce(
-      (acc, item) => {
-        const tokens =
-          typeof item.allTokens === 'number' && Number.isFinite(item.allTokens)
-            ? item.allTokens
-            : 0;
-        const costRaw = item.costs?.total;
-        const cost =
-          typeof costRaw === 'number' && Number.isFinite(costRaw) ? costRaw : 0;
-        return {
-          tokens: acc.tokens + tokens,
-          cost: acc.cost + cost,
-        };
-      },
-      { tokens: 0, cost: 0 },
-    );
+    const sumModelStats = (
+      entries: CrsModelStatsPayload[],
+    ): { tokens: number; cost: number } =>
+      entries.reduce(
+        (acc, item) => {
+          const tokens =
+            typeof item.allTokens === 'number' && Number.isFinite(item.allTokens)
+              ? item.allTokens
+              : 0;
+          const costRaw = item.costs?.total;
+          const cost =
+            typeof costRaw === 'number' && Number.isFinite(costRaw) ? costRaw : 0;
+          return {
+            tokens: acc.tokens + tokens,
+            cost: acc.cost + cost,
+          };
+        },
+        { tokens: 0, cost: 0 },
+      );
 
-    const usageTotalTokensRaw = userStats.usage?.total?.allTokens;
+    const dailyTotals = sumModelStats(modelStats.daily);
+    const weeklyTotals = sumModelStats(modelStats.weekly);
+    const monthlyTotals = sumModelStats(modelStats.monthly);
+
+    const usageTotal = userStats.usage?.total;
+    const usageTotalAllTokens =
+      typeof usageTotal?.allTokens === 'number' &&
+      Number.isFinite(usageTotal.allTokens)
+        ? usageTotal.allTokens
+        : undefined;
     const usageTotalTokens =
-      typeof usageTotalTokensRaw === 'number' && Number.isFinite(usageTotalTokensRaw)
-        ? usageTotalTokensRaw
-        : 0;
+      typeof usageTotal?.tokens === 'number' && Number.isFinite(usageTotal.tokens)
+        ? usageTotal.tokens
+        : undefined;
 
     const limits = userStats.limits;
+    const dailyUsed =
+      typeof limits.currentDailyCost === 'number' &&
+      Number.isFinite(limits.currentDailyCost)
+        ? limits.currentDailyCost
+        : dailyTotals.cost;
+    const weeklyUsed =
+      typeof limits.currentWeeklyCost === 'number' &&
+      Number.isFinite(limits.currentWeeklyCost)
+        ? limits.currentWeeklyCost
+        : weeklyTotals.cost;
+    const group = userStats.group;
+
     return {
       daily: {
         cost: {
-          used:
-            typeof limits.currentDailyCost === 'number' &&
-            Number.isFinite(limits.currentDailyCost)
-              ? limits.currentDailyCost
-              : 0,
+          used: dailyUsed,
           total:
             typeof limits.dailyCostLimit === 'number' &&
             Number.isFinite(limits.dailyCostLimit)
               ? limits.dailyCostLimit
               : 0,
         },
-        tokens: usageTotalTokens,
+        tokens: dailyTotals.tokens,
+      },
+      weekly: {
+        cost: {
+          used: weeklyUsed,
+          total:
+            typeof limits.weeklyCostLimit === 'number' &&
+            Number.isFinite(limits.weeklyCostLimit)
+              ? limits.weeklyCostLimit
+              : 0,
+        },
+        tokens: weeklyTotals.tokens,
       },
       monthly: {
         cost: {
@@ -540,8 +661,16 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
               ? limits.totalCostLimit
               : 0,
         },
-        tokens: usageTotalTokens,
+        tokens: usageTotalAllTokens ?? usageTotalTokens ?? 0,
       },
+      groupWeekly: group
+        ? {
+            cost: {
+              used: group.weeklyCost,
+              total: group.weeklyCostLimit,
+            },
+          }
+        : undefined,
     };
   }
 
@@ -664,27 +793,38 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
 
     const usage = isRecord(payload['usage']) ? payload['usage'] : undefined;
     const usageTotal = usage && isRecord(usage['total']) ? usage['total'] : undefined;
+    const group = isRecord(payload['group']) ? payload['group'] : undefined;
 
     return {
       usage: usageTotal
         ? {
             total: {
               allTokens: pickNumberLike(usageTotal, 'allTokens'),
+              tokens: pickNumberLike(usageTotal, 'tokens'),
             },
           }
         : undefined,
       limits: {
         currentDailyCost: pickNumberLike(limits, 'currentDailyCost'),
         dailyCostLimit: pickNumberLike(limits, 'dailyCostLimit'),
+        currentWeeklyCost: pickNumberLike(limits, 'currentWeeklyCost'),
+        weeklyCostLimit: pickNumberLike(limits, 'weeklyCostLimit'),
         currentTotalCost: pickNumberLike(limits, 'currentTotalCost'),
         totalCostLimit: pickNumberLike(limits, 'totalCostLimit'),
       },
+      group: group
+        ? {
+            weeklyCost: pickNumberLike(group, 'weeklyCost'),
+            weeklyCostLimit: pickNumberLike(group, 'weeklyCostLimit'),
+          }
+        : undefined,
     };
   }
 
   private async fetchUserModelStats(
     baseUrl: string,
     apiId: string,
+    period: CrsModelStatsPeriod,
     logger: ReturnType<typeof createSimpleHttpLogger>,
   ): Promise<CrsModelStatsPayload[]> {
     const endpoint = createEndpoint(baseUrl, 'user-model-stats');
@@ -694,7 +834,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
         'Content-Type': 'application/json',
         Accept: 'application/json',
       },
-      body: JSON.stringify({ apiId, period: 'monthly' }),
+      body: JSON.stringify({ apiId, period }),
       logger,
     });
 

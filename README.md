@@ -396,6 +396,7 @@ This screen shows all configuration fields for the model. For field details, see
 
 Use this feature to monitor provider balances in `Provider Settings`.
 
+- Run the VS Code command `Unify Chat Provider: Provider Balance Monitoring` to open the balance monitoring panel.
 - Configure it from the `Balance Monitor` field.
 - Built-in methods:
   - `Moonshot AI Balance`: no extra config required; uses provider `baseUrl` and API key.
@@ -406,7 +407,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Claude Relay Service Balance`: no extra config required; uses provider `baseUrl` and API key.
   - `Kimi Code Usage`: no extra config required; uses provider `baseUrl` and API key.
   - `New API Balance`: always shows API key balance; user balance is optional and requires `userId` + `systemToken` (sensitive data).
-- Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balances` to force refresh balances for all configured providers.
+- Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balance Information` to force refresh balances for all configured providers.
 
 ## Adjust Parameters
 

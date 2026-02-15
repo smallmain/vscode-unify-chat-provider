@@ -9,7 +9,7 @@
   "command.importConfigFromOtherApplications.title": "Unify Chat Provider: Import Config From Other Applications",
   "command.exportConfig.title": "Unify Chat Provider: Export Config",
   "command.manageProviders.title": "Unify Chat Provider: Manage Providers",
-  "command.manageBalances.title": "Unify Chat Provider: Provider Balances",
+  "command.manageBalances.title": "Unify Chat Provider: Provider Balance Monitoring",
   "command.refreshAllProvidersOfficialModels.title": "Unify Chat Provider: Refresh All Provider's Official Models",
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: Refresh All Providers' Balance Information",
   "configuration.title": "Unify Chat Provider",

@@ -65,7 +65,7 @@ function resolveRemainingPercent(
 }
 
 function formatProgressBar(percent: number | undefined): string | undefined {
-  const width = 22;
+  const width = 30;
 
   if (percent === undefined) {
     return undefined;
@@ -74,7 +74,7 @@ function formatProgressBar(percent: number | undefined): string | undefined {
   const clamped = clampPercent(percent);
   const filled = Math.floor((clamped / 100) * width);
   const empty = Math.max(0, width - filled);
-  return `${'█'.repeat(filled)}${'░'.repeat(empty)} ${Math.round(clamped)}%`;
+  return `${'█'.repeat(filled)}${'░'.repeat(empty)}`;
 }
 
 function formatBalanceDetail(
@@ -111,11 +111,58 @@ function formatBalanceDetail(
   return lines;
 }
 
-function escapeMarkdownInline(value: string): string {
+function formatProgressText(percent: number | undefined): string {
+  if (percent === undefined) {
+    return t('N/A');
+  }
+
+  return `${Math.round(clampPercent(percent))}%`;
+}
+
+function isUnlimitedText(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lower = normalized.toLowerCase();
+  return (
+    normalized.includes('∞') ||
+    normalized.includes('无限') ||
+    normalized.includes('不限') ||
+    lower.includes('unlimited') ||
+    lower.includes('no limit')
+  );
+}
+
+function isUnlimitedBalanceState(
+  state: BalanceProviderState | undefined,
+): boolean {
+  const snapshot = state?.snapshot;
+  if (!snapshot) {
+    return false;
+  }
+
+  const badgeText = snapshot.modelDisplay?.badge?.text;
+  if (typeof badgeText === 'string' && isUnlimitedText(badgeText)) {
+    return true;
+  }
+
+  if (isUnlimitedText(snapshot.summary)) {
+    return true;
+  }
+
+  return snapshot.details.some((line) => isUnlimitedText(line));
+}
+
+function escapeHtml(value: string): string {
   const normalized = value.replace(/[\r\n]+/g, ' ').trim();
   return normalized
-    .replace(/\\/g, '\\\\')
-    .replace(/([`*_{}[\]()#+\-.!|>])/g, '\\$1');
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
 }
 
 function buildTooltip(providers: ProviderConfig[]): vscode.MarkdownString {
@@ -129,37 +176,48 @@ function buildTooltip(providers: ProviderConfig[]): vscode.MarkdownString {
   });
 
   const markdown = new vscode.MarkdownString();
-  markdown.supportHtml = false;
+  markdown.supportHtml = true;
   markdown.isTrusted = false;
   markdown.appendMarkdown(
-    `**${escapeMarkdownInline(t('Provider Balances'))}**\n\n`,
+    `<table width="100%">
+<tbody>
+<tr>
+<td width="70%"><h4>${escapeHtml(t('Provider Balance Monitoring'))}</h4></td>
+<td width="30%" align="right">${escapeHtml('')}</td>
+</tr>
+</tbody>
+</table>\n\n`,
   );
 
   sorted.forEach((provider, index) => {
     const state = balanceManager.getProviderState(provider.name);
     const percent = resolveRemainingPercent(state);
-    const progress = formatProgressBar(percent);
-    markdown.appendMarkdown(`### ${escapeMarkdownInline(provider.name)}\n\n`);
-    if (progress) {
-      markdown.appendMarkdown(`${escapeMarkdownInline(progress)}\n\n`);
-    }
-
+    const progressBar = formatProgressBar(percent);
+    const progressText = isUnlimitedBalanceState(state)
+      ? t('Unlimited')
+      : formatProgressText(percent);
     const detailLines = formatBalanceDetail(state);
-    for (const line of detailLines) {
-      markdown.appendMarkdown(`- ${escapeMarkdownInline(line)}\n`);
-    }
-
+    const details = detailLines.map((line) => escapeHtml(line)).join('<br/>');
     const updatedAt = state?.snapshot?.updatedAt;
-    if (typeof updatedAt === 'number' && Number.isFinite(updatedAt)) {
-      const updatedText = t(
-        'Last updated: {0}',
-        new Date(updatedAt).toLocaleTimeString(),
-      );
-      markdown.appendMarkdown(`- ${escapeMarkdownInline(updatedText)}\n`);
-    }
+    const updatedText =
+      typeof updatedAt === 'number' && Number.isFinite(updatedAt)
+        ? new Date(updatedAt).toLocaleTimeString()
+        : t('N/A');
+
+    markdown.appendMarkdown(
+      `<table width="100%">
+<tbody>
+<tr><td><strong>${escapeHtml(provider.name)}</strong></td><td align="right">${escapeHtml(progressText)}</td></tr>
+${progressBar ? `<tr><td colspan="2">${escapeHtml(progressBar)}</td></tr>` : ''}
+<tr><td>${escapeHtml(t('Details'))}</td><td align="right">${escapeHtml(t('{0} item(s)', String(detailLines.length)))}</td></tr>
+<tr><td colspan="2">${details}</td></tr>
+<tr><td>${escapeHtml(t('Updated'))}</td><td align="right">${escapeHtml(updatedText)}</td></tr>
+</tbody>
+</table>\n\n`,
+    );
 
     if (index !== sorted.length - 1) {
-      markdown.appendMarkdown('\n---\n\n');
+      markdown.appendMarkdown('---\n\n<span style="height: 5px"></span>');
     }
   });
 

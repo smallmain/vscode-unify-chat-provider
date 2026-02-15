@@ -9,7 +9,7 @@
   "command.importConfigFromOtherApplications.title": "Unify Chat Provider: 从其他应用导入配置",
   "command.exportConfig.title": "Unify Chat Provider: 导出配置",
   "command.manageProviders.title": "Unify Chat Provider: 管理供应商",
-  "command.manageBalances.title": "Unify Chat Provider: 供应商余额",
+  "command.manageBalances.title": "Unify Chat Provider: 供应商余额监控",
   "command.refreshAllProvidersOfficialModels.title": "Unify Chat Provider: 刷新所有供应商的官方模型",
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: 刷新所有供应商的余额信息",
   "configuration.title": "Unify Chat Provider",

@@ -89,6 +89,40 @@ function formatProgressBar(percent: number | undefined): string | undefined {
   return `${bar} ${Math.round(clamped)}%`;
 }
 
+function isUnlimitedText(value: string): boolean {
+  const normalized = value.trim();
+  if (!normalized) {
+    return false;
+  }
+
+  const lower = normalized.toLowerCase();
+  return (
+    normalized.includes('∞') ||
+    normalized.includes('无限') ||
+    normalized.includes('不限') ||
+    lower.includes('unlimited') ||
+    lower.includes('no limit')
+  );
+}
+
+function isUnlimitedBalanceState(state: BalanceProviderState | undefined): boolean {
+  const snapshot = state?.snapshot;
+  if (!snapshot) {
+    return false;
+  }
+
+  const badgeText = snapshot.modelDisplay?.badge?.text;
+  if (typeof badgeText === 'string' && isUnlimitedText(badgeText)) {
+    return true;
+  }
+
+  if (isUnlimitedText(snapshot.summary)) {
+    return true;
+  }
+
+  return snapshot.details.some((line) => isUnlimitedText(line));
+}
+
 function formatBalanceDetail(state: BalanceProviderState | undefined): string {
   const parts: string[] = [];
 
@@ -201,7 +235,9 @@ export async function runBalanceProviderListScreen(
       for (const provider of providers) {
         const state = balanceManager.getProviderState(provider.name);
         const percent = resolveRemainingPercent(state);
-        const description = formatProgressBar(percent);
+        const description =
+          formatProgressBar(percent) ??
+          (isUnlimitedBalanceState(state) ? t('Unlimited') : undefined);
         const detail = formatBalanceDetail(state);
         const warning = evaluateBalanceWarning(
           state?.snapshot?.modelDisplay,
@@ -247,7 +283,7 @@ export async function runBalanceProviderListScreen(
   };
 
   const selection = await pickQuickItem<BalanceProviderListItem>({
-    title: t('Provider Balances'),
+    title: t('Provider Balance Monitoring'),
     placeholder: t('Select a provider to view details'),
     ignoreFocusOut: false,
     items: await buildItems(),
