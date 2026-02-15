@@ -782,7 +782,7 @@
   "Resets at {0}": "Resets at {0}",
   "Resets in {0}": "Resets in {0}",
   "Requires User ID and System Token": "Requires User ID and System Token",
-  "Select a provider to view details": "Select a provider to view details",
+  "Select a provider to configure balance monitor": "Select a provider to configure balance monitor",
   "Select a balance monitoring method": "Select a balance monitoring method",
   "Select a different balance monitoring method": "Select a different balance monitoring method",
   "Select monitoring scope": "Select monitoring scope",

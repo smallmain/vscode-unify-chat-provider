@@ -18,7 +18,12 @@ import type {
 } from '../router/types';
 
 type BalanceProviderListItem = vscode.QuickPickItem & {
-  action?: 'noop' | 'provider' | 'configure' | 'refresh-all' | 'view-all-providers';
+  action?:
+    | 'noop'
+    | 'provider'
+    | 'edit-provider'
+    | 'refresh-all'
+    | 'view-all-providers';
   providerName?: string;
 };
 
@@ -260,7 +265,7 @@ export async function runBalanceProviderListScreen(
             },
             {
               iconPath: new vscode.ThemeIcon('gear'),
-              tooltip: t('Configure balance monitor'),
+              tooltip: t('Edit Provider'),
             },
           ],
         });
@@ -284,7 +289,7 @@ export async function runBalanceProviderListScreen(
 
   const selection = await pickQuickItem<BalanceProviderListItem>({
     title: t('Provider Balance Monitoring'),
-    placeholder: t('Select a provider to view details'),
+    placeholder: t('Select a provider to configure balance monitor'),
     ignoreFocusOut: false,
     items: await buildItems(),
     onInlineAction: async (item, qp) => {
@@ -322,7 +327,7 @@ export async function runBalanceProviderListScreen(
       }
 
       if (buttonIndex === 1) {
-        return { ...item, action: 'configure' };
+        return { ...item, action: 'edit-provider' };
       }
 
       return;
@@ -368,7 +373,7 @@ export async function runBalanceProviderListScreen(
     return { kind: 'replace', route: { kind: 'providerList' } };
   }
 
-  if (selection.action === 'configure' && selection.providerName) {
+  if (selection.action === 'provider' && selection.providerName) {
     await configureBalanceMonitor({
       ctx,
       providerName: selection.providerName,
@@ -376,7 +381,7 @@ export async function runBalanceProviderListScreen(
     return { kind: 'stay' };
   }
 
-  if (selection.action === 'provider' && selection.providerName) {
+  if (selection.action === 'edit-provider' && selection.providerName) {
     const existing = ctx.store.getProvider(selection.providerName);
     if (!existing) {
       vscode.window.showErrorMessage(

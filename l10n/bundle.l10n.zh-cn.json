@@ -782,7 +782,7 @@
   "Resets at {0}": "重置于 {0}",
   "Resets in {0}": "将在 {0} 后重置",
   "Requires User ID and System Token": "需要用户 ID 和系统令牌",
-  "Select a provider to view details": "选择供应商查看详情",
+  "Select a provider to configure balance monitor": "选择供应商配置余额监控",
   "Select a balance monitoring method": "选择余额监控方式",
   "Select a different balance monitoring method": "选择其他余额监控方式",
   "Select monitoring scope": "选择监控范围",
