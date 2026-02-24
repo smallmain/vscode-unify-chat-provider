@@ -91,10 +91,6 @@ function resolvePeriodText(metric: BalanceMetric): string | undefined {
 }
 
 function resolveTypeLabel(metric: BalanceMetric): string {
-  if (metric.label?.trim()) {
-    return metric.label.trim();
-  }
-
   if (metric.type === 'amount') {
     if (metric.direction === 'used') {
       return t('Used');
@@ -116,8 +112,39 @@ function resolveTypeLabel(metric: BalanceMetric): string {
   return t('Status');
 }
 
+function normalizeForCompare(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/[\s()\[\]{}\-_:|,./\\]+/g, '');
+}
+
+function resolveMetricBaseLabel(metric: BalanceMetric): string {
+  const explicitLabel = metric.label?.trim();
+  const baseLabel = explicitLabel || resolveTypeLabel(metric);
+
+  const scope = metric.scope?.trim();
+  if (!scope) {
+    return baseLabel;
+  }
+
+  const normalizedBase = normalizeForCompare(baseLabel);
+  const normalizedScope = normalizeForCompare(scope);
+  if (
+    normalizedScope.length > 0 &&
+    normalizedBase.includes(normalizedScope)
+  ) {
+    return baseLabel;
+  }
+
+  return `${scope} ${baseLabel}`;
+}
+
 function resolveLabel(metric: BalanceMetric): string {
-  const typeLabel = resolveTypeLabel(metric);
+  const typeLabel = resolveMetricBaseLabel(metric);
+  if (metric.label?.trim()) {
+    return typeLabel;
+  }
+
   const periodText = resolvePeriodText(metric);
   return periodText ? `${typeLabel} (${periodText})` : typeLabel;
 }
@@ -187,6 +214,462 @@ function sortMetrics(metrics: readonly BalanceMetric[]): BalanceMetric[] {
     }
     return a.id.localeCompare(b.id);
   });
+}
+
+type MetricGroupFamily = 'amount' | 'token' | 'status' | 'percent' | 'time';
+
+interface MetricLineGroup {
+  key: string;
+  family: MetricGroupFamily;
+  period: BalanceMetric['period'];
+  periodLabel?: string;
+  scope?: string;
+  label?: string;
+  metrics: BalanceMetric[];
+}
+
+function normalizeGroupLabel(label: string | undefined): string | undefined {
+  const trimmed = label?.trim();
+  return trimmed ? trimmed : undefined;
+}
+
+function groupFamilyOf(metric: BalanceMetric): MetricGroupFamily {
+  return metric.type;
+}
+
+function buildBaseGroupKey(metric: BalanceMetric): string {
+  const scope = metric.scope?.trim() ?? '';
+  const label = normalizeGroupLabel(metric.label) ?? '';
+  const periodLabel = metric.periodLabel?.trim() ?? '';
+  return [
+    groupFamilyOf(metric),
+    scope,
+    metric.period,
+    periodLabel,
+    label,
+  ].join('|');
+}
+
+function buildStandaloneGroupKey(metric: BalanceMetric): string {
+  return [
+    groupFamilyOf(metric),
+    metric.id,
+    metric.scope?.trim() ?? '',
+    metric.period,
+  ].join('|');
+}
+
+function createMetricLineGroup(
+  key: string,
+  family: MetricGroupFamily,
+  metric: BalanceMetric,
+): MetricLineGroup {
+  return {
+    key,
+    family,
+    period: metric.period,
+    periodLabel: metric.periodLabel?.trim() || undefined,
+    scope: metric.scope?.trim() || undefined,
+    label: normalizeGroupLabel(metric.label),
+    metrics: [],
+  };
+}
+
+function isMetricContextMatch(
+  group: MetricLineGroup,
+  metric: BalanceMetric,
+): boolean {
+  const groupScope = group.scope ?? '';
+  const metricScope = metric.scope?.trim() ?? '';
+  const groupPeriodLabel = group.periodLabel ?? '';
+  const metricPeriodLabel = metric.periodLabel?.trim() ?? '';
+  return (
+    group.period === metric.period &&
+    groupScope === metricScope &&
+    groupPeriodLabel === metricPeriodLabel
+  );
+}
+
+function isGroupPrimary(group: MetricLineGroup): boolean {
+  return group.metrics.some((metric) => metric.primary);
+}
+
+function isSameLabel(left: string | undefined, right: string | undefined): boolean {
+  if (!left || !right) {
+    return false;
+  }
+  return normalizeForCompare(left) === normalizeForCompare(right);
+}
+
+function findGroupForDeferredMetric(
+  metric: BalanceMetric,
+  groups: readonly MetricLineGroup[],
+): MetricLineGroup | undefined {
+  const candidates = groups.filter(
+    (group) =>
+      (group.family === 'amount' ||
+        group.family === 'token' ||
+        group.family === 'status') &&
+      isMetricContextMatch(group, metric),
+  );
+  if (candidates.length === 0) {
+    return undefined;
+  }
+
+  const metricLabel = normalizeGroupLabel(metric.label);
+  const exactLabel = candidates.find((candidate) =>
+    isSameLabel(candidate.label, metricLabel),
+  );
+  if (exactLabel) {
+    return exactLabel;
+  }
+
+  const primary = candidates.find((candidate) => isGroupPrimary(candidate));
+  if (primary) {
+    return primary;
+  }
+
+  return candidates[0];
+}
+
+function buildMetricGroups(
+  snapshot: BalanceSnapshot,
+): MetricLineGroup[] {
+  const sorted = sortMetrics(snapshot.items);
+  const groups: MetricLineGroup[] = [];
+  const groupMap = new Map<string, MetricLineGroup>();
+  const deferredMetrics: BalanceMetric[] = [];
+
+  for (const metric of sorted) {
+    if (metric.type === 'percent' || metric.type === 'time') {
+      deferredMetrics.push(metric);
+      continue;
+    }
+
+    const key = buildBaseGroupKey(metric);
+    let group = groupMap.get(key);
+    if (!group) {
+      group = createMetricLineGroup(key, groupFamilyOf(metric), metric);
+      groupMap.set(key, group);
+      groups.push(group);
+    }
+
+    group.metrics.push(metric);
+  }
+
+  for (const metric of deferredMetrics) {
+    const target = findGroupForDeferredMetric(metric, groups);
+    if (target) {
+      target.metrics.push(metric);
+      continue;
+    }
+
+    const key = buildStandaloneGroupKey(metric);
+    const standalone = createMetricLineGroup(key, groupFamilyOf(metric), metric);
+    standalone.metrics.push(metric);
+    groups.push(standalone);
+  }
+
+  return groups;
+}
+
+function finiteMetricNumber(value: number | undefined): number | undefined {
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
+}
+
+function pickAmountMetric(
+  metrics: readonly BalanceMetric[],
+  direction: BalanceAmountMetric['direction'],
+): BalanceAmountMetric | undefined {
+  return metrics.find(
+    (metric): metric is BalanceAmountMetric =>
+      metric.type === 'amount' && metric.direction === direction,
+  );
+}
+
+function pickTokenMetric(
+  metrics: readonly BalanceMetric[],
+): BalanceTokenMetric | undefined {
+  return metrics.find(
+    (metric): metric is BalanceTokenMetric => metric.type === 'token',
+  );
+}
+
+function pickStatusMetric(
+  metrics: readonly BalanceMetric[],
+): BalanceStatusMetric | undefined {
+  return metrics.find(
+    (metric): metric is BalanceStatusMetric => metric.type === 'status',
+  );
+}
+
+function pickPercentMetric(
+  metrics: readonly BalanceMetric[],
+): BalancePercentMetric | undefined {
+  return metrics.find(
+    (metric): metric is BalancePercentMetric => metric.type === 'percent',
+  );
+}
+
+function pickTimeMetric(
+  metrics: readonly BalanceMetric[],
+): BalanceTimeMetric | undefined {
+  const expires = metrics.find(
+    (metric): metric is BalanceTimeMetric =>
+      metric.type === 'time' && metric.kind === 'expiresAt',
+  );
+  if (expires) {
+    return expires;
+  }
+
+  return metrics.find(
+    (metric): metric is BalanceTimeMetric =>
+      metric.type === 'time' && metric.kind === 'resetAt',
+  );
+}
+
+function resolveAmountValue(metrics: readonly BalanceMetric[]): {
+  text?: string;
+  remaining?: number;
+  used?: number;
+  limit?: number;
+} {
+  const remainingMetric = pickAmountMetric(metrics, 'remaining');
+  const usedMetric = pickAmountMetric(metrics, 'used');
+  const limitMetric = pickAmountMetric(metrics, 'limit');
+
+  const remaining = finiteMetricNumber(remainingMetric?.value);
+  const used = finiteMetricNumber(usedMetric?.value);
+  const limit = finiteMetricNumber(limitMetric?.value);
+
+  const currencySymbol =
+    remainingMetric?.currencySymbol ??
+    usedMetric?.currencySymbol ??
+    limitMetric?.currencySymbol;
+
+  if (remaining !== undefined && limit !== undefined && limit > 0) {
+    return {
+      text: `${formatAmount(remaining, currencySymbol)} / ${formatAmount(limit, currencySymbol)}`,
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (used !== undefined && limit !== undefined && limit > 0) {
+    return {
+      text: `${formatAmount(used, currencySymbol)} / ${formatAmount(limit, currencySymbol)}`,
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (remaining !== undefined) {
+    return {
+      text: formatAmount(remaining, currencySymbol),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (used !== undefined) {
+    return {
+      text: formatAmount(used, currencySymbol),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (limit !== undefined && limit > 0) {
+    return {
+      text: formatAmount(limit, currencySymbol),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  return { remaining, used, limit };
+}
+
+function resolveTokenValue(metric: BalanceTokenMetric): {
+  text?: string;
+  remaining?: number;
+  used?: number;
+  limit?: number;
+} {
+  const remaining = finiteMetricNumber(metric.remaining);
+  const used = finiteMetricNumber(metric.used);
+  const limit = finiteMetricNumber(metric.limit);
+
+  if (remaining !== undefined && limit !== undefined && limit > 0) {
+    return {
+      text: `${formatTokenCountCompact(remaining)} / ${formatTokenCountCompact(limit)}`,
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (used !== undefined && limit !== undefined && limit > 0) {
+    return {
+      text: `${formatTokenCountCompact(used)} / ${formatTokenCountCompact(limit)}`,
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (remaining !== undefined) {
+    return {
+      text: formatTokenCountCompact(remaining),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (used !== undefined) {
+    return {
+      text: formatTokenCountCompact(used),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  if (limit !== undefined && limit > 0) {
+    return {
+      text: formatTokenCountCompact(limit),
+      remaining,
+      used,
+      limit,
+    };
+  }
+
+  return { remaining, used, limit };
+}
+
+function derivePercentFromUsage(input: {
+  remaining?: number;
+  used?: number;
+  limit?: number;
+}): number | undefined {
+  const limit = input.limit;
+  if (limit === undefined || limit <= 0) {
+    return undefined;
+  }
+
+  if (input.remaining !== undefined) {
+    return clampPercent((input.remaining / limit) * 100);
+  }
+  if (input.used !== undefined) {
+    return clampPercent(((limit - input.used) / limit) * 100);
+  }
+  return undefined;
+}
+
+function resolveGroupPercent(
+  metrics: readonly BalanceMetric[],
+  amount: { remaining?: number; used?: number; limit?: number },
+  token: { remaining?: number; used?: number; limit?: number },
+): number | undefined {
+  const percentMetric = pickPercentMetric(metrics);
+  if (percentMetric) {
+    return clampPercent(percentMetric.value);
+  }
+
+  return (
+    derivePercentFromUsage(amount) ??
+    derivePercentFromUsage(token)
+  );
+}
+
+function resolveGroupTimeText(
+  metric: BalanceTimeMetric | undefined,
+): string | undefined {
+  if (!metric) {
+    return undefined;
+  }
+
+  return resolveTimeText(metric);
+}
+
+function resolveGroupLabel(group: MetricLineGroup): string | undefined {
+  const labelledMetric = group.metrics.find((metric) => metric.label?.trim());
+  if (labelledMetric) {
+    return resolveMetricBaseLabel(labelledMetric);
+  }
+
+  const reference = group.metrics[0];
+  if (!reference) {
+    return undefined;
+  }
+
+  const base = resolveMetricBaseLabel(reference);
+  const periodText = resolvePeriodText(reference);
+  return periodText ? `${base} (${periodText})` : base;
+}
+
+function formatGroupLine(group: MetricLineGroup): string | undefined {
+  if (group.metrics.length === 0) {
+    return undefined;
+  }
+
+  const label = resolveGroupLabel(group);
+  if (!label) {
+    return undefined;
+  }
+
+  const amount = resolveAmountValue(group.metrics);
+  const tokenMetric = pickTokenMetric(group.metrics);
+  const token = tokenMetric ? resolveTokenValue(tokenMetric) : {};
+  const statusMetric = pickStatusMetric(group.metrics);
+  const timeMetric = pickTimeMetric(group.metrics);
+  const percent = resolveGroupPercent(group.metrics, amount, token);
+
+  let value: string | undefined;
+  let valueSource: 'amount' | 'token' | 'status' | 'percent' | 'time' | undefined;
+
+  if (amount.text) {
+    value = amount.text;
+    valueSource = 'amount';
+  } else if (token.text) {
+    value = token.text;
+    valueSource = 'token';
+  } else if (statusMetric) {
+    value = resolveStatusText(statusMetric);
+    valueSource = 'status';
+  } else if (percent !== undefined) {
+    value = formatPercent(percent);
+    valueSource = 'percent';
+  } else if (timeMetric) {
+    value = resolveTimeText(timeMetric);
+    valueSource = 'time';
+  }
+
+  if (!value) {
+    return undefined;
+  }
+
+  const percentText = percent !== undefined ? formatPercent(percent) : undefined;
+  const title =
+    percentText && valueSource !== 'percent'
+      ? `${label} (${percentText})`
+      : label;
+
+  const shouldAppendTime =
+    valueSource !== 'time' &&
+    !(valueSource === 'status' && statusMetric?.value === 'unlimited');
+  const timeText = shouldAppendTime ? resolveGroupTimeText(timeMetric) : undefined;
+  const renderedValue = timeText ? `${value} (${timeText})` : value;
+
+  return `${title}: ${renderedValue}`;
 }
 
 export function getPrimaryMetric(
@@ -291,14 +774,8 @@ export function formatSnapshotLines(
     return [];
   }
 
-  return sortMetrics(snapshot.items)
-    .map((metric) => {
-      const value = formatMetricValue(metric);
-      if (!value) {
-        return undefined;
-      }
-      return `${resolveLabel(metric)}: ${value}`;
-    })
+  return buildMetricGroups(snapshot)
+    .map((group) => formatGroupLine(group))
     .filter((line): line is string => !!line);
 }
 
