@@ -1,5 +1,5 @@
-import { ApiProvider } from '../interface';
 import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
+import { buildBaseUrl } from '../utils';
 
 /**
  * Kilo Code Provider
@@ -8,18 +8,11 @@ import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
  * Extends OpenAIChatCompletionProvider for type safety.
  * @see https://kilo.ai/docs/gateway/api-reference
  */
-export class KiloCodeProvider
-  extends OpenAIChatCompletionProvider
-  implements ApiProvider
-{
-  constructor(protected readonly config: import('../../types').ProviderConfig) {
-    super(config);
-  }
-
-  protected resolveBaseUrl(
+export class KiloCodeProvider extends OpenAIChatCompletionProvider {
+  protected override resolveBaseUrl(
     config: import('../../types').ProviderConfig,
   ): string {
     // Kilo Gateway API base URL - no /v1 suffix needed as it's already at /api/gateway
-    return config.baseUrl;
+    return buildBaseUrl(config.baseUrl);
   }
 }
