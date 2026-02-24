@@ -46,6 +46,7 @@
   "configuration.endpoints.type.enumDescriptions.9": "Anthropic Claude Code",
   "configuration.endpoints.type.enumDescriptions.10": "GitHub Copilot",
   "configuration.endpoints.type.enumDescriptions.11": "Qwen Code",
+  "configuration.endpoints.type.enumDescriptions.12": "Kilo Code",
   "configuration.endpoints.name.description": "Display name for this provider.",
   "configuration.endpoints.baseUrl.description": "API base URL (e.g., https://api.anthropic.com).",
   "configuration.endpoints.balanceProvider.description": "Provider balance monitoring configuration.",
