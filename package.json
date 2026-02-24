@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "4.7.0",
+  "version": "4.9.0",
   "categories": [
     "AI",
     "Chat"
@@ -469,7 +469,10 @@
                   "type": {
                     "type": "string",
                     "description": "%configuration.endpoints.contextCache.type.description%",
-                    "enum": ["only-free", "allow-paid"],
+                    "enum": [
+                      "only-free",
+                      "allow-paid"
+                    ],
                     "default": "only-free",
                     "enumDescriptions": [
                       "%configuration.endpoints.contextCache.type.enumDescriptions.0%",

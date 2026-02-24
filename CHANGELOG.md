@@ -1,5 +1,50 @@
 # Changelog
 
+## v4.9.0 - 2026-02-24
+
+### Features
+- add support for Qwen 3.5 / Gemini 3.1 Pro / Sonnet 4.6 / MiniMax M2.5 Highspeed models (5432e13, SmallMain)
+- update balance monitor configuration terminology and actions (4a26d7a, SmallMain)
+- update balance monitoring terminology and enhance progress bar functionality (01aa07b, SmallMain)
+- add Claude Relay Service balance provider (d5d9d6e, SmallMain)
+- add Doubao Seed 2.0 models support (4bd1eb4, SmallMain)
+- add Volcano Engine / BytePlus context caching support (d35e21f, SmallMain)
+- add new balance providers for DeepSeek, OpenRouter, and SiliconFlow, and AIHubMix (3d7f609, SmallMain)
+- add context cache configuration and update descriptions in provider fields (6f18856, SmallMain)
+- add balance warning icon to provider list screen (8d5cc58, SmallMain)
+- add context cache configuration and descriptions for cache type and TTL (f728071, SmallMain)
+- add balance status bar icon and provider balances screen (21466d8, SmallMain)
+- add balance warning icon (2da694a, SmallMain)
+- update provider list screen to include balance summary in item details (df4b9d5, SmallMain)
+- enhance balance management with model display data and improve UI details (70e197e, SmallMain)
+- add Kimi Code balance monitoring support (0113859, SmallMain)
+- add balance refresh interval and throttle window configuration (e542067, SmallMain)
+- add balance monitoring and fix auth bugs (906f6bf, SmallMain)
+- tokenizers: add DeepSeek and OpenAI tokenizers with configuration (10015f6, SmallMain)
+
+### Fixes
+- refactor localization keys and improve balance display functions (c4762f6, SmallMain)
+- correct maxOutputTokens for Gemini 3.1 Pro and Gemini 3 Pro Preview models (0fd7882, SmallMain)
+- add weekly usage and window labels, enhance balance display logic (b395df7, SmallMain)
+- enhance metric group handling and display logic (bec0377, SmallMain)
+- enhance metric label resolution and grouping logic (2028790, SmallMain)
+- update Qwen3.5 models and Gemini CLI / Antigravity client support (50767c7, SmallMain)
+- update iFlow and Qwen Code providers (487be73, SmallMain)
+- update Github Copilot client (3130375, SmallMain)
+- update Antigravity and Gemini CLI support (8d6926a, SmallMain)
+- increase progress bar width from 20 to 22 for better visibility (b47c41a, SmallMain)
+- optimize balance display (9c8c68a, SmallMain)
+- update tokenizer (8305081, SmallMain)
+
+### Refactors
+- unified balance data interface (e49a0e0, SmallMain)
+- improve code readability and formatting in balance-status-bar.ts (2b827ae, SmallMain)
+
+### Chores
+- update agent (9d93d01, SmallMain)
+- add instruction to sync supported model list for clients (6b8dd15, SmallMain)
+- add balance monitoring part (55ae7bc, SmallMain)
+
 ## v4.7.0 - 2026-02-13
 
 ### Features
