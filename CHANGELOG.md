@@ -1,5 +1,18 @@
 # Changelog
 
+## v4.9.1 - 2026-02-25
+
+### Features
+- add Antigravity / Gemini CLI / Codex balance providers (9afbdc7, SmallMain)
+- add GPT-5.3-Codex-Spark model support (3c5f097, SmallMain)
+- update Alibaba Cloud Model Studio Coding Plan models list (af5b90b, SmallMain)
+
+### Fixes
+- issue with line breaks when the UI displays the response content (66e91d4, SmallMain)
+
+### Chores
+- update README (61148ff, SmallMain)
+
 ## v4.9.0 - 2026-02-24
 
 ### Features
