@@ -23,6 +23,7 @@ type ParsedResetAt = {
 };
 
 type ParsedRateLimitWindow = {
+  key: 'primary_window' | 'secondary_window';
   usedPercent: number;
   resetAt?: ParsedResetAt;
 };
@@ -143,10 +144,7 @@ function buildCodexUsageEndpoints(rawBaseUrl: string): string[] {
   const baseUrl = normalizeBaseUrlInput(rawBaseUrl);
   const parsed = new URL(`${baseUrl}/`);
 
-  const prefixes = new Set<string>([
-    derivePathPrefix(parsed.pathname),
-    '',
-  ]);
+  const prefixes = new Set<string>([derivePathPrefix(parsed.pathname), '']);
 
   const endpoints: string[] = [];
   for (const prefix of prefixes) {
@@ -221,44 +219,45 @@ function parseRateLimitWindow(
   }
 
   return {
+    key,
     usedPercent: clampPercent(usedPercent),
     resetAt: normalizeResetAt(rawWindow['reset_at']),
   };
 }
 
-function pickTighterWindow(
-  left: ParsedRateLimitWindow | undefined,
-  right: ParsedRateLimitWindow | undefined,
-): ParsedRateLimitWindow | undefined {
-  if (!left) {
-    return right;
-  }
-  if (!right) {
-    return left;
-  }
-  return right.usedPercent > left.usedPercent ? right : left;
+function resolveWindowLabel(
+  key: 'primary_window' | 'secondary_window',
+): string {
+  return key === 'primary_window' ? t('Primary window') : t('Secondary window');
 }
 
-function parseRateLimitMetric(
+function resolveRateLimitLabel(
+  label: string,
+  key: 'primary_window' | 'secondary_window',
+): string {
+  if (label === 'Primary rate limit') {
+    return key === 'primary_window' ? t('5-hour limit') : t('A weekly limit');
+  }
+
+  return `${label} (${resolveWindowLabel(key)})`;
+}
+
+function parseRateLimitMetrics(
   rateLimit: Record<string, unknown>,
   label: string,
   scope?: string,
-): ParsedLimitMetric | undefined {
-  const chosenWindow = pickTighterWindow(
+): ParsedLimitMetric[] {
+  const windows = [
     parseRateLimitWindow(rateLimit, 'primary_window'),
     parseRateLimitWindow(rateLimit, 'secondary_window'),
-  );
+  ].filter((window): window is ParsedRateLimitWindow => !!window);
 
-  if (!chosenWindow) {
-    return undefined;
-  }
-
-  return {
-    label,
+  return windows.map((window) => ({
+    label: resolveRateLimitLabel(label, window.key),
     scope,
-    usedPercent: chosenWindow.usedPercent,
-    resetAt: chosenWindow.resetAt,
-  };
+    usedPercent: window.usedPercent,
+    resetAt: window.resetAt,
+  }));
 }
 
 function hasUsageQuotaShape(record: Record<string, unknown>): boolean {
@@ -268,7 +267,9 @@ function hasUsageQuotaShape(record: Record<string, unknown>): boolean {
   );
 }
 
-function resolveUsagePayload(value: unknown): Record<string, unknown> | undefined {
+function resolveUsagePayload(
+  value: unknown,
+): Record<string, unknown> | undefined {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -298,13 +299,13 @@ function parseUsageMetrics(payload: unknown): ParsedLimitMetric[] {
 
   const primaryRateLimit = body['rate_limit'];
   if (isRecord(primaryRateLimit)) {
-    const metric = parseRateLimitMetric(
+    const parsedMetrics = parseRateLimitMetrics(
       primaryRateLimit,
       'Primary rate limit',
       'primary',
     );
-    if (metric) {
-      metrics.push(metric);
+    if (parsedMetrics.length > 0) {
+      metrics.push(...parsedMetrics);
     }
   }
 
@@ -328,9 +329,9 @@ function parseUsageMetrics(payload: unknown): ParsedLimitMetric[] {
         pickString(item, 'id')?.trim();
 
       const label = name || `Additional rate limit ${index + 1}`;
-      const metric = parseRateLimitMetric(rateLimit, label, name);
-      if (metric) {
-        metrics.push(metric);
+      const parsedMetrics = parseRateLimitMetrics(rateLimit, label, name);
+      if (parsedMetrics.length > 0) {
+        metrics.push(...parsedMetrics);
       }
     }
   }
@@ -505,8 +506,7 @@ export class CodexBalanceProvider implements BalanceProvider {
         if (!response.ok) {
           const text = await response.text().catch(() => '');
           const reason =
-            parseErrorMessage(text) ||
-            t('HTTP {0}', `${response.status}`);
+            parseErrorMessage(text) || t('HTTP {0}', `${response.status}`);
           endpointErrors.push(`${endpoint}: ${reason}`);
           continue;
         }

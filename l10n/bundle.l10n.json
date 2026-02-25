@@ -823,5 +823,7 @@
   "Dedicated": "Dedicated",
   "AIHubMix": "AIHubMix",
   "Group": "Group",
-  "User": "User"
+  "User": "User",
+  "5-hour limit": "5-hour limit",
+  "A weekly limit": "A weekly limit"
 }
