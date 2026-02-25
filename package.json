@@ -444,6 +444,42 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "antigravity",
+                        "description": "%configuration.endpoints.balanceProvider.method.antigravity.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "gemini-cli",
+                        "description": "%configuration.endpoints.balanceProvider.method.geminiCli.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "codex",
+                        "description": "%configuration.endpoints.balanceProvider.method.codex.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "newapi",
                         "description": "%configuration.endpoints.balanceProvider.method.newapi.description%"
                       },

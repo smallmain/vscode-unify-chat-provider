@@ -10,6 +10,9 @@ import { OpenRouterBalanceProvider } from './providers/openrouter';
 import { SiliconFlowBalanceProvider } from './providers/siliconflow';
 import { AiHubMixBalanceProvider } from './providers/aihubmix';
 import { ClaudeRelayServiceBalanceProvider } from './providers/claude-relay-service';
+import { AntigravityBalanceProvider } from './providers/antigravity';
+import { GeminiCliBalanceProvider } from './providers/gemini-cli';
+import { CodexBalanceProvider } from './providers/codex';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -152,6 +155,49 @@ export const BALANCE_METHODS = {
     resolveForExport: ClaudeRelayServiceBalanceProvider.resolveForExport,
     normalizeOnImport: ClaudeRelayServiceBalanceProvider.normalizeOnImport,
     prepareForDuplicate: ClaudeRelayServiceBalanceProvider.prepareForDuplicate,
+  },
+  antigravity: {
+    id: 'antigravity',
+    label: t('Antigravity Usage'),
+    description: t(
+      'Monitor usage percentages via Antigravity retrieveUserQuota API',
+    ),
+    category: 'Experimental',
+    ctor: AntigravityBalanceProvider,
+    supportsSensitiveDataInSettings:
+      AntigravityBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: AntigravityBalanceProvider.redactForExport,
+    resolveForExport: AntigravityBalanceProvider.resolveForExport,
+    normalizeOnImport: AntigravityBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: AntigravityBalanceProvider.prepareForDuplicate,
+  },
+  'gemini-cli': {
+    id: 'gemini-cli',
+    label: t('Gemini CLI Usage'),
+    description: t(
+      'Monitor usage percentages via Gemini CLI retrieveUserQuota API',
+    ),
+    category: 'Experimental',
+    ctor: GeminiCliBalanceProvider,
+    supportsSensitiveDataInSettings:
+      GeminiCliBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: GeminiCliBalanceProvider.redactForExport,
+    resolveForExport: GeminiCliBalanceProvider.resolveForExport,
+    normalizeOnImport: GeminiCliBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: GeminiCliBalanceProvider.prepareForDuplicate,
+  },
+  codex: {
+    id: 'codex',
+    label: t('Codex Usage'),
+    description: t('Monitor usage percentages via Codex usage APIs'),
+    category: 'Experimental',
+    ctor: CodexBalanceProvider,
+    supportsSensitiveDataInSettings:
+      CodexBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: CodexBalanceProvider.redactForExport,
+    resolveForExport: CodexBalanceProvider.resolveForExport,
+    normalizeOnImport: CodexBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: CodexBalanceProvider.prepareForDuplicate,
   },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,
