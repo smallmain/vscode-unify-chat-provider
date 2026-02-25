@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.9.2 - 2026-02-25
+
+### Features
+- enhance model overrides with matchers and config for NVIDIA integration (46b1ee7, SmallMain)
+
 ## v4.9.1 - 2026-02-25
 
 ### Features
