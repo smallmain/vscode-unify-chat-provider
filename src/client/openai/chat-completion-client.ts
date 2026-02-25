@@ -1179,6 +1179,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           reasoning_details,
         } = message;
 
+        for (const segment of thinkingTagParser.flush()) {
+          if (segment.type === 'thinking') {
+            yield new vscode.LanguageModelThinkingPart(segment.content);
+          } else {
+            yield new vscode.LanguageModelTextPart(segment.content);
+          }
+        }
+
         yield* this.extractThinkingParts(message, 'metadata-only');
 
         if (tool_calls && tool_calls.length > 0) {
