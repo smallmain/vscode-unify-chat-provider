@@ -1,5 +1,10 @@
 # Changelog
 
+## v4.9.4 - 2026-02-26
+
+### Fixes
+- rename isAbortError to isAbortLikeError and enhance error handling (7bb9c13, SmallMain)
+
 ## v4.9.3 - 2026-02-26
 
 ### Fixes
