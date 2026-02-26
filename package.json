@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "4.9.2",
+  "version": "4.9.3",
   "categories": [
     "AI",
     "Chat"

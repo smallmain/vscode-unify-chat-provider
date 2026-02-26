@@ -1,5 +1,12 @@
 # Changelog
 
+## v4.9.3 - 2026-02-26
+
+### Fixes
+- update codex balance display (491376a, SmallMain)
+- OpenAI Codex authorization with cancellation support (67a15e7, SmallMain)
+- Kilo gateway support (6c6a29b, SmallMain)
+
 ## v4.9.2 - 2026-02-25
 
 ### Features
