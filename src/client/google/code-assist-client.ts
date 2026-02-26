@@ -19,7 +19,7 @@ import {
   createStatefulMarkerIdentity,
   DEFAULT_CHAT_RETRY_CONFIG,
   describeNetworkError,
-  isAbortError,
+  isAbortLikeError,
   isRetryableStatusCode,
   resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
@@ -2106,7 +2106,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
           } catch (error) {
             throwIfAborted(abortController.signal);
 
-            if (isAbortError(error)) {
+            if (isAbortLikeError(error)) {
               throw error;
             }
 

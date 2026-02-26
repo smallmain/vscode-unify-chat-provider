@@ -15,8 +15,9 @@ import {
   delay,
   getAllModelsForProvider,
   getAllModelsForProviderSync,
-  isAbortError,
+  isAbortLikeError,
   isPlaceholderModelId,
+  normalizeTimeoutLikeError,
   resolveChatNetwork,
 } from './utils';
 import { SecretStore } from './secret';
@@ -395,7 +396,12 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       logger.vscodeInput(messages, options);
 
       const client = this.getClient(resolvedProvider);
-      const retryConfig = resolveChatNetwork(resolvedProvider).retry;
+      const chatNetwork = resolveChatNetwork(resolvedProvider);
+      const retryConfig = chatNetwork.retry;
+      const responseTimeoutMessage = t(
+        'Response timeout: No data received for {0}ms',
+        chatNetwork.timeout.response,
+      );
 
       let emptyStreamAttempt = 0;
 
@@ -436,15 +442,19 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             progress.report(part);
           }
         } catch (error) {
-          if (token.isCancellationRequested && isAbortError(error)) {
+          if (token.isCancellationRequested && isAbortLikeError(error)) {
             // User cancelled the request; treat provider abort errors as expected.
             outcome = 'cancelled';
           } else {
             outcome = 'error';
+            const normalizedError = normalizeTimeoutLikeError(
+              error,
+              responseTimeoutMessage,
+            );
             // sometimes, the chat panel in VSCode does not display the specific error,
             // but instead shows the output from `stackTrace.format`.
-            logger.error(error);
-            throw error;
+            logger.error(normalizedError);
+            throw normalizedError;
           }
         }
 
