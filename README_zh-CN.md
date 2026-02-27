@@ -49,6 +49,8 @@ Unify Chat Provider
   - [添加 GitHub Copilot 账号](#添加-github-copilot-账号)
 - **免费的 Kimi K2.5、GLM 4.7、MiniMax M2.1 等系列模型**：
   - [添加 Nvidia 账号](#添加-nvidia-账号)
+- **Kimi K2.5、GLM 5、MiniMax M2.1、Qwen3、DeepSeek 等系列模型**：
+  - [添加 Synthetic.new 账号](#添加-syntheticnew-账号)
 - **免费的 Kimi K2.5、GLM 5、MiniMax M2.1、Qwen3、DeepSeek 等系列模型**：
   - [添加 iFlow API Key 或 CLI 账号](#添加-iflow-api-key-或-cli-账号)
 - 更多食谱：
@@ -130,7 +132,16 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 > 如果你需要用 Kimi K2.5 模型，请从内置模型列表中添加，官方 API 可能暂未返回该模型信息。
 
 </details>
+#### 添加 Synthetic.new 账号
 
+<details>
+
+0. 你需要准备一个 Synthetic.new 账号。
+1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
+2. 在列表中选择 `Synthetic.new (OpenAI)`，并填入在用户面板生成的 API Key 直接回车。
+3. 点击配置界面最下方的 `保存` 按钮完成。
+
+</details>
 #### 添加 iFlow API Key 或 CLI 账号
 
 <details>
@@ -675,6 +686,11 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 
 - 完全免费。
 - 支持模型：GLM、Kimi、Qwen、DeepSeek 等主流模型。
+
+#### Synthetic.new
+
+- 通过 OpenAI 兼容 API 提供多种主流模型。
+- 支持模型：MiniMax M2.5、Qwen 3.5、Kimi K2.5、GLM 4.7、DeepSeek V3/R1、Llama 3.3。
 
 #### Cerebras
 
