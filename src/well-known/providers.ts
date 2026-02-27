@@ -124,6 +124,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.synthetic.new/openai/v1',
+    balanceProvider: { method: 'synthetic' },
     authTypes: ['api-key'],
     models: [
       'MiniMax-M2.5',
