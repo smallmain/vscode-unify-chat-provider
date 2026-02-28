@@ -215,6 +215,31 @@ export function isFeatureSupported(
 }
 
 /**
+ * Check whether a feature is enabled for a provider URL only.
+ */
+export function isFeatureSupportedByProvider(
+  featureId: FeatureId,
+  provider: ProviderConfig,
+): boolean {
+  const feature = FEATURES[featureId];
+  if (!feature) {
+    return false;
+  }
+
+  const { supportedProviders } = feature;
+
+  if (
+    supportedProviders?.some((pattern) =>
+      matchProvider(provider.baseUrl, pattern),
+    )
+  ) {
+    return true;
+  }
+
+  return false;
+}
+
+/**
  * Build a base URL with optional pattern stripping or suffix ensuring.
  */
 export function buildBaseUrl(

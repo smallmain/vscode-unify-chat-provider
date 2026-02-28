@@ -113,9 +113,7 @@ function resolveTypeLabel(metric: BalanceMetric): string {
 }
 
 function normalizeForCompare(value: string): string {
-  return value
-    .toLowerCase()
-    .replace(/[\s()\[\]{}\-_:|,./\\]+/g, '');
+  return value.toLowerCase().replace(/[\s()\[\]{}\-_:|,./\\]+/g, '');
 }
 
 function resolveScopeText(scope: string | undefined): string | undefined {
@@ -149,10 +147,7 @@ function resolveMetricBaseLabel(metric: BalanceMetric): string {
 
   const normalizedBase = normalizeForCompare(baseLabel);
   const normalizedScope = normalizeForCompare(scope);
-  if (
-    normalizedScope.length > 0 &&
-    normalizedBase.includes(normalizedScope)
-  ) {
+  if (normalizedScope.length > 0 && normalizedBase.includes(normalizedScope)) {
     return baseLabel;
   }
 
@@ -183,15 +178,13 @@ function resolveTokenText(metric: BalanceTokenMetric): string | undefined {
       ? metric.limit
       : undefined;
   const hasLimit = limit !== undefined && limit > 0;
-  const hasRemaining =
-    remaining !== undefined && remaining >= 0;
+  const hasRemaining = remaining !== undefined && remaining >= 0;
   const hasUsed = used !== undefined && used >= 0;
-  const usedForQuota =
-    hasUsed
-      ? used
-      : hasRemaining && hasLimit
-        ? Math.max(0, limit - remaining)
-        : undefined;
+  const usedForQuota = hasUsed
+    ? used
+    : hasRemaining && hasLimit
+      ? Math.max(0, limit - remaining)
+      : undefined;
 
   if (usedForQuota !== undefined && hasLimit) {
     return `${formatTokenCountCompact(usedForQuota)} / ${formatTokenCountCompact(limit)} ${t('used')}`;
@@ -264,13 +257,9 @@ function buildBaseGroupKey(metric: BalanceMetric): string {
   const scope = metric.scope?.trim() ?? '';
   const label = normalizeGroupLabel(metric.label) ?? '';
   const periodLabel = metric.periodLabel?.trim() ?? '';
-  return [
-    groupFamilyOf(metric),
-    scope,
-    metric.period,
-    periodLabel,
-    label,
-  ].join('|');
+  return [groupFamilyOf(metric), scope, metric.period, periodLabel, label].join(
+    '|',
+  );
 }
 
 function buildStandaloneGroupKey(metric: BalanceMetric): string {
@@ -317,7 +306,10 @@ function isGroupPrimary(group: MetricLineGroup): boolean {
   return group.metrics.some((metric) => metric.primary);
 }
 
-function isSameLabel(left: string | undefined, right: string | undefined): boolean {
+function isSameLabel(
+  left: string | undefined,
+  right: string | undefined,
+): boolean {
   if (!left || !right) {
     return false;
   }
@@ -328,6 +320,17 @@ function findGroupForDeferredMetric(
   metric: BalanceMetric,
   groups: readonly MetricLineGroup[],
 ): MetricLineGroup | undefined {
+  const metricLabel = normalizeGroupLabel(metric.label);
+  const exactDeferredGroup = groups.find(
+    (group) =>
+      (group.family === 'percent' || group.family === 'time') &&
+      isMetricContextMatch(group, metric) &&
+      isSameLabel(group.label, metricLabel),
+  );
+  if (exactDeferredGroup) {
+    return exactDeferredGroup;
+  }
+
   const candidates = groups.filter(
     (group) =>
       (group.family === 'amount' ||
@@ -339,7 +342,6 @@ function findGroupForDeferredMetric(
     return undefined;
   }
 
-  const metricLabel = normalizeGroupLabel(metric.label);
   const exactLabel = candidates.find((candidate) =>
     isSameLabel(candidate.label, metricLabel),
   );
@@ -355,9 +357,7 @@ function findGroupForDeferredMetric(
   return candidates[0];
 }
 
-function buildMetricGroups(
-  snapshot: BalanceSnapshot,
-): MetricLineGroup[] {
+function buildMetricGroups(snapshot: BalanceSnapshot): MetricLineGroup[] {
   const sorted = sortMetrics(snapshot.items);
   const groups: MetricLineGroup[] = [];
   const groupMap = new Map<string, MetricLineGroup>();
@@ -388,7 +388,11 @@ function buildMetricGroups(
     }
 
     const key = buildStandaloneGroupKey(metric);
-    const standalone = createMetricLineGroup(key, groupFamilyOf(metric), metric);
+    const standalone = createMetricLineGroup(
+      key,
+      groupFamilyOf(metric),
+      metric,
+    );
     standalone.metrics.push(metric);
     groups.push(standalone);
   }
@@ -615,8 +619,7 @@ function resolveGroupPercent(
   }
 
   return (
-    deriveUsedPercentFromUsage(amount) ??
-    deriveUsedPercentFromUsage(token)
+    deriveUsedPercentFromUsage(amount) ?? deriveUsedPercentFromUsage(token)
   );
 }
 
@@ -714,7 +717,8 @@ function resolveGroupDisplaySemantic(input: {
   }
 
   const hasRemaining =
-    isFiniteNonNegative(amount.remaining) || isFiniteNonNegative(token.remaining);
+    isFiniteNonNegative(amount.remaining) ||
+    isFiniteNonNegative(token.remaining);
   const hasUsed =
     isFiniteNonNegative(amount.used) || isFiniteNonNegative(token.used);
 
@@ -731,9 +735,7 @@ function resolveGroupDisplaySemantic(input: {
   return undefined;
 }
 
-function resolveDisplaySemanticText(
-  semantic: GroupDisplaySemantic,
-): string {
+function resolveDisplaySemanticText(semantic: GroupDisplaySemantic): string {
   if (semantic === 'quota') {
     return t('Quota');
   }
@@ -791,6 +793,28 @@ function resolveQuotaStyleTitle(input: {
   return `${scopeText}${periodText}${typeName}${semanticText}`;
 }
 
+function containsQuotaHint(label: string): boolean {
+  const normalized = normalizeForCompare(label);
+  const localizedQuota = normalizeForCompare(t('Quota'));
+  return (
+    normalized.includes('quota') ||
+    normalized.includes('limit') ||
+    (localizedQuota.length > 0 && normalized.includes(localizedQuota))
+  );
+}
+
+function ensureQuotaLabel(label: string): string {
+  if (containsQuotaHint(label)) {
+    return label;
+  }
+
+  const quotaText = t('Quota');
+  if (isEnglish()) {
+    return `${label} ${quotaText}`;
+  }
+  return `${label}${quotaText}`;
+}
+
 function formatGroupLine(group: MetricLineGroup): string | undefined {
   if (group.metrics.length === 0) {
     return undefined;
@@ -799,9 +823,11 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   const amount = resolveAmountValue(group.metrics);
   const tokenMetric = pickTokenMetric(group.metrics);
   const token = tokenMetric ? resolveTokenValue(tokenMetric) : {};
-  const label =
-    resolveQuotaStyleTitle({ group, amount, token }) ?? resolveGroupLabel(group);
-  if (!label) {
+  const semantic = resolveGroupDisplaySemantic({ group, amount, token });
+  const baseLabel =
+    resolveQuotaStyleTitle({ group, amount, token }) ??
+    resolveGroupLabel(group);
+  if (!baseLabel) {
     return undefined;
   }
   const statusMetric = pickStatusMetric(group.metrics);
@@ -809,7 +835,13 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   const percent = resolveGroupPercent(group.metrics, amount, token);
 
   let value: string | undefined;
-  let valueSource: 'amount' | 'token' | 'status' | 'percent' | 'time' | undefined;
+  let valueSource:
+    | 'amount'
+    | 'token'
+    | 'status'
+    | 'percent'
+    | 'time'
+    | undefined;
 
   if (amount.text) {
     value = amount.text;
@@ -821,7 +853,7 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
     value = resolveStatusText(statusMetric);
     valueSource = 'status';
   } else if (percent !== undefined) {
-    value = formatPercent(percent);
+    value = `${formatPercent(percent)} / ${formatPercent(100)}`;
     valueSource = 'percent';
   } else if (timeMetric) {
     value = resolveTimeText(timeMetric);
@@ -832,16 +864,29 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
     return undefined;
   }
 
-  const percentText = percent !== undefined ? formatPercent(percent) : undefined;
-  const title =
-    percentText && valueSource !== 'percent'
-      ? `${label} (${percentText})`
+  const quotaLike = semantic === 'quota' || valueSource === 'percent';
+  const label = quotaLike ? ensureQuotaLabel(baseLabel) : baseLabel;
+  const usedPercentText =
+    percent !== undefined ? formatPercent(percent) : undefined;
+  const remainingPercentText =
+    percent !== undefined
+      ? formatPercent(clampPercent(100 - percent))
+      : undefined;
+  const shouldPrefixPercentInTitle = valueSource !== 'percent';
+  const title = quotaLike
+    ? shouldPrefixPercentInTitle && remainingPercentText
+      ? `${label} (${remainingPercentText})`
+      : label
+    : usedPercentText && valueSource !== 'percent'
+      ? `${label} (${usedPercentText})`
       : label;
 
   const shouldAppendTime =
     valueSource !== 'time' &&
     !(valueSource === 'status' && statusMetric?.value === 'unlimited');
-  const timeText = shouldAppendTime ? resolveGroupTimeText(timeMetric) : undefined;
+  const timeText = shouldAppendTime
+    ? resolveGroupTimeText(timeMetric)
+    : undefined;
   const renderedValue = timeText ? `${value} (${timeText})` : value;
 
   return `${title}: ${renderedValue}`;
@@ -857,7 +902,9 @@ function hasAmountDirection(
   group: MetricLineGroup,
   direction: BalanceAmountMetric['direction'],
 ): boolean {
-  return getAmountMetrics(group).some((metric) => metric.direction === direction);
+  return getAmountMetrics(group).some(
+    (metric) => metric.direction === direction,
+  );
 }
 
 function pickAmountLimitValue(group: MetricLineGroup): number | undefined {
@@ -1111,9 +1158,7 @@ export function resolveProgressPercent(
   return undefined;
 }
 
-export function isUnlimited(
-  snapshot: BalanceSnapshot | undefined,
-): boolean {
+export function isUnlimited(snapshot: BalanceSnapshot | undefined): boolean {
   if (!snapshot) {
     return false;
   }

@@ -34,7 +34,7 @@ function collectSecretRefsFromAny(raw: unknown, refs: Set<string>): void {
   }
 }
 
-function collectUsedSecretRefsFromAllScopes(): Set<string> {
+function collectUsedSecretRefsFromGlobalScope(): Set<string> {
   const refs = new Set<string>();
 
   const addFromRaw = (raw: unknown): void => {
@@ -45,17 +45,6 @@ function collectUsedSecretRefsFromAllScopes(): Set<string> {
   const inspection = config.inspect<unknown[]>('endpoints');
 
   addFromRaw(inspection?.globalValue);
-  addFromRaw(inspection?.workspaceValue);
-  addFromRaw(inspection?.workspaceFolderValue);
-
-  for (const folder of vscode.workspace.workspaceFolders ?? []) {
-    const folderConfig = vscode.workspace.getConfiguration(
-      CONFIG_NAMESPACE,
-      folder.uri,
-    );
-    const folderInspection = folderConfig.inspect<unknown[]>('endpoints');
-    addFromRaw(folderInspection?.workspaceFolderValue);
-  }
 
   return refs;
 }
@@ -68,7 +57,7 @@ export async function cleanupUnusedSecrets(
     return;
   }
 
-  const usedRefs = collectUsedSecretRefsFromAllScopes();
+  const usedRefs = collectUsedSecretRefsFromGlobalScope();
 
   const toDelete: string[] = [];
 

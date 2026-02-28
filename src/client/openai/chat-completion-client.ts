@@ -36,6 +36,7 @@ import {
   getTokenType,
   getUnifiedUserAgent,
   isFeatureSupported,
+  isFeatureSupportedByProvider,
   mergeHeaders,
   parseToolArguments,
   processUsage as sharedProcessUsage,
@@ -92,6 +93,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
   }
 
   protected resolveBaseUrl(config: ProviderConfig): string {
+    if (isFeatureSupportedByProvider(FeatureId.OpenAIUseRawBaseUrl, config)) {
+      return buildBaseUrl(config.baseUrl);
+    }
+
     return buildBaseUrl(config.baseUrl, {
       ensureSuffix: '/v1',
       skipSuffixIfMatch: /\/v\d+$/,
@@ -1178,6 +1183,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           reasoning_content,
           reasoning_details,
         } = message;
+
+        for (const segment of thinkingTagParser.flush()) {
+          if (segment.type === 'thinking') {
+            yield new vscode.LanguageModelThinkingPart(segment.content);
+          } else {
+            yield new vscode.LanguageModelTextPart(segment.content);
+          }
+        }
 
         yield* this.extractThinkingParts(message, 'metadata-only');
 

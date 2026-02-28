@@ -440,6 +440,22 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gpt-5.3-codex-spark',
+    name: 'GPT-5.3-Codex-Spark',
+    maxInputTokens: 128000,
+    maxOutputTokens: 64000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'gpt-5.3-codex',
     name: 'GPT-5.3-Codex',
     maxInputTokens: 400000,
@@ -744,7 +760,13 @@ const _WELL_KNOWN_MODELS = [
     id: 'gpt-oss-120b',
     overrides: [
       'gpt-oss:120b',
-      'openai/gpt-oss-120b',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'openai/gpt-oss-120b',
+          maxOutputTokens: 4096,
+        },
+      },
       {
         matchers: ['api.cerebras.ai'],
         config: {
@@ -768,7 +790,17 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gpt-oss-20b',
-    overrides: ['gpt-oss:20b', 'gpt-oss:latest', 'openai/gpt-oss-20b'],
+    overrides: [
+      'gpt-oss:20b',
+      'gpt-oss:latest',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'openai/gpt-oss-20b',
+          maxOutputTokens: 4096,
+        },
+      },
+    ],
     name: 'GPT-OSS 20B',
     maxInputTokens: 131072,
     maxOutputTokens: 131072,
@@ -1085,7 +1117,13 @@ const _WELL_KNOWN_MODELS = [
     id: 'MiniMax-M2.5',
     overrides: [
       'minimax-m2.5-free',
-      'minimaxai/minimax-m2.5',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'minimaxai/minimax-m2.5',
+          maxOutputTokens: 32768,
+        },
+      },
       {
         matchers: [
           'dashscope.aliyuncs.com',
@@ -1129,7 +1167,13 @@ const _WELL_KNOWN_MODELS = [
     id: 'MiniMax-M2.1',
     overrides: [
       'minimax-m2.1-free',
-      'minimaxai/minimax-m2.1',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'minimaxai/minimax-m2.1',
+          maxOutputTokens: 32768,
+        },
+      },
       {
         matchers: [
           'dashscope.aliyuncs.com',
@@ -1172,7 +1216,13 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'MiniMax-M2',
     overrides: [
-      'minimaxai/minimax-m2',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'minimaxai/minimax-m2',
+          maxOutputTokens: 32768,
+        },
+      },
       {
         matchers: [
           'dashscope.aliyuncs.com',
@@ -1468,6 +1518,7 @@ const _WELL_KNOWN_MODELS = [
         matchers: ['integrate.api.nvidia.com'],
         config: {
           id: 'moonshotai/kimi-k2.5',
+          maxOutputTokens: 32768,
         },
       },
       {
@@ -1627,6 +1678,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3.5-397b-a17b',
+    overrides: [
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'qwen/qwen3.5-397b-a17b',
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'Qwen3.5-397B-A17B',
     maxInputTokens: 262144,
     maxOutputTokens: 64000,
@@ -2642,7 +2702,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-5',
-    overrides: ['z-ai/glm5'],
+    overrides: [
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'z-ai/glm5',
+          maxOutputTokens: 32768,
+        },
+      },
+    ],
     name: 'GLM-5',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,
@@ -2672,8 +2740,14 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'glm-4.7',
     overrides: [
-      'z-ai/glm4.7',
       'glm-4.7-free',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'z-ai/glm4.7',
+          maxOutputTokens: 32768,
+        },
+      },
       {
         matchers: ['api.cerebras.ai'],
         config: {

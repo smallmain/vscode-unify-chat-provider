@@ -10,7 +10,10 @@ export type BalanceMethod =
   | 'openrouter'
   | 'siliconflow'
   | 'aihubmix'
-  | 'claude-relay-service';
+  | 'claude-relay-service'
+  | 'antigravity'
+  | 'gemini-cli'
+  | 'codex';
 
 export interface NoBalanceConfig {
   method: 'none';
@@ -52,6 +55,18 @@ export interface ClaudeRelayServiceBalanceConfig {
   method: 'claude-relay-service';
 }
 
+export interface AntigravityBalanceConfig {
+  method: 'antigravity';
+}
+
+export interface GeminiCliBalanceConfig {
+  method: 'gemini-cli';
+}
+
+export interface CodexBalanceConfig {
+  method: 'codex';
+}
+
 export type BalanceConfig =
   | NoBalanceConfig
   | MoonshotAIBalanceConfig
@@ -61,7 +76,10 @@ export type BalanceConfig =
   | OpenRouterBalanceConfig
   | SiliconFlowBalanceConfig
   | AiHubMixBalanceConfig
-  | ClaudeRelayServiceBalanceConfig;
+  | ClaudeRelayServiceBalanceConfig
+  | AntigravityBalanceConfig
+  | GeminiCliBalanceConfig
+  | CodexBalanceConfig;
 
 export type BalanceMetricType =
   | 'amount'
@@ -200,4 +218,22 @@ export function isClaudeRelayServiceBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is ClaudeRelayServiceBalanceConfig {
   return config?.method === 'claude-relay-service';
+}
+
+export function isAntigravityBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is AntigravityBalanceConfig {
+  return config?.method === 'antigravity';
+}
+
+export function isGeminiCliBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is GeminiCliBalanceConfig {
+  return config?.method === 'gemini-cli';
+}
+
+export function isCodexBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is CodexBalanceConfig {
+  return config?.method === 'codex';
 }

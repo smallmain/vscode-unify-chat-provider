@@ -414,20 +414,11 @@ export class OpenAICodexAuthProvider implements AuthProvider {
         cancellable: true,
       },
       async (_progress, token) => {
-        const callbackPromise = performOpenAICodexAuthorization({
+        return await performOpenAICodexAuthorization({
           url: authorization.url,
           expectedState: authorization.state,
+          cancellationToken: token,
         });
-
-        const cancelSubscription = token.onCancellationRequested(() => {
-          // Best-effort: user can close browser; local server will stay until callback or error.
-        });
-
-        try {
-          return await callbackPromise;
-        } finally {
-          cancelSubscription.dispose();
-        }
       },
     );
 

@@ -1137,6 +1137,14 @@ export class AnthropicProvider implements ApiProvider {
         }
 
         case 'message_stop': {
+          for (const segment of thinkingTagParser.flush()) {
+            if (segment.type === 'thinking') {
+              yield new vscode.LanguageModelThinkingPart(segment.content);
+            } else {
+              yield new vscode.LanguageModelTextPart(segment.content);
+            }
+          }
+
           yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
             expectedIdentity,
             {

@@ -1,5 +1,35 @@
 # Changelog
 
+## v4.9.4 - 2026-02-26
+
+### Fixes
+- rename isAbortError to isAbortLikeError and enhance error handling (7bb9c13, SmallMain)
+
+## v4.9.3 - 2026-02-26
+
+### Fixes
+- update codex balance display (491376a, SmallMain)
+- OpenAI Codex authorization with cancellation support (67a15e7, SmallMain)
+- Kilo gateway support (6c6a29b, SmallMain)
+
+## v4.9.2 - 2026-02-25
+
+### Features
+- enhance model overrides with matchers and config for NVIDIA integration (46b1ee7, SmallMain)
+
+## v4.9.1 - 2026-02-25
+
+### Features
+- add Antigravity / Gemini CLI / Codex balance providers (9afbdc7, SmallMain)
+- add GPT-5.3-Codex-Spark model support (3c5f097, SmallMain)
+- update Alibaba Cloud Model Studio Coding Plan models list (af5b90b, SmallMain)
+
+### Fixes
+- issue with line breaks when the UI displays the response content (66e91d4, SmallMain)
+
+### Chores
+- update README (61148ff, SmallMain)
+
 ## v4.9.0 - 2026-02-24
 
 ### Features

@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "4.9.0",
+  "version": "4.9.4",
   "categories": [
     "AI",
     "Chat"
@@ -436,6 +436,42 @@
                         "type": "string",
                         "const": "kimi-code",
                         "description": "%configuration.endpoints.balanceProvider.method.kimiCode.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "antigravity",
+                        "description": "%configuration.endpoints.balanceProvider.method.antigravity.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "gemini-cli",
+                        "description": "%configuration.endpoints.balanceProvider.method.geminiCli.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "codex",
+                        "description": "%configuration.endpoints.balanceProvider.method.codex.description%"
                       }
                     },
                     "required": [

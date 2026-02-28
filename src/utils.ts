@@ -160,7 +160,8 @@ export function resolveContextCacheConfig(
       ? raw.type
       : DEFAULT_CONTEXT_CACHE_TYPE;
 
-  const ttlSeconds = readPositiveInteger(raw?.ttl) ?? DEFAULT_CONTEXT_CACHE_TTL_SECONDS;
+  const ttlSeconds =
+    readPositiveInteger(raw?.ttl) ?? DEFAULT_CONTEXT_CACHE_TTL_SECONDS;
 
   return { type, ttlSeconds };
 }
@@ -429,6 +430,112 @@ export function isAbortError(error: unknown): boolean {
   return false;
 }
 
+function tryGetErrorCode(value: unknown): string | undefined {
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  if (!('code' in value)) {
+    return undefined;
+  }
+  const code = (value as { code: unknown }).code;
+  return typeof code === 'string' ? code : undefined;
+}
+
+function getErrorCode(error: unknown): string | undefined {
+  const direct = tryGetErrorCode(error);
+  if (direct) {
+    return direct;
+  }
+  if (typeof error === 'object' && error !== null && 'cause' in error) {
+    return tryGetErrorCode((error as { cause: unknown }).cause);
+  }
+  return undefined;
+}
+
+const ABORT_LIKE_ERROR_CODES = new Set<string>([
+  'ABORT_ERR',
+  'ERR_ABORTED',
+  'UND_ERR_ABORTED',
+]);
+
+const TIMEOUT_LIKE_ERROR_CODES = new Set<string>([
+  'ETIMEDOUT',
+  'ECONNABORTED',
+  'ESOCKETTIMEDOUT',
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+]);
+
+export function createTimeoutError(message: string): Error {
+  const timeoutError = new Error(message);
+  timeoutError.name = 'TimeoutError';
+  return timeoutError;
+}
+
+export function isAbortLikeError(error: unknown): boolean {
+  if (isAbortError(error)) {
+    return true;
+  }
+
+  const code = getErrorCode(error);
+  if (code && ABORT_LIKE_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    message.includes('aborted') ||
+    (error.name === 'TypeError' && message.includes('terminated'))
+  );
+}
+
+export function isTimeoutLikeError(error: unknown): boolean {
+  if (!error) {
+    return false;
+  }
+
+  if (error instanceof Error && error.name === 'TimeoutError') {
+    return true;
+  }
+
+  const code = getErrorCode(error);
+  if (code && TIMEOUT_LIKE_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  if (!(error instanceof Error)) {
+    return false;
+  }
+
+  const message = error.message.toLowerCase();
+  return (
+    (error.name === 'TypeError' && message.includes('terminated')) ||
+    message.includes('timed out') ||
+    message.includes('timeout') ||
+    message.includes('fetch.onaborted')
+  );
+}
+
+export function normalizeTimeoutLikeError(
+  error: unknown,
+  timeoutMessage: string,
+): Error {
+  if (error instanceof Error && error.name === 'TimeoutError') {
+    return error;
+  }
+
+  if (!isTimeoutLikeError(error)) {
+    return error instanceof Error ? error : new Error(String(error));
+  }
+
+  return createTimeoutError(timeoutMessage);
+}
+
 function throwIfAborted(signal: AbortSignal | null | undefined): void {
   if (!signal) {
     return;
@@ -522,19 +629,7 @@ export function calculateBackoffDelay(
  * Used when logging retries for errors that don't have an HTTP status code.
  */
 export function describeNetworkError(error: unknown): string {
-  const tryCode = (value: unknown): string | undefined => {
-    if (typeof value === 'object' && value !== null && 'code' in value) {
-      const code = (value as { code: unknown }).code;
-      return typeof code === 'string' ? code : undefined;
-    }
-    return undefined;
-  };
-
-  const code =
-    tryCode(error) ??
-    (typeof error === 'object' && error !== null && 'cause' in error
-      ? tryCode((error as { cause: unknown }).cause)
-      : undefined);
+  const code = getErrorCode(error);
   const message = error instanceof Error ? error.message : String(error);
   if (code) {
     return `${code}: ${message}`;
@@ -577,6 +672,7 @@ export async function fetchWithRetryUsingFetch(
     retryConfig?.jitterFactor ?? DEFAULT_NORMAL_RETRY_CONFIG.jitterFactor;
   const connTimeout =
     connectionTimeoutMs ?? DEFAULT_NORMAL_TIMEOUT_CONFIG.connection;
+  const timeoutMessage = t('Timeout: Request aborted after {0}ms', connTimeout);
 
   let lastResponse: Response | undefined;
   let lastError: Error | undefined;
@@ -652,10 +748,6 @@ export async function fetchWithRetryUsingFetch(
     // Create timeout controller for connection timeout
     const timeoutController = new AbortController();
     const existingSignal = fetchOptions.signal;
-    const timeoutMessage = t(
-      'Timeout: Request aborted after {0}ms',
-      connTimeout,
-    );
     let didTimeout = false;
 
     // Combine with existing signal if present
@@ -734,8 +826,7 @@ export async function fetchWithRetryUsingFetch(
       // Normalize undici's `TypeError: terminated` (and other abort surfaces)
       // when we know this request was cancelled due to our own timeout.
       if (didTimeout) {
-        const timeoutError = new Error(timeoutMessage);
-        timeoutError.name = 'TimeoutError';
+        const timeoutError = createTimeoutError(timeoutMessage);
         lastError = timeoutError;
 
         if (attempt < maxRetries) {
@@ -807,7 +898,7 @@ export async function fetchWithRetryUsingFetch(
 
   // All retries exhausted
   if (lastError) {
-    throw lastError;
+    throw normalizeTimeoutLikeError(lastError, timeoutMessage);
   }
   return lastResponse!;
 }
@@ -829,6 +920,10 @@ export async function* withIdleTimeout<T>(
   abortSignal?: AbortSignal,
 ): AsyncGenerator<T> {
   const iterator = source[Symbol.asyncIterator]();
+  const timeoutMessage = t(
+    'Response timeout: No data received for {0}ms',
+    responseTimeoutMs,
+  );
 
   type RaceResult =
     | { kind: 'value'; result: IteratorResult<T> }
@@ -871,7 +966,15 @@ export async function* withIdleTimeout<T>(
           races.push(abortRace);
         }
 
-        const result = await Promise.race(races);
+        let result: RaceResult;
+        try {
+          result = await Promise.race(races);
+        } catch (error) {
+          if (abortSignal?.aborted) {
+            throw abortReasonToError(abortSignal);
+          }
+          throw normalizeTimeoutLikeError(error, timeoutMessage);
+        }
 
         if (result.kind === 'abort') {
           if (abortSignal) {
@@ -881,12 +984,7 @@ export async function* withIdleTimeout<T>(
         }
 
         if (result.kind === 'timeout') {
-          throw new Error(
-            t(
-              'Response timeout: No data received for {0}ms',
-              responseTimeoutMs,
-            ),
-          );
+          throw createTimeoutError(timeoutMessage);
         }
 
         // Normal iteration result
