@@ -9,7 +9,6 @@ import { VertexAIProvider } from './google/vertex-ai-client';
 import { ProviderDefinition } from './interface';
 import { GitHubCopilotProvider } from './github-copilot/client';
 import { IFlowCLIProvider } from './iflow/client';
-import { KiloCodeProvider } from './kilo-code/client';
 import { OllamaProvider } from './ollama/client';
 import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
 import { OpenAICodexProvider } from './openai/codex-client';
@@ -26,7 +25,6 @@ export type ProviderType =
   | 'google-antigravity'
   | 'google-gemini-cli'
   | 'github-copilot'
-  | 'kilo-code'
   | 'openai-chat-completion'
   | 'iflow-cli'
   | 'qwen-code'
@@ -104,13 +102,6 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/chat/completions, /responses',
     category: 'Experimental',
     class: GitHubCopilotProvider,
-  },
-  'kilo-code': {
-    type: 'kilo-code',
-    label: t('Kilo Code'),
-    description: '/chat/completions',
-    category: 'General',
-    class: KiloCodeProvider,
   },
   'qwen-code': {
     type: 'qwen-code',
