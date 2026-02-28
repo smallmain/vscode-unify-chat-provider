@@ -12,6 +12,8 @@
   "Refreshing provider balances...": "正在刷新供应商余额...",
   "Refreshed balances for {0} provider(s).": "已刷新 {0} 个供应商的余额。",
   "Refreshed official models for {0} provider(s).": "已刷新 {0} 个供应商的官方模型。",
+  "Open User Settings": "打开用户设置",
+  "Detected workspace-scoped settings for Unify Chat Provider ({0}). They are ignored and related credentials may be removed automatically. Please move them to user settings (global), then re-enter API keys or re-authorize OAuth if prompted.": "检测到 Unify Chat Provider 的工作区级设置（{0}）。这些设置将被忽略，相关凭据也可能被自动移除。请迁移到用户设置（全局），然后按提示重新输入 API Key 或重新进行 OAuth 授权。",
   "API key is missing. Please re-enter it before exporting the configuration.": "API Key 缺失。导出配置前请重新输入。",
   "API key is missing for: {0}. Please re-enter before exporting.": "以下项缺少 API Key：{0}。导出前请重新输入。",
   "Provider \"{0}\" updated.": "已更新供应商 \"{0}\"。",

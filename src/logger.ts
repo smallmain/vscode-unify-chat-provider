@@ -31,7 +31,8 @@ function getChannel(): vscode.LogOutputChannel {
 
 function isVerboseEnabled(): boolean {
   const config = vscode.workspace.getConfiguration('unifyChatProvider');
-  const verbose = config.get<unknown>('verbose', false);
+  const inspection = config.inspect<unknown>('verbose');
+  const verbose = inspection?.globalValue;
   return typeof verbose === 'boolean' ? verbose : false;
 }
 

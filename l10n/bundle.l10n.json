@@ -12,6 +12,8 @@
   "Refreshing provider balances...": "Refreshing provider balances...",
   "Refreshed balances for {0} provider(s).": "Refreshed balances for {0} provider(s).",
   "Refreshed official models for {0} provider(s).": "Refreshed official models for {0} provider(s).",
+  "Open User Settings": "Open User Settings",
+  "Detected workspace-scoped settings for Unify Chat Provider ({0}). They are ignored and related credentials may be removed automatically. Please move them to user settings (global), then re-enter API keys or re-authorize OAuth if prompted.": "Detected workspace-scoped settings for Unify Chat Provider ({0}). They are ignored and related credentials may be removed automatically. Please move them to user settings (global), then re-enter API keys or re-authorize OAuth if prompted.",
   "API key is missing. Please re-enter it before exporting the configuration.": "API key is missing. Please re-enter it before exporting the configuration.",
   "API key is missing for: {0}. Please re-enter before exporting.": "API key is missing for: {0}. Please re-enter before exporting.",
   "Provider \"{0}\" updated.": "Provider \"{0}\" updated.",
