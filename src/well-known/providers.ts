@@ -590,6 +590,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: ['glm-5', 'glm-4.7', 'MiniMax-M2.5', 'MiniMax-M2.1', 'kimi-k2.5'],
     autoFetchOfficialModels: true,
   },
+  {
+    name: 'Kilo Code',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
 ];
 
 export function resolveProviderModels(
