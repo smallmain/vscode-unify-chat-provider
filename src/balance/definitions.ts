@@ -13,6 +13,7 @@ import { ClaudeRelayServiceBalanceProvider } from './providers/claude-relay-serv
 import { AntigravityBalanceProvider } from './providers/antigravity';
 import { GeminiCliBalanceProvider } from './providers/gemini-cli';
 import { CodexBalanceProvider } from './providers/codex';
+import { SyntheticBalanceProvider } from './providers/synthetic';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -198,6 +199,19 @@ export const BALANCE_METHODS = {
     resolveForExport: CodexBalanceProvider.resolveForExport,
     normalizeOnImport: CodexBalanceProvider.normalizeOnImport,
     prepareForDuplicate: CodexBalanceProvider.prepareForDuplicate,
+  },
+  synthetic: {
+    id: 'synthetic',
+    label: t('Synthetic.new Quota'),
+    description: t('Monitor subscription and tool usage quotas via Synthetic API'),
+    category: 'General',
+    ctor: SyntheticBalanceProvider,
+    supportsSensitiveDataInSettings:
+      SyntheticBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: SyntheticBalanceProvider.redactForExport,
+    resolveForExport: SyntheticBalanceProvider.resolveForExport,
+    normalizeOnImport: SyntheticBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: SyntheticBalanceProvider.prepareForDuplicate,
   },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,

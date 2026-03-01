@@ -131,6 +131,17 @@ VS Code's Copilot Chat itself supports logging into a GitHub Copilot account, so
 
 </details>
 
+#### Add Synthetic.new Account
+
+<details>
+
+0. You need to prepare a Synthetic.new account.
+1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
+2. Select `Synthetic.new (OpenAI)` in the list, fill in the API Key generated in the user panel and press Enter.
+3. Click the `Save` button at the bottom of the configuration interface to complete.
+
+</details>
+
 #### Add iFlow API Key or CLI Account
 
 <details>
@@ -644,6 +655,7 @@ Experimental Supported Providers:
 | [Google Antigravity](https://antigravity.google/)      | [Details](#google-antigravity) |       ✅        |
 | [Google Gemini CLI](https://geminicli.com/)            | [Details](#google-gemini-cli)  |       ✅        |
 | [Claude Code](https://claude.ai/)                      |                                |
+| [Synthetic.new](https://synthetic.new/)                |                                |       ✅        |
 | [iFlow](https://platform.iflow.cn/)                    | [Details](#iflow)              |
 
 Long-Term Free Quotas:
@@ -675,6 +687,11 @@ Long-Term Free Quotas:
 
 - Completely free.
 - Supported models: GLM, Kimi, Qwen, DeepSeek and other mainstream models.
+
+#### Synthetic.new
+
+- Provides various mainstream models via OpenAI-compatible API.
+- Supported models: MiniMax M2.5, Qwen 3.5, Kimi K2.5, GLM 4.7, DeepSeek 3.2 and others.
 
 #### Cerebras
 

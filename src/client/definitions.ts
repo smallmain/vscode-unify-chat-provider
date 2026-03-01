@@ -349,7 +349,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIOnlyMaxCompletionTokens]: {
-    supportedProviders: ['api.cerebras.ai', 'opencode.ai'],
+    supportedProviders: ['api.cerebras.ai', 'opencode.ai', 'api.synthetic.new'],
     supportedFamilys: [
       'codex-mini-latest',
       'gpt-5.2',
@@ -461,6 +461,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+      'api.synthetic.new',
     ],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
@@ -480,6 +481,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'dashscope.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
       'api-inference.modelscope.cn',
+      'api.synthetic.new',
     ],
   },
   [FeatureId.OpenAIUseMaxInputTokens]: {
@@ -526,6 +528,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.siliconflow.cn',
       'api.siliconflow.com',
       'api.longcat.chat',
+      'api.synthetic.new',
     ],
     customCheckers: [
       // Checker for iFlow enable_thinking models:
