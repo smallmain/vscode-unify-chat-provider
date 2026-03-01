@@ -89,6 +89,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     model: ModelConfig,
   ): vscode.LanguageModelChatInformation {
     const modelId = this.createModelId(provider.name, model.id);
+    const displayName = `${model.name ?? model.id} [${provider.name}]`;
     const balanceSnapshot = this.balanceManager?.getProviderState(
       provider.name,
     )?.snapshot;
@@ -105,7 +106,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
     return {
       id: modelId,
-      name: model.name ?? model.id,
+      name: displayName,
       family: model.family ?? getBaseModelId(model.id),
       version: '',
       maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
