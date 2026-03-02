@@ -625,7 +625,6 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.kilo.ai/api/gateway',
     authTypes: ['api-key'],
     models: [],
-    autoFetchOfficialModels: true,
   },
 ];
 
