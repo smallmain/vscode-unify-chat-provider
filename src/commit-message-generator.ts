@@ -22,7 +22,7 @@ const COMMIT_MESSAGE_LOG_CHANNEL_NAME =
 const GIT_OUTPUT_TRUNCATED_MARKER =
     '[git output truncated: exceeded process buffer limit]';
 const DEFAULT_COMMIT_MESSAGE_PROMPT = `1. Use conventional commit message format
-2. Choose message language according project rules. If not specified:
+2. Choose message language according to project rules. If not specified:
   1) Analyze code and determine the most appropriate language from code comments.
   2) If you cannot determine the language, default to English.
 3. Present the generated commit message to the user in text format:
