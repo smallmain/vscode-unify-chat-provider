@@ -22,6 +22,12 @@ const DEFAULT_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 1;
 const MIN_BALANCE_WARNING_TIME_THRESHOLD_DAYS = 0;
 const MIN_BALANCE_WARNING_AMOUNT_THRESHOLD = 0;
 const MIN_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 0;
+const DEFAULT_COMMIT_MESSAGE_GENERATION_MODEL = '';
+const DEFAULT_COMMIT_MESSAGE_GENERATION_PROMPT = '';
+const DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS = 100_000;
+const MIN_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS = 1_000;
+const DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT = 30;
+const MIN_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT = 1;
 const GLOBAL_ONLY_CONFIG_KEYS = [
   'endpoints',
   'verbose',
@@ -33,6 +39,10 @@ const GLOBAL_ONLY_CONFIG_KEYS = [
   'balanceWarning.timeThresholdDays',
   'balanceWarning.amountThreshold',
   'balanceWarning.tokenThresholdMillions',
+  'commitMessageGeneration.model',
+  'commitMessageGeneration.prompt',
+  'commitMessageGeneration.maxChangeContextChars',
+  'commitMessageGeneration.maxUntrackedFileCount',
 ] as const;
 
 /**
@@ -44,6 +54,7 @@ export interface ExtensionConfiguration {
   balanceRefreshIntervalMs: number;
   balanceThrottleWindowMs: number;
   balanceWarning: BalanceWarningConfiguration;
+  commitMessageGeneration: CommitMessageGenerationConfiguration;
   verbose: boolean;
 }
 
@@ -55,6 +66,13 @@ export interface BalanceWarningConfiguration {
   amountThreshold: number;
   /** Token remaining threshold in millions. */
   tokenThresholdMillions: number;
+}
+
+export interface CommitMessageGenerationConfiguration {
+  model: string;
+  prompt: string;
+  maxChangeContextChars: number;
+  maxUntrackedFileCount: number;
 }
 
 /**
@@ -196,6 +214,61 @@ export class ConfigStore {
   }
 
   /**
+   * Configured model ID for commit message generation.
+   * Empty value means the feature is disabled.
+   */
+  get commitMessageGenerationModel(): string {
+    const raw = this.readGlobalUnknown('commitMessageGeneration.model');
+    return typeof raw === 'string'
+      ? raw.trim()
+      : DEFAULT_COMMIT_MESSAGE_GENERATION_MODEL;
+  }
+
+  /**
+   * Custom prompt for commit message generation.
+   * Empty value means fallback to built-in default prompt.
+   */
+  get commitMessageGenerationPrompt(): string {
+    const raw = this.readGlobalUnknown('commitMessageGeneration.prompt');
+    return typeof raw === 'string'
+      ? raw
+      : DEFAULT_COMMIT_MESSAGE_GENERATION_PROMPT;
+  }
+
+  /**
+   * Max number of characters from git changes included into model prompt.
+   */
+  get commitMessageGenerationMaxChangeContextChars(): number {
+    const raw = this.readGlobalUnknown('commitMessageGeneration.maxChangeContextChars');
+    return this.readIntegerAtLeast(
+      raw,
+      DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS,
+      MIN_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS,
+    );
+  }
+
+  /**
+   * Max number of untracked files whose diffs are sampled into prompt context.
+   */
+  get commitMessageGenerationMaxUntrackedFileCount(): number {
+    const raw = this.readGlobalUnknown('commitMessageGeneration.maxUntrackedFileCount');
+    return this.readIntegerAtLeast(
+      raw,
+      DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT,
+      MIN_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT,
+    );
+  }
+
+  get commitMessageGeneration(): CommitMessageGenerationConfiguration {
+    return {
+      model: this.commitMessageGenerationModel,
+      prompt: this.commitMessageGenerationPrompt,
+      maxChangeContextChars: this.commitMessageGenerationMaxChangeContextChars,
+      maxUntrackedFileCount: this.commitMessageGenerationMaxUntrackedFileCount,
+    };
+  }
+
+  /**
    * Get the full extension configuration
    */
   get configuration(): ExtensionConfiguration {
@@ -205,6 +278,7 @@ export class ConfigStore {
       balanceRefreshIntervalMs: this.balanceRefreshIntervalMs,
       balanceThrottleWindowMs: this.balanceThrottleWindowMs,
       balanceWarning: this.balanceWarning,
+      commitMessageGeneration: this.commitMessageGeneration,
       verbose: this.verbose,
     };
   }

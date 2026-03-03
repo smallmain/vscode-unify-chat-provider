@@ -32,6 +32,7 @@ Unify Chat Provider
 - 📦 **开箱即用**：一键配置，或从主流应用和扩展一键迁移，支持自动同步官方模型列表，无需繁琐操作。
 - 💾 **导入导出**：拥有完善的导入和导出功能，支持多种方式（Base64、JSON、URL、URI）导入已有配置。
 - 💎 **极致体验**：可视化界面配置，模型参数完全开放，支持无限供应商及模型配置，支持同供应商及模型多个配置变体共存。
+- 📝 **提交信息生成**：键根据未提交的更改生成提交信息，支持选择模型并可自定义提示词。
 - ✨ **One More Thing**：一键使用你的 Claude Code、Gemini CLI、Antigravity、Github Copilot、Qwen Code、OpenAI Codex (ChatGPT Plus/Pro)、iFlow CLI 账号配额。
 
 ## 安装

@@ -32,6 +32,7 @@ Integrate multiple LLM API providers into VS Code's GitHub Copilot Chat using th
 - 📦 **Out of the Box**: One-click configuration, or one-click migration from mainstream applications and extensions, with automatic syncing of official model lists, no tedious operations required.
 - 💾 **Import and Export**: Complete import/export support; import existing configs via Base64, JSON, URL, or URI.
 - 💎 **Great UX**: Visual interface configuration, fully open model parameters, supports unlimited provider and model configurations, and supports coexistence of multiple configuration variants for the same provider and model.
+- 📝 **Commit Message Generation**: Generate commit messages from uncommitted changes in one click, with selectable model and customizable prompt.
 - ✨ **One More Thing**: One-click use of your Claude Code, Gemini CLI, Antigravity, Github Copilot, Qwen Code, OpenAI Codex (ChatGPT Plus/Pro), iFlow CLI account quotas.
 
 ## Installation
