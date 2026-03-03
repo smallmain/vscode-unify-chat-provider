@@ -531,7 +531,11 @@ async function collectUntrackedDiffs(
                     : rawDiff;
 
             diffs.push(perFileDiff);
-        } catch {
+        } catch (error: unknown) {
+            if (error instanceof OperationCancelledError || token.isCancellationRequested) {
+                throw error;
+            }
+
             diffs.push(`[skipped diff for ${relativePath}: unable to render diff]`);
         }
     }
