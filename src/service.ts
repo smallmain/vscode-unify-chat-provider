@@ -375,23 +375,36 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     token: vscode.CancellationToken,
   ): Promise<void> {
     const commitMessageRequestName = getCommitMessageRequestName(messages);
-    const externalCancellationSource = new vscode.CancellationTokenSource();
-    const tokenForwarder = token.onCancellationRequested(() => {
-      externalCancellationSource.cancel();
-    });
-    const commitMessageCancellationListener = commitMessageRequestName
-      ? onCommitMessageCancellation((requestName) => {
-        if (requestName === commitMessageRequestName) {
-          externalCancellationSource.cancel();
-        }
+    // Commit-message requests support an additional cancellation channel
+    // (toolbar command -> named request cancellation event).
+    // For regular chat requests, reusing the original VS Code token avoids
+    // per-request forwarding allocations without changing cancellation semantics.
+    const externalCancellationSource = commitMessageRequestName
+      ? new vscode.CancellationTokenSource()
+      : undefined;
+    const tokenForwarder = externalCancellationSource
+      ? token.onCancellationRequested(() => {
+        externalCancellationSource.cancel();
       })
       : undefined;
+    const commitMessageCancellationListener =
+      commitMessageRequestName && externalCancellationSource
+        ? onCommitMessageCancellation((requestName) => {
+          if (requestName === commitMessageRequestName) {
+            externalCancellationSource.cancel();
+          }
+        })
+        : undefined;
 
-    if (token.isCancellationRequested) {
+    // Preserve already-requested cancellation when we are bridging through
+    // the external source; this keeps behavior consistent on immediate cancel.
+    if (externalCancellationSource && token.isCancellationRequested) {
       externalCancellationSource.cancel();
     }
 
-    const effectiveToken = externalCancellationSource.token;
+    // Commit-message flow listens to both cancellation channels through the
+    // bridged token; non-commit flow uses the original request token directly.
+    const effectiveToken = externalCancellationSource?.token ?? token;
 
     const logger = createRequestLogger();
     const performanceTrace: PerformanceTrace = {
@@ -534,8 +547,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         );
       }
       commitMessageCancellationListener?.dispose();
-      tokenForwarder.dispose();
-      externalCancellationSource.dispose();
+      tokenForwarder?.dispose();
+      externalCancellationSource?.dispose();
     }
   }
 

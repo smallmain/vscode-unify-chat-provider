@@ -135,226 +135,235 @@ export async function generateCommitMessageFromChanges(
     return;
   }
 
-  const configuredModelSettingValue = configStore.commitMessageGenerationModel;
-  if (!configuredModelSettingValue) {
-    logCommitMessageDebug('command aborted because no model is configured');
-    vscode.window.showInformationMessage(
-      t(
-        'Commit message generation is disabled. Select a model in settings to enable it.',
-      ),
-    );
-    return;
-  }
-
-  let repository: GitRepositoryLike | undefined;
-  try {
-    logCommitMessageDebug('resolving repository from context/git extension');
-    repository = await resolveRepository(commandContext);
-    logCommitMessageDebug('repository resolved', {
-      rootPath: repository?.rootUri.fsPath ?? 'undefined',
-    });
-  } catch (error) {
-    logCommitMessageError('failed to resolve repository', error);
-    showCommitMessageGenerationError(error);
-    return;
-  }
-
-  if (!repository) {
-    logCommitMessageDebug('no repository resolved for current workspace/context');
-    vscode.window.showErrorMessage(
-      t('No Git repository found in the current workspace.'),
-    );
-    return;
-  }
-
-  let model: vscode.LanguageModelChat | undefined;
-  try {
-    logCommitMessageDebug('resolving configured model', {
-      modelSettingValue: configuredModelSettingValue,
-    });
-    model = await resolveConfiguredModel(configuredModelSettingValue, configStore);
-    logCommitMessageDebug('model resolve completed', {
-      found: Boolean(model),
-    });
-  } catch (error) {
-    logCommitMessageError('failed to resolve configured model', error);
-    showCommitMessageGenerationError(error);
-    return;
-  }
-
-  if (!model) {
-    vscode.window.showErrorMessage(
-      t(
-        'Selected model "{0}" is unavailable. Update setting "{1}".',
-        configuredModelSettingValue,
-        MODEL_SETTING_KEY,
-      ),
-    );
-    return;
-  }
-
-  const cancellationSource = new vscode.CancellationTokenSource();
-  generationCancellationSource = cancellationSource;
-  let requestName: string | undefined;
-
   generationInProgress = true;
-  const generationStartTime = Date.now();
-  let generationResult: 'success' | 'cancelled' | 'error' | 'empty' = 'success';
-  let generatedMessageLength = 0;
-  let contextMetadata: CommitMessageContextWithMetadata | undefined;
-  let generationTokens: { prompt?: number; completion?: number } | undefined;
-
+  let lockManagedByGenerationWorkflow = false;
   try {
-    logCommitMessageDebug('starting generation workflow');
-    await vscode.commands.executeCommand(
-      'setContext',
-      IN_PROGRESS_CONTEXT_KEY,
-      true,
-    );
-    const token = cancellationSource.token;
-
-    logCommitMessageDebug('collecting git change context', {
-      repositoryPath: repository.rootUri.fsPath,
-    });
-    const changeContext = await collectGitChangeContext(
-      repository.rootUri.fsPath,
-      token,
-      {
-        maxChangeContextChars:
-          configStore.commitMessageGenerationMaxChangeContextChars,
-        maxUntrackedFileCount:
-          configStore.commitMessageGenerationMaxUntrackedFileCount,
-      },
-    );
-    if (!changeContext) {
-      if (token.isCancellationRequested) {
-        generationResult = 'cancelled';
-        logCommitMessageDebug('generation cancelled before prompt preparation');
-        return;
-      }
-      generationResult = 'empty';
-      logCommitMessageDebug('no git changes detected, skipping generation');
+    const configuredModelSettingValue = configStore.commitMessageGenerationModel;
+    if (!configuredModelSettingValue) {
+      logCommitMessageDebug('command aborted because no model is configured');
       vscode.window.showInformationMessage(
-        t('No changes detected. Commit message was not generated.'),
-      );
-      return;
-    }
-    logCommitMessageDebug('git change context collected', {
-      files: changeContext.fileCount,
-      chars: changeContext.charCount,
-    });
-
-    contextMetadata = changeContext;
-
-    const fullPrompt = buildGenerationPrompt({
-      instruction: resolveEffectivePrompt(configStore),
-      gitChangeContext: changeContext.content,
-    });
-    logCommitMessageDebug('prompt prepared', {
-      promptChars: fullPrompt.length,
-    });
-
-    requestName = createCommitMessageRequestName();
-    activeCommitMessageRequestName = requestName;
-
-    logCommitMessageInfo('▶ Commit message generation started', {
-      model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
-      files: changeContext.fileCount,
-      chars: changeContext.charCount,
-    });
-
-    const generated = await requestCommitMessageText(
-      model,
-      fullPrompt,
-      requestName,
-      token,
-    );
-
-    if (!generated) {
-      if (token.isCancellationRequested) {
-        generationResult = 'cancelled';
-        logCommitMessageDebug('generation cancelled during model request');
-        return;
-      }
-      generationResult = 'empty';
-      logCommitMessageDebug('generation produced empty result');
-      vscode.window.showInformationMessage(
-        t('The model returned an empty commit message. Please try again.'),
+        t(
+          'Commit message generation is disabled. Select a model in settings to enable it.',
+        ),
       );
       return;
     }
 
-    generationTokens = {
-      prompt: generated.promptTokens,
-      completion: generated.completionTokens,
-    };
-
+    let repository: GitRepositoryLike | undefined;
     try {
-      await setCommitMessageInputValue(
-        repository,
-        commandContext,
-        generated.text,
-      );
-      generatedMessageLength = generated.text.length;
-      logCommitMessageDebug('commit message inserted into SCM input', {
-        chars: generated.text.length,
+      logCommitMessageDebug('resolving repository from context/git extension');
+      repository = await resolveRepository(commandContext);
+      logCommitMessageDebug('repository resolved', {
+        rootPath: repository?.rootUri.fsPath ?? 'undefined',
       });
     } catch (error) {
-      logCommitMessageError('failed to write generated message to SCM input', error);
-      throw new Error(
-        `failed to write generated message to SCM input: ${error instanceof Error ? error.message : String(error)}`,
-      );
-    }
-  } catch (error) {
-    generationResult = 'error';
-    if (cancellationSource.token.isCancellationRequested) {
-      generationResult = 'cancelled';
-      logCommitMessageDebug('generation cancelled by user action');
+      logCommitMessageError('failed to resolve repository', error);
+      showCommitMessageGenerationError(error);
       return;
     }
-    logCommitMessageError('generation workflow failed', error);
-    showCommitMessageGenerationError(error);
+
+    if (!repository) {
+      logCommitMessageDebug('no repository resolved for current workspace/context');
+      vscode.window.showErrorMessage(
+        t('No Git repository found in the current workspace.'),
+      );
+      return;
+    }
+
+    let model: vscode.LanguageModelChat | undefined;
+    try {
+      logCommitMessageDebug('resolving configured model', {
+        modelSettingValue: configuredModelSettingValue,
+      });
+      model = await resolveConfiguredModel(configuredModelSettingValue, configStore);
+      logCommitMessageDebug('model resolve completed', {
+        found: Boolean(model),
+      });
+    } catch (error) {
+      logCommitMessageError('failed to resolve configured model', error);
+      showCommitMessageGenerationError(error);
+      return;
+    }
+
+    if (!model) {
+      vscode.window.showErrorMessage(
+        t(
+          'Selected model "{0}" is unavailable. Update setting "{1}".',
+          configuredModelSettingValue,
+          MODEL_SETTING_KEY,
+        ),
+      );
+      return;
+    }
+
+    const cancellationSource = new vscode.CancellationTokenSource();
+    generationCancellationSource = cancellationSource;
+    let requestName: string | undefined;
+
+    const generationStartTime = Date.now();
+    let generationResult: 'success' | 'cancelled' | 'error' | 'empty' = 'success';
+    let generatedMessageLength = 0;
+    let contextMetadata: CommitMessageContextWithMetadata | undefined;
+    let generationTokens: { prompt?: number; completion?: number } | undefined;
+
+    lockManagedByGenerationWorkflow = true;
+
+    try {
+      logCommitMessageDebug('starting generation workflow');
+      await vscode.commands.executeCommand(
+        'setContext',
+        IN_PROGRESS_CONTEXT_KEY,
+        true,
+      );
+      const token = cancellationSource.token;
+
+      logCommitMessageDebug('collecting git change context', {
+        repositoryPath: repository.rootUri.fsPath,
+      });
+      const changeContext = await collectGitChangeContext(
+        repository.rootUri.fsPath,
+        token,
+        {
+          maxChangeContextChars:
+            configStore.commitMessageGenerationMaxChangeContextChars,
+          maxUntrackedFileCount:
+            configStore.commitMessageGenerationMaxUntrackedFileCount,
+        },
+      );
+      if (!changeContext) {
+        if (token.isCancellationRequested) {
+          generationResult = 'cancelled';
+          logCommitMessageDebug('generation cancelled before prompt preparation');
+          return;
+        }
+        generationResult = 'empty';
+        logCommitMessageDebug('no git changes detected, skipping generation');
+        vscode.window.showInformationMessage(
+          t('No changes detected. Commit message was not generated.'),
+        );
+        return;
+      }
+      logCommitMessageDebug('git change context collected', {
+        files: changeContext.fileCount,
+        chars: changeContext.charCount,
+      });
+
+      contextMetadata = changeContext;
+
+      const fullPrompt = buildGenerationPrompt({
+        instruction: resolveEffectivePrompt(configStore),
+        gitChangeContext: changeContext.content,
+      });
+      logCommitMessageDebug('prompt prepared', {
+        promptChars: fullPrompt.length,
+      });
+
+      requestName = createCommitMessageRequestName();
+      activeCommitMessageRequestName = requestName;
+
+      logCommitMessageInfo('▶ Commit message generation started', {
+        model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
+        files: changeContext.fileCount,
+        chars: changeContext.charCount,
+      });
+
+      const generated = await requestCommitMessageText(
+        model,
+        fullPrompt,
+        requestName,
+        token,
+      );
+
+      if (!generated) {
+        if (token.isCancellationRequested) {
+          generationResult = 'cancelled';
+          logCommitMessageDebug('generation cancelled during model request');
+          return;
+        }
+        generationResult = 'empty';
+        logCommitMessageDebug('generation produced empty result');
+        vscode.window.showInformationMessage(
+          t('The model returned an empty commit message. Please try again.'),
+        );
+        return;
+      }
+
+      generationTokens = {
+        prompt: generated.promptTokens,
+        completion: generated.completionTokens,
+      };
+
+      try {
+        await setCommitMessageInputValue(
+          repository,
+          commandContext,
+          generated.text,
+        );
+        generatedMessageLength = generated.text.length;
+        logCommitMessageDebug('commit message inserted into SCM input', {
+          chars: generated.text.length,
+        });
+      } catch (error) {
+        logCommitMessageError('failed to write generated message to SCM input', error);
+        throw new Error(
+          `failed to write generated message to SCM input: ${error instanceof Error ? error.message : String(error)}`,
+        );
+      }
+    } catch (error) {
+      generationResult = 'error';
+      if (cancellationSource.token.isCancellationRequested) {
+        generationResult = 'cancelled';
+        logCommitMessageDebug('generation cancelled by user action');
+        return;
+      }
+      logCommitMessageError('generation workflow failed', error);
+      showCommitMessageGenerationError(error);
+    } finally {
+      if (requestName && activeCommitMessageRequestName === requestName) {
+        activeCommitMessageRequestName = undefined;
+      }
+      cancellationSource.dispose();
+      if (generationCancellationSource === cancellationSource) {
+        generationCancellationSource = undefined;
+      }
+      generationInProgress = false;
+
+      const duration = Date.now() - generationStartTime;
+      const durationSeconds = (duration / 1000).toFixed(2);
+
+      const statusEmoji = generationResult === 'success' ? '✅' :
+        generationResult === 'cancelled' ? '🚫' :
+          generationResult === 'error' ? '❌' : '⚠️';
+
+      const summaryData: Record<string, string | number> = {
+        model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
+        files: contextMetadata?.fileCount ?? 0,
+        contextChars: contextMetadata?.charCount ?? 0,
+        messageChars: generatedMessageLength,
+        duration: `${durationSeconds}s`,
+      };
+
+      if (generationTokens?.prompt !== undefined || generationTokens?.completion !== undefined) {
+        if (generationTokens.prompt !== undefined) {
+          summaryData.promptTokens = generationTokens.prompt;
+        }
+        if (generationTokens.completion !== undefined) {
+          summaryData.completionTokens = generationTokens.completion;
+        }
+      }
+
+      logCommitMessageInfo(`${statusEmoji} Commit message generation ${generationResult}`, summaryData);
+
+      await vscode.commands.executeCommand(
+        'setContext',
+        IN_PROGRESS_CONTEXT_KEY,
+        false,
+      );
+    }
   } finally {
-    if (requestName && activeCommitMessageRequestName === requestName) {
-      activeCommitMessageRequestName = undefined;
+    if (!lockManagedByGenerationWorkflow) {
+      generationInProgress = false;
     }
-    cancellationSource.dispose();
-    if (generationCancellationSource === cancellationSource) {
-      generationCancellationSource = undefined;
-    }
-    generationInProgress = false;
-
-    const duration = Date.now() - generationStartTime;
-    const durationSeconds = (duration / 1000).toFixed(2);
-
-    const statusEmoji = generationResult === 'success' ? '✅' :
-      generationResult === 'cancelled' ? '🚫' :
-        generationResult === 'error' ? '❌' : '⚠️';
-
-    const summaryData: Record<string, string | number> = {
-      model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
-      files: contextMetadata?.fileCount ?? 0,
-      contextChars: contextMetadata?.charCount ?? 0,
-      messageChars: generatedMessageLength,
-      duration: `${durationSeconds}s`,
-    };
-
-    if (generationTokens?.prompt !== undefined || generationTokens?.completion !== undefined) {
-      if (generationTokens.prompt !== undefined) {
-        summaryData.promptTokens = generationTokens.prompt;
-      }
-      if (generationTokens.completion !== undefined) {
-        summaryData.completionTokens = generationTokens.completion;
-      }
-    }
-
-    logCommitMessageInfo(`${statusEmoji} Commit message generation ${generationResult}`, summaryData);
-
-    await vscode.commands.executeCommand(
-      'setContext',
-      IN_PROGRESS_CONTEXT_KEY,
-      false,
-    );
   }
 }
 
