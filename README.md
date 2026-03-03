@@ -415,6 +415,12 @@ Use this feature to monitor provider balances in `Provider Settings`.
 
 ## Adjust Parameters
 
+### Configuration Scope
+
+- Most `unifyChatProvider.*` settings are read from **User (Global)** scope.
+- Workspace (`.vscode/settings.json`) overrides are ignored for those global-only keys.
+- Exception: `unifyChatProvider.commitMessageGeneration.prompt` uses the effective VS Code setting value, so it can be set at workspace/workspaceFolder/user scope.
+
 ### Global Settings
 
 <details>

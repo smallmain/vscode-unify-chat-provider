@@ -247,6 +247,11 @@
           "default": 30,
           "minimum": 1
         },
+        "unifyChatProvider.commitMessageGeneration.restrictToVendor": {
+          "type": "boolean",
+          "description": "%configuration.commitMessageGeneration.restrictToVendor.description%",
+          "default": true
+        },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
           "description": "%configuration.balanceRefreshIntervalMs.description%",

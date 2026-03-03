@@ -22,6 +22,7 @@
   "configuration.commitMessageGeneration.prompt.description": "Custom instruction prompt for commit message generation. Leave empty to use the built-in default prompt.",
   "configuration.commitMessageGeneration.maxChangeContextChars.description": "Maximum number of git-change characters included in commit message generation prompt. Default: 100000.",
   "configuration.commitMessageGeneration.maxUntrackedFileCount.description": "Maximum number of untracked files whose diffs are sampled for commit message generation. Default: 30.",
+  "configuration.commitMessageGeneration.restrictToVendor.description": "Restrict model selection to unify-chat-provider vendor only. When false, models from all providers are available for commit message generation. Default: true.",
   "configuration.balanceRefreshIntervalMs.description": "Periodic refresh interval for provider balances in milliseconds. Default: 60000 (60 seconds).",
   "configuration.balanceThrottleWindowMs.description": "Throttle window for post-request balance refresh in milliseconds. Default: 10000 (10 seconds).",
   "configuration.balanceStatusBarIcon.description": "Status bar icon for provider balances. Set to empty to hide.",

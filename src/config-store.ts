@@ -28,6 +28,7 @@ const DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS = 100_000;
 const MIN_COMMIT_MESSAGE_GENERATION_MAX_CHANGE_CONTEXT_CHARS = 1_000;
 const DEFAULT_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT = 30;
 const MIN_COMMIT_MESSAGE_GENERATION_MAX_UNTRACKED_FILE_COUNT = 1;
+const DEFAULT_COMMIT_MESSAGE_GENERATION_RESTRICT_TO_VENDOR = true;
 const GLOBAL_ONLY_CONFIG_KEYS = [
   'endpoints',
   'verbose',
@@ -40,13 +41,13 @@ const GLOBAL_ONLY_CONFIG_KEYS = [
   'balanceWarning.amountThreshold',
   'balanceWarning.tokenThresholdMillions',
   'commitMessageGeneration.model',
-  'commitMessageGeneration.prompt',
   'commitMessageGeneration.maxChangeContextChars',
   'commitMessageGeneration.maxUntrackedFileCount',
+  'commitMessageGeneration.restrictToVendor',
 ] as const;
 
 /**
- * Extension configuration stored in user (global) settings.
+ * Extension configuration values.
  */
 export interface ExtensionConfiguration {
   endpoints: ProviderConfig[];
@@ -73,12 +74,14 @@ export interface CommitMessageGenerationConfiguration {
   prompt: string;
   maxChangeContextChars: number;
   maxUntrackedFileCount: number;
+  restrictToVendor: boolean;
 }
 
 /**
- * Manages extension configuration stored in VS Code user (global) settings.
+ * Manages extension configuration.
  *
- * Workspace/workspaceFolder scoped overrides are intentionally ignored.
+ * Workspace/workspaceFolder scoped overrides are intentionally ignored
+ * for all keys except `commitMessageGeneration.prompt`.
  */
 export class ConfigStore {
   private readonly _onDidChange = new vscode.EventEmitter<void>();
@@ -229,7 +232,7 @@ export class ConfigStore {
    * Empty value means fallback to built-in default prompt.
    */
   get commitMessageGenerationPrompt(): string {
-    const raw = this.readGlobalUnknown('commitMessageGeneration.prompt');
+    const raw = this.readEffectiveUnknown('commitMessageGeneration.prompt');
     return typeof raw === 'string'
       ? raw
       : DEFAULT_COMMIT_MESSAGE_GENERATION_PROMPT;
@@ -259,12 +262,22 @@ export class ConfigStore {
     );
   }
 
+  /**
+   * Whether to restrict model selection to unify-chat-provider vendor only.
+   * When false, models from all providers are available.
+   */
+  get commitMessageGenerationRestrictToVendor(): boolean {
+    const raw = this.readGlobalUnknown('commitMessageGeneration.restrictToVendor');
+    return typeof raw === 'boolean' ? raw : DEFAULT_COMMIT_MESSAGE_GENERATION_RESTRICT_TO_VENDOR;
+  }
+
   get commitMessageGeneration(): CommitMessageGenerationConfiguration {
     return {
       model: this.commitMessageGenerationModel,
       prompt: this.commitMessageGenerationPrompt,
       maxChangeContextChars: this.commitMessageGenerationMaxChangeContextChars,
       maxUntrackedFileCount: this.commitMessageGenerationMaxUntrackedFileCount,
+      restrictToVendor: this.commitMessageGenerationRestrictToVendor,
     };
   }
 
@@ -317,6 +330,11 @@ export class ConfigStore {
     const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
     const inspection = config.inspect<unknown>(key);
     return inspection?.globalValue;
+  }
+
+  private readEffectiveUnknown(key: string): unknown {
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    return config.get<unknown>(key);
   }
 
   private hasWorkspaceFolderOverride(key: string): boolean {

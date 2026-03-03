@@ -229,7 +229,7 @@ export function registerCommands(
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.selectCommitMessageGenerationModel',
-      () => selectCommitMessageGenerationModel(),
+      () => selectCommitMessageGenerationModel(configStore),
     ),
   );
 }

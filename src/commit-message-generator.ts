@@ -13,6 +13,7 @@ const execFileAsync = promisify(execFile);
 
 const VENDOR_ID = 'unify-chat-provider';
 const MODEL_SETTING_KEY = 'unifyChatProvider.commitMessageGeneration.model';
+const MODEL_IDENTITY_SEPARATOR = '::';
 const IN_PROGRESS_CONTEXT_KEY =
     'unifyChatProvider.commitMessageGeneration.inProgress';
 const MAX_GIT_OUTPUT_BYTES = 2_000_000;
@@ -21,14 +22,13 @@ const COMMIT_MESSAGE_LOG_CHANNEL_NAME =
     'Unify Chat Provider: Commit Message Generation';
 const GIT_OUTPUT_TRUNCATED_MARKER =
     '[git output truncated: exceeded process buffer limit]';
-const DEFAULT_COMMIT_MESSAGE_PROMPT = `1. Use conventional commit message format
-2. Choose message language according to project rules. If not specified:
-  1) Analyze code and determine the most appropriate language from code comments.
-  2) If you cannot determine the language, default to English.
-3. Present the generated commit message to the user in text format:
+const DEFAULT_COMMIT_MESSAGE_PROMPT = `1. Use conventional commit message format.
+2. Analyze code and determine the most appropriate language from code comments.
+3. If you cannot determine the language, default to English.
+4. Present the generated commit message to the user in format:
 <type>(<scope>): <subject>
 <BLANK LINE>
-<body>`;
+<body. use bullet points if there are multiple items to mention>`;
 
 let generationInProgress = false;
 let generationCancellationSource: vscode.CancellationTokenSource | undefined;
@@ -49,12 +49,61 @@ interface RunGitCommandError extends Error {
 }
 
 interface ModelPickItem extends vscode.QuickPickItem {
-    readonly modelId: string;
+    readonly modelSettingValue: string;
 }
 
 interface CommitMessageContextLimits {
     readonly maxChangeContextChars: number;
     readonly maxUntrackedFileCount: number;
+}
+
+interface CommitMessageContextWithMetadata {
+    readonly content: string;
+    readonly fileCount: number;
+    readonly charCount: number;
+}
+
+function createCommitMessageContextWithMetadata(
+    content: string,
+    fileCount: number,
+): CommitMessageContextWithMetadata {
+    const charCount = content.length;
+    const normalizedFileCount = fileCount > 0 ? Math.floor(fileCount) : 0;
+
+    return {
+        content,
+        fileCount: normalizedFileCount,
+        charCount,
+    };
+}
+
+function toModelSettingValue(
+    model: Pick<vscode.LanguageModelChat, 'vendor' | 'id'>,
+): string {
+    return `${model.vendor}${MODEL_IDENTITY_SEPARATOR}${model.id}`;
+}
+
+function parseModelSettingValue(
+    modelSettingValue: string,
+): { vendor: string; modelId: string } | undefined {
+    const separatorIndex = modelSettingValue.indexOf(MODEL_IDENTITY_SEPARATOR);
+    if (
+        separatorIndex <= 0 ||
+        separatorIndex >= modelSettingValue.length - MODEL_IDENTITY_SEPARATOR.length
+    ) {
+        return undefined;
+    }
+
+    return {
+        vendor: modelSettingValue.slice(0, separatorIndex),
+        modelId: modelSettingValue.slice(separatorIndex + MODEL_IDENTITY_SEPARATOR.length),
+    };
+}
+
+interface CommitMessageGenerationMetadata {
+    readonly text: string;
+    readonly promptTokens?: number;
+    readonly completionTokens?: number;
 }
 
 class OperationCancelledError extends Error {
@@ -76,19 +125,19 @@ export async function generateCommitMessageFromChanges(
     configStore: ConfigStore,
     commandContext?: unknown,
 ): Promise<void> {
-    logCommitMessageInfo('command invoked');
+    logCommitMessageDebug('command invoked');
 
     if (generationInProgress) {
-        logCommitMessageInfo('command ignored because generation is already in progress');
+        logCommitMessageDebug('command ignored because generation is already in progress');
         vscode.window.showInformationMessage(
             t('Commit message generation is already running.'),
         );
         return;
     }
 
-    const configuredModelId = configStore.commitMessageGenerationModel;
-    if (!configuredModelId) {
-        logCommitMessageInfo('command aborted because no model is configured');
+    const configuredModelSettingValue = configStore.commitMessageGenerationModel;
+    if (!configuredModelSettingValue) {
+        logCommitMessageDebug('command aborted because no model is configured');
         vscode.window.showInformationMessage(
             t(
                 'Commit message generation is disabled. Select a model in settings to enable it.',
@@ -99,9 +148,9 @@ export async function generateCommitMessageFromChanges(
 
     let repository: GitRepositoryLike | undefined;
     try {
-        logCommitMessageInfo('resolving repository from context/git extension');
+        logCommitMessageDebug('resolving repository from context/git extension');
         repository = await resolveRepository(commandContext);
-        logCommitMessageInfo('repository resolved', {
+        logCommitMessageDebug('repository resolved', {
             rootPath: repository?.rootUri.fsPath ?? 'undefined',
         });
     } catch (error) {
@@ -111,7 +160,7 @@ export async function generateCommitMessageFromChanges(
     }
 
     if (!repository) {
-        logCommitMessageInfo('no repository resolved for current workspace/context');
+        logCommitMessageDebug('no repository resolved for current workspace/context');
         vscode.window.showErrorMessage(
             t('No Git repository found in the current workspace.'),
         );
@@ -120,11 +169,11 @@ export async function generateCommitMessageFromChanges(
 
     let model: vscode.LanguageModelChat | undefined;
     try {
-        logCommitMessageInfo('resolving configured model', {
-            modelId: configuredModelId,
+        logCommitMessageDebug('resolving configured model', {
+            modelSettingValue: configuredModelSettingValue,
         });
-        model = await resolveConfiguredModel(configuredModelId);
-        logCommitMessageInfo('model resolve completed', {
+        model = await resolveConfiguredModel(configuredModelSettingValue, configStore);
+        logCommitMessageDebug('model resolve completed', {
             found: Boolean(model),
         });
     } catch (error) {
@@ -137,7 +186,7 @@ export async function generateCommitMessageFromChanges(
         vscode.window.showErrorMessage(
             t(
                 'Selected model "{0}" is unavailable. Update setting "{1}".',
-                configuredModelId,
+                configuredModelSettingValue,
                 MODEL_SETTING_KEY,
             ),
         );
@@ -149,8 +198,14 @@ export async function generateCommitMessageFromChanges(
     let requestName: string | undefined;
 
     generationInProgress = true;
+    const generationStartTime = Date.now();
+    let generationResult: 'success' | 'cancelled' | 'error' | 'empty' = 'success';
+    let generatedMessageLength = 0;
+    let contextMetadata: CommitMessageContextWithMetadata | undefined;
+    let generationTokens: { prompt?: number; completion?: number } | undefined;
+
     try {
-        logCommitMessageInfo('starting generation workflow');
+        logCommitMessageDebug('starting generation workflow');
         await vscode.commands.executeCommand(
             'setContext',
             IN_PROGRESS_CONTEXT_KEY,
@@ -158,7 +213,7 @@ export async function generateCommitMessageFromChanges(
         );
         const token = cancellationSource.token;
 
-        logCommitMessageInfo('collecting git change context', {
+        logCommitMessageDebug('collecting git change context', {
             repositoryPath: repository.rootUri.fsPath,
         });
         const changeContext = await collectGitChangeContext(
@@ -173,29 +228,40 @@ export async function generateCommitMessageFromChanges(
         );
         if (!changeContext) {
             if (token.isCancellationRequested) {
-                logCommitMessageInfo('generation cancelled before prompt preparation');
+                generationResult = 'cancelled';
+                logCommitMessageDebug('generation cancelled before prompt preparation');
                 return;
             }
-            logCommitMessageInfo('no git changes detected, skipping generation');
+            generationResult = 'empty';
+            logCommitMessageDebug('no git changes detected, skipping generation');
             vscode.window.showInformationMessage(
                 t('No changes detected. Commit message was not generated.'),
             );
             return;
         }
-        logCommitMessageInfo('git change context collected', {
-            chars: changeContext.length,
+        logCommitMessageDebug('git change context collected', {
+            files: changeContext.fileCount,
+            chars: changeContext.charCount,
         });
+
+        contextMetadata = changeContext;
 
         const fullPrompt = buildGenerationPrompt({
             instruction: resolveEffectivePrompt(configStore),
-            gitChangeContext: changeContext,
+            gitChangeContext: changeContext.content,
         });
-        logCommitMessageInfo('prompt prepared', {
+        logCommitMessageDebug('prompt prepared', {
             promptChars: fullPrompt.length,
         });
 
         requestName = createCommitMessageRequestName();
         activeCommitMessageRequestName = requestName;
+
+        logCommitMessageInfo('▶ Commit message generation started', {
+            model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
+            files: changeContext.fileCount,
+            chars: changeContext.charCount,
+        });
 
         const generated = await requestCommitMessageText(
             model,
@@ -206,24 +272,32 @@ export async function generateCommitMessageFromChanges(
 
         if (!generated) {
             if (token.isCancellationRequested) {
-                logCommitMessageInfo('generation cancelled before writing to scm input');
+                generationResult = 'cancelled';
+                logCommitMessageDebug('generation cancelled during model request');
                 return;
             }
-            logCommitMessageInfo('generation produced empty result');
+            generationResult = 'empty';
+            logCommitMessageDebug('generation produced empty result');
             vscode.window.showInformationMessage(
                 t('The model returned an empty commit message. Please try again.'),
             );
             return;
         }
 
+        generationTokens = {
+            prompt: generated.promptTokens,
+            completion: generated.completionTokens,
+        };
+
         try {
             await setCommitMessageInputValue(
                 repository,
                 commandContext,
-                generated,
+                generated.text,
             );
-            logCommitMessageInfo('commit message inserted into SCM input', {
-                chars: generated.length,
+            generatedMessageLength = generated.text.length;
+            logCommitMessageDebug('commit message inserted into SCM input', {
+                chars: generated.text.length,
             });
         } catch (error) {
             logCommitMessageError('failed to write generated message to SCM input', error);
@@ -232,8 +306,10 @@ export async function generateCommitMessageFromChanges(
             );
         }
     } catch (error) {
+        generationResult = 'error';
         if (cancellationSource.token.isCancellationRequested) {
-            logCommitMessageInfo('generation cancelled by user action');
+            generationResult = 'cancelled';
+            logCommitMessageDebug('generation cancelled by user action');
             return;
         }
         logCommitMessageError('generation workflow failed', error);
@@ -247,7 +323,33 @@ export async function generateCommitMessageFromChanges(
             generationCancellationSource = undefined;
         }
         generationInProgress = false;
-        logCommitMessageInfo('generation workflow finished');
+
+        const duration = Date.now() - generationStartTime;
+        const durationSeconds = (duration / 1000).toFixed(2);
+
+        const statusEmoji = generationResult === 'success' ? '✅' :
+            generationResult === 'cancelled' ? '🚫' :
+                generationResult === 'error' ? '❌' : '⚠️';
+
+        const summaryData: Record<string, string | number> = {
+            model: `${model.vendor}/${model.family}${model.name ? ` (${model.name})` : ''}`,
+            files: contextMetadata?.fileCount ?? 0,
+            contextChars: contextMetadata?.charCount ?? 0,
+            messageChars: generatedMessageLength,
+            duration: `${durationSeconds}s`,
+        };
+
+        if (generationTokens?.prompt !== undefined || generationTokens?.completion !== undefined) {
+            if (generationTokens.prompt !== undefined) {
+                summaryData.promptTokens = generationTokens.prompt;
+            }
+            if (generationTokens.completion !== undefined) {
+                summaryData.completionTokens = generationTokens.completion;
+            }
+        }
+
+        logCommitMessageInfo(`${statusEmoji} Commit message generation ${generationResult}`, summaryData);
+
         await vscode.commands.executeCommand(
             'setContext',
             IN_PROGRESS_CONTEXT_KEY,
@@ -261,10 +363,13 @@ export async function generateCommitMessageFromChanges(
  */
 export function cancelCommitMessageGeneration(): void {
     if (!generationInProgress || !generationCancellationSource) {
+        logCommitMessageDebug('cancellation requested but no active generation');
         return;
     }
 
-    logCommitMessageInfo('cancellation requested from scm toolbar button');
+    logCommitMessageDebug('cancellation requested from scm toolbar button', {
+        requestName: activeCommitMessageRequestName,
+    });
     requestCommitMessageCancellation(activeCommitMessageRequestName);
     generationCancellationSource.cancel();
 }
@@ -272,8 +377,13 @@ export function cancelCommitMessageGeneration(): void {
 /**
  * Let user choose commit-message generation model from currently available models.
  */
-export async function selectCommitMessageGenerationModel(): Promise<void> {
-    const models = await vscode.lm.selectChatModels({ vendor: VENDOR_ID });
+export async function selectCommitMessageGenerationModel(
+    configStore: ConfigStore,
+): Promise<void> {
+    const restrictToVendor = configStore.commitMessageGenerationRestrictToVendor;
+    const models = await vscode.lm.selectChatModels(
+        restrictToVendor ? { vendor: VENDOR_ID } : {},
+    );
     if (models.length === 0) {
         vscode.window.showInformationMessage(
             t('No models are currently available for commit message generation.'),
@@ -285,7 +395,7 @@ export async function selectCommitMessageGenerationModel(): Promise<void> {
         {
             label: t('Disable commit message generation'),
             description: t('Feature disabled (no model selected)'),
-            modelId: '',
+            modelSettingValue: '',
         },
         ...models
             .map<ModelPickItem>((model) => ({
@@ -295,7 +405,7 @@ export async function selectCommitMessageGenerationModel(): Promise<void> {
                     model.family && model.family.trim().length > 0
                         ? `${model.vendor} · ${model.family}`
                         : model.vendor,
-                modelId: model.id,
+                modelSettingValue: toModelSettingValue(model),
             }))
             .sort((a, b) => a.label.localeCompare(b.label)),
     ];
@@ -313,7 +423,7 @@ export async function selectCommitMessageGenerationModel(): Promise<void> {
         .getConfiguration('unifyChatProvider')
         .update(
             'commitMessageGeneration.model',
-            selected.modelId,
+            selected.modelSettingValue,
             vscode.ConfigurationTarget.Global,
         );
 }
@@ -322,10 +432,23 @@ export async function selectCommitMessageGenerationModel(): Promise<void> {
  * Resolve the model configured in settings from currently available LM models.
  */
 async function resolveConfiguredModel(
-    modelId: string,
+    modelSettingValue: string,
+    configStore: ConfigStore,
 ): Promise<vscode.LanguageModelChat | undefined> {
-    const models = await vscode.lm.selectChatModels({ vendor: VENDOR_ID });
-    return models.find((candidate) => candidate.id === modelId);
+    const resolvedModelIdentity = parseModelSettingValue(modelSettingValue);
+    if (!resolvedModelIdentity) {
+        return undefined;
+    }
+
+    const restrictToVendor = configStore.commitMessageGenerationRestrictToVendor;
+    const models = await vscode.lm.selectChatModels(
+        restrictToVendor ? { vendor: VENDOR_ID } : {},
+    );
+    return models.find(
+        (candidate) =>
+            candidate.vendor === resolvedModelIdentity.vendor &&
+            candidate.id === resolvedModelIdentity.modelId,
+    );
 }
 
 /**
@@ -411,7 +534,7 @@ async function collectGitChangeContext(
     repositoryPath: string,
     token: vscode.CancellationToken,
     limits: CommitMessageContextLimits,
-): Promise<string | undefined> {
+): Promise<CommitMessageContextWithMetadata | undefined> {
     throwIfCancelled(token);
     const stagedDiff = await runGitCommand(
         repositoryPath,
@@ -422,7 +545,14 @@ async function collectGitChangeContext(
     );
 
     if (stagedDiff.trim().length > 0) {
-        return truncateChangeContext(stagedDiff, limits.maxChangeContextChars);
+        const stagedFiles = await collectNameOnlyFiles(
+            repositoryPath,
+            ['diff', '--cached', '--name-only', '--'],
+            token,
+        );
+        const truncated = truncateChangeContext(stagedDiff, limits.maxChangeContextChars);
+        const fileCount = countUniqueFiles(stagedFiles);
+        return createCommitMessageContextWithMetadata(truncated, fileCount);
     }
 
     throwIfCancelled(token);
@@ -433,6 +563,13 @@ async function collectGitChangeContext(
         token,
         true,
     );
+    throwIfCancelled(token);
+    const unstagedFiles = await collectNameOnlyFiles(
+        repositoryPath,
+        ['diff', '--name-only', '--'],
+        token,
+    );
+
     throwIfCancelled(token);
     let untrackedFiles: string[] = [];
     let untrackedListOverflowed = false;
@@ -491,7 +628,9 @@ async function collectGitChangeContext(
     }
 
     const combined = sections.join('\n\n');
-    return truncateChangeContext(combined, limits.maxChangeContextChars);
+    const truncated = truncateChangeContext(combined, limits.maxChangeContextChars);
+    const fileCount = countUniqueFiles(unstagedFiles, untrackedFiles);
+    return createCommitMessageContextWithMetadata(truncated, fileCount);
 }
 
 /**
@@ -658,10 +797,54 @@ async function runGitCommand(
 }
 
 /**
+ * Collect changed file names in best-effort mode.
+ */
+async function collectNameOnlyFiles(
+    repositoryPath: string,
+    args: readonly string[],
+    token: vscode.CancellationToken,
+): Promise<string[]> {
+    try {
+        const output = await runGitCommand(
+            repositoryPath,
+            args,
+            [0],
+            token,
+            true,
+        );
+
+        return parseGitNameOnlyFiles(output);
+    } catch (error) {
+        if (error instanceof OperationCancelledError || token.isCancellationRequested) {
+            throw error;
+        }
+
+        logCommitMessageDebug('failed to collect changed file names for metadata', {
+            args: args.join(' '),
+            error: error instanceof Error ? error.message : String(error),
+        });
+
+        return [];
+    }
+}
+
+/**
  * Detect shape of child_process execution error used by execFile.
  */
 function isRunGitCommandError(error: unknown): error is RunGitCommandError {
-    return error instanceof Error;
+    if (!(error instanceof Error)) {
+        return false;
+    }
+
+    const err = error as RunGitCommandError;
+
+    // Check if it looks like a child process error by verifying
+    // that it has at least one of the expected properties
+    return (
+        'code' in err ||
+        'stdout' in err ||
+        'stderr' in err
+    );
 }
 
 /**
@@ -707,6 +890,30 @@ function splitNonEmptyLines(value: string): string[] {
         .split(/\r?\n/)
         .map((line) => line.trim())
         .filter((line) => line.length > 0);
+}
+
+/**
+ * Parse output of `git diff --name-only` preserving spaces inside file names.
+ */
+function parseGitNameOnlyFiles(value: string): string[] {
+    return value
+        .split(/\r?\n/)
+        .filter((line) => line.length > 0 && line !== GIT_OUTPUT_TRUNCATED_MARKER);
+}
+
+/**
+ * Count unique file paths across several file lists.
+ */
+function countUniqueFiles(...fileLists: ReadonlyArray<ReadonlyArray<string>>): number {
+    const uniqueFiles = new Set<string>();
+
+    for (const fileList of fileLists) {
+        for (const filePath of fileList) {
+            uniqueFiles.add(filePath);
+        }
+    }
+
+    return uniqueFiles.size;
 }
 
 /**
@@ -760,8 +967,7 @@ function getContextInputBox(
  *
  * Priority order:
  * 1) resolved repository input box,
- * 2) command context sourceControl input box,
- * 3) global vscode.scm input box.
+ * 2) command context sourceControl input box.
  */
 async function setCommitMessageInputValue(
     repository: GitRepositoryLike,
@@ -777,10 +983,6 @@ async function setCommitMessageInputValue(
     const contextInputBox = getContextInputBox(commandContext);
     if (contextInputBox) {
         candidateInputBoxes.push(contextInputBox);
-    }
-
-    if (isSourceControlInputBoxLike(vscode.scm.inputBox)) {
-        candidateInputBoxes.push(vscode.scm.inputBox);
     }
 
     logCommitMessageInfo('scm input candidates prepared', {
@@ -858,9 +1060,20 @@ async function requestCommitMessageText(
     fullPrompt: string,
     requestName: string,
     token: vscode.CancellationToken,
-): Promise<string | undefined> {
+): Promise<CommitMessageGenerationMetadata | undefined> {
     let response: vscode.LanguageModelChatResponse;
+    let promptTokens: number | undefined;
+
     try {
+        // Try to count tokens in prompt (may not be supported by all models)
+        try {
+            promptTokens = await model.countTokens(fullPrompt, token);
+        } catch (error) {
+            logCommitMessageDebug('countTokens for prompt failed', {
+                error: error instanceof Error ? error.message : String(error),
+            });
+        }
+
         response = await awaitWithCancellation(
             model.sendRequest(
                 [vscode.LanguageModelChatMessage.User(fullPrompt, requestName)],
@@ -871,7 +1084,7 @@ async function requestCommitMessageText(
         );
     } catch (error) {
         if (token.isCancellationRequested) {
-            logCommitMessageInfo('generation cancelled during model request');
+            logCommitMessageDebug('generation cancelled during model request');
             return undefined;
         }
         logCommitMessageError('model request failed', error);
@@ -879,23 +1092,41 @@ async function requestCommitMessageText(
             `model request failed: ${error instanceof Error ? error.message : String(error)}`,
         );
     }
-    logCommitMessageInfo('model request started streaming response');
+    logCommitMessageDebug('model request started streaming response');
 
     const combined = await readResponseTextWithCancellation(response.text, token);
     if (combined === undefined) {
-        logCommitMessageInfo('generation cancelled during model response stream');
+        logCommitMessageDebug('generation cancelled during model response stream');
         return undefined;
     }
-    logCommitMessageInfo('model response stream completed', {
+    logCommitMessageDebug('model response stream completed', {
         responseChars: combined.length,
     });
 
     const normalized = normalizeGeneratedCommitMessage(combined);
-    logCommitMessageInfo('normalized generated message', {
+    logCommitMessageDebug('normalized generated message', {
         chars: normalized.length,
     });
 
-    return normalized.length > 0 ? normalized : undefined;
+    if (normalized.length === 0) {
+        return undefined;
+    }
+
+    let completionTokens: number | undefined;
+    try {
+        // Try to count tokens in completion (may not be supported by all models)
+        completionTokens = await model.countTokens(normalized, token);
+    } catch (error) {
+        logCommitMessageDebug('countTokens for completion failed', {
+            error: error instanceof Error ? error.message : String(error),
+        });
+    }
+
+    return {
+        text: normalized,
+        promptTokens,
+        completionTokens,
+    };
 }
 
 /**
@@ -921,6 +1152,18 @@ function logCommitMessageInfo(message: string, data?: unknown): void {
         channel.info(`[commit-message-generation] ${message}`, data);
     } else {
         channel.info(`[commit-message-generation] ${message}`);
+    }
+}
+
+/**
+ * Write debug log for commit-message generation workflow.
+ */
+function logCommitMessageDebug(message: string, data?: unknown): void {
+    const channel = getCommitMessageLogChannel();
+    if (data !== undefined) {
+        channel.debug(`[commit-message-generation] ${message}`, data);
+    } else {
+        channel.debug(`[commit-message-generation] ${message}`);
     }
 }
 

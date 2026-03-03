@@ -22,6 +22,7 @@
   "configuration.commitMessageGeneration.prompt.description": "用于生成 commit message 的自定义提示词。留空时使用内置默认提示词。",
   "configuration.commitMessageGeneration.maxChangeContextChars.description": "用于生成 commit message 的变更上下文最大字符数。默认值：100000。",
   "configuration.commitMessageGeneration.maxUntrackedFileCount.description": "用于生成 commit message 时采样 diff 的 untracked 文件最大数量。默认值：30。",
+  "configuration.commitMessageGeneration.restrictToVendor.description": "限制模型选择仅限于 unify-chat-provider 供应商。为 false 时，所有供应商的模型都可用于 commit message 生成。默认值：true。",
   "configuration.balanceRefreshIntervalMs.description": "供应商余额的定时刷新间隔（毫秒）。默认值：60000（60 秒）。",
   "configuration.balanceThrottleWindowMs.description": "请求后余额刷新节流窗口（毫秒）。默认值：10000（10 秒）。",
   "configuration.balanceStatusBarIcon.description": "供应商余额状态栏图标。设为空字符串可隐藏。",

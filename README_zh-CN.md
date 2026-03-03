@@ -415,6 +415,12 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
 ## 调整参数
 
+### 配置作用域
+
+- 大多数 `unifyChatProvider.*` 配置按 **用户级（Global）** 读取。
+- 这些全局配置项会忽略 workspace（`.vscode/settings.json`）覆盖。
+- 例外：`unifyChatProvider.commitMessageGeneration.prompt` 使用 VS Code 的生效值（effective value），可在 workspace/workspaceFolder/user 级别设置。
+
 ### 全局设置
 
 <details>
