@@ -51,6 +51,7 @@ Check out the [Cookbook](#-cookbook), you can start using it in minutes:
   - [Add Nvidia Account](#add-nvidia-account)
 - **Free Kimi K2.5, GLM 5, MiniMax M2.1, Qwen3, DeepSeek Series Models**:
   - [Add iFlow API Key or CLI Account](#add-iflow-api-key-or-cli-account)
+- **OpenAI-compatible Kilo Gateway (often includes free stealth or limited-time frontier models)**: [Add Kilo API Key](#add-kilo-api-key)
 - More Recipes:
   - [Impersonate Claude Code Client](#impersonate-claude-code-client)
 
@@ -141,6 +142,21 @@ VS Code's Copilot Chat itself supports logging into a GitHub Copilot account, so
    - `API Key`: Fill in the API Key generated in the iFlow console.
    - `iFlow CLI`: Allow the extension to open the browser for authorized login, and log in to your account in the browser.
 3. After verification is completed, return to VS Code and click the `Save` button at the bottom of the configuration interface to complete.
+
+</details>
+
+#### Add Kilo API Key
+
+<details>
+
+0. You need to prepare a Kilo API key.
+1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
+2. Select `Kilo Code` in the list.
+3. Fill in your Kilo API key and press Enter.
+4. Keep the default base URL `https://api.kilo.ai/api/gateway`.
+5. Click the `Save` button at the bottom of the configuration interface to complete.
+
+> Free model availability on Kilo can change frequently; stealth models and limited-time frontier models may appear/disappear over time.
 
 </details>
 
@@ -597,6 +613,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming            | [Details](#opencode-zen)   |
 | [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                 | [Details](#opencode-zen)   |
 | [Nvidia](https://build.nvidia.com/)                                                             |                                                                 | [Details](#nvidia)         |
+| [Kilo Code](https://kilo.ai/)                                                                    | <li>RawBaseUrl                                                  | [Details](#kilo-code)      |
 | [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                    | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio) | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
@@ -647,6 +664,11 @@ Experimental Supported Providers:
 | [iFlow](https://platform.iflow.cn/)                    | [Details](#iflow)              |
 
 Long-Term Free Quotas:
+
+#### Kilo Code
+
+- Often includes free models, including stealth models and limited-time frontier models.
+- Availability can change frequently, so check Kilo's latest listing in-app.
 
 #### Qwen Code
 
