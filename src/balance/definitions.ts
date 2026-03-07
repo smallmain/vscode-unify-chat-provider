@@ -1,6 +1,9 @@
 import { t } from '../i18n';
 import type { SecretStore } from '../secret';
-import type { BalanceProvider, BalanceProviderContext } from './balance-provider';
+import type {
+  BalanceProvider,
+  BalanceProviderContext,
+} from './balance-provider';
 import type { BalanceConfig, BalanceMethod } from './types';
 import { MoonshotAIBalanceProvider } from './providers/moonshot-ai';
 import { KimiCodeBalanceProvider } from './providers/kimi-code';
@@ -202,8 +205,10 @@ export const BALANCE_METHODS = {
   },
   synthetic: {
     id: 'synthetic',
-    label: t('Synthetic.new Quota'),
-    description: t('Monitor subscription and tool usage quotas via Synthetic API'),
+    label: t('Synthetic Quota'),
+    description: t(
+      'Monitor subscription and tool usage quotas via Synthetic API',
+    ),
     category: 'General',
     ctor: SyntheticBalanceProvider,
     supportsSensitiveDataInSettings:
@@ -218,8 +223,8 @@ export const BALANCE_METHODS = {
   BalanceMethodDefinition
 >;
 
-export function getBalanceMethodDefinition<M extends keyof typeof BALANCE_METHODS>(
-  method: M | 'none',
-): (typeof BALANCE_METHODS)[M] | undefined {
+export function getBalanceMethodDefinition<
+  M extends keyof typeof BALANCE_METHODS,
+>(method: M | 'none'): (typeof BALANCE_METHODS)[M] | undefined {
   return method === 'none' ? undefined : BALANCE_METHODS[method];
 }

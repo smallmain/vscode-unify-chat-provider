@@ -729,6 +729,7 @@
   "Monitor usage percentages via Antigravity retrieveUserQuota API": "通过 Antigravity retrieveUserQuota API 监控用量百分比",
   "Monitor usage percentages via Gemini CLI retrieveUserQuota API": "通过 Gemini CLI retrieveUserQuota API 监控用量百分比",
   "Monitor usage percentages via Codex usage APIs": "通过 Codex usage API 监控用量百分比",
+  "Monitor subscription and tool usage quotas via Synthetic API": "通过 Synthetic API 监控订阅与工具调用配额",
   "Moonshot AI Balance": "Moonshot AI 余额",
   "New API Balance": "New API 余额",
   "New API Balance Configuration": "New API 余额配置",
@@ -768,6 +769,16 @@
   "Unexpected user balance response.": "用户余额响应格式异常。",
   "{0} usage response from {1} does not include quota percentages.": "{0} 在 {1} 返回的用量响应中缺少配额百分比。",
   "Codex usage response from {0} does not include quota percentages.": "Codex 在 {0} 返回的用量响应中缺少配额百分比。",
+  "Synthetic Quota": "Synthetic 配额",
+  "Subscription": "订阅",
+  "Subscription Requests": "订阅请求数",
+  "Subscription Renews": "订阅续期时间",
+  "Hourly": "每小时",
+  "Web Search": "网络搜索",
+  "Free": "免费",
+  "Free Tool Calls": "免费工具调用",
+  "Primary window": "主窗口",
+  "Secondary window": "次窗口",
   "Unlimited": "无限额",
   "Unsupported balance monitor: {0}": "不支持的余额监控方式：{0}",
   "Usage endpoint not available. Try Kimi For Coding.": "用量接口不可用，请尝试 Kimi For Coding。",
@@ -824,6 +835,6 @@
   "AIHubMix": "AIHubMix",
   "Group": "分组",
   "User": "用户",
-  "5-hour limit": "5-hour limit",
-  "A weekly limit": "A weekly limit"
+  "5-hour limit": "5 小时限额",
+  "A weekly limit": "每周限额"
 }

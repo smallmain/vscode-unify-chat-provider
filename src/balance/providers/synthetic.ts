@@ -51,9 +51,7 @@ export class SyntheticBalanceProvider implements BalanceProvider {
   }
 
   static redactForExport(config: BalanceConfig): BalanceConfig {
-    return isSyntheticBalanceConfig(config)
-      ? config
-      : { method: 'synthetic' };
+    return isSyntheticBalanceConfig(config) ? config : { method: 'synthetic' };
   }
 
   static async resolveForExport(
@@ -84,8 +82,10 @@ export class SyntheticBalanceProvider implements BalanceProvider {
   get definition(): BalanceProviderDefinition {
     return {
       id: 'synthetic',
-      label: t('Synthetic.new Quota'),
-      description: t('Monitor subscription and tool usage quotas via Synthetic API'),
+      label: t('Synthetic Quota'),
+      description: t(
+        'Monitor subscription and tool usage quotas via Synthetic API',
+      ),
     };
   }
 
@@ -116,7 +116,7 @@ export class SyntheticBalanceProvider implements BalanceProvider {
     if (!apiKey) {
       return {
         success: false,
-        error: t('API key is required to query {0} balance.', 'Synthetic.new'),
+        error: t('API key is required to query {0} balance.', 'Synthetic'),
       };
     }
 
@@ -144,7 +144,7 @@ export class SyntheticBalanceProvider implements BalanceProvider {
           success: false,
           error: t(
             'Failed to query {0} balance (HTTP {1}).',
-            'Synthetic.new',
+            'Synthetic',
             `${response.status}`,
           ),
         };
@@ -154,7 +154,7 @@ export class SyntheticBalanceProvider implements BalanceProvider {
       if (!isRecord(json)) {
         return {
           success: false,
-          error: t('Unexpected {0} balance response.', 'Synthetic.new'),
+          error: t('Unexpected {0} balance response.', 'Synthetic'),
         };
       }
 

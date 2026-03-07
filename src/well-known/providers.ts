@@ -120,7 +120,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
-    name: 'Synthetic.new (OpenAI)',
+    name: 'Synthetic',
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.synthetic.new/openai/v1',
