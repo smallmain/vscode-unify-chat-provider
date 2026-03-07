@@ -760,6 +760,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'gpt-oss-120b',
     overrides: [
       'gpt-oss:120b',
+      'hf:openai/gpt-oss-120b',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -1117,6 +1118,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'MiniMax-M2.5',
     overrides: [
       'minimax-m2.5-free',
+      'hf:MiniMaxAI/MiniMax-M2.5',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -1167,6 +1169,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'MiniMax-M2.1',
     overrides: [
       'minimax-m2.1-free',
+      'hf:MiniMaxAI/MiniMax-M2.1',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -1278,7 +1281,11 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3.2',
-    overrides: ['ark-code-latest', 'deepseek-ai/deepseek-v3.2'],
+    overrides: [
+      'ark-code-latest',
+      'deepseek-ai/deepseek-v3.2',
+      'hf:deepseek-ai/DeepSeek-V3.2',
+    ],
     name: 'DeepSeek V3.2',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1361,6 +1368,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3',
+    overrides: ['hf:deepseek-ai/DeepSeek-V3'],
     name: 'DeepSeek V3',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1374,6 +1382,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v3-0324',
+    overrides: ['hf:deepseek-ai/DeepSeek-V3-0324'],
     name: 'DeepSeek V3 (0324)',
     maxInputTokens: 128000,
     maxOutputTokens: 8000,
@@ -1404,7 +1413,10 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-r1-0528',
-    overrides: ['deepseek-ai/deepseek-r1-0528'],
+    overrides: [
+      'deepseek-ai/deepseek-r1-0528',
+      'hf:deepseek-ai/DeepSeek-R1-0528',
+    ],
     name: 'DeepSeek R1 (0528)',
     maxInputTokens: 128000,
     maxOutputTokens: 32768,
@@ -1514,6 +1526,8 @@ const _WELL_KNOWN_MODELS = [
     id: 'kimi-k2.5',
     overrides: [
       'kimi-k2.5-free',
+      'hf:moonshotai/Kimi-K2.5',
+      'hf:nvidia/Kimi-K2.5-NVFP4',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -1550,6 +1564,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'kimi-k2-thinking',
     overrides: [
       'moonshotai/kimi-k2-thinking',
+      'hf:moonshotai/Kimi-K2-Thinking',
       {
         matchers: [
           'ark.cn-beijing.volces.com',
@@ -1597,6 +1612,7 @@ const _WELL_KNOWN_MODELS = [
       'kimi-k2',
       'moonshotai/kimi-k2-instruct',
       'moonshotai/kimi-k2-instruct-0905',
+      'hf:moonshotai/Kimi-K2-Instruct-0905',
     ],
     name: 'Kimi K2 0905 Preview',
     maxInputTokens: 256000,
@@ -1679,6 +1695,7 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'qwen3.5-397b-a17b',
     overrides: [
+      'hf:Qwen/Qwen3.5-397B-A17B',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -2148,7 +2165,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'llama-3.3-70b',
-    overrides: ['llama3.3-70b'],
+    overrides: ['llama3.3-70b', 'hf:meta-llama/Llama-3.3-70B-Instruct'],
     name: 'Llama 3.3 70B',
     maxInputTokens: 128000,
     stream: true,
@@ -2473,6 +2490,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-235b-a22b-thinking-2507',
+    overrides: ['hf:Qwen/Qwen3-235B-A22B-Thinking-2507'],
     name: 'Qwen3 235B A22B Thinking 2507',
     maxInputTokens: 126976,
     maxOutputTokens: 32768,
@@ -2519,6 +2537,7 @@ const _WELL_KNOWN_MODELS = [
       'qwen3-coder:480b',
       'qwen3-coder',
       'qwen/qwen3-coder-480b-a35b-instruct',
+      'hf:Qwen/Qwen3-Coder-480B-A35B-Instruct',
     ],
     name: 'Qwen3 Coder 480B A35B Instruct',
     maxInputTokens: 262144,
@@ -2741,6 +2760,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'glm-4.7',
     overrides: [
       'glm-4.7-free',
+      'hf:zai-org/GLM-4.7',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {

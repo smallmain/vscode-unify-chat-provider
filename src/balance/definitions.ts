@@ -1,6 +1,9 @@
 import { t } from '../i18n';
 import type { SecretStore } from '../secret';
-import type { BalanceProvider, BalanceProviderContext } from './balance-provider';
+import type {
+  BalanceProvider,
+  BalanceProviderContext,
+} from './balance-provider';
 import type { BalanceConfig, BalanceMethod } from './types';
 import { MoonshotAIBalanceProvider } from './providers/moonshot-ai';
 import { KimiCodeBalanceProvider } from './providers/kimi-code';
@@ -13,6 +16,7 @@ import { ClaudeRelayServiceBalanceProvider } from './providers/claude-relay-serv
 import { AntigravityBalanceProvider } from './providers/antigravity';
 import { GeminiCliBalanceProvider } from './providers/gemini-cli';
 import { CodexBalanceProvider } from './providers/codex';
+import { SyntheticBalanceProvider } from './providers/synthetic';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -199,13 +203,28 @@ export const BALANCE_METHODS = {
     normalizeOnImport: CodexBalanceProvider.normalizeOnImport,
     prepareForDuplicate: CodexBalanceProvider.prepareForDuplicate,
   },
+  synthetic: {
+    id: 'synthetic',
+    label: t('Synthetic Quota'),
+    description: t(
+      'Monitor subscription and tool usage quotas via Synthetic API',
+    ),
+    category: 'General',
+    ctor: SyntheticBalanceProvider,
+    supportsSensitiveDataInSettings:
+      SyntheticBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: SyntheticBalanceProvider.redactForExport,
+    resolveForExport: SyntheticBalanceProvider.resolveForExport,
+    normalizeOnImport: SyntheticBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: SyntheticBalanceProvider.prepareForDuplicate,
+  },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,
   BalanceMethodDefinition
 >;
 
-export function getBalanceMethodDefinition<M extends keyof typeof BALANCE_METHODS>(
-  method: M | 'none',
-): (typeof BALANCE_METHODS)[M] | undefined {
+export function getBalanceMethodDefinition<
+  M extends keyof typeof BALANCE_METHODS,
+>(method: M | 'none'): (typeof BALANCE_METHODS)[M] | undefined {
   return method === 'none' ? undefined : BALANCE_METHODS[method];
 }

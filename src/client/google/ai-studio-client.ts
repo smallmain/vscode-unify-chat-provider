@@ -892,9 +892,26 @@ export class GoogleAIStudioProvider implements ApiProvider {
       const content = chunk.candidates?.[0]?.content;
 
       if (content && this.isValidContent(content)) {
-        outputContents.push(content);
-
         const parts = content.parts!;
+
+        // Check if this chunk contains only nameless functionCall parts (streaming arg-update
+        // deltas from the Gemini API). These should be merged into the previous content rather
+        // than stored as separate Content entries, because replaying them as-is causes
+        // "Name cannot be empty" errors from the API.
+        const hasOnlyAnonymousFunctionCalls =
+          parts.length > 0 &&
+          parts.every(
+            (p: Part) => p.functionCall !== undefined && !p.functionCall.name,
+          );
+
+        if (hasOnlyAnonymousFunctionCalls && outputContents.length > 0) {
+          // Merge the nameless parts into the previous content's parts
+          const prev = outputContents[outputContents.length - 1];
+          prev.parts = [...(prev.parts ?? []), ...parts];
+        } else {
+          outputContents.push(content);
+        }
+
         for (const part of parts) {
           if (part.text) {
             if (part.thought) {
@@ -905,8 +922,10 @@ export class GoogleAIStudioProvider implements ApiProvider {
             }
           }
 
-          if (part.functionCall) {
-            const name = part.functionCall.name!;
+          // Only yield tool call parts for named function calls — nameless chunks are
+          // streaming arg-update deltas and do not represent new/distinct tool invocations.
+          if (part.functionCall && part.functionCall.name) {
+            const name = part.functionCall.name;
             const id = part.functionCall.id;
             const args = part.functionCall.args ?? {};
             const callId = this.generateToolCallId(name, id, toolCallIndex++);
