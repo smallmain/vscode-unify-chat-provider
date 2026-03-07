@@ -176,8 +176,42 @@
       {
         "command": "unifyChatProvider.refreshAllProvidersBalance",
         "title": "%command.refreshAllProvidersBalance.title%"
+      },
+      {
+        "command": "unifyChatProvider.generateCommitMessage",
+        "title": "%command.generateCommitMessage.title%",
+        "icon": "$(wand)"
+      },
+      {
+        "command": "unifyChatProvider.generateCommitMessageInProgress",
+        "title": "%command.generateCommitMessageInProgress.title%",
+        "icon": "$(sync~spin)"
+      },
+      {
+        "command": "unifyChatProvider.selectCommitMessageGenerationModel",
+        "title": "%command.selectCommitMessageGenerationModel.title%",
+        "icon": "$(list-selection)"
       }
     ],
+    "menus": {
+      "scm/title": [
+        {
+          "command": "unifyChatProvider.selectCommitMessageGenerationModel",
+          "when": "scmProvider == git",
+          "group": "navigation@1"
+        },
+        {
+          "command": "unifyChatProvider.generateCommitMessage",
+          "when": "scmProvider == git && config.unifyChatProvider.commitMessageGeneration.model =~ /\\S/ && !unifyChatProvider.commitMessageGeneration.inProgress",
+          "group": "navigation@2"
+        },
+        {
+          "command": "unifyChatProvider.generateCommitMessageInProgress",
+          "when": "scmProvider == git && config.unifyChatProvider.commitMessageGeneration.model =~ /\\S/ && unifyChatProvider.commitMessageGeneration.inProgress",
+          "group": "navigation@2"
+        }
+      ]
+    },
     "configuration": {
       "title": "%configuration.title%",
       "properties": {
@@ -190,6 +224,33 @@
           "type": "boolean",
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
+        },
+        "unifyChatProvider.commitMessageGeneration.model": {
+          "type": "string",
+          "description": "%configuration.commitMessageGeneration.model.description%",
+          "default": ""
+        },
+        "unifyChatProvider.commitMessageGeneration.prompt": {
+          "type": "string",
+          "description": "%configuration.commitMessageGeneration.prompt.description%",
+          "default": ""
+        },
+        "unifyChatProvider.commitMessageGeneration.maxChangeContextChars": {
+          "type": "integer",
+          "description": "%configuration.commitMessageGeneration.maxChangeContextChars.description%",
+          "default": 100000,
+          "minimum": 1000
+        },
+        "unifyChatProvider.commitMessageGeneration.maxUntrackedFileCount": {
+          "type": "integer",
+          "description": "%configuration.commitMessageGeneration.maxUntrackedFileCount.description%",
+          "default": 30,
+          "minimum": 1
+        },
+        "unifyChatProvider.commitMessageGeneration.restrictToVendor": {
+          "type": "boolean",
+          "description": "%configuration.commitMessageGeneration.restrictToVendor.description%",
+          "default": true
         },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
