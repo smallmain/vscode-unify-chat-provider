@@ -440,6 +440,22 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'gpt-5.3-codex-spark',
     name: 'GPT-5.3-Codex-Spark',
     maxInputTokens: 128000,
