@@ -181,6 +181,7 @@ export async function runProviderFormScreen(
               store: ctx.store,
               secretStore: ctx.secretStore,
               originalName,
+              uriHandler: ctx.uriHandler,
             });
           }
 

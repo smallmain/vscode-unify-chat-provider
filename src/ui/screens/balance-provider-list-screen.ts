@@ -10,6 +10,10 @@ import {
 import { evaluateBalanceWarning } from '../../balance/warning-utils';
 import { stableStringify } from '../../config-ops';
 import { t } from '../../i18n';
+import {
+  ensureMainInstanceCompatibility,
+  showMainInstanceCompatibilityWarning,
+} from '../../main-instance/compatibility';
 import { pickQuickItem } from '../component';
 import { createProviderDraft } from '../form-utils';
 import { saveProviderDraft } from '../provider-ops';
@@ -207,16 +211,26 @@ export async function runBalanceProviderListScreen(
       }
 
       if (item.action === 'refresh-all') {
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: t('Refreshing provider balances...'),
-            cancellable: false,
-          },
-          async () => {
-            await balanceManager.forceRefreshAll();
-          },
-        );
+        if (!(await ensureMainInstanceCompatibility())) {
+          return true;
+        }
+        try {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: t('Refreshing provider balances...'),
+              cancellable: false,
+            },
+            async () => {
+              await balanceManager.forceRefreshAll();
+            },
+          );
+        } catch (error) {
+          if (await showMainInstanceCompatibilityWarning(error)) {
+            return true;
+          }
+          throw error;
+        }
         qp.items = await buildItems();
         return true;
       }

@@ -11,6 +11,12 @@ import { deepClone, stableStringify } from '../config-ops';
 import { t } from '../i18n';
 import { type SecretStore } from '../secret';
 import type { ProviderConfig } from '../types';
+import { mainInstance } from '../main-instance';
+import {
+  isLeaderUnavailableError,
+  isVersionIncompatibleError,
+} from '../main-instance/errors';
+import type { EventedUriHandler } from '../uri-handler';
 import {
   ensureDraftSessionId,
   normalizeProviderDraft,
@@ -27,6 +33,16 @@ type DraftBalanceSession = {
 };
 
 const draftBalanceSessions = new Map<string, DraftBalanceSession>();
+const BALANCE_REFRESH_UNAVAILABLE_MESSAGE = t(
+  'Balance refresh is temporarily unavailable while the main instance is switching. Please try again.',
+);
+
+function getBalanceRefreshUnavailableMessage(): string {
+  return (
+    mainInstance.getCompatibilityError()?.message ??
+    BALANCE_REFRESH_UNAVAILABLE_MESSAGE
+  );
+}
 
 function resolveDraftProviderConfig(
   draft: ProviderFormDraft,
@@ -136,6 +152,7 @@ async function resolveDraftCredential(options: {
   draft: ProviderFormDraft;
   secretStore: SecretStore;
   originalName?: string;
+  uriHandler?: EventedUriHandler;
 }): Promise<AuthTokenInfo | undefined> {
   const auth = options.draft.auth;
   if (!auth || auth.method === 'none') {
@@ -145,12 +162,12 @@ async function resolveDraftCredential(options: {
   const providerLabel =
     options.draft.name?.trim() || options.originalName || t('Provider');
   const providerId = options.originalName ?? ensureDraftSessionId(options.draft);
-
   const authProvider = createAuthProvider(
     {
       providerId,
       providerLabel,
       secretStore: options.secretStore,
+      uriHandler: options.uriHandler,
     },
     deepClone(auth),
   );
@@ -167,6 +184,25 @@ async function resolveDraftCredential(options: {
   }
 }
 
+async function forceRefreshSavedBalanceState(providerName: string): Promise<boolean> {
+  try {
+    await balanceManager.forceRefresh(providerName);
+    return true;
+  } catch (error) {
+    if (
+      !isLeaderUnavailableError(error) &&
+      !isVersionIncompatibleError(error)
+    ) {
+      throw error;
+    }
+    if (mainInstance.isLeader()) {
+      await balanceManager.forceRefresh(providerName);
+      return true;
+    }
+    return false;
+  }
+}
+
 async function refreshDraftBalanceState(options: {
   state: BalanceProviderState;
   balanceProvider: NonNullable<ReturnType<typeof createBalanceProvider>>;
@@ -174,6 +210,7 @@ async function refreshDraftBalanceState(options: {
   draft: ProviderFormDraft;
   secretStore: SecretStore;
   originalName?: string;
+  uriHandler?: EventedUriHandler;
 }): Promise<void> {
   const state = options.state;
   const provider = options.draftProvider;
@@ -192,6 +229,7 @@ async function refreshDraftBalanceState(options: {
       draft: options.draft,
       secretStore: options.secretStore,
       originalName: options.originalName,
+      uriHandler: options.uriHandler,
     });
     const result = await options.balanceProvider.refresh({
       provider,
@@ -218,6 +256,7 @@ export async function resolveBalanceFieldDetail(options: {
   store: ConfigStore;
   secretStore: SecretStore;
   originalName?: string;
+  uriHandler?: EventedUriHandler;
 }): Promise<string | undefined> {
   const balanceProviderConfig = options.draft.balanceProvider;
   if (!balanceProviderConfig || balanceProviderConfig.method === 'none') {
@@ -236,7 +275,18 @@ export async function resolveBalanceFieldDetail(options: {
   ) {
     const state = balanceManager.getProviderState(savedProvider.name);
     if (!state?.snapshot && !state?.lastError && !state?.isRefreshing) {
-      await balanceManager.forceRefresh(savedProvider.name);
+      const refreshed = await forceRefreshSavedBalanceState(savedProvider.name);
+      if (!refreshed) {
+        return formatStateDetail({
+          ...(state ?? {
+            isRefreshing: false,
+            pendingTrailing: false,
+          }),
+          isRefreshing: false,
+          pendingTrailing: false,
+          lastError: getBalanceRefreshUnavailableMessage(),
+        });
+      }
     }
     return formatStateDetail(balanceManager.getProviderState(savedProvider.name));
   }
@@ -274,6 +324,7 @@ export async function resolveBalanceFieldDetail(options: {
         draft: options.draft,
         secretStore: options.secretStore,
         originalName: options.originalName,
+        uriHandler: options.uriHandler,
       });
     }
 

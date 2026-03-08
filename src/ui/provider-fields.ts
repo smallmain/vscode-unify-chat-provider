@@ -46,6 +46,11 @@ import {
   type WellKnownAuthPreset,
 } from '../well-known/auths';
 import { deepClone, stableStringify } from '../config-ops';
+import { mainInstance } from '../main-instance';
+import {
+  isLeaderUnavailableError,
+  isVersionIncompatibleError,
+} from '../main-instance/errors';
 
 /**
  * Context for provider form fields.
@@ -332,6 +337,17 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
     },
   ],
 };
+
+const BALANCE_REFRESH_UNAVAILABLE_MESSAGE = t(
+  'Balance refresh is temporarily unavailable while the main instance is switching. Please try again.',
+);
+
+function getBalanceRefreshUnavailableMessage(): string {
+  return (
+    mainInstance.getCompatibilityError()?.message ??
+    BALANCE_REFRESH_UNAVAILABLE_MESSAGE
+  );
+}
 
 type ContextCacheSettingsItem = vscode.QuickPickItem & {
   action?: 'back' | 'reset';
@@ -1079,6 +1095,25 @@ async function resolveDraftCredential(
   }
 }
 
+async function forceRefreshSavedBalanceState(providerName: string): Promise<boolean> {
+  try {
+    await balanceManager.forceRefresh(providerName);
+    return true;
+  } catch (error) {
+    if (
+      !isLeaderUnavailableError(error) &&
+      !isVersionIncompatibleError(error)
+    ) {
+      throw error;
+    }
+    if (mainInstance.isLeader()) {
+      await balanceManager.forceRefresh(providerName);
+      return true;
+    }
+    return false;
+  }
+}
+
 async function showBalanceStatusView(options: {
   draft: ProviderFormDraft;
   ctx: ProviderFieldContext;
@@ -1147,11 +1182,25 @@ async function showBalanceStatusView(options: {
 
   const refresh = async (): Promise<void> => {
     if (canUseManagerRefresh && savedProvider) {
-      await balanceManager.forceRefresh(savedProvider.name);
-      const refreshed = balanceManager.getProviderState(savedProvider.name);
-      localState = refreshed
+      const refreshSucceeded = await forceRefreshSavedBalanceState(
+        savedProvider.name,
+      );
+      if (!refreshSucceeded) {
+        localState = {
+          ...(localState ?? {
+            isRefreshing: false,
+            pendingTrailing: false,
+          }),
+          isRefreshing: false,
+          pendingTrailing: false,
+          lastError: getBalanceRefreshUnavailableMessage(),
+        };
+        return;
+      }
+      const refreshedState = balanceManager.getProviderState(savedProvider.name);
+      localState = refreshedState
         ? {
-            ...refreshed,
+            ...refreshedState,
             pendingTrailing: false,
           }
         : localState;

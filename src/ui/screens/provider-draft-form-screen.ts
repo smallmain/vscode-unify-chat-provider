@@ -156,6 +156,7 @@ export async function runProviderDraftFormScreen(
               draft,
               store: ctx.store,
               secretStore: ctx.secretStore,
+              uriHandler: ctx.uriHandler,
             });
           }
 

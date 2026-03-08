@@ -13,11 +13,20 @@ import type {
   BalanceSnapshot,
   BalanceProviderState,
 } from './types';
+import { mainInstance } from '../main-instance';
+import { showMainInstanceCompatibilityWarning } from '../main-instance/compatibility';
+import {
+  isLeaderUnavailableError,
+  MainInstanceError,
+} from '../main-instance/errors';
+import { t } from '../i18n';
 
 const DEFAULT_PERIODIC_REFRESH_MS = 60_000;
 const DEFAULT_THROTTLE_WINDOW_MS = 10_000;
 const STATE_KEY = 'balanceState';
 const STATE_VERSION = 3;
+const MANUAL_REFRESH_UNAVAILABLE_MESSAGE =
+  'Balance refresh is temporarily unavailable while the main instance is switching. Please try again.';
 
 type PersistedProviderState = {
   snapshot?: BalanceSnapshot;
@@ -57,13 +66,228 @@ export class BalanceManager implements vscode.Disposable {
     string,
     ReturnType<typeof setTimeout>
   >();
+  private readonly postRequestRefreshRetryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
   private periodicTimer?: ReturnType<typeof setInterval>;
+  private syncRetryTimer?: ReturnType<typeof setTimeout>;
   private persistChain: Promise<void> = Promise.resolve();
 
   private readonly disposables: vscode.Disposable[] = [];
   private readonly onDidUpdateEmitter = new vscode.EventEmitter<string>();
 
   readonly onDidUpdate = this.onDidUpdateEmitter.event;
+
+  private isLeader(): boolean {
+    return mainInstance.isLeader();
+  }
+
+  private notifyUpdated(providerName: string): void {
+    this.onDidUpdateEmitter.fire(providerName);
+    this.queuePersistState();
+    this.broadcastUpdate(providerName);
+  }
+
+  private broadcastUpdate(providerName: string): void {
+    if (!this.isLeader()) {
+      return;
+    }
+
+    const state = this.states.get(providerName);
+    const lastUsedAt = this.lastUsedAt.get(providerName);
+    mainInstance.broadcast('balance.updated', {
+      providerName,
+      state: state ?? null,
+      lastUsedAt: lastUsedAt ?? null,
+    });
+  }
+
+  private applyLeaderUpdate(payload: unknown): void {
+    if (this.isLeader()) {
+      return;
+    }
+
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return;
+    }
+    const record = payload as Record<string, unknown>;
+    const providerName = record['providerName'];
+    if (typeof providerName !== 'string' || providerName.trim() === '') {
+      return;
+    }
+
+    const stateValue = record['state'];
+    if (stateValue === null) {
+      this.states.delete(providerName);
+    } else if (stateValue && typeof stateValue === 'object' && !Array.isArray(stateValue)) {
+      this.states.set(providerName, stateValue as BalanceProviderState);
+    }
+
+    const lastUsedAtValue = record['lastUsedAt'];
+    if (typeof lastUsedAtValue === 'number' && Number.isFinite(lastUsedAtValue) && lastUsedAtValue >= 0) {
+      this.lastUsedAt.set(providerName, lastUsedAtValue);
+    } else if (lastUsedAtValue === null) {
+      this.lastUsedAt.delete(providerName);
+    }
+
+    this.onDidUpdateEmitter.fire(providerName);
+  }
+
+  getSnapshotForFollowers(): {
+    providers: Record<string, BalanceProviderState>;
+    lastUsedAt: Record<string, number>;
+  } {
+    const providers: Record<string, BalanceProviderState> = {};
+    for (const [providerName, state] of this.states) {
+      providers[providerName] = { ...state };
+    }
+
+    const lastUsedAt: Record<string, number> = {};
+    for (const [providerName, timestamp] of this.lastUsedAt) {
+      if (
+        typeof timestamp === 'number' &&
+        Number.isFinite(timestamp) &&
+        timestamp >= 0
+      ) {
+        lastUsedAt[providerName] = timestamp;
+      }
+    }
+
+    return { providers, lastUsedAt };
+  }
+
+  private applySnapshotFromLeader(snapshot: unknown): void {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return;
+    }
+    const record = snapshot as Record<string, unknown>;
+    const providersValue = record['providers'];
+    const lastUsedAtValue = record['lastUsedAt'];
+
+    if (!providersValue || typeof providersValue !== 'object' || Array.isArray(providersValue)) {
+      return;
+    }
+    if (!lastUsedAtValue || typeof lastUsedAtValue !== 'object' || Array.isArray(lastUsedAtValue)) {
+      return;
+    }
+
+    const providersRecord = providersValue as Record<string, unknown>;
+    const lastUsedAtRecord = lastUsedAtValue as Record<string, unknown>;
+    const updatedProviderNames = new Set<string>();
+
+    for (const providerName of this.states.keys()) {
+      updatedProviderNames.add(providerName);
+    }
+    for (const providerName of this.lastUsedAt.keys()) {
+      updatedProviderNames.add(providerName);
+    }
+
+    this.states.clear();
+    this.lastUsedAt.clear();
+
+    for (const [providerName, rawState] of Object.entries(providersRecord)) {
+      if (!rawState || typeof rawState !== 'object' || Array.isArray(rawState)) {
+        continue;
+      }
+      const state = rawState as BalanceProviderState;
+      this.states.set(providerName, { ...state });
+      updatedProviderNames.add(providerName);
+    }
+
+    for (const [providerName, rawTimestamp] of Object.entries(lastUsedAtRecord)) {
+      if (typeof rawTimestamp !== 'number' || !Number.isFinite(rawTimestamp) || rawTimestamp < 0) {
+        continue;
+      }
+      this.lastUsedAt.set(providerName, rawTimestamp);
+      updatedProviderNames.add(providerName);
+    }
+
+    for (const providerName of updatedProviderNames) {
+      this.onDidUpdateEmitter.fire(providerName);
+    }
+  }
+
+  private async syncFromLeader(): Promise<void> {
+    if (this.isLeader()) {
+      return;
+    }
+
+    try {
+      const snapshot = await mainInstance.runInLeaderWhenAvailable<unknown>(
+        'balance.getSnapshot',
+        {},
+      );
+      this.applySnapshotFromLeader(snapshot);
+    } catch (error) {
+      if (
+        (error instanceof MainInstanceError &&
+          error.code === 'NOT_IMPLEMENTED') ||
+        isLeaderUnavailableError(error)
+      ) {
+        this.scheduleSyncRetry();
+      }
+    }
+  }
+
+  private scheduleSyncRetry(): void {
+    if (this.isLeader() || this.syncRetryTimer) {
+      return;
+    }
+    this.syncRetryTimer = setTimeout(() => {
+      this.syncRetryTimer = undefined;
+      void this.syncFromLeader();
+    }, 250);
+  }
+
+  private clearPostRequestRefreshRetry(providerName: string): void {
+    const timer = this.postRequestRefreshRetryTimers.get(providerName);
+    if (!timer) {
+      return;
+    }
+    clearTimeout(timer);
+    this.postRequestRefreshRetryTimers.delete(providerName);
+  }
+
+  private schedulePostRequestRefreshRetry(
+    providerName: string,
+    outcome: 'success' | 'error',
+  ): void {
+    this.clearPostRequestRefreshRetry(providerName);
+    const timer = setTimeout(() => {
+      this.postRequestRefreshRetryTimers.delete(providerName);
+      this.notifyChatRequestFinished(providerName, outcome);
+    }, 250);
+    this.postRequestRefreshRetryTimers.set(providerName, timer);
+  }
+
+  private cancelAllTrailingTimers(): void {
+    for (const timer of this.trailingTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.trailingTimers.clear();
+  }
+
+  private restorePendingTrailingRefreshes(): void {
+    if (!this.isLeader()) {
+      this.cancelAllTrailingTimers();
+      return;
+    }
+
+    this.cancelAllTrailingTimers();
+    for (const [providerName, state] of this.states) {
+      if (!state.pendingTrailing) {
+        continue;
+      }
+      const dueAt =
+        (state.lastRequestEndAt ?? Date.now()) + this.getThrottleWindowMs();
+      if (dueAt <= Date.now()) {
+        void this.flushTrailingRefresh(providerName);
+        continue;
+      }
+      this.scheduleTrailingTimer(providerName, dueAt);
+    }
+  }
 
   async initialize(options: {
     configStore: ConfigStore;
@@ -87,8 +311,31 @@ export class BalanceManager implements vscode.Disposable {
       }),
     );
 
+    this.disposables.push(
+      mainInstance.onDidReceiveEvent(({ event, payload }) => {
+        if (event === 'balance.updated') {
+          this.applyLeaderUpdate(payload);
+        }
+      }),
+    );
+
+    this.disposables.push(
+      mainInstance.onDidChangeRole(({ role }) => {
+        this.startPeriodicRefresh();
+        if (role === 'leader') {
+          this.restorePendingTrailingRefreshes();
+          return;
+        }
+        this.cancelAllTrailingTimers();
+        void this.syncFromLeader();
+      }),
+    );
+
     this.reconcileStates();
     this.startPeriodicRefresh();
+    this.restorePendingTrailingRefreshes();
+
+    void this.syncFromLeader();
   }
 
   getProviderState(providerName: string): BalanceProviderState | undefined {
@@ -105,8 +352,17 @@ export class BalanceManager implements vscode.Disposable {
     }
 
     this.lastUsedAt.set(providerName, Date.now());
-    this.onDidUpdateEmitter.fire(providerName);
-    this.queuePersistState();
+    this.notifyUpdated(providerName);
+
+    if (!this.isLeader()) {
+      void mainInstance
+        .runInLeaderWhenAvailable('balance.notifyChatRequestStarted', {
+          providerName,
+        })
+        .catch(() => {
+          // Best-effort.
+        });
+    }
   }
 
   notifyChatRequestFinished(
@@ -117,6 +373,33 @@ export class BalanceManager implements vscode.Disposable {
       return;
     }
 
+    if (!this.isLeader()) {
+      void mainInstance
+        .runInLeaderWhenAvailable('balance.notifyChatRequestFinished', {
+          providerName,
+          outcome,
+        })
+        .then(() => {
+          this.clearPostRequestRefreshRetry(providerName);
+        })
+        .catch((error) => {
+          if (!isLeaderUnavailableError(error)) {
+            return;
+          }
+          if (this.isLeader()) {
+            this.clearPostRequestRefreshRetry(providerName);
+            this.scheduleRefresh(providerName, {
+              reason: 'post-request-immediate',
+              allowTrailing: true,
+            });
+            return;
+          }
+          this.schedulePostRequestRefreshRetry(providerName, outcome);
+        });
+      return;
+    }
+
+    this.clearPostRequestRefreshRetry(providerName);
     this.scheduleRefresh(providerName, {
       reason: 'post-request-immediate',
       allowTrailing: true,
@@ -124,14 +407,55 @@ export class BalanceManager implements vscode.Disposable {
   }
 
   requestRefresh(providerName: string, reason: RefreshReason = 'manual'): void {
+    if (reason === 'manual') {
+      void this.forceRefresh(providerName).catch((error) => {
+        void showMainInstanceCompatibilityWarning(error).then((handled) => {
+          if (handled) {
+            return;
+          }
+          if (isLeaderUnavailableError(error)) {
+            vscode.window.showErrorMessage(
+              t(MANUAL_REFRESH_UNAVAILABLE_MESSAGE),
+            );
+            return;
+          }
+
+          const message = error instanceof Error ? error.message : String(error);
+          vscode.window.showErrorMessage(
+            t('Failed to refresh balance for "{0}": {1}', providerName, message),
+          );
+        });
+      });
+      return;
+    }
+
+    if (!this.isLeader()) {
+      void mainInstance
+        .runInLeaderWhenAvailable('balance.requestRefresh', {
+          providerName,
+          reason,
+        })
+        .catch(() => {
+          // Best-effort.
+        });
+      return;
+    }
+
     this.scheduleRefresh(providerName, {
       reason,
       allowTrailing: false,
-      force: reason === 'manual',
+      force: false,
     });
   }
 
   async forceRefresh(providerName: string): Promise<void> {
+    if (!this.isLeader()) {
+      await mainInstance.runInLeaderWhenAvailable('balance.forceRefresh', {
+        providerName,
+      });
+      return;
+    }
+
     const provider = this.configStore?.getProvider(providerName);
     if (!provider || !this.hasConfiguredBalanceProvider(provider)) {
       return;
@@ -140,9 +464,28 @@ export class BalanceManager implements vscode.Disposable {
     await this.refreshProvider(provider, 'manual', true);
   }
 
-  async forceRefreshAll(): Promise<number> {
-    const providers = this.configStore?.endpoints ?? [];
-    const targets = providers.filter((provider) =>
+  async forceRefreshAll(providers?: ProviderConfig[]): Promise<number> {
+    if (!this.isLeader()) {
+      const result = await mainInstance.runInLeaderWhenAvailable<unknown>(
+        'balance.forceRefreshAll',
+        providers && providers.length > 0
+          ? {
+              providerNames: providers.map(
+                (provider) => provider.name,
+              ),
+            }
+          : {},
+      );
+      if (!result || typeof result !== 'object' || Array.isArray(result)) {
+        throw new Error('Invalid balance.forceRefreshAll response');
+      }
+      const record = result as Record<string, unknown>;
+      const count = record['count'];
+      return typeof count === 'number' && Number.isFinite(count) ? count : 0;
+    }
+
+    const currentProviders = providers ?? this.configStore?.endpoints ?? [];
+    const targets = currentProviders.filter((provider) =>
       this.hasConfiguredBalanceProvider(provider),
     );
 
@@ -185,7 +528,7 @@ export class BalanceManager implements vscode.Disposable {
     state.pendingTrailing = true;
     state.lastRequestEndAt = now;
     this.scheduleTrailingTimer(providerName, now + this.getThrottleWindowMs());
-    this.onDidUpdateEmitter.fire(providerName);
+    this.notifyUpdated(providerName);
   }
 
   private scheduleTrailingTimer(providerName: string, dueAt: number): void {
@@ -217,13 +560,13 @@ export class BalanceManager implements vscode.Disposable {
     if (!provider || !this.hasConfiguredBalanceProvider(provider)) {
       state.pendingTrailing = false;
       state.lastRequestEndAt = undefined;
-      this.onDidUpdateEmitter.fire(providerName);
+      this.notifyUpdated(providerName);
       return;
     }
 
     state.pendingTrailing = false;
     state.lastRequestEndAt = undefined;
-    this.onDidUpdateEmitter.fire(providerName);
+    this.notifyUpdated(providerName);
 
     await this.refreshProvider(provider, 'post-request-trailing', true);
   }
@@ -284,14 +627,12 @@ export class BalanceManager implements vscode.Disposable {
 
     state.isRefreshing = true;
     state.lastAttemptAt = Date.now();
-    this.onDidUpdateEmitter.fire(provider.name);
-    this.queuePersistState();
+    this.notifyUpdated(provider.name);
 
     if (!balanceProvider) {
       state.isRefreshing = false;
       state.lastError = 'Balance provider is not available.';
-      this.onDidUpdateEmitter.fire(provider.name);
-      this.queuePersistState();
+      this.notifyUpdated(provider.name);
       return;
     }
 
@@ -313,8 +654,7 @@ export class BalanceManager implements vscode.Disposable {
       state.lastError = error instanceof Error ? error.message : String(error);
     } finally {
       state.isRefreshing = false;
-      this.onDidUpdateEmitter.fire(provider.name);
-      this.queuePersistState();
+      this.notifyUpdated(provider.name);
       balanceProvider.dispose?.();
     }
   }
@@ -331,7 +671,10 @@ export class BalanceManager implements vscode.Disposable {
       return undefined;
     }
 
-    const credential = await this.authManager.getCredential(provider.name);
+    const credential = await this.authManager.getCredential(
+      provider.name,
+      'background',
+    );
     return this.toAuthTokenInfo(credential);
   }
 
@@ -436,6 +779,11 @@ export class BalanceManager implements vscode.Disposable {
   private startPeriodicRefresh(): void {
     if (this.periodicTimer) {
       clearInterval(this.periodicTimer);
+      this.periodicTimer = undefined;
+    }
+
+    if (!this.isLeader()) {
+      return;
     }
 
     this.periodicTimer = setInterval(() => {
@@ -499,10 +847,12 @@ export class BalanceManager implements vscode.Disposable {
       this.configSignatures.set(providerName, signature);
     }
 
-    for (const provider of activeProviders) {
-      const state = this.states.get(provider.name);
-      if (this.shouldRefreshOnReconcile(state)) {
-        void this.refreshProvider(provider, 'ui', false);
+    if (this.isLeader()) {
+      for (const provider of activeProviders) {
+        const state = this.states.get(provider.name);
+        if (this.shouldRefreshOnReconcile(state)) {
+          void this.refreshProvider(provider, 'ui', false);
+        }
       }
     }
   }
@@ -536,8 +886,7 @@ export class BalanceManager implements vscode.Disposable {
       this.trailingTimers.delete(providerName);
     }
 
-    this.onDidUpdateEmitter.fire(providerName);
-    this.queuePersistState();
+    this.notifyUpdated(providerName);
   }
 
   private async loadState(): Promise<void> {
@@ -817,7 +1166,7 @@ export class BalanceManager implements vscode.Disposable {
   }
 
   private queuePersistState(): void {
-    if (!this.extensionContext) {
+    if (!this.extensionContext || !this.isLeader()) {
       return;
     }
 
@@ -884,10 +1233,19 @@ export class BalanceManager implements vscode.Disposable {
       clearTimeout(timer);
     }
     this.trailingTimers.clear();
+    for (const timer of this.postRequestRefreshRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.postRequestRefreshRetryTimers.clear();
 
     if (this.periodicTimer) {
       clearInterval(this.periodicTimer);
       this.periodicTimer = undefined;
+    }
+
+    if (this.syncRetryTimer) {
+      clearTimeout(this.syncRetryTimer);
+      this.syncRetryTimer = undefined;
     }
 
     this.configSignatures.clear();

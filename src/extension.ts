@@ -24,6 +24,13 @@ import { t } from './i18n';
 import { AuthManager } from './auth';
 import { balanceManager } from './balance';
 import { registerBalanceStatusBar } from './ui/balance-status-bar';
+import { mainInstance } from './main-instance';
+import {
+  ensureMainInstanceCompatibility,
+  showMainInstanceCompatibilityWarning,
+} from './main-instance/compatibility';
+import { registerMainInstanceHandlers } from './main-instance/register-handlers';
+import { authLog } from './logger';
 
 const VENDOR_ID = 'unify-chat-provider';
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -34,6 +41,9 @@ const CONFIG_NAMESPACE = 'unifyChatProvider';
 export async function activate(
   context: vscode.ExtensionContext,
 ): Promise<void> {
+  await mainInstance.initialize(context);
+  context.subscriptions.push(mainInstance);
+
   const configStore = new ConfigStore();
   const secretStore = new SecretStore(context.secrets);
   registerIgnoredScopeConfigurationWarning(context, configStore);
@@ -44,9 +54,152 @@ export async function activate(
   // Initialize auth system
   const authManager = new AuthManager(configStore, secretStore, uriHandler);
   context.subscriptions.push(authManager);
+  let mainInstanceHandlersRegistered = false;
+  let leaderStartupReady = false;
+  let leaderPromotionPromise: Promise<void> | undefined;
+  let leaderPromotionRetryTimer: ReturnType<typeof setTimeout> | undefined;
 
-  await migrateProviderTypes(configStore);
-  await migrateApiKeyToAuth(configStore);
+  const runLeaderStartupMigrations = async (): Promise<void> => {
+    if (!mainInstance.isLeader()) {
+      authLog.verbose(
+        'main-instance',
+        'Skipping leader startup migrations because this instance is not leader',
+      );
+      return;
+    }
+    authLog.verbose('main-instance', 'Running leader startup migrations');
+    await migrateProviderTypes(configStore);
+    await migrateApiKeyToAuth(configStore);
+    authLog.verbose('main-instance', 'Leader startup migrations completed');
+  };
+
+  const setMainInstanceReadyIfPossible = (): void => {
+    if (
+      !mainInstanceHandlersRegistered ||
+      !leaderStartupReady ||
+      !mainInstance.isLeader()
+    ) {
+      authLog.verbose(
+        'main-instance',
+        'Deferring leader ready state until startup prerequisites are satisfied',
+        {
+          mainInstanceHandlersRegistered,
+          leaderStartupReady,
+          isLeader: mainInstance.isLeader(),
+        },
+      );
+      return;
+    }
+    if (leaderPromotionRetryTimer) {
+      clearTimeout(leaderPromotionRetryTimer);
+      leaderPromotionRetryTimer = undefined;
+    }
+    authLog.verbose('main-instance', 'Marking leader as ready');
+    mainInstance.setReady(true);
+  };
+
+  const scheduleLeaderPromotionRetry = (error: unknown): void => {
+    leaderStartupReady = false;
+    authLog.error(
+      'main-instance',
+      'Leader promotion finalization failed; scheduling retry',
+      error,
+    );
+    if (!mainInstance.isLeader() || leaderPromotionRetryTimer) {
+      return;
+    }
+    leaderPromotionRetryTimer = setTimeout(() => {
+      leaderPromotionRetryTimer = undefined;
+      if (!mainInstance.isLeader() || leaderStartupReady) {
+        return;
+      }
+      void ensureLeaderPromotionFinalized().catch((retryError) => {
+        scheduleLeaderPromotionRetry(retryError);
+      });
+    }, 1_000);
+  };
+
+  const finalizeLeaderPromotion = async (): Promise<void> => {
+    if (!mainInstance.isLeader()) {
+      authLog.verbose(
+        'main-instance',
+        'Skipping leader promotion finalization because this instance is not leader',
+      );
+      return;
+    }
+    authLog.verbose('main-instance', 'Finalizing leader promotion');
+    await runLeaderStartupMigrations();
+    if (!mainInstance.isLeader()) {
+      leaderStartupReady = false;
+      authLog.verbose(
+        'main-instance',
+        'Leader promotion interrupted before startup finished',
+      );
+      return;
+    }
+    leaderStartupReady = true;
+    authLog.verbose(
+      'main-instance',
+      'Leader startup marked ready; scheduling secret storage maintenance',
+    );
+    runSecretStorageMaintenanceOnStartup(configStore, secretStore);
+    setMainInstanceReadyIfPossible();
+  };
+
+  const ensureLeaderPromotionFinalized = (): Promise<void> => {
+    if (!mainInstance.isLeader()) {
+      authLog.verbose(
+        'main-instance',
+        'Skipping leader promotion finalization request because this instance is not leader',
+      );
+      return Promise.resolve();
+    }
+    if (leaderPromotionPromise) {
+      authLog.verbose(
+        'main-instance',
+        'Leader promotion finalization already in progress; joining existing promise',
+      );
+      return leaderPromotionPromise;
+    }
+    authLog.verbose('main-instance', 'Starting leader promotion finalization');
+    leaderPromotionPromise = finalizeLeaderPromotion().finally(() => {
+      authLog.verbose('main-instance', 'Leader promotion finalization settled');
+      leaderPromotionPromise = undefined;
+    });
+    return leaderPromotionPromise;
+  };
+
+  context.subscriptions.push(
+    mainInstance.onDidChangeRole((snapshot) => {
+      authLog.verbose('main-instance', 'Observed main-instance role change', snapshot);
+      if (snapshot.role !== 'leader') {
+        leaderStartupReady = false;
+        if (leaderPromotionRetryTimer) {
+          clearTimeout(leaderPromotionRetryTimer);
+          leaderPromotionRetryTimer = undefined;
+        }
+        return;
+      }
+      if (snapshot.ready) {
+        return;
+      }
+      leaderStartupReady = false;
+      void ensureLeaderPromotionFinalized().catch((error) => {
+        scheduleLeaderPromotionRetry(error);
+      });
+    }),
+  );
+  context.subscriptions.push(
+    new vscode.Disposable(() => {
+      if (leaderPromotionRetryTimer) {
+        clearTimeout(leaderPromotionRetryTimer);
+        leaderPromotionRetryTimer = undefined;
+      }
+    }),
+  );
+  if (mainInstance.isLeader()) {
+    await ensureLeaderPromotionFinalized();
+  }
 
   await balanceManager.initialize({
     configStore,
@@ -64,8 +217,24 @@ export async function activate(
   );
 
   // Initialize official models manager
-  await officialModelsManager.initialize(context, secretStore, authManager);
+  await officialModelsManager.initialize(
+    context,
+    configStore,
+    secretStore,
+    authManager,
+    uriHandler,
+  );
   context.subscriptions.push(officialModelsManager);
+
+  registerMainInstanceHandlers({
+    configStore,
+    authManager,
+    balanceManager,
+    officialModelsManager,
+  });
+  mainInstanceHandlersRegistered = true;
+  authLog.verbose('main-instance', 'Main-instance handlers registered');
+  setMainInstanceReadyIfPossible();
 
   // Register the language model chat provider
   const providerRegistration = vscode.lm.registerLanguageModelChatProvider(
@@ -86,13 +255,12 @@ export async function activate(
   );
 
   registerSecretStorageMaintenance(context, configStore, secretStore);
-  runSecretStorageMaintenanceOnStartup(configStore, secretStore);
 
   // Re-register provider when configuration changes to pick up new models
   context.subscriptions.push(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
-      enqueueMaintenance(async () => {
+      enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });
     }),
@@ -118,6 +286,8 @@ export async function activate(
 
   // Clean up config store on deactivation
   context.subscriptions.push(configStore);
+
+  setMainInstanceReadyIfPossible();
 }
 
 export function registerCommands(
@@ -157,59 +327,73 @@ export function registerCommands(
     vscode.commands.registerCommand(
       'unifyChatProvider.refreshAllProvidersOfficialModels',
       async () => {
-        const providers = configStore.endpoints;
-        const enabledCount = providers.filter(
-          (p) => p.autoFetchOfficialModels,
-        ).length;
-        if (enabledCount === 0) {
+        if (!(await ensureMainInstanceCompatibility())) {
+          return;
+        }
+        let refreshedCount = 0;
+        try {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: t('Refreshing official models...'),
+              cancellable: false,
+            },
+            async () => {
+              refreshedCount = await officialModelsManager.refreshAll();
+            },
+          );
+        } catch (error) {
+          if (await showMainInstanceCompatibilityWarning(error)) {
+            return;
+          }
+          throw error;
+        }
+        if (refreshedCount === 0) {
           vscode.window.showInformationMessage(
             t('No providers have auto-fetch official models enabled.'),
           );
           return;
         }
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: t('Refreshing official models...'),
-            cancellable: false,
-          },
-          async () => {
-            await officialModelsManager.refreshAll(providers);
-          },
-        );
         vscode.window.showInformationMessage(
-          t('Refreshed official models for {0} provider(s).', enabledCount),
+          t('Refreshed official models for {0} provider(s).', refreshedCount),
         );
       },
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.refreshAllProvidersBalance',
       async () => {
-        const providers = configStore.endpoints;
-        const enabledCount = providers.filter(
-          (p) => p.balanceProvider && p.balanceProvider.method !== 'none',
-        ).length;
+        if (!(await ensureMainInstanceCompatibility())) {
+          return;
+        }
+        let refreshedCount = 0;
 
-        if (enabledCount === 0) {
+        try {
+          await vscode.window.withProgress(
+            {
+              location: vscode.ProgressLocation.Notification,
+              title: t('Refreshing provider balances...'),
+              cancellable: false,
+            },
+            async () => {
+              refreshedCount = await balanceManager.forceRefreshAll();
+            },
+          );
+        } catch (error) {
+          if (await showMainInstanceCompatibilityWarning(error)) {
+            return;
+          }
+          throw error;
+        }
+
+        if (refreshedCount === 0) {
           vscode.window.showInformationMessage(
             t('No providers have balance monitoring configured.'),
           );
           return;
         }
 
-        await vscode.window.withProgress(
-          {
-            location: vscode.ProgressLocation.Notification,
-            title: t('Refreshing provider balances...'),
-            cancellable: false,
-          },
-          async () => {
-            await balanceManager.forceRefreshAll();
-          },
-        );
-
         vscode.window.showInformationMessage(
-          t('Refreshed balances for {0} provider(s).', enabledCount),
+          t('Refreshed balances for {0} provider(s).', refreshedCount),
         );
       },
     ),
@@ -225,11 +409,35 @@ export function deactivate(): void {
 
 let maintenanceQueue: Promise<void> = Promise.resolve();
 
-function enqueueMaintenance(work: () => Promise<void>): void {
+function enqueueMaintenance(
+  label: string,
+  work: () => Promise<void>,
+): void {
+  if (!mainInstance.isLeader()) {
+    authLog.verbose(
+      'main-instance',
+      `Skipping maintenance enqueue because this instance is not leader (${label})`,
+    );
+    return;
+  }
   const run = async (): Promise<void> => {
+    if (!mainInstance.isLeader()) {
+      authLog.verbose(
+        'main-instance',
+        `Skipping queued maintenance because leadership changed before execution (${label})`,
+      );
+      return;
+    }
     try {
+      authLog.verbose('main-instance', `Starting maintenance task (${label})`);
       await work();
+      authLog.verbose('main-instance', `Completed maintenance task (${label})`);
     } catch (error) {
+      authLog.error(
+        'main-instance',
+        `Secret storage maintenance failed (${label})`,
+        error,
+      );
       const message = error instanceof Error ? error.message : String(error);
       vscode.window.showErrorMessage(
         t('Failed to maintain secret storage: {0}', message),
@@ -259,7 +467,7 @@ function registerSecretStorageMaintenance(
       }
       lastGlobalStoreApiKeyInSettings = nextGlobalStoreApiKeyInSettings;
 
-      enqueueMaintenance(async () => {
+      enqueueMaintenance('migrate-api-key-storage-on-setting-change', async () => {
         await migrateApiKeyStorage({
           configStore,
           secretStore,
@@ -276,7 +484,7 @@ function runSecretStorageMaintenanceOnStartup(
   configStore: ConfigStore,
   secretStore: SecretStore,
 ): void {
-  enqueueMaintenance(async () => {
+  enqueueMaintenance('startup-secret-storage-maintenance', async () => {
     await migrateApiKeyStorage({
       configStore,
       secretStore,
