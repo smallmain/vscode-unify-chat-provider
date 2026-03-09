@@ -988,7 +988,7 @@ export class AnthropicProvider implements ApiProvider {
 
         case 'redacted_thinking':
           yield new vscode.LanguageModelThinkingPart(
-            'Encrypted thinking...',
+            '',
             undefined,
             {
               redactedData: block.data,
@@ -1069,9 +1069,6 @@ export class AnthropicProvider implements ApiProvider {
               break;
 
             case 'redacted_thinking':
-              yield new vscode.LanguageModelThinkingPart(
-                'Encrypted thinking...',
-              );
               break;
 
             default:

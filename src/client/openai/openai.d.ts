@@ -1,7 +1,7 @@
 import 'openai/resources/chat/completions';
 import 'openai/resources/responses/responses';
 import 'openai/lib/ChatCompletionStream';
-import { ChatCompletionReasoningEffort } from 'openai/resources/chat/completions';
+import type { ChatCompletionReasoningEffort } from 'openai/resources/chat/completions';
 
 declare module 'openai/resources/chat/completions' {
   /**

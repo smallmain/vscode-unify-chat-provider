@@ -1102,9 +1102,6 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           break;
 
         case 'reasoning.encrypted':
-          if (emitMode !== 'metadata-only') {
-            yield new vscode.LanguageModelThinkingPart('Encrypted thinking...');
-          }
           if (metadata) {
             metadata.redactedData = content.data;
           }
