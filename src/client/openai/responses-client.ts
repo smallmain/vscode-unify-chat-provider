@@ -50,6 +50,7 @@ import {
   ResponseFunctionToolCall,
   ResponseInput,
   ResponseInputItem,
+  ResponseOutputItem,
   ResponseReasoningItem,
   ResponseStreamEvent,
   ResponseUsage,
@@ -108,7 +109,9 @@ function readNumberField(
   key: string,
 ): number | undefined {
   const value = record[key];
-  return typeof value === 'number' && Number.isFinite(value) ? value : undefined;
+  return typeof value === 'number' && Number.isFinite(value)
+    ? value
+    : undefined;
 }
 
 class OpenAIResponsesRequestError extends Error {
@@ -225,7 +228,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
     let latestResponseId: string | undefined;
     let outItemsAfterLatestResponse: ResponseInputItem[] = [];
     const outItems: ResponseInputItem[] = [];
-    const rawMap = new Map<ResponseInputItem, ResponseInputItem[]>();
+    const rawMap = new Map<
+      ResponseInputItem,
+      OpenAIResponsesMarkerData['data']
+    >();
     const appendOutItem = (item: ResponseInputItem): void => {
       outItems.push(item);
       if (latestResponseId !== undefined) {
@@ -311,7 +317,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
       }
     }
 
-    // use raw messages, for details, see parseMessage's NOTE comments.
+    // Reuse raw response output items from the stateful marker verbatim so assistant
+    // metadata such as `phase` survives follow-up requests.
     for (const [param, raw] of rawMap) {
       const index = outItems.indexOf(param);
       if (index === -1) continue;
@@ -910,8 +917,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         try {
           if (streamEnabled) {
-            const responseTimeoutMs =
-              resolveChatNetwork(this.config).timeout.response;
+            const responseTimeoutMs = resolveChatNetwork(this.config).timeout
+              .response;
 
             const stream = await client.responses.create(
               { ...requestBody, stream: true },
@@ -1218,7 +1225,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.failed':
           if (event.response.error) {
-            const responseError = this.extractResponseError(event.response.error);
+            const responseError = this.extractResponseError(
+              event.response.error,
+            );
             throw new OpenAIResponsesRequestError(
               `OpenAI Response Failed: ${responseError.message}${
                 responseError.code ? ` (${responseError.code})` : ''
@@ -1310,7 +1319,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
 }
 
 export type OpenAIResponsesMarkerData = {
-  data: ResponseInputItem[];
+  /** Raw `response.output` items, preserved verbatim for follow-up requests. */
+  data: ResponseOutputItem[];
   sessionId?: string;
   responseId?: string;
 };
