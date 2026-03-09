@@ -7,6 +7,7 @@ import {
 } from './config-ops';
 import { normalizeBaseUrlInput } from './utils';
 import { PROVIDER_KEYS, ProviderType } from './client/definitions';
+import { getRenamedProviderType } from './secret/migration';
 import { ContextCacheConfig, ModelConfig, ProviderConfig } from './types';
 
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -405,13 +406,15 @@ export class ConfigStore {
       .filter((m): m is ModelConfig => m !== null);
 
     // Parse and validate type
-    if (
-      typeof obj.type !== 'string' ||
-      !PROVIDER_KEYS.includes(obj.type as ProviderType)
-    ) {
+    const rawType = obj.type;
+    if (typeof rawType !== 'string') {
       return null;
     }
-    const type = obj.type as ProviderType;
+    const renamedType = getRenamedProviderType(rawType) ?? rawType;
+    if (!PROVIDER_KEYS.includes(renamedType as ProviderType)) {
+      return null;
+    }
+    const type = renamedType as ProviderType;
 
     const provider: ProviderConfig = {
       type,
@@ -434,6 +437,15 @@ export class ConfigStore {
     provider.extraHeaders = this.normalizeStringRecord(provider.extraHeaders);
     provider.extraBody = this.normalizeObjectRecord(provider.extraBody);
     provider.contextCache = this.normalizeContextCacheConfig(provider.contextCache);
+
+    const legacyApiKey = obj.apiKey;
+    if (
+      provider.auth === undefined &&
+      typeof legacyApiKey === 'string' &&
+      legacyApiKey.trim()
+    ) {
+      provider.auth = { method: 'api-key', apiKey: legacyApiKey };
+    }
 
     return provider;
   }

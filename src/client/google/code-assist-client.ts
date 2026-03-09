@@ -321,6 +321,10 @@ function buildSignatureSessionId(options: {
   return `${PLUGIN_SESSION_ID}:${modelForKey}:${projectKey}:${conversationKey}`;
 }
 
+function generateAntigravityImageRequestId(): string {
+  return `image_gen/${Date.now()}/${randomUUID()}/12`;
+}
+
 function sanitizeAntigravityToolName(name: string): string {
   const trimmed = name.trim();
   if (!trimmed) {
@@ -1421,6 +1425,12 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       }
     }
 
+    if (!Object.keys(headers).some((k) => k.toLowerCase() === 'accept')) {
+      headers['Accept'] = options?.streaming
+        ? 'text/event-stream'
+        : 'application/json';
+    }
+
     if (this.codeAssistHeaderStyle === 'antigravity') {
       // Fingerprint headers override runtime headers where applicable.
       const fingerprintHeaders = buildFingerprintHeaders(
@@ -1782,8 +1792,11 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     );
 
     const modelIdLower = resolvedModel.requestModelId.toLowerCase();
+    const isImageModel = IMAGE_MODEL_PATTERN.test(resolvedModel.requestModelId);
     const isClaudeModel = modelIdLower.includes('claude');
     const isClaudeOpusModel = modelIdLower.includes('claude-opus');
+    const isAntigravityImageRequest =
+      this.codeAssistHeaderStyle === 'antigravity' && isImageModel;
 
     const expectedIdentity = createStatefulMarkerIdentity(this.config, model);
     const sanitizedMessages = sanitizeMessagesForModelSwitch(messages, {
@@ -1956,17 +1969,19 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     }
 
     const projectId = this.resolveProjectId();
-    const sessionId = buildSignatureSessionId({
-      modelId: resolvedModel.requestModelId,
-      projectId,
-      systemInstruction: systemInstructionForRequest,
-      contents,
-    });
+    const sessionId = isAntigravityImageRequest
+      ? undefined
+      : buildSignatureSessionId({
+          modelId: resolvedModel.requestModelId,
+          projectId,
+          systemInstruction: systemInstructionForRequest,
+          contents,
+        });
 
     const requestPayload: Record<string, unknown> = {
       contents,
       systemInstruction: systemInstructionForRequest,
-      sessionId,
+      ...(sessionId ? { sessionId } : {}),
       ...(Object.keys(generationConfig).length > 0 ? { generationConfig } : {}),
       ...(tools ? { tools } : {}),
       ...(functionCallingConfig
@@ -1988,9 +2003,11 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       request: requestPayload,
       ...(this.codeAssistHeaderStyle === 'antigravity'
         ? {
-            requestType: 'agent',
+            requestType: isAntigravityImageRequest ? 'image_gen' : 'agent',
             userAgent: 'antigravity',
-            requestId: `agent-${randomUUID()}`,
+            requestId: isAntigravityImageRequest
+              ? generateAntigravityImageRequestId()
+              : `agent-${randomUUID()}`,
           }
         : {}),
     };

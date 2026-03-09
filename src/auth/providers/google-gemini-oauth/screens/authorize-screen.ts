@@ -8,10 +8,14 @@
  */
 
 import * as vscode from 'vscode';
-import { createServer } from 'node:http';
 import { t } from '../../../../i18n';
 import { GEMINI_CLI_REDIRECT_PATH } from '../constants';
-import type { AddressInfo } from 'node:net';
+import { mainInstance } from '../../../../main-instance';
+import {
+  ensureMainInstanceCompatibility,
+  showMainInstanceCompatibilityWarning,
+} from '../../../../main-instance/compatibility';
+import { isLeaderUnavailableError } from '../../../../main-instance/errors';
 
 type CallbackResult =
   | { type: 'success'; code: string; state: string }
@@ -45,16 +49,6 @@ function parseCallbackFromUrl(url: URL): CallbackResult {
   return { type: 'success', code, state };
 }
 
-function renderHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-
-  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>Gemini CLI Authentication</title></head><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;"><h2>${escaped}</h2></body></html>`;
-}
-
 /**
  * Perform the Gemini CLI OAuth authorization flow.
  *
@@ -64,6 +58,10 @@ function renderHtml(text: string): string {
 export async function performGeminiCliAuthorization(
   createAuthorizationUrl: (redirectUri: string) => Promise<string> | string,
 ): Promise<CallbackResult | null> {
+  if (!(await ensureMainInstanceCompatibility())) {
+    return null;
+  }
+
   const manualFallback = async (): Promise<CallbackResult | null> => {
     const pasted = await vscode.window.showInputBox({
       title: t('Authorization'),
@@ -93,120 +91,114 @@ export async function performGeminiCliAuthorization(
     async (progress, cancellationToken) => {
       progress.report({ message: t('Complete authorization in your browser') });
 
-      return await new Promise<CallbackResult | null>((resolve) => {
-        let resolved = false;
-        const doResolve = (result: CallbackResult | null): void => {
-          if (resolved) return;
-          resolved = true;
-          cancelSubscription.dispose();
-          resolve(result);
-        };
+      let sessionId: string | undefined;
+      let authorizationUrl: string | undefined;
+      let browserOpened = false;
+      const startController = new AbortController();
+      const ensureBrowserOpened = async (): Promise<boolean> => {
+        if (!authorizationUrl) {
+          return false;
+        }
+        if (browserOpened) {
+          return true;
+        }
+        const opened = await vscode.env.openExternal(
+          vscode.Uri.parse(authorizationUrl),
+        );
+        if (!opened) {
+          return false;
+        }
+        browserOpened = true;
+        return true;
+      };
+      const cancelSubscription = cancellationToken.onCancellationRequested(() => {
+        startController.abort();
+        if (!sessionId) {
+          return;
+        }
+        void mainInstance
+          .runInLeader('oauth.http.cancel', { sessionId })
+          .catch(() => {
+            // Best-effort.
+          });
+      });
 
-        const cancelSubscription = cancellationToken.onCancellationRequested(
-          () => {
-            server.close(() => {
-              doResolve(null);
-            });
+      try {
+        const started = await mainInstance.runInLeaderWhenAvailable<{
+          sessionId: string;
+          redirectUri: string;
+        }>(
+          'oauth.http.start',
+          {
+            port: 0,
+            redirectPath: GEMINI_CLI_REDIRECT_PATH,
           },
+          { signal: startController.signal },
         );
 
-        const tryListen = async (host: string): Promise<{
-          origin: string;
-          redirectUri: string;
-        } | null> => {
-          try {
-            await new Promise<void>((resolveListen, rejectListen) => {
-              const handleError = (error: unknown): void => {
-                server.off('error', handleError);
-                rejectListen(
-                  error instanceof Error ? error : new Error(String(error)),
-                );
-              };
-              server.once('error', handleError);
-              server.listen(0, host, () => {
-                server.off('error', handleError);
-                resolveListen();
+        sessionId = started.sessionId;
+        authorizationUrl = await Promise.resolve(
+          createAuthorizationUrl(started.redirectUri),
+        );
+
+        try {
+          if (!(await ensureBrowserOpened())) {
+            void mainInstance
+              .runInLeader('oauth.http.cancel', { sessionId })
+              .catch(() => {
+                // Best-effort.
               });
-            });
-
-            const address = server.address();
-            const info =
-              address && typeof address === 'object' && 'port' in address
-                ? (address as AddressInfo)
-                : null;
-            if (!info) {
-              throw new Error('Failed to resolve OAuth callback port');
-            }
-
-            const hostForUrl = host === '::1' ? '[::1]' : host;
-            const origin = `http://${hostForUrl}:${info.port}`;
-            return {
-              origin,
-              redirectUri: `${origin}${GEMINI_CLI_REDIRECT_PATH}`,
-            };
-          } catch {
             return null;
           }
-        };
 
-        const server = createServer((req, res) => {
-          const reqUrl = req.url ?? '';
-          const parsed = parseUrlOrNull(`${origin}${reqUrl}`);
-          if (!parsed || parsed.pathname !== GEMINI_CLI_REDIRECT_PATH) {
-            res.statusCode = 404;
-            res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-            res.end('Not Found');
-            return;
+          const waitResult = await mainInstance.runInLeader<{
+            type: 'success';
+            url: string;
+          } | { type: 'cancel' }>('oauth.http.wait', { sessionId });
+
+          if (waitResult.type === 'cancel') {
+            return null;
           }
 
-          const result = parseCallbackFromUrl(parsed);
-          res.statusCode = 200;
-          res.setHeader('Content-Type', 'text/html; charset=utf-8');
-          res.end(
-            renderHtml(
-              result.type === 'success'
-                ? 'Authentication complete. You may close this tab.'
-                : 'Authentication failed. You may close this tab.',
+          const parsed = parseUrlOrNull(waitResult.url);
+          if (!parsed) {
+            return { type: 'error', error: 'Invalid callback URL' };
+          }
+
+          return parseCallbackFromUrl(parsed);
+        } finally {
+          cancelSubscription.dispose();
+        }
+      } catch (error) {
+        cancelSubscription.dispose();
+        if (cancellationToken.isCancellationRequested) {
+          return null;
+        }
+        if (await showMainInstanceCompatibilityWarning(error)) {
+          return null;
+        }
+        if (isLeaderUnavailableError(error)) {
+          if (await ensureBrowserOpened()) {
+            return await manualFallback();
+          }
+          vscode.window.showWarningMessage(
+            t(
+              'Main instance window is temporarily unavailable; authorization has been cancelled. Please try again.',
             ),
           );
+          return null;
+        }
 
-          // Close server and resolve immediately
-          setImmediate(() => {
-            server.close();
-            doResolve(result);
-          });
-        });
-
-        let origin = 'http://127.0.0.1';
-        const start = async (): Promise<void> => {
-          const listener =
-            (await tryListen('127.0.0.1')) ?? (await tryListen('::1'));
-          if (!listener) {
-            server.close();
-            doResolve(await manualFallback());
-            return;
-          }
-
-          origin = listener.origin;
-          const url = await Promise.resolve(
-            createAuthorizationUrl(listener.redirectUri),
-          );
-
-          const opened = await vscode.env.openExternal(vscode.Uri.parse(url));
-          if (!opened) {
-            server.close(() => {
-              doResolve(null);
+        if (sessionId) {
+          void mainInstance
+            .runInLeader('oauth.http.cancel', { sessionId })
+            .catch(() => {
+              // Best-effort.
             });
-          }
-        };
+        }
 
-        void start();
-
-        server.on('error', async () => {
-          server.close();
-          doResolve(await manualFallback());
-        });
-      });
+        return await manualFallback();
+      }
     },
   );
 }

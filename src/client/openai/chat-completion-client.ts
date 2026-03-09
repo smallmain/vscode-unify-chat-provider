@@ -40,6 +40,7 @@ import {
   mergeHeaders,
   parseToolArguments,
   processUsage as sharedProcessUsage,
+  resolveOpenAIServiceTier,
   setUserAgentHeader,
 } from '../utils';
 import * as vscode from 'vscode';
@@ -847,11 +848,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const streamEnabled = model.stream ?? true;
 
     const headers = this.buildHeaders(credential, model, sanitizedMessages);
+    const serviceTier = resolveOpenAIServiceTier(this.config, model);
 
     const baseBody: ChatCompletionCreateParamsBase = {
       model: getBaseModelId(model.id),
       messages: convertedMessages,
       ...this.buildReasoningParams(model, thinkingParamType),
+      ...(serviceTier !== undefined ? { service_tier: serviceTier } : {}),
       ...(useTopK && model.topK !== undefined ? { top_k: model.topK } : {}),
       ...(useClearThinking ? { clear_thinking: false } : {}),
       ...(useReasoningSplitParam ? { reasoning_split: true } : {}),

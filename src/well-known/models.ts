@@ -440,6 +440,22 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gpt-5.4',
+    name: 'GPT-5.4',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'gpt-5.3-codex-spark',
     name: 'GPT-5.3-Codex-Spark',
     maxInputTokens: 128000,
@@ -1747,6 +1763,62 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'qwen3.5-35b-a3b',
     name: 'Qwen3.5-35B-A3B',
+    maxInputTokens: 262144,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.5-9b',
+    name: 'Qwen3.5-9B',
+    maxInputTokens: 262144,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.5-4b',
+    name: 'Qwen3.5-4B',
+    maxInputTokens: 262144,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.5-2b',
+    name: 'Qwen3.5-2B',
+    maxInputTokens: 262144,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.5-0.8b',
+    name: 'Qwen3.5-0.8B',
     maxInputTokens: 262144,
     maxOutputTokens: 64000,
     stream: true,
@@ -3171,6 +3243,21 @@ const _WELL_KNOWN_MODELS = [
     id: 'gemini-3.1-pro-preview',
     overrides: ['gemini-3.1-pro', 'gemini-3.1-pro-preview-customtools'],
     name: 'Gemini 3.1 Pro Preview',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65535,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gemini-3.1-flash-lite-preview',
+    overrides: ['gemini-3.1-flash-lite'],
+    name: 'Gemini 3.1 Flash Lite Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65535,
     stream: true,

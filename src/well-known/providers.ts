@@ -598,6 +598,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key', 'claude-code'],
     models: [
       'claude-opus-4-6',
+      'claude-sonnet-4-6',
       'claude-opus-4-5',
       'claude-sonnet-4-5',
       'claude-haiku-4-5',

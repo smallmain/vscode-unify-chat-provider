@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "4.9.4",
+  "version": "5.1.0",
   "categories": [
     "AI",
     "Chat"
@@ -773,6 +773,24 @@
                             "%configuration.endpoints.models.verbosity.enumDescriptions.2%"
                           ]
                         },
+                        "serviceTier": {
+                          "type": "string",
+                          "description": "%configuration.endpoints.models.serviceTier.description%",
+                          "enum": [
+                            "auto",
+                            "standard",
+                            "flex",
+                            "scale",
+                            "priority"
+                          ],
+                          "enumDescriptions": [
+                            "%configuration.endpoints.models.serviceTier.enumDescriptions.0%",
+                            "%configuration.endpoints.models.serviceTier.enumDescriptions.1%",
+                            "%configuration.endpoints.models.serviceTier.enumDescriptions.2%",
+                            "%configuration.endpoints.models.serviceTier.enumDescriptions.3%",
+                            "%configuration.endpoints.models.serviceTier.enumDescriptions.4%"
+                          ]
+                        },
                         "thinking": {
                           "type": "object",
                           "description": "%configuration.endpoints.models.thinking.description%",
@@ -963,13 +981,13 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.73.0",
-    "@google/genai": "^1.40.0",
-    "@huggingface/tokenizers": "^0.1.1",
+    "@anthropic-ai/sdk": "^0.78.0",
+    "@google/genai": "^1.44.0",
+    "@huggingface/tokenizers": "^0.1.2",
     "@iarna/toml": "^2.2.5",
     "@vscode/l10n": "^0.0.18",
     "ollama": "^0.6.3",
-    "openai": "^6.18.0",
+    "openai": "^6.27.0",
     "tiktoken": "^1.0.22"
   }
 }

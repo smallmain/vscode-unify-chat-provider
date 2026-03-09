@@ -506,6 +506,45 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       ],
       getDescription: (draft) => draft.verbosity ?? t('default'),
     },
+    // Service Tier
+    {
+      key: 'serviceTier',
+      type: 'picker',
+      label: t('Service Tier'),
+      icon: 'layers',
+      section: 'parameters',
+      title: t('Service Tier'),
+      placeholder: t('Choose service tier'),
+      options: [
+        {
+          label: t('Default'),
+          description: t('Use provider default behavior'),
+          value: undefined,
+        },
+        {
+          label: t('Auto'),
+          value: 'auto',
+        },
+        {
+          label: t('Standard'),
+          value: 'standard',
+        },
+        {
+          label: t('Flex'),
+          value: 'flex',
+        },
+        {
+          label: t('Scale'),
+          value: 'scale',
+        },
+        {
+          label: t('Priority'),
+          value: 'priority',
+        },
+      ],
+      getDescription: (draft) =>
+        draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
     // Temperature
     {
       key: 'temperature',

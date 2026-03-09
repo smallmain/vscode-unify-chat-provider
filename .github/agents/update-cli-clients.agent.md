@@ -3,23 +3,33 @@ name: Update Cli Clients
 description: Regularly maintain certain clients.
 tools:
   [
-    'vscode/askQuestions',
-    'execute/getTerminalOutput',
-    'execute/awaitTerminal',
-    'execute/killTerminal',
-    'execute/runInTerminal',
-    'execute/testFailure',
-    'read/terminalSelection',
-    'read/terminalLastCommand',
-    'read/problems',
-    'read/readFile',
-    'agent',
-    'edit/createDirectory',
-    'edit/createFile',
-    'edit/editFiles',
-    'search',
-    'web',
-    'todo',
+    vscode/switchAgent,
+    vscode/askQuestions,
+    execute/testFailure,
+    execute/getTerminalOutput,
+    execute/awaitTerminal,
+    execute/killTerminal,
+    execute/runInTerminal,
+    read/problems,
+    read/readFile,
+    read/terminalSelection,
+    read/terminalLastCommand,
+    agent/runSubagent,
+    edit/createDirectory,
+    edit/createFile,
+    edit/editFiles,
+    search/changes,
+    search/codebase,
+    search/fileSearch,
+    search/listDirectory,
+    search/searchResults,
+    search/textSearch,
+    search/searchSubagent,
+    search/usages,
+    web/fetch,
+    web/githubRepo,
+    vscode.mermaid-chat-features/renderMermaidDiagram,
+    todo,
   ]
 ---
 
@@ -31,10 +41,10 @@ tools:
 
 # 客户端列表
 
-- Claude Code Client：参考 opencode-anthropic-auth 项目，本地路径：`/Users/smallmain/Documents/Work/opencode-anthropic-auth`
-- Github Copilot Client：参考 opencode 项目，本地路径：`/Users/smallmain/Documents/Work/opencode/`
+- Claude Code Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Github Copilot Client：参考 opencode 项目，本地路径：`/Users/smallmain/Documents/Work/opencode`
 - Open AI Codex Client：参考 opencode 项目，本地路径：`/Users/smallmain/Documents/Work/opencode`
-- Antigravity / Gemini CLI Client：参考 opencode-antigravity-auth 项目，本地路径：`/Users/smallmain/Documents/Work/opencode-antigravity-auth`
+- Antigravity / Gemini CLI Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 - Qwen Code Client: 参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 - iFlow CLI Client: 参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 
@@ -52,10 +62,11 @@ tools:
 - 参考指定的参考项目的源码，检查客户端是否需要更新。
 - 同步客户端支持的模型列表。
 - 如果需要更新，那么修改相应的代码。
-- 最后，将参考项目同步到最新提交。
+- 最后，将参考项目同步到最新提交（注意如果多个客户端共用一个参考项目，那么需都完成之后再同步到最新提交）。
 
-## Antigravity / Gemini CLI 模型 ID 同步规则（重要）
+## 模型 ID 同步规则（重要）
 
-- 本项目的请求模型 ID 以“本项目的模型配置”作为输入，不直接照搬参考项目的 `antigravity-*` 前缀模型 ID 或复杂 alias 解析。
+- 本项目的请求模型 ID 以“本项目的模型配置”作为输入，不直接照搬参考项目的前缀模型 ID 或复杂 alias 解析（例如 `antigravity-*`）。
 - 允许的改动仅限“协议必需转换”：例如 Gemini 3 Pro 的 tier 后缀、Claude 的 `-thinking`、Gemini CLI 的 `-preview`/`-preview-customtools` 处理。
 - 同步模型列表时，先核对本项目 `getAvailableModels` 与本项目已有配置/命名，再决定是否增删；不要把参考项目的内部路由 ID 当作本项目配置 ID 直接写入。
+- 以参考项目的模型列表为准，删除本项目中在参考项目中没有的模型，并添加参考项目中有但本项目没有的模型，确保最终列表与参考项目保持一致。

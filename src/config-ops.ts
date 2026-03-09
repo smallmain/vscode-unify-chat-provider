@@ -1,5 +1,12 @@
-import { ModelConfig, ProviderConfig, type ProviderConfigPersistedKey } from './types';
-import { resolveTokenCountMultiplier, resolveTokenizerId } from './tokenizer/tokenizers';
+import {
+  ModelConfig,
+  ProviderConfig,
+  type ProviderConfigPersistedKey,
+} from './types';
+import {
+  resolveTokenCountMultiplier,
+  resolveTokenizerId,
+} from './tokenizer/tokenizers';
 
 export const MODEL_CONFIG_KEYS = [
   'id',
@@ -17,6 +24,7 @@ export const MODEL_CONFIG_KEYS = [
   'frequencyPenalty',
   'presencePenalty',
   'parallelToolCalling',
+  'serviceTier',
   'verbosity',
   'thinking',
   'webSearch',

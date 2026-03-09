@@ -1,10 +1,15 @@
 import * as vscode from 'vscode';
-import { createServer } from 'node:http';
 import { t } from '../../../../i18n';
 import {
   CLAUDE_CODE_CALLBACK_PORT,
   CLAUDE_CODE_REDIRECT_PATH,
 } from '../constants';
+import { mainInstance } from '../../../../main-instance';
+import {
+  ensureMainInstanceCompatibility,
+  showMainInstanceCompatibilityWarning,
+} from '../../../../main-instance/compatibility';
+import { isLeaderUnavailableError } from '../../../../main-instance/errors';
 
 type CallbackResult =
   | { type: 'success'; code: string }
@@ -17,16 +22,6 @@ function parseUrlOrNull(raw: string): URL | null {
   } catch {
     return null;
   }
-}
-
-function renderHtml(text: string): string {
-  const escaped = text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-
-  return `<!doctype html><html><head><meta charset="utf-8" /><meta name="viewport" content="width=device-width,initial-scale=1" /><title>Authentication</title></head><body style="font-family:system-ui,-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;padding:24px;"><h2>${escaped}</h2></body></html>`;
 }
 
 function parseCallbackFromUrl(url: URL, expectedState: string): CallbackResult {
@@ -57,6 +52,24 @@ export async function performClaudeCodeAuthorization(options: {
   expectedState: string;
   cancellationToken?: vscode.CancellationToken;
 }): Promise<CallbackResult | null> {
+  if (!(await ensureMainInstanceCompatibility())) {
+    return null;
+  }
+
+  let browserOpened = false;
+  const ensureBrowserOpened = async (): Promise<boolean> => {
+    if (browserOpened) {
+      return true;
+    }
+    const opened = await vscode.env.openExternal(vscode.Uri.parse(options.url));
+    if (!opened) {
+      vscode.window.showErrorMessage(t('Failed to open browser for authorization'));
+      return false;
+    }
+    browserOpened = true;
+    return true;
+  };
+
   const manualFallback = async (): Promise<CallbackResult | null> => {
     const pasted = await vscode.window.showInputBox({
       title: t('Authorization'),
@@ -82,73 +95,88 @@ export async function performClaudeCodeAuthorization(options: {
     return parseCallbackFromUrl(parsed, options.expectedState);
   };
 
-  return await new Promise<CallbackResult | null>((resolve) => {
-    let resolved = false;
-    let cancelSubscription: vscode.Disposable | undefined;
-
-    const doResolve = (result: CallbackResult | null): void => {
-      if (resolved) return;
-      resolved = true;
-      cancelSubscription?.dispose();
-      resolve(result);
-    };
-
-    cancelSubscription = options.cancellationToken?.onCancellationRequested(() => {
-      server.close(() => doResolve({ type: 'cancel' }));
-    });
-
-    const server = createServer((req, res) => {
-      const reqUrl = req.url ?? '';
-      const parsed = parseUrlOrNull(`http://localhost${reqUrl}`);
-      if (!parsed) {
-        res.statusCode = 400;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end('Bad Request');
+  let sessionId: string | undefined;
+  const startController = new AbortController();
+  const cancelSubscription = options.cancellationToken?.onCancellationRequested(
+    () => {
+      startController.abort();
+      if (!sessionId) {
         return;
       }
+      void mainInstance
+        .runInLeader('oauth.http.cancel', { sessionId })
+        .catch(() => {
+          // Best-effort.
+        });
+    },
+  );
 
-      if (parsed.pathname === '/cancel') {
-        res.statusCode = 200;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end('Login cancelled');
-        server.close(() => doResolve({ type: 'cancel' }));
-        return;
+  try {
+    const started = await mainInstance.runInLeaderWhenAvailable<{
+      sessionId: string;
+      redirectUri: string;
+    }>(
+      'oauth.http.start',
+      {
+        port: CLAUDE_CODE_CALLBACK_PORT,
+        redirectPath: CLAUDE_CODE_REDIRECT_PATH,
+        expectedState: options.expectedState,
+      },
+      { signal: startController.signal },
+    );
+
+    sessionId = started.sessionId;
+
+    try {
+      if (!(await ensureBrowserOpened())) {
+        void mainInstance
+          .runInLeader('oauth.http.cancel', { sessionId })
+          .catch(() => {
+            // Best-effort.
+          });
+        return null;
+      }
+
+      const waitResult = await mainInstance.runInLeader<{
+        type: 'success';
+        url: string;
+      } | { type: 'cancel' }>('oauth.http.wait', { sessionId });
+
+      if (waitResult.type === 'cancel') {
+        return { type: 'cancel' };
+      }
+
+      const parsed = parseUrlOrNull(waitResult.url);
+      if (!parsed) {
+        return { type: 'error', error: 'Invalid callback URL' };
       }
 
       if (parsed.pathname !== CLAUDE_CODE_REDIRECT_PATH) {
-        res.statusCode = 404;
-        res.setHeader('Content-Type', 'text/plain; charset=utf-8');
-        res.end('Not Found');
-        return;
+        return { type: 'error', error: 'Invalid callback URL path' };
       }
 
-      const result = parseCallbackFromUrl(parsed, options.expectedState);
-
-      res.statusCode = result.type === 'success' ? 200 : 400;
-      res.setHeader('Content-Type', 'text/html; charset=utf-8');
-      res.end(
-        renderHtml(
-          result.type === 'success'
-            ? 'Authentication complete. You may close this tab.'
-            : 'Authentication failed. You may close this tab.',
-        ),
-      );
-
-      server.close(() => doResolve(result));
-    });
-
-    server.on('error', async () => {
-      server.close();
-      doResolve(await manualFallback());
-    });
-
-    server.listen(CLAUDE_CODE_CALLBACK_PORT, 'localhost', async () => {
-      const opened = await vscode.env.openExternal(vscode.Uri.parse(options.url));
-      if (!opened) {
-        server.close();
-        vscode.window.showErrorMessage(t('Failed to open browser for authorization'));
-        doResolve(null);
+      return parseCallbackFromUrl(parsed, options.expectedState);
+    } finally {
+      cancelSubscription?.dispose();
+    }
+  } catch (error) {
+    cancelSubscription?.dispose();
+    if (options.cancellationToken?.isCancellationRequested) {
+      return { type: 'cancel' };
+    }
+    if (await showMainInstanceCompatibilityWarning(error)) {
+      return null;
+    }
+    if (isLeaderUnavailableError(error)) {
+      if (!(await ensureBrowserOpened())) {
+        return null;
       }
-    });
-  });
+      return await manualFallback();
+    }
+
+    if (!(await ensureBrowserOpened())) {
+      return null;
+    }
+    return await manualFallback();
+  }
 }

@@ -16,8 +16,11 @@ import {
   parseProviderConfigArray,
 } from './ui/import-config';
 import { t } from './i18n';
+import { mainInstance } from './main-instance';
+import { MainInstanceError } from './main-instance/errors';
 
 const IMPORT_CONFIG_PATH = '/import-config';
+const OAUTH_CALLBACK_PATH = '/oauth/callback';
 
 export interface EventedUriHandler extends vscode.UriHandler {
   readonly onDidReceiveUri: vscode.Event<vscode.Uri>;
@@ -27,6 +30,8 @@ export interface EventedUriHandler extends vscode.UriHandler {
 class UnifiedUriHandler implements EventedUriHandler, vscode.Disposable {
   private readonly importConfigHandler: ImportConfigUriHandler;
   private readonly _onDidReceiveUri = new vscode.EventEmitter<vscode.Uri>();
+  private readonly pendingOAuthCallbacks = new Map<string, string>();
+  private pendingOAuthFlushTimer?: ReturnType<typeof setTimeout>;
   readonly onDidReceiveUri = this._onDidReceiveUri.event;
 
   constructor(
@@ -42,7 +47,72 @@ class UnifiedUriHandler implements EventedUriHandler, vscode.Disposable {
 
   async handleUri(uri: vscode.Uri): Promise<void> {
     this._onDidReceiveUri.fire(uri);
+    const normalizedPath = uri.path.endsWith('/')
+      ? uri.path.slice(0, -1)
+      : uri.path;
+    if (normalizedPath === OAUTH_CALLBACK_PATH) {
+      const uriString = uri.toString(true);
+      const forwarded = await this.tryForwardOAuthCallback(uriString);
+      if (!forwarded) {
+        this.pendingOAuthCallbacks.set(uriString, uriString);
+        this.schedulePendingOAuthFlush();
+      }
+    }
     await this.importConfigHandler.handleUri(uri);
+  }
+
+  private async tryForwardOAuthCallback(uri: string): Promise<boolean> {
+    try {
+      await mainInstance.runInLeaderWhenAvailable(
+        'oauth.uri.notify',
+        { uri },
+        { timeoutMs: 500, maxAttempts: 1 },
+      );
+      return true;
+    } catch (error) {
+      if (
+        error instanceof MainInstanceError &&
+        (error.code === 'NOT_IMPLEMENTED' ||
+          error.code === 'INCOMPATIBLE_VERSION' ||
+          error.code === 'NO_LEADER' ||
+          error.code === 'LEADER_GONE')
+      ) {
+        return error.code === 'INCOMPATIBLE_VERSION';
+      }
+      // Best-effort: URI forwarding is only required for multi-window OAuth flows.
+      return true;
+    }
+  }
+
+  private schedulePendingOAuthFlush(): void {
+    if (
+      this.pendingOAuthCallbacks.size === 0 ||
+      this.pendingOAuthFlushTimer
+    ) {
+      return;
+    }
+
+    this.pendingOAuthFlushTimer = setTimeout(() => {
+      this.pendingOAuthFlushTimer = undefined;
+      void this.flushPendingOAuthCallbacks();
+    }, 250);
+  }
+
+  private async flushPendingOAuthCallbacks(): Promise<void> {
+    if (this.pendingOAuthCallbacks.size === 0) {
+      return;
+    }
+
+    for (const uri of Array.from(this.pendingOAuthCallbacks.keys())) {
+      const forwarded = await this.tryForwardOAuthCallback(uri);
+      if (forwarded) {
+        this.pendingOAuthCallbacks.delete(uri);
+      }
+    }
+
+    if (this.pendingOAuthCallbacks.size > 0) {
+      this.schedulePendingOAuthFlush();
+    }
   }
 
   getOAuthRedirectUri(path = '/oauth/callback'): string {
@@ -51,6 +121,11 @@ class UnifiedUriHandler implements EventedUriHandler, vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.pendingOAuthFlushTimer) {
+      clearTimeout(this.pendingOAuthFlushTimer);
+      this.pendingOAuthFlushTimer = undefined;
+    }
+    this.pendingOAuthCallbacks.clear();
     this._onDidReceiveUri.dispose();
   }
 }

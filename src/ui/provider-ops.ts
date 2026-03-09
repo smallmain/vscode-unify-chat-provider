@@ -25,6 +25,11 @@ import {
 } from './conflict-resolution';
 import { getAuthMethodCtor } from '../auth';
 import { getBalanceMethodDefinition } from '../balance';
+import { mainInstance } from '../main-instance';
+import {
+  isLeaderUnavailableError,
+  isVersionIncompatibleError,
+} from '../main-instance/errors';
 
 async function applyAuthStoragePolicy(options: {
   store: ConfigStore;
@@ -90,6 +95,29 @@ async function applyBalanceStoragePolicy(options: {
 
   next.balanceProvider = normalized;
   return next;
+}
+
+async function syncPersistedProvider(options: {
+  provider: ProviderConfig;
+  originalName?: string;
+}): Promise<void> {
+  if (mainInstance.isLeader()) {
+    return;
+  }
+
+  try {
+    await mainInstance.runInLeaderWhenAvailable('config.syncPersistedProvider', {
+      provider: options.provider,
+      ...(options.originalName && options.originalName !== options.provider.name
+        ? { originalName: options.originalName }
+        : {}),
+    });
+  } catch (error) {
+    if (isLeaderUnavailableError(error) || isVersionIncompatibleError(error)) {
+      return;
+    }
+    throw error;
+  }
 }
 
 export async function saveProviderDraft(options: {
@@ -171,6 +199,10 @@ export async function saveProviderDraft(options: {
     await options.store.removeProvider(options.originalName);
   }
   await options.store.upsertProvider(provider);
+  await syncPersistedProvider({
+    provider,
+    originalName: options.originalName,
+  });
 
   const draftSessionId = finalDraft._draftSessionId;
 
@@ -278,6 +310,7 @@ export async function duplicateProvider(
   }
 
   await store.upsertProvider(duplicated);
+  await syncPersistedProvider({ provider: duplicated });
   vscode.window.showInformationMessage(
     t('Provider duplicated as "{0}".', newName),
   );

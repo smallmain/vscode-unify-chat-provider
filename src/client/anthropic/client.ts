@@ -52,6 +52,7 @@ import {
   mergeHeaders,
   parseToolArguments,
   processUsage as sharedProcessUsage,
+  resolveAnthropicServiceTier,
   getToken,
   getUnifiedUserAgent,
   setUserAgentHeader,
@@ -791,12 +792,14 @@ export class AnthropicProvider implements ApiProvider {
       this.convertToolChoice(options.toolMode, tools, thinkingEnabled),
       model.parallelToolCalling,
     );
+    const serviceTier = resolveAnthropicServiceTier(this.config, model);
 
     try {
       let requestBase: Omit<MessageCreateParamsStreaming, 'stream'> = {
         model: getBaseModelId(model.id),
         messages: anthropicMessages,
         max_tokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+        ...(serviceTier !== undefined ? { service_tier: serviceTier } : {}),
       };
 
       Object.assign(requestBase, this.config.extraBody, model.extraBody);

@@ -18,6 +18,15 @@ import {
 } from '../oauth2-client';
 import { OAuth2AuthState } from '../types';
 import { t } from '../../../../i18n';
+import { mainInstance } from '../../../../main-instance';
+import {
+  ensureMainInstanceCompatibility,
+  showMainInstanceCompatibilityWarning,
+} from '../../../../main-instance/compatibility';
+import {
+  isLeaderUnavailableError,
+  MainInstanceError,
+} from '../../../../main-instance/errors';
 
 const OAUTH_CALLBACK_PATH = '/oauth/callback';
 
@@ -52,6 +61,10 @@ async function performAuthCodeFlow(
     return undefined;
   }
 
+  if (!(await ensureMainInstanceCompatibility())) {
+    return undefined;
+  }
+
   // Generate state and PKCE
   const state = generateState();
   const pkce = config.pkce !== false ? generatePKCE() : undefined;
@@ -69,18 +82,39 @@ async function performAuthCodeFlow(
     authState,
   );
 
-  const callbackCancellation = new vscode.CancellationTokenSource();
-  const codePromise = waitForAuthorizationCode(
+  const callbackController = new AbortController();
+  const localCallbackController = new vscode.CancellationTokenSource();
+  const localCallbackPromise = waitForAuthorizationCallback(
     uriHandler,
     state,
-    callbackCancellation.token,
+    localCallbackController.token,
   );
+  const waitForLeaderCallback = (): Promise<
+    { type: 'success'; url: string } | { type: 'cancel' }
+  > =>
+    mainInstance.runInLeaderWhenAvailable<
+      { type: 'success'; url: string } | { type: 'cancel' }
+    >(
+      'oauth.uri.wait',
+      { path: OAUTH_CALLBACK_PATH, expectedState: state },
+      { signal: callbackController.signal },
+    );
+
+  const cancelLeaderWait = (): void => {
+    callbackController.abort();
+    void mainInstance
+      .runInLeaderWhenAvailable('oauth.uri.cancel', { expectedState: state })
+      .catch(() => {
+        // Best-effort.
+      });
+  };
 
   // Open browser
   const opened = await vscode.env.openExternal(vscode.Uri.parse(authUrl));
   if (!opened) {
-    callbackCancellation.cancel();
-    callbackCancellation.dispose();
+    cancelLeaderWait();
+    localCallbackController.cancel();
+    localCallbackController.dispose();
     vscode.window.showErrorMessage(t('Failed to open browser for authorization'));
     return undefined;
   }
@@ -97,15 +131,50 @@ async function performAuthCodeFlow(
         progress.report({ message: t('Complete authorization in your browser') });
 
         const cancelSubscription = token.onCancellationRequested(() => {
-          callbackCancellation.cancel();
+          cancelLeaderWait();
+          localCallbackController.cancel();
         });
         try {
-          const code = await codePromise;
+          const callbackUrl = await waitForFirstAvailableCallback({
+            waitForLeaderCallback,
+            localPromise: localCallbackPromise,
+            cancelLeaderWait,
+            cancelLocalWait: () => {
+              localCallbackController.cancel();
+            },
+          });
 
           if (token.isCancellationRequested) {
             return undefined;
           }
 
+          if (!callbackUrl) {
+            return undefined;
+          }
+
+          let parsed: URL;
+          try {
+            parsed = new URL(callbackUrl);
+          } catch {
+            throw new Error('Invalid callback URL');
+          }
+
+          if (parsed.pathname !== OAUTH_CALLBACK_PATH) {
+            throw new Error('Invalid callback URL path');
+          }
+
+          const returnedState = parsed.searchParams.get('state');
+          if (returnedState !== state) {
+            throw new Error('Invalid state');
+          }
+
+          const error = parsed.searchParams.get('error');
+          if (error) {
+            const description = parsed.searchParams.get('error_description');
+            throw new Error(description ? `${error}: ${description}` : error);
+          }
+
+          const code = parsed.searchParams.get('code')?.trim();
           if (!code) {
             return undefined;
           }
@@ -124,6 +193,7 @@ async function performAuthCodeFlow(
           );
         } finally {
           cancelSubscription.dispose();
+          localCallbackController.dispose();
         }
       },
     );
@@ -134,34 +204,130 @@ async function performAuthCodeFlow(
 
     return result;
   } catch (error) {
+    if (error instanceof MainInstanceError && error.code === 'CANCELLED') {
+      return undefined;
+    }
+    if (await showMainInstanceCompatibilityWarning(error)) {
+      return undefined;
+    }
     vscode.window.showErrorMessage(
       t('Authorization failed: {0}', (error as Error).message),
     );
     return undefined;
-  } finally {
-    callbackCancellation.dispose();
   }
 }
 
 /**
- * Wait for authorization code from URI callback.
+ * Wait for the callback via either the main instance or the current window.
+ * Local URI listening keeps the flow alive if leader handoff happens mid-auth.
  */
-function waitForAuthorizationCode(
+async function waitForFirstAvailableCallback(options: {
+  waitForLeaderCallback: () => Promise<
+    { type: 'success'; url: string } | { type: 'cancel' }
+  >;
+  localPromise: Promise<string | undefined>;
+  cancelLeaderWait: () => void;
+  cancelLocalWait: () => void;
+}): Promise<string | undefined> {
+  type WaitOutcome =
+    | { channel: 'leader'; kind: 'success'; url: string }
+    | { channel: 'leader'; kind: 'cancel' | 'unavailable' }
+    | { channel: 'local'; kind: 'success'; url: string }
+    | { channel: 'local'; kind: 'cancel' };
+
+  const local = options.localPromise.then<WaitOutcome>((url) =>
+    url
+      ? { channel: 'local', kind: 'success', url }
+      : { channel: 'local', kind: 'cancel' },
+  );
+  const createLeaderWait = (): Promise<WaitOutcome> =>
+    options.waitForLeaderCallback()
+      .then<WaitOutcome>((callback) =>
+        callback.type === 'success'
+          ? { channel: 'leader', kind: 'success', url: callback.url }
+          : { channel: 'leader', kind: 'cancel' },
+      )
+      .catch<WaitOutcome>((error: unknown) => {
+        if (
+          error instanceof MainInstanceError &&
+          error.code === 'CANCELLED'
+        ) {
+          return { channel: 'leader', kind: 'cancel' };
+        }
+        if (isLeaderUnavailableError(error)) {
+          return { channel: 'leader', kind: 'unavailable' };
+        }
+        throw error;
+      });
+
+  let leaderPending = true;
+  let localPending = true;
+  let leader = createLeaderWait();
+
+  while (leaderPending || localPending) {
+    const waiters: Promise<WaitOutcome>[] = [];
+    if (leaderPending) {
+      waiters.push(leader);
+    }
+    if (localPending) {
+      waiters.push(local);
+    }
+
+    const outcome = await Promise.race(waiters);
+    if (outcome.channel === 'leader') {
+      leaderPending = false;
+    } else {
+      localPending = false;
+    }
+
+    if (outcome.kind === 'success') {
+      if (outcome.channel === 'leader') {
+        options.cancelLocalWait();
+      } else {
+        options.cancelLeaderWait();
+      }
+      return outcome.url;
+    }
+
+    if (outcome.channel === 'leader' && outcome.kind === 'unavailable') {
+      leaderPending = true;
+      leader = createLeaderWait();
+      continue;
+    }
+
+    if (!leaderPending && !localPending) {
+      return undefined;
+    }
+  }
+
+  return undefined;
+}
+
+/**
+ * Wait for a matching callback URI in the current window.
+ */
+function waitForAuthorizationCallback(
   uriHandler: EventedUriHandler,
   expectedState: string,
   cancellationToken: vscode.CancellationToken,
 ): Promise<string | undefined> {
   return new Promise((resolve, reject) => {
-    let done = false;
-
+    let settled = false;
     let uriSubscription: vscode.Disposable | undefined;
     let cancelSubscription: vscode.Disposable | undefined;
 
-    const cleanup = (): void => {
-      if (done) return;
-      done = true;
+    const finish = (result?: string, error?: Error): void => {
+      if (settled) {
+        return;
+      }
+      settled = true;
       uriSubscription?.dispose();
       cancelSubscription?.dispose();
+      if (error) {
+        reject(error);
+        return;
+      }
+      resolve(result);
     };
 
     uriSubscription = uriHandler.onDidReceiveUri((uri) => {
@@ -178,28 +344,20 @@ function waitForAuthorizationCode(
       const error = query.get('error');
       if (error) {
         const description = query.get('error_description');
-        cleanup();
-        reject(new Error(description ? `${error}: ${description}` : error));
+        finish(undefined, new Error(description ? `${error}: ${description}` : error));
         return;
       }
 
-      const code = query.get('code');
-      cleanup();
-      resolve(code?.trim() || undefined);
+      const code = query.get('code')?.trim();
+      finish(code ? uri.toString(true) : undefined);
     });
-
-    if (done) {
-      uriSubscription.dispose();
-      return;
-    }
 
     cancelSubscription = cancellationToken.onCancellationRequested(() => {
-      cleanup();
-      resolve(undefined);
+      finish(undefined);
     });
 
-    if (done) {
-      cancelSubscription.dispose();
+    if (cancellationToken.isCancellationRequested) {
+      finish(undefined);
     }
   });
 }

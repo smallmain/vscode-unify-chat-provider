@@ -1,18 +1,17 @@
 import OpenAI from 'openai';
 import * as vscode from 'vscode';
 import type { AuthTokenInfo } from '../../auth/types';
-import type { ProviderHttpLogger, RequestLogger } from '../../logger';
+import type { ProviderHttpLogger } from '../../logger';
 import {
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
   buildOpencodeUserAgent,
   resolveChatNetwork,
 } from '../../utils';
-import type { ModelConfig, PerformanceTrace } from '../../types';
+import type { ModelConfig } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
 import { OpenAIResponsesProvider } from './responses-client';
 import { randomBytes } from 'crypto';
-import { OPENCODE_CODEX_INSTRUCTIONS } from './codex-instructions';
 import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 
 const CODEX_API_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
@@ -78,6 +77,15 @@ function sanitizeCodexHeaders(headersInit: HeadersInit | undefined): Headers {
 }
 
 export class OpenAICodexProvider extends OpenAIResponsesProvider {
+  protected override getInputMessageRole(
+    role: vscode.LanguageModelChatMessageRole,
+  ) {
+    if (role === vscode.LanguageModelChatMessageRole.System) {
+      return 'developer';
+    }
+    return super.getInputMessageRole(role);
+  }
+
   protected override buildHeaders(
     sessionId: string,
     credential?: AuthTokenInfo,
@@ -112,7 +120,7 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     Object.assign(baseBody, {
       store: false,
       prompt_cache_key: sessionId,
-      instructions: OPENCODE_CODEX_INSTRUCTIONS,
+      instructions: '',
     });
   }
 
@@ -175,66 +183,12 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
       { id: 'gpt-5.1-codex-max', maxOutputTokens: undefined },
       { id: 'gpt-5.1-codex-mini', maxOutputTokens: undefined },
       { id: 'gpt-5.2', maxOutputTokens: undefined },
+      { id: 'gpt-5.4', maxOutputTokens: undefined },
       { id: 'gpt-5.2-codex', maxOutputTokens: undefined },
       { id: 'gpt-5.3-codex', maxOutputTokens: undefined },
       { id: 'gpt-5.3-codex-spark', maxOutputTokens: undefined },
       { id: 'gpt-5.1-codex', maxOutputTokens: undefined },
     ];
-  }
-
-  override async *streamChat(
-    encodedModelId: string,
-    model: ModelConfig,
-    messages: readonly vscode.LanguageModelChatRequestMessage[],
-    options: vscode.ProvideLanguageModelChatResponseOptions,
-    performanceTrace: PerformanceTrace,
-    token: vscode.CancellationToken,
-    logger: RequestLogger,
-    credential: AuthTokenInfo,
-  ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
-    const systemTextParts: string[] = [];
-    for (const message of messages) {
-      if (message.role !== vscode.LanguageModelChatMessageRole.System) {
-        continue;
-      }
-      for (const part of message.content) {
-        if (part instanceof vscode.LanguageModelTextPart) {
-          const text = part.value.trim();
-          if (text) {
-            systemTextParts.push(text);
-          }
-        }
-      }
-    }
-
-    const systemAsUserText =
-      systemTextParts.length > 0 ? systemTextParts.join('\n\n') : undefined;
-
-    const codexMessages: vscode.LanguageModelChatRequestMessage[] = messages
-      .filter(
-        (message) =>
-          message.role !== vscode.LanguageModelChatMessageRole.System,
-      )
-      .slice();
-
-    if (systemAsUserText) {
-      codexMessages.unshift({
-        role: vscode.LanguageModelChatMessageRole.User,
-        name: undefined,
-        content: [new vscode.LanguageModelTextPart(systemAsUserText)],
-      });
-    }
-
-    yield* super.streamChat(
-      encodedModelId,
-      model,
-      codexMessages,
-      options,
-      performanceTrace,
-      token,
-      logger,
-      credential,
-    );
   }
 }
 

@@ -46,7 +46,10 @@ export class GoogleAntigravityProvider extends GoogleCodeAssistProvider {
     // Sync rule: keep canonical model IDs used by this project config.
     // Do NOT copy reference project's "antigravity-*" prefixed IDs directly.
     return [
+      { id: 'gemini-2.5-flash' },
+      { id: 'gemini-2.5-flash-lite' },
       { id: 'gemini-3.1-pro' },
+      { id: 'gemini-3.1-flash-lite-preview' },
       { id: 'gemini-3-pro' },
       { id: 'gemini-3-flash' },
       { id: 'claude-sonnet-4-6' },

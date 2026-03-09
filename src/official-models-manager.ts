@@ -7,9 +7,15 @@ import { SecretStore } from './secret';
 import { normalizeBaseUrlInput } from './utils';
 import { t } from './i18n';
 import type { AuthConfig, AuthCredential, AuthTokenInfo } from './auth/types';
-import { createAuthProvider } from './auth/create-auth-provider';
-import type { AuthProviderContext } from './auth/auth-provider';
-import { getAuthMethodCtor, type AuthManager } from './auth';
+import { createAuthProvider, getAuthMethodCtor, type AuthManager } from './auth';
+import { mainInstance } from './main-instance';
+import {
+  isLeaderUnavailableError,
+  isVersionIncompatibleError,
+  MainInstanceError,
+} from './main-instance/errors';
+import type { EventedUriHandler } from './uri-handler';
+import type { ConfigStore } from './config-store';
 
 /**
  * State for a single provider's official models fetch
@@ -82,6 +88,11 @@ interface PersistedState {
   [providerName: string]: OfficialModelsFetchState;
 }
 
+type ApplyProviderStateSyncResult = {
+  applied: boolean;
+  state: OfficialModelsFetchState;
+};
+
 /**
  * Configuration for the exponential backoff
  */
@@ -115,10 +126,23 @@ const AUTH_REQUIRED_MESSAGE =
 export class OfficialModelsManager {
   private state: PersistedState = {};
   private extensionContext?: vscode.ExtensionContext;
-  private secretStore!: SecretStore;
+  private configStore?: ConfigStore;
+  private secretStore?: SecretStore;
   private authManager?: AuthManager;
+  private uriHandler?: EventedUriHandler;
   private fetchInProgress = new Map<string, Promise<ModelConfig[]>>();
   private readonly onDidUpdateEmitter = new vscode.EventEmitter<string>();
+  private readonly disposables: vscode.Disposable[] = [];
+  private syncRetryTimer?: ReturnType<typeof setTimeout>;
+  private providerStateSyncRetryTimer?: ReturnType<typeof setTimeout>;
+  private readonly backgroundFetchRetryTimers = new Map<
+    string,
+    ReturnType<typeof setTimeout>
+  >();
+  private readonly pendingProviderStateSyncs = new Map<
+    string,
+    OfficialModelsFetchState
+  >();
 
   /** Draft session states (in-memory only, keyed by session ID) */
   private draftSessions = new Map<string, DraftSessionState>();
@@ -128,18 +152,384 @@ export class OfficialModelsManager {
   /** Fired when a provider's or draft session's official models are updated */
   readonly onDidUpdate = this.onDidUpdateEmitter.event;
 
+  private isLeader(): boolean {
+    return mainInstance.isLeader();
+  }
+
+  private resolveConfiguredProvider(providerName: string): ProviderConfig | undefined {
+    return this.configStore?.getProvider(providerName);
+  }
+
+  private getStateCheckpoint(state: OfficialModelsFetchState | undefined): number {
+    if (!state) {
+      return 0;
+    }
+    return state.lastAttemptTime ?? state.lastErrorTime ?? state.lastFetchTime;
+  }
+
+  private shouldPreferProviderState(
+    current: OfficialModelsFetchState | undefined,
+    incoming: OfficialModelsFetchState,
+  ): boolean {
+    if (!current) {
+      return true;
+    }
+
+    const currentCheckpoint = this.getStateCheckpoint(current);
+    const incomingCheckpoint = this.getStateCheckpoint(incoming);
+    if (incomingCheckpoint !== currentCheckpoint) {
+      return incomingCheckpoint > currentCheckpoint;
+    }
+
+    const currentFetchTime = current.lastFetchTime ?? 0;
+    const incomingFetchTime = incoming.lastFetchTime ?? 0;
+    if (incomingFetchTime !== currentFetchTime) {
+      return incomingFetchTime > currentFetchTime;
+    }
+
+    if (current.modelsHash !== incoming.modelsHash) {
+      return incoming.modelsHash.trim() !== '' && current.modelsHash.trim() === '';
+    }
+
+    if (!current.lastConfigSignature && incoming.lastConfigSignature) {
+      return true;
+    }
+
+    if (
+      current.lastConfigSignature &&
+      incoming.lastConfigSignature &&
+      !this.signaturesEqual(current.lastConfigSignature, incoming.lastConfigSignature)
+    ) {
+      return true;
+    }
+
+    return false;
+  }
+
+  private async recoverAfterLeaderPromotion(): Promise<void> {
+    if (!this.isLeader()) {
+      return;
+    }
+
+    const updatedProviderNames: string[] = [];
+    for (const [providerName, state] of Object.entries(this.state)) {
+      if (!state?.isFetching) {
+        continue;
+      }
+      state.isFetching = false;
+      state.lastAttemptTime = 0;
+      updatedProviderNames.push(providerName);
+    }
+
+    if (updatedProviderNames.length === 0) {
+      return;
+    }
+
+    await this.saveState();
+    for (const providerName of updatedProviderNames) {
+      this.onDidUpdateEmitter.fire(providerName);
+      this.broadcastProviderUpdate(providerName);
+    }
+  }
+
+  private scheduleRecoveryAfterLeaderPromotion(): void {
+    void this
+      .recoverAfterLeaderPromotion()
+      .then(() => this.flushPendingProviderStateSyncs())
+      .catch((error) => {
+        console.error(
+          '[unify-chat-provider] Failed to recover official-model state after leader promotion.',
+          error,
+        );
+      });
+  }
+
+  getSnapshotForFollowers(): PersistedState {
+    return { ...this.state };
+  }
+
+  private async commitProviderState(
+    providerName: string,
+    state: OfficialModelsFetchState,
+  ): Promise<void> {
+    this.state[providerName] = { ...state };
+    await this.saveState();
+    this.onDidUpdateEmitter.fire(providerName);
+    this.broadcastProviderUpdate(providerName);
+  }
+
+  private applyAuthoritativeProviderState(
+    providerName: string,
+    state: OfficialModelsFetchState,
+  ): void {
+    const previous = this.state[providerName];
+    const changed =
+      !previous || stableStringify(previous) !== stableStringify(state);
+    this.state[providerName] = { ...state };
+    if (changed) {
+      this.onDidUpdateEmitter.fire(providerName);
+    }
+  }
+
+  private async commitLocalProviderStateAndQueueSync(
+    providerName: string,
+    state: OfficialModelsFetchState,
+  ): Promise<void> {
+    await this.commitProviderState(providerName, state);
+
+    if (this.isLeader()) {
+      this.pendingProviderStateSyncs.delete(providerName);
+      return;
+    }
+
+    this.pendingProviderStateSyncs.set(providerName, { ...state });
+    this.schedulePendingProviderStateSyncRetry();
+  }
+
+  async applyProviderStateFromSync(
+    providerName: string,
+    state: OfficialModelsFetchState,
+  ): Promise<ApplyProviderStateSyncResult> {
+    const current = this.state[providerName];
+    if (!this.shouldPreferProviderState(current, state)) {
+      return {
+        applied: false,
+        state: current ? { ...current } : { ...state },
+      };
+    }
+    await this.commitProviderState(providerName, state);
+    return { applied: true, state: { ...state } };
+  }
+
+  private broadcastProviderUpdate(providerName: string): void {
+    if (!this.isLeader()) {
+      return;
+    }
+    mainInstance.broadcast('officialModels.updated', {
+      providerName,
+      state: this.state[providerName] ?? null,
+    });
+  }
+
+  private applyLeaderUpdate(payload: unknown): void {
+    if (this.isLeader()) {
+      return;
+    }
+    if (!payload || typeof payload !== 'object' || Array.isArray(payload)) {
+      return;
+    }
+    const record = payload as Record<string, unknown>;
+    const providerName = record['providerName'];
+    if (typeof providerName !== 'string' || providerName.trim() === '') {
+      return;
+    }
+
+    const stateValue = record['state'];
+    if (stateValue === null) {
+      delete this.state[providerName];
+    } else if (stateValue && typeof stateValue === 'object' && !Array.isArray(stateValue)) {
+      this.state[providerName] = stateValue as OfficialModelsFetchState;
+    }
+
+    this.onDidUpdateEmitter.fire(providerName);
+  }
+
+  private applySnapshotFromLeader(snapshot: unknown): void {
+    if (!snapshot || typeof snapshot !== 'object' || Array.isArray(snapshot)) {
+      return;
+    }
+
+    const updatedProviderNames = new Set<string>(Object.keys(this.state));
+    const next: PersistedState = {};
+    for (const [providerName, raw] of Object.entries(
+      snapshot as Record<string, unknown>,
+    )) {
+      if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+        continue;
+      }
+      next[providerName] = raw as OfficialModelsFetchState;
+      updatedProviderNames.add(providerName);
+    }
+
+    for (const [providerName, state] of Array.from(
+      this.pendingProviderStateSyncs.entries(),
+    )) {
+      const current = next[providerName];
+      if (this.shouldPreferProviderState(current, state)) {
+        next[providerName] = { ...state };
+        updatedProviderNames.add(providerName);
+        continue;
+      }
+      this.pendingProviderStateSyncs.delete(providerName);
+    }
+
+    this.state = next;
+    for (const providerName of updatedProviderNames) {
+      this.onDidUpdateEmitter.fire(providerName);
+    }
+  }
+
+  private async syncFromLeader(): Promise<void> {
+    if (this.isLeader()) {
+      return;
+    }
+
+    try {
+      const snapshot = await mainInstance.runInLeaderWhenAvailable<unknown>(
+        'officialModels.getSnapshot',
+        {},
+      );
+      this.applySnapshotFromLeader(snapshot);
+    } catch (error) {
+      if (
+        (error instanceof MainInstanceError &&
+          error.code === 'NOT_IMPLEMENTED') ||
+        isLeaderUnavailableError(error)
+      ) {
+        this.scheduleSyncRetry();
+      }
+    }
+  }
+
+  private scheduleSyncRetry(): void {
+    if (this.isLeader() || this.syncRetryTimer) {
+      return;
+    }
+    this.syncRetryTimer = setTimeout(() => {
+      this.syncRetryTimer = undefined;
+      void this.syncFromLeader();
+    }, 250);
+  }
+
+  private schedulePendingProviderStateSyncRetry(): void {
+    if (
+      this.pendingProviderStateSyncs.size === 0 ||
+      this.providerStateSyncRetryTimer
+    ) {
+      return;
+    }
+
+    this.providerStateSyncRetryTimer = setTimeout(() => {
+      this.providerStateSyncRetryTimer = undefined;
+      void this.flushPendingProviderStateSyncs();
+    }, 250);
+  }
+
+  private async flushPendingProviderStateSyncs(): Promise<void> {
+    if (this.pendingProviderStateSyncs.size === 0) {
+      return;
+    }
+
+    for (const [providerName, state] of Array.from(
+      this.pendingProviderStateSyncs.entries(),
+    )) {
+      try {
+        if (this.isLeader()) {
+          await this.applyProviderStateFromSync(providerName, state);
+        } else {
+          const response = await mainInstance.runInLeaderWhenAvailable<unknown>(
+            'officialModels.applyProviderState',
+            {
+              providerName,
+              state,
+            },
+          );
+          const result = this.parseApplyProviderStateResponse(
+            response,
+            'officialModels.applyProviderState',
+          );
+          this.applyAuthoritativeProviderState(providerName, result.state);
+        }
+        this.pendingProviderStateSyncs.delete(providerName);
+      } catch (error) {
+        if (
+          (error instanceof MainInstanceError &&
+            error.code === 'NOT_IMPLEMENTED') ||
+          isLeaderUnavailableError(error) ||
+          isVersionIncompatibleError(error)
+        ) {
+          this.schedulePendingProviderStateSyncRetry();
+          return;
+        }
+        throw error;
+      }
+    }
+  }
+
+  private clearBackgroundFetchRetry(providerName: string): void {
+    const timer = this.backgroundFetchRetryTimers.get(providerName);
+    if (!timer) {
+      return;
+    }
+    clearTimeout(timer);
+    this.backgroundFetchRetryTimers.delete(providerName);
+  }
+
+  private scheduleBackgroundFetchRetry(provider: ProviderConfig): void {
+    this.clearBackgroundFetchRetry(provider.name);
+    const timer = setTimeout(() => {
+      this.backgroundFetchRetryTimers.delete(provider.name);
+      this.triggerBackgroundFetch(provider);
+    }, 250);
+    this.backgroundFetchRetryTimers.set(provider.name, timer);
+  }
+
   /**
    * Initialize the manager with VS Code extension context
    */
   async initialize(
     context: vscode.ExtensionContext,
+    configStore: ConfigStore,
     secretStore: SecretStore,
     authManager?: AuthManager,
+    uriHandler?: EventedUriHandler,
   ): Promise<void> {
+    for (const disposable of this.disposables.splice(0)) {
+      disposable.dispose();
+    }
+    if (this.syncRetryTimer) {
+      clearTimeout(this.syncRetryTimer);
+      this.syncRetryTimer = undefined;
+    }
+    if (this.providerStateSyncRetryTimer) {
+      clearTimeout(this.providerStateSyncRetryTimer);
+      this.providerStateSyncRetryTimer = undefined;
+    }
+    for (const timer of this.backgroundFetchRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.backgroundFetchRetryTimers.clear();
+
     this.extensionContext = context;
+    this.configStore = configStore;
     this.secretStore = secretStore;
     this.authManager = authManager;
+    this.uriHandler = uriHandler;
     await this.loadState();
+
+    this.disposables.push(
+      mainInstance.onDidReceiveEvent(({ event, payload }) => {
+        if (event === 'officialModels.updated') {
+          this.applyLeaderUpdate(payload);
+        }
+      }),
+    );
+
+    this.disposables.push(
+      mainInstance.onDidChangeRole(({ role }) => {
+        if (role === 'leader') {
+          this.scheduleRecoveryAfterLeaderPromotion();
+          return;
+        }
+        void this.syncFromLeader();
+      }),
+    );
+
+    if (this.isLeader()) {
+      this.scheduleRecoveryAfterLeaderPromotion();
+    } else {
+      void this.syncFromLeader();
+    }
   }
 
   /**
@@ -159,7 +549,7 @@ export class OfficialModelsManager {
    * Note: isFetching is excluded as it's a runtime-only state
    */
   private async saveState(): Promise<void> {
-    if (!this.extensionContext) return;
+    if (!this.extensionContext || !this.isLeader()) return;
     const stateToSave: PersistedState = {};
     for (const [key, value] of Object.entries(this.state)) {
       const { isFetching: _, ...rest } = value;
@@ -296,6 +686,11 @@ export class OfficialModelsManager {
     throwError = false,
   ): Promise<ModelConfig[]> {
     const providerName = provider.name;
+    const activeProvider =
+      this.isLeader() ? this.resolveConfiguredProvider(providerName) : provider;
+    if (!activeProvider) {
+      return [];
+    }
 
     // If a fetch is already in progress for this provider, wait for it
     const inProgress = this.fetchInProgress.get(providerName);
@@ -304,7 +699,7 @@ export class OfficialModelsManager {
     }
 
     const existingState = this.state[providerName];
-    const currentSignature = await this.computeConfigSignature(provider);
+    const currentSignature = await this.computeConfigSignature(activeProvider);
 
     const configChanged =
       !!existingState &&
@@ -323,8 +718,45 @@ export class OfficialModelsManager {
       }
     }
 
+    if (!this.isLeader()) {
+      const fetchPromise = this.fetchFromLeader(provider, shouldForceFetch).catch(
+        async (error) => {
+          if (isVersionIncompatibleError(error)) {
+            if (shouldForceFetch) {
+              throw error;
+            }
+            return existingState?.models ?? [];
+          }
+          if (
+            error instanceof MainInstanceError &&
+            (error.code === 'NO_LEADER' || error.code === 'LEADER_GONE')
+          ) {
+            if (this.isLeader()) {
+              const leaderProvider = this.resolveConfiguredProvider(providerName);
+              if (!leaderProvider) {
+                return [];
+              }
+              const leaderSignature = await this.computeConfigSignature(
+                leaderProvider,
+              );
+              return await this.doFetch(leaderProvider, leaderSignature);
+            }
+            return existingState?.models ?? [];
+          }
+          throw error;
+        },
+      );
+      this.fetchInProgress.set(providerName, fetchPromise);
+
+      try {
+        return await fetchPromise;
+      } finally {
+        this.fetchInProgress.delete(providerName);
+      }
+    }
+
     // Start a new fetch
-    const fetchPromise = this.doFetch(provider, currentSignature);
+    const fetchPromise = this.doFetch(activeProvider, currentSignature);
     this.fetchInProgress.set(providerName, fetchPromise);
 
     try {
@@ -332,6 +764,67 @@ export class OfficialModelsManager {
     } finally {
       this.fetchInProgress.delete(providerName);
     }
+  }
+
+  private async fetchFromLeader(
+    provider: ProviderConfig,
+    forceFetch: boolean,
+  ): Promise<ModelConfig[]> {
+    const response = await mainInstance.runInLeaderWhenAvailable<unknown>(
+      'officialModels.getOfficialModels',
+      { providerName: provider.name, forceFetch },
+    );
+
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+      throw new MainInstanceError(
+        'BAD_REQUEST',
+        'officialModels.getOfficialModels: invalid response',
+      );
+    }
+
+    const record = response as Record<string, unknown>;
+    const modelsValue = record['models'];
+    const stateValue = record['state'];
+
+    if (!Array.isArray(modelsValue)) {
+      throw new MainInstanceError(
+        'BAD_REQUEST',
+        'officialModels.getOfficialModels: invalid response',
+      );
+    }
+
+    if (stateValue && typeof stateValue === 'object' && !Array.isArray(stateValue)) {
+      this.applyAuthoritativeProviderState(
+        provider.name,
+        stateValue as OfficialModelsFetchState,
+      );
+    }
+
+    return modelsValue as ModelConfig[];
+  }
+
+  private parseApplyProviderStateResponse(
+    value: unknown,
+    method: string,
+  ): ApplyProviderStateSyncResult {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      throw new MainInstanceError('BAD_REQUEST', `${method}: invalid response`);
+    }
+
+    const record = value as Record<string, unknown>;
+    const applied = record['applied'];
+    const stateValue = record['state'];
+    if (typeof applied !== 'boolean') {
+      throw new MainInstanceError('BAD_REQUEST', `${method}: invalid response`);
+    }
+    if (!stateValue || typeof stateValue !== 'object' || Array.isArray(stateValue)) {
+      throw new MainInstanceError('BAD_REQUEST', `${method}: invalid response`);
+    }
+
+    return {
+      applied,
+      state: stateValue as OfficialModelsFetchState,
+    };
   }
 
   /**
@@ -351,6 +844,7 @@ export class OfficialModelsManager {
       state.lastConfigSignature = signature;
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
+      this.broadcastProviderUpdate(providerName);
       return state.models;
     }
 
@@ -358,6 +852,7 @@ export class OfficialModelsManager {
     state.isFetching = true;
     state.lastConfigSignature = signature;
     this.onDidUpdateEmitter.fire(providerName);
+    this.broadcastProviderUpdate(providerName);
 
     try {
       const credential = await this.resolveCredentialForPersistedProvider(
@@ -369,6 +864,7 @@ export class OfficialModelsManager {
         state.lastConfigSignature = signature;
         await this.saveState();
         this.onDidUpdateEmitter.fire(providerName);
+        this.broadcastProviderUpdate(providerName);
         return state.models;
       }
 
@@ -396,6 +892,7 @@ export class OfficialModelsManager {
 
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
+      this.broadcastProviderUpdate(providerName);
 
       return models;
     } catch (error) {
@@ -408,6 +905,7 @@ export class OfficialModelsManager {
       state.lastConfigSignature = signature;
       await this.saveState();
       this.onDidUpdateEmitter.fire(providerName);
+      this.broadcastProviderUpdate(providerName);
       return state.models;
     }
   }
@@ -550,7 +1048,10 @@ export class OfficialModelsManager {
       return undefined;
     }
 
-    const credential = await this.authManager.getCredential(provider.name);
+    const credential = await this.authManager.getCredential(
+      provider.name,
+      'background',
+    );
     return this.toAuthTokenInfo(credential);
   }
 
@@ -562,19 +1063,29 @@ export class OfficialModelsManager {
       return { kind: 'none' };
     }
 
-    const context: AuthProviderContext = {
-      providerId: provider.name,
-      providerLabel: provider.name,
-      secretStore: this.secretStore,
-    };
+    if (!this.secretStore) {
+      return undefined;
+    }
 
-    const authProvider = createAuthProvider(context, auth);
+    const authProvider = createAuthProvider(
+      {
+        providerId: provider.name,
+        providerLabel: provider.name,
+        secretStore: this.secretStore,
+        uriHandler: this.uriHandler,
+      },
+      auth,
+    );
+
+    if (!authProvider) {
+      return undefined;
+    }
 
     try {
-      const credential = await authProvider?.getCredential();
+      const credential = await authProvider.getCredential();
       return this.toAuthTokenInfo(credential);
     } finally {
-      authProvider?.dispose?.();
+      authProvider.dispose?.();
     }
   }
 
@@ -600,14 +1111,44 @@ export class OfficialModelsManager {
   /**
    * Force refresh official models for all providers with autoFetchOfficialModels enabled
    */
-  async refreshAll(providers: ProviderConfig[]): Promise<void> {
-    const enabledProviders = providers.filter((p) => p.autoFetchOfficialModels);
+  async refreshAll(providers?: ProviderConfig[]): Promise<number> {
+    if (!this.isLeader()) {
+      const response = await mainInstance.runInLeaderWhenAvailable<unknown>(
+        'officialModels.refreshAll',
+        providers && providers.length > 0
+          ? {
+              providerNames: providers.map((provider) => provider.name),
+            }
+          : {},
+      );
+      if (!response || typeof response !== 'object' || Array.isArray(response)) {
+        throw new MainInstanceError(
+          'BAD_REQUEST',
+          'officialModels.refreshAll: invalid response',
+        );
+      }
+      const count = (response as Record<string, unknown>)['count'];
+      if (typeof count !== 'number' || !Number.isFinite(count)) {
+        throw new MainInstanceError(
+          'BAD_REQUEST',
+          'officialModels.refreshAll: invalid response',
+        );
+      }
+      return count;
+    }
+
+    const currentProviders = providers ?? this.configStore?.endpoints ?? [];
+    const enabledProviders = currentProviders.filter(
+      (p) => p.autoFetchOfficialModels,
+    );
 
     await Promise.all(
       enabledProviders.map((provider) =>
         this.getOfficialModels(provider, true),
       ),
     );
+
+    return enabledProviders.length;
   }
 
   /**
@@ -623,15 +1164,52 @@ export class OfficialModelsManager {
    * The onDidUpdate event will fire when the fetch completes.
    */
   triggerBackgroundFetch(provider: ProviderConfig): void {
-    void this.getOfficialModels(provider, false);
+    if (!this.isLeader()) {
+      void mainInstance
+        .runInLeaderWhenAvailable('officialModels.triggerBackgroundFetch', {
+          providerName: provider.name,
+        })
+        .then(() => {
+          this.clearBackgroundFetchRetry(provider.name);
+        })
+        .catch((error) => {
+          if (isLeaderUnavailableError(error)) {
+            if (this.isLeader()) {
+              void this.getOfficialModels(provider, false);
+              return;
+            }
+            this.scheduleBackgroundFetchRetry(provider);
+          }
+        });
+      return;
+    }
+
+    const currentProvider = this.resolveConfiguredProvider(provider.name);
+    this.clearBackgroundFetchRetry(provider.name);
+    if (!currentProvider) {
+      return;
+    }
+    void this.getOfficialModels(currentProvider, false);
   }
 
   /**
    * Clear state for a provider
    */
   async clearProviderState(providerName: string): Promise<void> {
+    if (!this.isLeader()) {
+      await mainInstance.runInLeaderWhenAvailable(
+        'officialModels.clearProviderState',
+        {
+          providerName,
+        },
+      );
+      return;
+    }
+
     delete this.state[providerName];
     await this.saveState();
+    this.onDidUpdateEmitter.fire(providerName);
+    this.broadcastProviderUpdate(providerName);
   }
 
   private async computeConfigSignature(
@@ -863,6 +1441,12 @@ export class OfficialModelsManager {
       this.onDidUpdateEmitter.fire(sessionId);
       return models;
     } catch (error) {
+      if (isLeaderUnavailableError(error)) {
+        session.state.isFetching = false;
+        this.onDidUpdateEmitter.fire(sessionId);
+        return session.state.models;
+      }
+
       const errorMessage =
         error instanceof Error ? error.message : String(error);
 
@@ -941,12 +1525,44 @@ export class OfficialModelsManager {
     const session = this.draftSessions.get(sessionId);
     if (!session) return;
 
-    // Copy draft state to persisted state
-    this.state[providerName] = {
+    const nextState: OfficialModelsFetchState = {
       ...session.state,
+      isFetching: false,
       lastConfigSignature: session.configSignature,
     };
-    await this.saveState();
+
+    if (!this.isLeader()) {
+      try {
+        const response = await mainInstance.runInLeaderWhenAvailable<unknown>(
+          'officialModels.applyProviderState',
+          {
+            providerName,
+            state: nextState,
+          },
+        );
+        const result = this.parseApplyProviderStateResponse(
+          response,
+          'officialModels.applyProviderState',
+        );
+        this.pendingProviderStateSyncs.delete(providerName);
+        this.applyAuthoritativeProviderState(providerName, result.state);
+      } catch (error) {
+        if (!isLeaderUnavailableError(error)) {
+          throw error;
+        }
+        if (this.isLeader()) {
+          await this.commitProviderState(providerName, nextState);
+        } else {
+          await this.commitLocalProviderStateAndQueueSync(
+            providerName,
+            nextState,
+          );
+        }
+      }
+    } else {
+      this.pendingProviderStateSyncs.delete(providerName);
+      await this.commitProviderState(providerName, nextState);
+    }
 
     // Clean up draft session
     this.draftSessions.delete(sessionId);
@@ -974,6 +1590,22 @@ export class OfficialModelsManager {
   }
 
   dispose(): void {
+    for (const disposable of this.disposables.splice(0)) {
+      disposable.dispose();
+    }
+    if (this.syncRetryTimer) {
+      clearTimeout(this.syncRetryTimer);
+      this.syncRetryTimer = undefined;
+    }
+    if (this.providerStateSyncRetryTimer) {
+      clearTimeout(this.providerStateSyncRetryTimer);
+      this.providerStateSyncRetryTimer = undefined;
+    }
+    for (const timer of this.backgroundFetchRetryTimers.values()) {
+      clearTimeout(timer);
+    }
+    this.backgroundFetchRetryTimers.clear();
+    this.pendingProviderStateSyncs.clear();
     this.onDidUpdateEmitter.dispose();
   }
 }

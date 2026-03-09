@@ -1,5 +1,45 @@
 # Changelog
 
+## v5.1.0 - 2026-03-09
+
+### Features
+- add previous_response_id handling for OpenAI responses API (638c440, SmallMain)
+- add service tier support (e49f29a, SmallMain)
+
+### Fixes
+- remove deprecated gemini-3.1-pro-preview-customtools model ID (1e4691e, SmallMain)
+- add default instructions field to OpenAICodexProvider request body (1f6eb6d, SmallMain)
+- update CLI clients (44c89dd, SmallMain)
+- update formats (e3f5e2a, SmallMain)
+- update QwenCode client headers and model configs (10ec83a, SmallMain)
+
+### Chores
+- update CLI clients and tools in agent configuration (fb6460b, SmallMain)
+- Update CLI clients and synchronize model IDs according to reference projects (8bcc9b3, SmallMain)
+
+## v5.0.0 - 2026-03-08
+
+### Breaking Changes
+- accepts only globally scoped configurations (300a7a8, SmallMain)
+
+### Features
+- add GPT-5.4 model support (98769e5, SmallMain)
+- add Gemini 3.1 Flash Lite Preview model (3ce0c9d, SmallMain)
+- add Qwen 3.5 series tiny models (ad8bf86, SmallMain)
+- refactor to multi-window instance anti-concurrency strategy (7278bdb, SmallMain)
+- add Synthetic.new provider docs and balance checker (7983ac3, Matt Cowger)
+- add Synthetic.new well-known provider and models (afc9364, Matt Cowger)
+
+### Fixes
+- update formatting functions for model selection and enhance balance snapshot normalization (a8ab026, SmallMain)
+- update Synthetic provider translates and documentation (a62db6e, SmallMain)
+- google: merge streaming functionCall chunks to prevent empty name errors (ab8e96d, Matt Cowger)
+
+### Chores
+- update dependencies (070e527, SmallMain)
+- update CLI clients to sync with reference projects (a937c6c, SmallMain)
+- update vscode dts (259605b, SmallMain)
+
 ## v4.9.4 - 2026-02-26
 
 ### Fixes

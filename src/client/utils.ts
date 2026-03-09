@@ -305,6 +305,51 @@ export function mergeHeaders(
   return result;
 }
 
+export function resolveOpenAIServiceTier(
+  provider: ProviderConfig,
+  model: ModelConfig,
+): 'auto' | 'default' | 'flex' | 'scale' | 'priority' | undefined {
+  if (!matchProvider(provider.baseUrl, 'api.openai.com')) {
+    return undefined;
+  }
+
+  switch (model.serviceTier) {
+    case 'auto':
+      return 'auto';
+    case 'standard':
+      return 'default';
+    case 'flex':
+      return 'flex';
+    case 'scale':
+      return 'scale';
+    case 'priority':
+      return 'priority';
+    default:
+      return undefined;
+  }
+}
+
+export function resolveAnthropicServiceTier(
+  provider: ProviderConfig,
+  model: ModelConfig,
+): 'auto' | 'standard_only' | undefined {
+  if (!matchProvider(provider.baseUrl, 'api.anthropic.com')) {
+    return undefined;
+  }
+
+  switch (model.serviceTier) {
+    case 'auto':
+      return 'auto';
+    case 'standard':
+    case 'flex':
+    case 'scale':
+    case 'priority':
+      return 'standard_only';
+    default:
+      return undefined;
+  }
+}
+
 const HEADER_VALUE_PLACEHOLDER_PATTERN = /\$\{([A-Z0-9_]+)\}/g;
 
 /**

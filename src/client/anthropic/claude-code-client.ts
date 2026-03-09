@@ -23,6 +23,20 @@ function createClaudeCodeSystemPrompt(): BetaTextBlockParam {
   };
 }
 
+function createClaudeCodeBillingHeaderPrompt(
+  requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
+): BetaTextBlockParam {
+  const cch = createHash('sha256')
+    .update(JSON.stringify(requestBase), 'utf8')
+    .digest('hex')
+    .slice(0, 5);
+  const buildHash = randomBytes(2).toString('hex').slice(0, 3);
+  return {
+    type: 'text',
+    text: `x-anthropic-billing-header: cc_version=${DEFAULT_CLAUDE_CODE_CLI_VERSION}.${buildHash}; cc_entrypoint=cli; cch=${cch};`,
+  };
+}
+
 const MCP_TOOL_PREFIX = 'mcp_';
 const NON_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
   'memory',
@@ -154,7 +168,12 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     headers['anthropic-version'] = '2023-06-01';
     headers['anthropic-dangerous-direct-browser-access'] = 'true';
     headers['Content-Type'] = 'application/json';
-    headers['Accept'] = 'application/json';
+    headers['Accept'] = options?.stream
+      ? 'text/event-stream'
+      : 'application/json';
+    headers['Accept-Encoding'] = options?.stream
+      ? 'identity'
+      : 'gzip, deflate, br, zstd';
 
     headers['X-Stainless-Lang'] = 'js';
     headers['X-Stainless-Package-Version'] = sdkVersion;
@@ -186,6 +205,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     options.betaFeatures.add('interleaved-thinking-2025-05-14');
     options.betaFeatures.add('context-management-2025-06-27');
+    options.betaFeatures.add('prompt-caching-scope-2026-01-05');
   }
 
   protected override transformRequestBase(
@@ -207,9 +227,12 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     // - Strip top_p (only when NORMALIZE_PARAMS=true)
     const systemBlocks = toTextBlocks(requestBase.system);
     const claudeSystemPrompt = createClaudeCodeSystemPrompt();
+    const claudeBillingPrompt =
+      createClaudeCodeBillingHeaderPrompt(requestBase);
     const mergedSystem = strictMode
-      ? [claudeSystemPrompt]
+      ? [claudeBillingPrompt, claudeSystemPrompt]
       : [
+          claudeBillingPrompt,
           claudeSystemPrompt,
           ...systemBlocks.map((v) => {
             v.text = `${CLAUDE_CODE_SYSTEM_PROMPT_TEXT}\n\n${v.text}`;

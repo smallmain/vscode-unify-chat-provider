@@ -569,12 +569,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
           'Refresh token was revoked (invalid_grant); reauthentication required',
         );
         await this.revoke();
-        this._onDidChangeStatus.fire({ status: 'revoked' });
-        vscode.window.showWarningMessage(
-          t(
-            'Google revoked your Antigravity refresh token. Please sign in again.',
-          ),
-        );
+        this._onDidChangeStatus.fire({ status: 'revoked', errorType: 'auth_error' });
         return false;
       }
 

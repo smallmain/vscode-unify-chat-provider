@@ -109,6 +109,8 @@ export interface ModelConfig {
   presencePenalty?: number;
   /** Parallel tool calling (true to enable, false to disable, undefined to use default) */
   parallelToolCalling?: boolean;
+  /** Service tier / processing tier */
+  serviceTier?: 'auto' | 'standard' | 'flex' | 'scale' | 'priority';
   /**
    * Constrains response verbosity. Lower = concise, higher = verbose.
    * Supported values: low | medium | high.

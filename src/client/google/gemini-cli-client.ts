@@ -107,13 +107,13 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
     // Sync rule: this list should match local canonical model IDs for Gemini CLI.
     // Do NOT import Antigravity-prefixed or proxy-specific resolver aliases.
     return [
-      { id: 'gemini-3.1-pro-preview' },
-      { id: 'gemini-3.1-pro-preview-customtools' },
-      { id: 'gemini-3-pro-preview' },
-      { id: 'gemini-3-flash-preview' },
       { id: 'gemini-2.5-pro' },
       { id: 'gemini-2.5-flash' },
-      { id: 'gemini-2.0-flash' },
+      { id: 'gemini-2.5-flash-lite' },
+      { id: 'gemini-3-pro-preview' },
+      { id: 'gemini-3.1-pro-preview' },
+      { id: 'gemini-3-flash-preview' },
+      { id: 'gemini-3.1-flash-lite-preview' },
     ];
   }
 }
