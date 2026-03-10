@@ -1,5 +1,16 @@
 # Changelog
 
+## v5.2.0 - 2026-03-10
+
+### Features
+- claude relay service balance provider with configurable base URL (f7be2ad, SmallMain)
+
+### Fixes
+- remove deprecated iFlow CLI from README files (61f2910, SmallMain)
+
+### Chores
+- update ModelConfig fields and add service tier notes in README files (7df2123, SmallMain)
+
 ## v5.1.0 - 2026-03-09
 
 ### Features
