@@ -85,6 +85,7 @@ export interface ModelViewRoute {
   providerLabel?: string;
   providerType?: ProviderType;
   model: ModelConfig;
+  models: ModelConfig[];
 }
 
 export interface ModelSelectionRoute {

@@ -54,7 +54,11 @@ export async function runModelFormScreen(
   const selection = await pickQuickItem<FormItem<ModelConfig>>({
     title: route.model
       ? isImportMode
-        ? t('Edit Model ({0}){1}', route.model.name || route.model.id, providerSuffix)
+        ? t(
+            'Edit Model ({0}){1}',
+            route.model.name || route.model.id,
+            providerSuffix,
+          )
         : t('Model: {0}{1}', route.model.name || route.model.id, providerSuffix)
       : t('Add Model{0}', providerSuffix),
     placeholder: t('Select a field to edit'),
@@ -66,7 +70,9 @@ export async function runModelFormScreen(
         isEditing: !isImportMode && !!route.model,
         hasExport: !isImportMode,
         backLabel: `$(arrow-left) ${t('Back')}`,
-        saveLabel: isImportMode ? `$(check) ${t('Done')}` : `$(check) ${t('Save')}`,
+        saveLabel: isImportMode
+          ? `$(check) ${t('Done')}`
+          : `$(check) ${t('Save')}`,
       },
       context,
     ),
@@ -154,12 +160,12 @@ export async function runModelViewScreen(
   const providerSuffix = route.providerLabel ? ` (${route.providerLabel})` : '';
 
   const context: ModelFieldContext = {
-    models: [],
+    models: route.models,
     originalId: model.id,
     providerType: route.providerType,
   };
 
-  // Build read-only items (no confirm, no duplicate/delete, only export)
+  // Build read-only items (no confirm/delete, but allow export + duplicate)
   const readOnlyItems = buildFormItems(
     modelFormSchema,
     model,
@@ -170,9 +176,17 @@ export async function runModelViewScreen(
     },
     context,
   );
+  readOnlyItems.push({
+    label: `$(files) ${t('Duplicate')}`,
+    action: 'duplicate',
+  });
 
   const selection = await pickQuickItem<FormItem<ModelConfig>>({
-    title: t('Model: {0}{1} (Read-Only)', route.model.name || route.model.id, providerSuffix),
+    title: t(
+      'Model: {0}{1} (Read-Only)',
+      route.model.name || route.model.id,
+      providerSuffix,
+    ),
     placeholder: t('Select a field to view'),
     ignoreFocusOut: true,
     items: readOnlyItems,
@@ -184,6 +198,15 @@ export async function runModelViewScreen(
 
   if (selection.action === 'export') {
     await showCopiedBase64Config(model);
+    return { kind: 'stay' };
+  }
+
+  if (selection.action === 'duplicate') {
+    const duplicated = duplicateModel(model, route.models);
+    route.models.push(duplicated);
+    vscode.window.showInformationMessage(
+      t('Model duplicated as "{0}".', duplicated.id),
+    );
     return { kind: 'stay' };
   }
 
