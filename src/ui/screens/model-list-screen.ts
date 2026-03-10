@@ -183,10 +183,6 @@ export async function runModelListScreen(
         return { ...event.item, action: 'export-model' };
       }
 
-      if (isOfficial) {
-        return;
-      }
-
       if (buttonIndex === 1) {
         const duplicated = duplicateModel(model, route.models);
         route.models.push(duplicated);
@@ -194,6 +190,10 @@ export async function runModelListScreen(
           t('Model duplicated as "{0}".', duplicated.id),
         );
         qp.items = buildModelListItems(route, includeSave);
+        return;
+      }
+
+      if (isOfficial) {
         return;
       }
 
@@ -416,6 +416,7 @@ export async function runModelListScreen(
         route: {
           kind: 'modelView',
           model: selectedModel,
+          models: route.models,
           providerLabel: route.draft?.name ?? route.providerLabel,
           providerType: route.draft?.type,
         },
@@ -568,6 +569,10 @@ function buildModelListItems(
             iconPath: new vscode.ThemeIcon('export'),
             tooltip: t('Export as Base64 config'),
           },
+          {
+            iconPath: new vscode.ThemeIcon('files'),
+            tooltip: t('Duplicate model'),
+          },
         ],
       });
     }
@@ -629,8 +634,8 @@ function formatFetchStatus(state: OfficialModelsFetchState | undefined): {
     const errorDate = state.lastErrorTime
       ? new Date(state.lastErrorTime)
       : state.lastFetchTime
-      ? new Date(state.lastFetchTime)
-      : new Date();
+        ? new Date(state.lastFetchTime)
+        : new Date();
     return {
       label: `$(warning) ${t('Last attempt: {0}', formatTimeAgo(errorDate))}`,
       detail: t('Error: {0}', state.lastError),

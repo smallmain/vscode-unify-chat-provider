@@ -910,6 +910,7 @@ export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 const IMAGE_MODEL_PATTERN = /image|imagen/i;
 const GEMINI_3_TIER_SUFFIX = /-(minimal|low|medium|high)$/i;
 const GEMINI_3_PRO_PATTERN = /^gemini-3(?:\.\d+)?-pro/i;
+const CLAUDE_THINKING_SUFFIX = /-thinking$/i;
 const CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY = 32768;
 const CLAUDE_OPUS_LOW_THINKING_BUDGET_ANTIGRAVITY = 8192;
 const CLAUDE_OPUS_MAX_OUTPUT_TOKENS_ANTIGRAVITY = 64000;
@@ -1085,11 +1086,16 @@ export function resolveAntigravityModelForRequest(
   const trimmed = modelId.trim();
   const modelLower = trimmed.toLowerCase();
 
-  // Handle Claude models with dynamic -thinking suffix
+  // Antigravity currently exposes Claude Opus as a dedicated `-thinking`
+  // request model, while Claude Sonnet keeps its canonical model ID even
+  // when thinking is enabled. Normalize any existing suffix first so we do
+  // not accidentally produce `-thinking-thinking`.
   if (modelLower.includes('claude')) {
-    const isOpus = modelLower.includes('opus');
-    const shouldAddThinking = isOpus || thinkingEnabled === true;
-    const requestModelId = shouldAddThinking ? `${trimmed}-thinking` : trimmed;
+    const baseClaudeModelId = trimmed.replace(CLAUDE_THINKING_SUFFIX, '');
+    const isOpus = baseClaudeModelId.toLowerCase().includes('opus');
+    const requestModelId = isOpus
+      ? `${baseClaudeModelId}-thinking`
+      : baseClaudeModelId;
     return { requestModelId };
   }
 

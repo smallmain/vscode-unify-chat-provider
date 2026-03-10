@@ -36,6 +36,7 @@ import {
 } from './main-instance/compatibility';
 import { registerMainInstanceHandlers } from './main-instance/register-handlers';
 import { authLog } from './logger';
+import { webSocketSessionManager } from './client/websocket-session-manager';
 
 const VENDOR_ID = 'unify-chat-provider';
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -213,6 +214,7 @@ export async function activate(
     extensionContext: context,
   });
   context.subscriptions.push(balanceManager);
+  context.subscriptions.push(webSocketSessionManager);
 
   const chatProvider = new UnifyChatService(
     configStore,

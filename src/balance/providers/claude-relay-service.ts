@@ -1,6 +1,7 @@
 import { t } from '../../i18n';
 import { createSimpleHttpLogger } from '../../logger';
 import { getToken } from '../../client/utils';
+import { showInput } from '../../ui/component';
 import { fetchWithRetry, normalizeBaseUrlInput } from '../../utils';
 import type { SecretStore } from '../../secret';
 import type {
@@ -8,6 +9,7 @@ import type {
   BalanceConfig,
   BalanceRefreshInput,
   BalanceRefreshResult,
+  ClaudeRelayServiceBalanceConfig,
 } from '../types';
 import { isClaudeRelayServiceBalanceConfig } from '../types';
 import type {
@@ -151,10 +153,32 @@ function createEndpoint(baseUrl: string, suffix: string): string {
   return base.toString();
 }
 
-function normalizeConfig(config: BalanceConfig | undefined): BalanceConfig {
+function sanitizeConfiguredBaseUrl(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function getConfiguredBaseUrl(
+  config: BalanceConfig | undefined,
+): string | undefined {
   return isClaudeRelayServiceBalanceConfig(config)
-    ? config
+    ? sanitizeConfiguredBaseUrl(config.baseUrl)
+    : undefined;
+}
+
+function normalizeConfig(
+  config: BalanceConfig | undefined,
+): ClaudeRelayServiceBalanceConfig {
+  const baseUrl = getConfiguredBaseUrl(config);
+  return baseUrl
+    ? { method: 'claude-relay-service', baseUrl }
     : { method: 'claude-relay-service' };
+}
+
+function resolveBaseUrl(
+  config: BalanceConfig | undefined,
+  providerBaseUrl: string,
+): string {
+  return normalizeBaseUrlInput(getConfiguredBaseUrl(config) ?? providerBaseUrl);
 }
 
 function resolveMostConstrainedWindow(
@@ -350,7 +374,9 @@ function buildSnapshot(usage: CrsUsageSnapshot): {
     groupTotal > 0;
   if (hasGroupUsed || hasGroupTotal) {
     const groupUsedValue =
-      typeof groupUsed === 'number' && Number.isFinite(groupUsed) ? groupUsed : 0;
+      typeof groupUsed === 'number' && Number.isFinite(groupUsed)
+        ? groupUsed
+        : 0;
     const groupTotalValue =
       typeof groupTotal === 'number' &&
       Number.isFinite(groupTotal) &&
@@ -479,7 +505,46 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
   }
 
   async configure(): Promise<BalanceConfigureResult> {
-    const next: BalanceConfig = { method: 'claude-relay-service' };
+    const baseUrl = await showInput({
+      title: t('Base URL ({0})', this.context.providerLabel),
+      prompt: t(
+        'Enter Claude Relay Service base URL for balance queries, or leave empty to use the provider base URL.',
+      ),
+      ignoreFocusOut: true,
+      value: getConfiguredBaseUrl(this.config),
+      placeHolder: t('Leave empty to use the provider base URL'),
+      validateInput: (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return null;
+        }
+
+        try {
+          normalizeBaseUrlInput(trimmed);
+          return null;
+        } catch (error) {
+          return error instanceof Error
+            ? error.message
+            : t('Please enter a valid base URL');
+        }
+      },
+      onWillAccept: (value) => {
+        const trimmed = value.trim();
+        if (!trimmed) {
+          return { value: '' };
+        }
+        return { value: normalizeBaseUrlInput(trimmed) };
+      },
+    });
+
+    if (baseUrl === undefined) {
+      return { success: false };
+    }
+
+    const normalizedBaseUrl = sanitizeConfiguredBaseUrl(baseUrl);
+    const next: BalanceConfig = normalizedBaseUrl
+      ? { method: 'claude-relay-service', baseUrl: normalizedBaseUrl }
+      : { method: 'claude-relay-service' };
     this.config = next;
     await this.context.persistBalanceConfig?.(next);
     return { success: true, config: next };
@@ -503,7 +568,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
       providerType: input.provider.type,
     });
 
-    const baseUrl = normalizeBaseUrlInput(input.provider.baseUrl);
+    const baseUrl = resolveBaseUrl(this.config, input.provider.baseUrl);
 
     try {
       const apiId = await this.fetchApiId(baseUrl, apiKey, logger);
@@ -551,12 +616,15 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
       entries.reduce(
         (acc, item) => {
           const tokens =
-            typeof item.allTokens === 'number' && Number.isFinite(item.allTokens)
+            typeof item.allTokens === 'number' &&
+            Number.isFinite(item.allTokens)
               ? item.allTokens
               : 0;
           const costRaw = item.costs?.total;
           const cost =
-            typeof costRaw === 'number' && Number.isFinite(costRaw) ? costRaw : 0;
+            typeof costRaw === 'number' && Number.isFinite(costRaw)
+              ? costRaw
+              : 0;
           return {
             tokens: acc.tokens + tokens,
             cost: acc.cost + cost,
@@ -576,7 +644,8 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
         ? usageTotal.allTokens
         : undefined;
     const usageTotalTokens =
-      typeof usageTotal?.tokens === 'number' && Number.isFinite(usageTotal.tokens)
+      typeof usageTotal?.tokens === 'number' &&
+      Number.isFinite(usageTotal.tokens)
         ? usageTotal.tokens
         : undefined;
 
@@ -767,7 +836,8 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
     }
 
     const usage = isRecord(payload['usage']) ? payload['usage'] : undefined;
-    const usageTotal = usage && isRecord(usage['total']) ? usage['total'] : undefined;
+    const usageTotal =
+      usage && isRecord(usage['total']) ? usage['total'] : undefined;
     const group = isRecord(payload['group']) ? payload['group'] : undefined;
 
     return {

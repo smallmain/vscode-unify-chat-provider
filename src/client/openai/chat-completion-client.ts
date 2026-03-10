@@ -23,6 +23,7 @@ import {
   parseThinkingTags,
   resolveContextCacheConfig,
   resolveChatNetwork,
+  resolveOpenAISdkTimeoutMs,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
   withIdleTimeout,
@@ -145,6 +146,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const requestTimeoutMs = stream
       ? effectiveTimeout.connection
       : effectiveTimeout.response;
+    const sdkTimeoutMs = resolveOpenAISdkTimeoutMs(effectiveTimeout, stream);
 
     const token = getToken(credential);
 
@@ -152,6 +154,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       apiKey: token ?? '',
       baseURL: this.baseUrl,
       maxRetries: 0,
+      timeout: sdkTimeoutMs,
       fetch: createCustomFetch({
         connectionTimeoutMs: requestTimeoutMs,
         logger,

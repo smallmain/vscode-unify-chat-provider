@@ -54,6 +54,8 @@ export interface AiHubMixBalanceConfig {
 
 export interface ClaudeRelayServiceBalanceConfig {
   method: 'claude-relay-service';
+  /** Optional custom base URL for Claude Relay Service apiStats APIs. */
+  baseUrl?: string;
 }
 
 export interface AntigravityBalanceConfig {

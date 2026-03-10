@@ -1,5 +1,37 @@
 # Changelog
 
+## v5.3.0 - 2026-03-10
+
+### Features
+- add transport mode configuration and WebSocket support for OpenAI Responses provider (36b1931, SmallMain)
+
+### Fixes
+- service tier resolution for non-OpenAI/Anthropic providers (8877ca9, SmallMain)
+
+## v5.2.2 - 2026-03-10
+
+### Fixes
+- Antigravity: normalize Claude model ID before appending -thinking suffix (526c467, SmallMain)
+- enhance model handling by adding models array to ModelViewRoute and updating related screens (eed4b64, SmallMain)
+- update section name from 'parameters' to 'capabilities' in model form schema (05e1031, SmallMain)
+
+## v5.2.1 - 2026-03-10
+
+### Fixes
+- add chatgpt.com to supported providers for OpenAIUsePreviousResponseId feature (315bc81, SmallMain)
+- only support previous_response_id continuation for compatible providers (aa782e7, SmallMain)
+
+## v5.2.0 - 2026-03-10
+
+### Features
+- claude relay service balance provider with configurable base URL (f7be2ad, SmallMain)
+
+### Fixes
+- remove deprecated iFlow CLI from README files (61f2910, SmallMain)
+
+### Chores
+- update ModelConfig fields and add service tier notes in README files (7df2123, SmallMain)
+
 ## v5.1.0 - 2026-03-09
 
 ### Features
