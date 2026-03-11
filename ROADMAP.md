@@ -1,8 +1,8 @@
 # Roadmap
 
 - Optimize the storage content in the settings.json file and the logic for displaying the UI, fixing some issues with the OAuth process (for example, reauthorization not working properly, etc.).
+- Optimize the display strategy for balance monitoring.
 - Supports load balancing for multiple accounts and multiple suppliers.
-- Support monitoring of balance usage.
 - Commit message generate support.
 - add Kiro provider.
 - add Amazon Bedrock provider.
