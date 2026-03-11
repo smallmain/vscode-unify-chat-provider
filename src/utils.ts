@@ -123,6 +123,8 @@ export interface ResolvedChatNetworkConfig {
   retry: ResolvedChatRetryConfig;
 }
 
+const MAX_SAFE_TIMEOUT_MS = 0x7fffffff;
+
 export interface ChatNetworkOverrides {
   timeout?: TimeoutConfig;
   retry?: RetryConfig;
@@ -268,6 +270,30 @@ export function resolveChatNetwork(
   applyRetryOverrides(resolved.retry, overrides?.retry);
 
   return resolved;
+}
+
+/**
+ * Resolve the total request timeout passed to the OpenAI SDK.
+ *
+ * The OpenAI SDK applies its own overall request timeout (10 minutes by default).
+ * For streaming requests, this conflicts with our own timeout model:
+ * - connection timeout is enforced in `createCustomFetch`
+ * - response idle timeout is enforced by `withIdleTimeout`
+ *
+ * To avoid the SDK aborting healthy long-running streams before our own idle
+ * timeout logic fires, use the largest safe timer duration for streaming
+ * requests and keep non-streaming requests aligned with the configured
+ * response timeout.
+ */
+export function resolveOpenAISdkTimeoutMs(
+  timeout: Pick<ResolvedChatTimeoutConfig, 'connection' | 'response'>,
+  stream: boolean,
+): number {
+  if (!stream) {
+    return Math.min(timeout.response, MAX_SAFE_TIMEOUT_MS);
+  }
+
+  return MAX_SAFE_TIMEOUT_MS;
 }
 
 export interface FetchWithRetryOptions extends RequestInit {

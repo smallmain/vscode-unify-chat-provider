@@ -37,6 +37,8 @@ export const PROVIDER_CONFIG_KEYS = [
   'type',
   'name',
   'baseUrl',
+  'transport',
+  'serviceTier',
   'auth',
   'balanceProvider',
   'models',

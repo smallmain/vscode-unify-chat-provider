@@ -416,13 +416,14 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
 <details>
 
-| 名称                 | ID                         | 介绍                                        |
-| -------------------- | -------------------------- | ------------------------------------------- |
-| 全局网络设置         | `networkSettings`          | 网络超时/重试设置，这些设置仅影响聊天请求。 |
-| 余额刷新间隔         | `balanceRefreshIntervalMs` | 供应商余额的定时刷新间隔（毫秒）。          |
-| 余额节流窗口         | `balanceThrottleWindowMs`  | 请求后余额刷新的节流窗口（毫秒）。          |
-| 在设置中存储 Api Key | `storeApiKeyInSettings`    | 请查看 [云同步兼容](#云同步兼容) 了解详情。 |
-| 启用详细日志         | `verbose`                  | 启用更详细的日志以排查错误。                |
+| 名称                 | ID                         | 介绍                                                                       |
+| -------------------- | -------------------------- | -------------------------------------------------------------------------- |
+| 全局网络设置         | `networkSettings`          | 网络超时/重试设置，这些设置仅影响聊天请求。                                |
+| 模型显示名称模板     | `modelDisplayNameTemplate` | 聊天模型名称模板。示例：`{modelName} [{providerName}{remainingBalance}]`。 |
+| 余额刷新间隔         | `balanceRefreshIntervalMs` | 供应商余额的定时刷新间隔（毫秒）。                                         |
+| 余额节流窗口         | `balanceThrottleWindowMs`  | 请求后余额刷新的节流窗口（毫秒）。                                         |
+| 在设置中存储 Api Key | `storeApiKeyInSettings`    | 请查看 [云同步兼容](#云同步兼容) 了解详情。                                |
+| 启用详细日志         | `verbose`                  | 启用更详细的日志以排查错误。                                               |
 
 </details>
 
@@ -437,6 +438,8 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | API 格式         | `type`                    | 供应商类型（决定 API 格式与兼容逻辑）。                                                                                  |
 | 供应商名称       | `name`                    | 该供应商配置的唯一名称（用于列表展示与引用）。                                                                           |
 | API 基础 URL     | `baseUrl`                 | API 基础地址，例如 `https://api.anthropic.com`。                                                                         |
+| 传输模式         | `transport`               | 此供应商的首选传输模式。留空时使用供应商默认行为。                                                                       |
+| 服务层级         | `serviceTier`             | 此供应商请求的默认处理层级。                                                                                             |
 | 上下文缓存       | `contextCache`            | 上下文缓存配置（对支持 Prompt Caching 的供应商生效）。                                                                   |
 | 缓存类型         | `contextCache.type`       | `only-free`（默认）：仅在免费时使用上下文缓存。`allow-paid`：即使可能产生费用也使用。                                    |
 | 缓存 TTL（秒）   | `contextCache.ttl`        | TTL 单位秒。留空时使用供应商默认 TTL。部分供应商可能会映射到其支持的 TTL 档位；可能产生费用的档位可能需要 `allow-paid`。 |

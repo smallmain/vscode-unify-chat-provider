@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "5.2.0",
+  "version": "5.5.0",
   "categories": [
     "AI",
     "Chat"
@@ -185,6 +185,11 @@
           "type": "boolean",
           "description": "%configuration.verbose.description%",
           "default": false
+        },
+        "unifyChatProvider.modelDisplayNameTemplate": {
+          "type": "string",
+          "description": "%configuration.modelDisplayNameTemplate.description%",
+          "default": "{modelName}"
         },
         "unifyChatProvider.storeApiKeyInSettings": {
           "type": "boolean",
@@ -521,6 +526,38 @@
                     "minimum": 1
                   }
                 }
+              },
+              "transport": {
+                "type": "string",
+                "description": "%configuration.endpoints.transport.description%",
+                "enum": [
+                  "auto",
+                  "sse",
+                  "websocket"
+                ],
+                "enumDescriptions": [
+                  "%configuration.endpoints.transport.enumDescriptions.0%",
+                  "%configuration.endpoints.transport.enumDescriptions.1%",
+                  "%configuration.endpoints.transport.enumDescriptions.2%"
+                ]
+              },
+              "serviceTier": {
+                "type": "string",
+                "description": "%configuration.endpoints.serviceTier.description%",
+                "enum": [
+                  "auto",
+                  "standard",
+                  "flex",
+                  "scale",
+                  "priority"
+                ],
+                "enumDescriptions": [
+                  "%configuration.endpoints.serviceTier.enumDescriptions.0%",
+                  "%configuration.endpoints.serviceTier.enumDescriptions.1%",
+                  "%configuration.endpoints.serviceTier.enumDescriptions.2%",
+                  "%configuration.endpoints.serviceTier.enumDescriptions.3%",
+                  "%configuration.endpoints.serviceTier.enumDescriptions.4%"
+                ]
               },
               "extraHeaders": {
                 "type": "object",
@@ -916,6 +953,7 @@
   "devDependencies": {
     "@types/node": "^22",
     "@types/vscode": "^1.104.0",
+    "@types/ws": "^8.18.1",
     "@vscode/l10n-dev": "^0.0.35",
     "typescript": "^5.9.3"
   },
@@ -927,6 +965,8 @@
     "@vscode/l10n": "^0.0.18",
     "ollama": "^0.6.3",
     "openai": "^6.27.0",
-    "tiktoken": "^1.0.22"
+    "tiktoken": "^1.0.22",
+    "undici": "^7.22.0",
+    "ws": "^8.19.0"
   }
 }

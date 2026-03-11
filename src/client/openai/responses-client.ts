@@ -22,6 +22,7 @@ import {
   normalizeImageMimeType,
   resolveContextCacheConfig,
   resolveChatNetwork,
+  resolveOpenAISdkTimeoutMs,
   sanitizeMessagesForModelSwitch,
   withIdleTimeout,
 } from '../../utils';
@@ -46,6 +47,7 @@ import {
   FunctionTool,
   Response as OpenAIResponse,
   ResponseCreateParamsBase,
+  ResponsesClientEvent,
   ResponseFunctionCallOutputItem,
   ResponseFunctionToolCall,
   ResponseInput,
@@ -58,13 +60,25 @@ import {
   ToolChoiceOptions,
 } from 'openai/resources/responses/responses';
 import { getBaseModelId } from '../../model-id-utils';
-import { randomUUID } from 'crypto';
+import { createHash, randomUUID } from 'crypto';
 import { ProviderConfig, ModelConfig, PerformanceTrace } from '../../types';
+import {
+  WebSocketSessionError,
+  WebSocketSessionRequest,
+  type WebSocketSessionTransport,
+  webSocketSessionManager,
+} from '../websocket-session-manager';
+import { OpenAIResponsesWebSocketTransport } from './responses-websocket-transport';
 
 const VOLC_CONTEXT_CACHE_MAX_TTL_SECONDS = 604_800;
 const PREVIOUS_RESPONSE_ID_ERROR_CODES = new Set<string>([
   'invalid_previous_response_id',
+  'previous_response_not_found',
 ]);
+const WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE =
+  'websocket_connection_limit_reached';
+
+type ResolvedTransportMode = 'sse' | 'auto' | 'websocket';
 
 type ConvertedMessagesResult = {
   input: ResponseInput;
@@ -90,6 +104,33 @@ type ExtractedResponseError = {
   code?: string;
   type?: string;
   param?: string;
+};
+
+type OpenAIResponsesRequestContext = {
+  sessionId: string;
+  streamEnabled: boolean;
+  baseBody: OpenAIResponsesRequestBody;
+  fullInput: OpenAIResponsesRequestBody['input'];
+  headers: Record<string, string>;
+  abortController: AbortController;
+  token: CancellationToken;
+  logger: RequestLogger;
+  performanceTrace: PerformanceTrace;
+  expectedIdentity: string;
+  credential: AuthTokenInfo;
+};
+
+type OpenAIResponsesHttpRequestContext = OpenAIResponsesRequestContext & {
+  continuation: ResponseContinuation | undefined;
+  includeResponseIdInMarker: boolean;
+};
+
+type OpenAIResponsesWebSocketRequestContext = OpenAIResponsesRequestContext & {
+  continuation: ResponseContinuation | undefined;
+  includeResponseIdInMarker: boolean;
+  sessionKey: string;
+  hadHotSessionAtStart: boolean;
+  webSocketHeaders: Record<string, string>;
 };
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -142,8 +183,26 @@ class OpenAIResponsesRequestError extends Error {
   }
 }
 
+class OpenAIResponsesWebSocketFallbackError extends Error {
+  constructor(message: string, cause?: unknown) {
+    super(message);
+    this.name = 'OpenAIResponsesWebSocketFallbackError';
+    if (cause !== undefined) {
+      Object.defineProperty(this, 'cause', {
+        configurable: true,
+        enumerable: false,
+        value: cause,
+        writable: true,
+      });
+    }
+    Object.setPrototypeOf(this, new.target.prototype);
+  }
+}
+
 export class OpenAIResponsesProvider implements ApiProvider {
   protected readonly baseUrl: string;
+  private websocketCapability: 'unknown' | 'supported' | 'unsupported' =
+    'unknown';
 
   constructor(protected readonly config: ProviderConfig) {
     this.baseUrl = this.resolveBaseUrl(config);
@@ -179,6 +238,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return headers;
   }
 
+  protected buildWebSocketHeaders(
+    sessionId: string,
+    credential?: AuthTokenInfo,
+    modelConfig?: ModelConfig,
+    messages?: readonly LanguageModelChatRequestMessage[],
+  ): Record<string, string> {
+    return this.buildHeaders(sessionId, credential, modelConfig, messages);
+  }
+
   /**
    * Create an OpenAI client with custom fetch for retry support.
    * A new client is created per request to enable per-request logging.
@@ -195,9 +263,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
-    const requestTimeoutMs = stream
-      ? effectiveTimeout.connection
-      : effectiveTimeout.response;
+    const sdkTimeoutMs = resolveOpenAISdkTimeoutMs(effectiveTimeout, stream);
 
     const token = getToken(credential);
 
@@ -205,8 +271,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
       apiKey: token ?? '',
       baseURL: this.baseUrl,
       maxRetries: 0,
+      timeout: sdkTimeoutMs,
       fetch: createCustomFetch({
-        connectionTimeoutMs: requestTimeoutMs,
+        connectionTimeoutMs: effectiveTimeout.connection,
+        responseTimeoutMs: effectiveTimeout.response,
         logger,
         retryConfig: chatNetwork?.retry,
         type: mode,
@@ -217,6 +285,34 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
   protected generateSessionId(): string {
     return randomUUID();
+  }
+
+  protected resolveWebSocketBaseUrl(client: OpenAI): string {
+    return client.baseURL;
+  }
+
+  protected createWebSocketTransport(
+    client: OpenAI,
+    headers: Record<string, string>,
+  ): WebSocketSessionTransport<ResponsesClientEvent, ResponseStreamEvent> {
+    const webSocketBaseUrl = this.resolveWebSocketBaseUrl(client);
+    const transportClient =
+      webSocketBaseUrl === client.baseURL
+        ? client
+        : new OpenAI({
+            apiKey: client.apiKey,
+            baseURL: webSocketBaseUrl,
+            maxRetries: 0,
+            timeout: client.timeout,
+          });
+
+    return new OpenAIResponsesWebSocketTransport(transportClient, headers);
+  }
+
+  protected transformWebSocketRequestPayload(
+    payload: ResponsesClientEvent,
+  ): ResponsesClientEvent {
+    return payload;
   }
 
   protected getInputMessageRole(
@@ -659,10 +755,45 @@ export class OpenAIResponsesProvider implements ApiProvider {
     baseBody: ResponseCreateParamsBase,
   ) {}
 
+  private resolveTransportMode(streamEnabled: boolean): ResolvedTransportMode {
+    switch (this.config.transport) {
+      case 'auto':
+        return 'auto';
+      case 'websocket':
+        return 'websocket';
+      case 'sse':
+      default:
+        return 'sse';
+    }
+  }
+
+  private createWebSocketSessionKey(
+    sessionId: string,
+    headers: Record<string, string>,
+  ): string {
+    const normalizedHeaders = Object.entries(headers)
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([key, value]) => [key, value] as const);
+    const fingerprint = createHash('sha256')
+      .update(JSON.stringify(normalizedHeaders))
+      .digest('hex');
+
+    return [
+      this.config.type,
+      this.config.name,
+      this.baseUrl,
+      fingerprint,
+      sessionId,
+    ].join('|');
+  }
+
   private resolveResponseContinuation(
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
     previousResponseId: string | undefined,
     inputAfterPreviousResponse: ResponseInputItem[] | undefined,
+    options: {
+      allowStoreFalse?: boolean;
+    } = {},
   ): ResponseContinuation | undefined {
     if (
       typeof previousResponseId !== 'string' ||
@@ -673,11 +804,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
       return undefined;
     }
 
-    const body = baseBody as OpenAIResponsesRequestBody;
-    if (body.store === false) {
+    if (baseBody.store === false && options.allowStoreFalse !== true) {
       return undefined;
     }
-    if (body.conversation !== undefined && body.conversation !== null) {
+    if (baseBody.conversation !== undefined && baseBody.conversation !== null) {
       return undefined;
     }
 
@@ -688,14 +818,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
   }
 
   private buildRequestBodyForAttempt(
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
     fullInput: OpenAIResponsesRequestBody['input'],
     continuation: ResponseContinuation | undefined,
     useContinuation: boolean,
     stream: boolean,
-  ): ResponseCreateParamsBase {
+  ): OpenAIResponsesRequestBody {
     const body: OpenAIResponsesRequestBody = {
-      ...(baseBody as OpenAIResponsesRequestBody),
+      ...baseBody,
       input: fullInput,
       stream,
     };
@@ -710,10 +840,55 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return body;
   }
 
+  private buildWebSocketRequestForAttempt(
+    baseBody: OpenAIResponsesRequestBody,
+    fullInput: OpenAIResponsesRequestBody['input'],
+    continuation: ResponseContinuation | undefined,
+    useContinuation: boolean,
+  ): ResponsesClientEvent {
+    const body: OpenAIResponsesRequestBody = {
+      ...baseBody,
+      input: fullInput,
+    };
+
+    delete body.previous_response_id;
+    delete body.stream;
+
+    if (useContinuation && continuation) {
+      body.previous_response_id = continuation.previousResponseId;
+      body.input = continuation.inputAfterPreviousResponse;
+    }
+
+    return {
+      type: 'response.create',
+      ...body,
+    };
+  }
+
   private shouldIncludeResponseIdInMarker(
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
+    options: {
+      allowStoreFalse?: boolean;
+    } = {},
   ): boolean {
-    return baseBody.store !== false;
+    return options.allowStoreFalse === true || baseBody.store !== false;
+  }
+
+  private shouldMarkWebSocketUnsupported(error: unknown): boolean {
+    if (error instanceof WebSocketSessionError) {
+      return (
+        error.kind === 'unexpected_response' || error.kind === 'protocol_error'
+      );
+    }
+
+    const details = this.extractResponseError(error);
+    const normalizedMessage = details.message.toLowerCase();
+    return (
+      normalizedMessage.includes('websocket') &&
+      (normalizedMessage.includes('unsupported') ||
+        normalizedMessage.includes('not support') ||
+        normalizedMessage.includes('not supported'))
+    );
   }
 
   private extractResponseError(error: unknown): ExtractedResponseError {
@@ -813,10 +988,41 @@ export class OpenAIResponsesProvider implements ApiProvider {
       return true;
     }
 
-    return (
-      details.source === 'stream' &&
-      this.isPreviousResponseIdTextMatch(details.message)
-    );
+    return this.isPreviousResponseIdTextMatch(details.message);
+  }
+
+  private describeTransportError(error: unknown): string {
+    const parts: string[] = [];
+
+    if (error instanceof WebSocketSessionError) {
+      parts.push(`wsKind=${error.kind}`);
+      if (error.statusCode !== undefined) {
+        parts.push(`status=${error.statusCode}`);
+      }
+      if (error.closeCode !== undefined) {
+        parts.push(`closeCode=${error.closeCode}`);
+      }
+    }
+
+    const details = this.extractResponseError(error);
+    if (details.source !== 'generic') {
+      parts.push(`source=${details.source}`);
+    }
+    if (details.code) {
+      parts.push(`code=${details.code}`);
+    }
+    if (details.status !== undefined) {
+      parts.push(`status=${details.status}`);
+    }
+    if (details.param) {
+      parts.push(`param=${details.param}`);
+    }
+    parts.push(`message=${details.message}`);
+    return parts.join(' | ');
+  }
+
+  private countInputItems(input: OpenAIResponsesRequestBody['input']): number {
+    return Array.isArray(input) ? input.length : 0;
   }
 
   async *streamChat(
@@ -858,6 +1064,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const tools = this.convertTools(options.tools);
     const toolChoice = this.convertToolChoice(options.toolMode, tools);
     const streamEnabled = model.stream ?? true;
+    const supportsPreviousResponseId =
+      this.shouldEnableVolcContextCaching(model) ||
+      isFeatureSupported(
+        FeatureId.OpenAIUsePreviousResponseId,
+        this.config,
+        model,
+      );
     const useThinkingParam2 = isFeatureSupported(
       FeatureId.OpenAIUseThinkingParam2,
       this.config,
@@ -869,8 +1082,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
       model,
     );
     const serviceTier = resolveOpenAIServiceTier(this.config, model);
+    const transportMode = this.resolveTransportMode(streamEnabled);
 
-    const baseBody: ResponseCreateParamsBase = {
+    const baseBody: OpenAIResponsesRequestBody = {
       model: getBaseModelId(model.id),
       input: convertedMessages,
       ...this.buildReasoningParams(model, useThinkingParam2),
@@ -899,13 +1113,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
     this.applyVolcContextCaching(model, baseBody);
 
-    const includeResponseIdInMarker =
+    const httpIncludeResponseIdInMarker =
       this.shouldIncludeResponseIdInMarker(baseBody);
-    const continuation = this.resolveResponseContinuation(
-      baseBody,
-      previousResponseId,
-      inputAfterPreviousResponse,
-    );
+    const httpContinuation = supportsPreviousResponseId
+      ? this.resolveResponseContinuation(
+          baseBody,
+          previousResponseId,
+          inputAfterPreviousResponse,
+        )
+      : undefined;
     const fullInput = baseBody.input;
 
     const headers = this.buildHeaders(
@@ -914,97 +1130,370 @@ export class OpenAIResponsesProvider implements ApiProvider {
       model,
       sanitizedMessages,
     );
-
-    const client = this.createClient(
-      logger,
-      streamEnabled,
+    const webSocketHeaders = this.buildWebSocketHeaders(
+      sessionId,
       credential,
-      abortController.signal,
+      model,
+      sanitizedMessages,
     );
 
+    const baseContext: OpenAIResponsesRequestContext = {
+      sessionId,
+      streamEnabled,
+      baseBody,
+      fullInput,
+      headers,
+      abortController,
+      token,
+      logger,
+      performanceTrace,
+      expectedIdentity,
+      credential,
+    };
+    const httpContext: OpenAIResponsesHttpRequestContext = {
+      ...baseContext,
+      continuation: httpContinuation,
+      includeResponseIdInMarker: httpIncludeResponseIdInMarker,
+    };
+
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
+    logger.verbose(
+      `OpenAI Responses transport selected | configured=${this.config.transport ?? 'default'} | effective=${transportMode} | stream=${streamEnabled ? 'true' : 'false'} | session=${sessionId} | previousResponseId=${previousResponseId ? 'present' : 'absent'} | store=${baseBody.store === false ? 'false' : 'default/true'} | websocketCapability=${this.websocketCapability}`,
+    );
 
     try {
-      let shouldUseContinuation = continuation !== undefined;
+      if (transportMode === 'sse') {
+        yield* this.streamChatOverHttp(httpContext);
+        return;
+      }
 
-      while (true) {
-        performanceTrace.ttf = Date.now() - performanceTrace.tts;
-        const requestBody = this.buildRequestBodyForAttempt(
-          baseBody,
-          fullInput,
-          continuation,
-          shouldUseContinuation,
-          streamEnabled,
+      if (
+        transportMode === 'auto' &&
+        this.websocketCapability === 'unsupported'
+      ) {
+        logger.verbose(
+          'OpenAI Responses transport auto skipped WebSocket because this endpoint was previously marked unsupported; using SSE.',
         );
-        let emittedPartCount = 0;
+        yield* this.streamChatOverHttp(httpContext);
+        return;
+      }
 
-        try {
-          if (streamEnabled) {
-            const responseTimeoutMs = resolveChatNetwork(this.config).timeout
-              .response;
+      const webSocketSessionKey = this.createWebSocketSessionKey(
+        sessionId,
+        webSocketHeaders,
+      );
+      const hasHotWebSocketSession =
+        webSocketSessionManager.hasSession(webSocketSessionKey);
+      const webSocketContinuation = this.resolveResponseContinuation(
+        baseBody,
+        previousResponseId,
+        inputAfterPreviousResponse,
+        {
+          allowStoreFalse: hasHotWebSocketSession,
+        },
+      );
+      const webSocketContext: OpenAIResponsesWebSocketRequestContext = {
+        ...baseContext,
+        continuation: webSocketContinuation,
+        includeResponseIdInMarker: this.shouldIncludeResponseIdInMarker(
+          baseBody,
+          {
+            allowStoreFalse: true,
+          },
+        ),
+        sessionKey: webSocketSessionKey,
+        hadHotSessionAtStart: hasHotWebSocketSession,
+        webSocketHeaders,
+      };
 
-            const stream = await client.responses.create(
-              { ...requestBody, stream: true },
-              {
-                headers,
-                signal: abortController.signal,
-              },
-            );
-            const timedStream = withIdleTimeout(
-              stream,
-              responseTimeoutMs,
-              abortController.signal,
-            );
-            for await (const part of this.parseMessageStream(
-              timedStream,
-              sessionId,
-              token,
-              logger,
-              performanceTrace,
-              expectedIdentity,
-              includeResponseIdInMarker,
-            )) {
-              emittedPartCount++;
-              yield part;
-            }
-          } else {
-            const data = await client.responses.create(
-              { ...requestBody, stream: false },
-              {
-                headers,
-                signal: abortController.signal,
-              },
-            );
-            for await (const part of this.parseMessage(
-              data,
-              sessionId,
-              performanceTrace,
-              logger,
-              expectedIdentity,
-              includeResponseIdInMarker,
-            )) {
-              emittedPartCount++;
-              yield part;
-            }
-          }
-          break;
-        } catch (error) {
-          if (
-            !shouldUseContinuation ||
-            emittedPartCount > 0 ||
-            !this.shouldRetryWithoutPreviousResponseId(error)
-          ) {
-            throw error;
-          }
-
-          logger.verbose(
-            'Provider rejected previous_response_id; retrying without previous_response_id.',
-          );
-          shouldUseContinuation = false;
+      try {
+        yield* this.streamChatOverWebSocket(
+          webSocketContext,
+          transportMode === 'auto',
+        );
+      } catch (error) {
+        if (
+          transportMode !== 'auto' ||
+          !(error instanceof OpenAIResponsesWebSocketFallbackError)
+        ) {
+          throw error;
         }
+
+        logger.verbose(
+          'Falling back to SSE after failing to establish an OpenAI Responses WebSocket turn.',
+        );
+        yield* this.streamChatOverHttp(httpContext);
       }
     } finally {
       cancellationListener.dispose();
+    }
+  }
+
+  private async *streamChatOverHttp(
+    context: OpenAIResponsesHttpRequestContext,
+  ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
+    const client = this.createClient(
+      context.logger,
+      context.streamEnabled,
+      context.credential,
+      context.abortController.signal,
+    );
+
+    let shouldUseContinuation = context.continuation !== undefined;
+    let attempt = 0;
+
+    while (true) {
+      attempt += 1;
+      context.performanceTrace.ttf = Date.now() - context.performanceTrace.tts;
+      const requestBody = this.buildRequestBodyForAttempt(
+        context.baseBody,
+        context.fullInput,
+        context.continuation,
+        shouldUseContinuation,
+        context.streamEnabled,
+      );
+      context.logger.verbose(
+        `OpenAI Responses HTTP attempt ${attempt} | transport=${context.streamEnabled ? 'sse' : 'http'} | session=${context.sessionId} | continuation=${shouldUseContinuation ? 'previous_response_id' : 'full_input'} | inputItems=${this.countInputItems(requestBody.input)} | store=${requestBody.store === false ? 'false' : 'default/true'}`,
+      );
+      let emittedPartCount = 0;
+
+      try {
+        if (context.streamEnabled) {
+          const responseTimeoutMs = resolveChatNetwork(this.config).timeout
+            .response;
+
+          const stream = await client.responses.create(
+            { ...requestBody, stream: true },
+            {
+              headers: context.headers,
+              signal: context.abortController.signal,
+            },
+          );
+          const timedStream = withIdleTimeout(
+            stream,
+            responseTimeoutMs,
+            context.abortController.signal,
+          );
+          for await (const part of this.parseMessageStream(
+            timedStream,
+            context.sessionId,
+            context.token,
+            context.logger,
+            context.performanceTrace,
+            context.expectedIdentity,
+            context.includeResponseIdInMarker,
+            context.streamEnabled ? 'sse' : 'http',
+          )) {
+            emittedPartCount++;
+            yield part;
+          }
+        } else {
+          const data = await client.responses.create(
+            { ...requestBody, stream: false },
+            {
+              headers: context.headers,
+              signal: context.abortController.signal,
+            },
+          );
+          for await (const part of this.parseMessage(
+            data,
+            context.sessionId,
+            context.performanceTrace,
+            context.logger,
+            context.expectedIdentity,
+            context.includeResponseIdInMarker,
+            'http',
+          )) {
+            emittedPartCount++;
+            yield part;
+          }
+        }
+        return;
+      } catch (error) {
+        if (
+          !shouldUseContinuation ||
+          emittedPartCount > 0 ||
+          !this.shouldRetryWithoutPreviousResponseId(error)
+        ) {
+          throw error;
+        }
+
+        context.logger.verbose(
+          'Provider rejected previous_response_id; retrying without previous_response_id.',
+        );
+        shouldUseContinuation = false;
+      }
+    }
+  }
+
+  private async *streamChatOverWebSocket(
+    context: OpenAIResponsesWebSocketRequestContext,
+    allowFallback: boolean,
+  ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
+    const client = this.createClient(
+      context.logger,
+      true,
+      context.credential,
+      undefined,
+    );
+    const connectionTimeoutMs = resolveChatNetwork(this.config).timeout
+      .connection;
+    let shouldUseContinuation = context.continuation !== undefined;
+    let shouldForceNewConnection = false;
+    let retriedForConnectionLimit = false;
+    let attempt = 0;
+
+    while (true) {
+      attempt += 1;
+      context.performanceTrace.ttf = Date.now() - context.performanceTrace.tts;
+      let request: WebSocketSessionRequest<ResponseStreamEvent> | undefined;
+      let responseEstablished = false;
+
+      try {
+        const requestPayload = this.transformWebSocketRequestPayload(
+          this.buildWebSocketRequestForAttempt(
+            context.baseBody,
+            context.fullInput,
+            context.continuation,
+            shouldUseContinuation,
+          ),
+        );
+        const requestInput =
+          requestPayload.type === 'response.create'
+            ? requestPayload.input
+            : undefined;
+        context.logger.verbose(
+          `OpenAI Responses WebSocket attempt ${attempt} | mode=${allowFallback ? 'auto' : 'websocket'} | session=${context.sessionId} | baseUrl=${this.resolveWebSocketBaseUrl(client)} | hotSessionAtStart=${context.hadHotSessionAtStart ? 'true' : 'false'} | continuation=${shouldUseContinuation ? 'previous_response_id' : 'full_input'} | forceNewConnection=${shouldForceNewConnection ? 'true' : 'false'} | inputItems=${this.countInputItems(requestInput)} | store=${requestPayload.store === false ? 'false' : 'default/true'}`,
+        );
+        request = await webSocketSessionManager.createRequest(
+          {
+            sessionKey: context.sessionKey,
+            connectionTimeoutMs,
+            createTransport: () =>
+              this.createWebSocketTransport(client, context.webSocketHeaders),
+          },
+          requestPayload,
+          {
+            signal: context.abortController.signal,
+            forceNewConnection: shouldForceNewConnection,
+          },
+        );
+        context.logger.verbose(
+          `OpenAI Responses WebSocket connection ready | attempt=${attempt} | session=${context.sessionId} | connection=${request.reusedConnection ? 'reused' : 'new'}`,
+        );
+        shouldForceNewConnection = false;
+
+        const stream =
+          (async function* (): AsyncGenerator<ResponseStreamEvent> {
+            for await (const event of request.stream) {
+              if (event.type.startsWith('response.')) {
+                if (!responseEstablished) {
+                  context.logger.verbose(
+                    `OpenAI Responses WebSocket response established | attempt=${attempt} | session=${context.sessionId} | firstEvent=${event.type} | connection=${request?.reusedConnection ? 'reused' : 'new'}`,
+                  );
+                }
+                responseEstablished = true;
+              }
+              yield event;
+
+              if (
+                event.type === 'response.completed' ||
+                event.type === 'response.failed' ||
+                event.type === 'response.incomplete'
+              ) {
+                return;
+              }
+            }
+          })();
+
+        for await (const part of this.parseMessageStream(
+          stream,
+          context.sessionId,
+          context.token,
+          context.logger,
+          context.performanceTrace,
+          context.expectedIdentity,
+          context.includeResponseIdInMarker,
+          'websocket',
+        )) {
+          yield part;
+        }
+
+        request.release();
+        this.websocketCapability = 'supported';
+        context.logger.verbose(
+          `OpenAI Responses WebSocket turn completed | attempt=${attempt} | session=${context.sessionId} | connection=${request.reusedConnection ? 'reused' : 'new'}`,
+        );
+        return;
+      } catch (error) {
+        request?.release();
+
+        if (
+          context.abortController.signal.aborted ||
+          (error instanceof WebSocketSessionError &&
+            error.kind === 'request_aborted')
+        ) {
+          throw error;
+        }
+
+        if (responseEstablished) {
+          this.websocketCapability = 'supported';
+          context.logger.verbose(
+            `OpenAI Responses WebSocket turn failed after establishment | attempt=${attempt} | session=${context.sessionId} | ${this.describeTransportError(error)}`,
+          );
+          throw error;
+        }
+
+        if (this.shouldMarkWebSocketUnsupported(error)) {
+          this.websocketCapability = 'unsupported';
+          context.logger.verbose(
+            `OpenAI Responses WebSocket endpoint marked unsupported | attempt=${attempt} | session=${context.sessionId} | ${this.describeTransportError(error)}`,
+          );
+        }
+
+        const details = this.extractResponseError(error);
+        context.logger.verbose(
+          `OpenAI Responses WebSocket attempt failed before establishment | attempt=${attempt} | session=${context.sessionId} | ${this.describeTransportError(error)}`,
+        );
+        if (
+          shouldUseContinuation &&
+          this.shouldRetryWithoutPreviousResponseId(error)
+        ) {
+          context.logger.verbose(
+            `OpenAI Responses WebSocket continuation failed; retrying without previous_response_id | attempt=${attempt} | session=${context.sessionId}.`,
+          );
+          shouldUseContinuation = false;
+          continue;
+        }
+
+        if (
+          details.code === WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE &&
+          !retriedForConnectionLimit
+        ) {
+          retriedForConnectionLimit = true;
+          shouldForceNewConnection = true;
+          context.logger.verbose(
+            `OpenAI Responses WebSocket hit the connection limit; reconnecting once before continuing | attempt=${attempt} | session=${context.sessionId}.`,
+          );
+          webSocketSessionManager.closeSession(
+            context.sessionKey,
+            WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE,
+          );
+          continue;
+        }
+
+        if (allowFallback) {
+          context.logger.verbose(
+            `OpenAI Responses WebSocket falling back to SSE | attempt=${attempt} | session=${context.sessionId} | ${this.describeTransportError(error)}`,
+          );
+          throw new OpenAIResponsesWebSocketFallbackError(
+            'OpenAI Responses WebSocket turn could not be established.',
+            error,
+          );
+        }
+
+        throw error;
+      }
     }
   }
 
@@ -1015,6 +1504,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     logger: RequestLogger,
     expectedIdentity: string,
     includeResponseIdInMarker: boolean,
+    transportLabel: 'http' | 'sse' | 'websocket',
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     // NOTE: The current behavior of VSCode is such that all Parts returned here will be
     // aggregated into a single Part during the next request, and only the Thinking part
@@ -1026,7 +1516,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
     // ensuring basic compatibility across different models.
     // 2. always send a StatefulMarker DataPart containing the complete, raw response data, to maximize context restoration.
 
-    logger.providerResponseChunk(JSON.stringify(message));
+    logger.providerResponseChunk(
+      `[responses:${transportLabel}] ${JSON.stringify(message)}`,
+    );
 
     performanceTrace.ttft =
       Date.now() - (performanceTrace.tts + performanceTrace.ttf);
@@ -1212,6 +1704,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     performanceTrace: PerformanceTrace,
     expectedIdentity: string,
     includeResponseIdInMarker: boolean,
+    transportLabel: 'http' | 'sse' | 'websocket',
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     let usage: ResponseUsage | undefined;
     let sawReasoningContentText = false;
@@ -1223,7 +1716,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
         break;
       }
 
-      logger.providerResponseChunk(JSON.stringify(event));
+      logger.providerResponseChunk(
+        `[responses:${transportLabel}] ${JSON.stringify(event)}`,
+      );
 
       recordFirstToken();
 
@@ -1344,13 +1839,21 @@ export class OpenAIResponsesProvider implements ApiProvider {
             { source: 'stream' },
           );
 
-        case 'error':
+        case 'error': {
+          const responseError = this.extractResponseError(event);
           throw new OpenAIResponsesRequestError(
-            `OpenAI API Error: ${event.message}${
-              event.code ? ` (${event.code})` : ''
+            `OpenAI API Error: ${responseError.message}${
+              responseError.code ? ` (${responseError.code})` : ''
             }`,
-            { source: 'stream', code: event.code ?? undefined },
+            {
+              source: 'stream',
+              code: responseError.code,
+              type: responseError.type,
+              param: responseError.param,
+              status: responseError.status,
+            },
           );
+        }
 
         default:
           break;

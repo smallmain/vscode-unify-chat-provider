@@ -95,10 +95,6 @@ export class AnthropicProvider implements ApiProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
-    const requestTimeoutMs = stream
-      ? effectiveTimeout.connection
-      : effectiveTimeout.response;
-
     const token = getToken(credential);
 
     return new Anthropic({
@@ -117,7 +113,8 @@ export class AnthropicProvider implements ApiProvider {
       baseURL: this.baseUrl,
       maxRetries: 0,
       fetch: createCustomFetch({
-        connectionTimeoutMs: requestTimeoutMs,
+        connectionTimeoutMs: effectiveTimeout.connection,
+        responseTimeoutMs: effectiveTimeout.response,
         logger,
         retryConfig: chatNetwork?.retry,
         type: mode,

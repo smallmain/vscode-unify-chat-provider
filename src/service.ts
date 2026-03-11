@@ -10,6 +10,7 @@ import { ModelConfig, PerformanceTrace, ProviderConfig } from './types';
 import { getBaseModelId } from './model-id-utils';
 import { createProvider } from './client/utils';
 import {
+  formatProviderBadgeSuffixForModelSelection,
   formatModelTooltipForModelSelection,
   formatProviderDetailForModelSelection,
 } from './ui/form-utils';
@@ -36,6 +37,16 @@ import {
 } from './tokenizer/tokenizers';
 import type { BalanceManager } from './balance';
 import { evaluateBalanceWarning } from './balance/warning-utils';
+
+const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
+  /\{(modelName|modelFamily|providerName|remainingBalance)\}/g;
+
+interface ModelDisplayNameTemplateValues {
+  modelName: string;
+  modelFamily: string;
+  providerName: string;
+  remainingBalance: string;
+}
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
@@ -92,9 +103,19 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     model: ModelConfig,
   ): vscode.LanguageModelChatInformation {
     const modelId = this.createModelId(provider.name, model.id);
+    const resolvedModelName = model.name ?? model.id;
+    const resolvedModelFamily = model.family ?? getBaseModelId(model.id);
     const balanceSnapshot = this.balanceManager?.getProviderState(
       provider.name,
     )?.snapshot;
+    const remainingBalance =
+      formatProviderBadgeSuffixForModelSelection(balanceSnapshot);
+    const displayName = this.renderModelDisplayName({
+      modelName: resolvedModelName,
+      modelFamily: resolvedModelFamily,
+      providerName: provider.name,
+      remainingBalance,
+    });
     const detail = formatProviderDetailForModelSelection(
       provider.name,
       balanceSnapshot,
@@ -115,8 +136,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
     return {
       id: modelId,
-      name: model.name ?? model.id,
-      family: model.family ?? getBaseModelId(model.id),
+      name: displayName,
+      family: resolvedModelFamily,
       version: '',
       maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
       maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
@@ -133,6 +154,36 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       isUserSelectable: true,
       statusIcon,
     };
+  }
+
+  private renderModelDisplayName(
+    values: ModelDisplayNameTemplateValues,
+  ): string {
+    const rendered = this.configStore.modelDisplayNameTemplate.replace(
+      MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN,
+      (_match, key: string) =>
+        this.resolveModelDisplayNameTemplateValue(key, values),
+    );
+    const trimmed = rendered.trim();
+    return trimmed || values.modelName;
+  }
+
+  private resolveModelDisplayNameTemplateValue(
+    key: string,
+    values: ModelDisplayNameTemplateValues,
+  ): string {
+    switch (key) {
+      case 'modelName':
+        return values.modelName;
+      case 'modelFamily':
+        return values.modelFamily;
+      case 'providerName':
+        return values.providerName;
+      case 'remainingBalance':
+        return values.remainingBalance;
+      default:
+        return `{${key}}`;
+    }
   }
 
   /**

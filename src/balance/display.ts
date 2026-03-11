@@ -1018,6 +1018,13 @@ export function formatPrimaryBadge(
   return formatMetricValue(primary);
 }
 
+export function formatProviderBadgeSuffix(
+  snapshot: BalanceSnapshot | undefined,
+): string {
+  const badge = formatPrimaryBadge(snapshot)?.trim();
+  return badge ? ` (${badge})` : '';
+}
+
 export function formatSummaryLine(
   snapshot: BalanceSnapshot | undefined,
 ): string | undefined {
@@ -1173,11 +1180,7 @@ export function formatProviderDetail(
   providerName: string,
   snapshot: BalanceSnapshot | undefined,
 ): string {
-  const badge = formatPrimaryBadge(snapshot)?.trim();
-  if (!badge) {
-    return providerName;
-  }
-  return `${providerName} (${badge})`;
+  return `${providerName}${formatProviderBadgeSuffix(snapshot)}`;
 }
 
 export function pickAmountMetricForWarning(

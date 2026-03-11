@@ -207,6 +207,15 @@ export enum FeatureId {
    */
   OpenAIStripIncludeParam = 'openai_strip-include-param',
   /**
+   * Use `previous_response_id` continuation requests in the OpenAI Responses API.
+   *
+   * Many OpenAI-compatible providers expose a `/responses` endpoint before they
+   * fully support response chaining, so this remains feature-gated.
+   *
+   * @see https://developers.openai.com/docs/guides/conversation-state
+   */
+  OpenAIUsePreviousResponseId = 'openai_use-previous-response-id',
+  /**
    * Enable VolcEngine / BytePlus context caching on OpenAI Responses API.
    */
   OpenAIUseVolcContextCaching = 'openai_use-volc-context-caching',
@@ -469,6 +478,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
     ],
+  },
+  [FeatureId.OpenAIUsePreviousResponseId]: {
+    supportedProviders: ['api.openai.com', 'chatgpt.com'],
   },
   [FeatureId.OpenAIUseVolcContextCaching]: {
     supportedProviders: [

@@ -416,13 +416,14 @@ Use this feature to monitor provider balances in `Provider Settings`.
 
 <details>
 
-| Name                      | ID                         | Description                                                                   |
-| ------------------------- | -------------------------- | ----------------------------------------------------------------------------- |
-| Global Network Settings   | `networkSettings`          | Network timeout/retry settings, which only affect chat requests.              |
-| Balance Refresh Interval  | `balanceRefreshIntervalMs` | Periodic refresh interval for provider balances (milliseconds).               |
-| Balance Throttle Window   | `balanceThrottleWindowMs`  | Throttle window for post-request balance refresh (milliseconds).              |
-| Store API Key in Settings | `storeApiKeyInSettings`    | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details. |
-| Enable Detailed Logging   | `verbose`                  | Enables more detailed logging for troubleshooting errors.                     |
+| Name                        | ID                         | Description                                                                               |
+| --------------------------- | -------------------------- | ----------------------------------------------------------------------------------------- |
+| Global Network Settings     | `networkSettings`          | Network timeout/retry settings, which only affect chat requests.                          |
+| Model Display Name Template | `modelDisplayNameTemplate` | Template for chat model names. Example: `{modelName} [{providerName}{remainingBalance}]`. |
+| Balance Refresh Interval    | `balanceRefreshIntervalMs` | Periodic refresh interval for provider balances (milliseconds).                           |
+| Balance Throttle Window     | `balanceThrottleWindowMs`  | Throttle window for post-request balance refresh (milliseconds).                          |
+| Store API Key in Settings   | `storeApiKeyInSettings`    | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details.             |
+| Enable Detailed Logging     | `verbose`                  | Enables more detailed logging for troubleshooting errors.                                 |
 
 </details>
 
@@ -437,6 +438,8 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | API Format                  | `type`                    | Provider type (determines the API format and compatibility logic).                                                                                               |
 | Provider Name               | `name`                    | Unique name for this provider config (used for list display and references).                                                                                     |
 | API Base URL                | `baseUrl`                 | API base URL, e.g. `https://api.anthropic.com`.                                                                                                                  |
+| Transport Mode              | `transport`               | Preferred transport mode for this provider. Leave empty to use the provider default.                                                                             |
+| Service Tier                | `serviceTier`             | Default processing tier for requests from this provider.                                                                                                         |
 | Context Cache               | `contextCache`            | Context cache configuration (used by providers that support prompt caching).                                                                                     |
 | Context Cache Type          | `contextCache.type`       | `only-free` (default): use context cache only when it's free. `allow-paid`: use it even if it may incur cost.                                                    |
 | Context Cache TTL (seconds) | `contextCache.ttl`        | TTL in seconds. Leave empty to use the provider's default TTL. Some providers may quantize this to supported TTL presets; paid presets may require `allow-paid`. |

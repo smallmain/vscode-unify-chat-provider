@@ -15,6 +15,7 @@ import { normalizeBaseUrlInput } from '../utils';
 import { showValidationErrors } from './component';
 import type { BalanceMetric, BalanceSnapshot } from '../balance/types';
 import {
+  formatProviderBadgeSuffix,
   formatProviderDetail as formatStructuredProviderDetail,
   formatSnapshotLines,
   formatSummaryLine,
@@ -307,8 +308,14 @@ export function formatProviderDetailForModelSelection(
   providerName: string,
   snapshot: BalanceSnapshot | undefined,
 ): string {
-  return formatStructuredProviderDetail(
-    providerName,
+  const normalizedSnapshot = normalizeBalanceSnapshotForModelSelection(snapshot);
+  return formatStructuredProviderDetail(providerName, normalizedSnapshot);
+}
+
+export function formatProviderBadgeSuffixForModelSelection(
+  snapshot: BalanceSnapshot | undefined,
+): string {
+  return formatProviderBadgeSuffix(
     normalizeBalanceSnapshotForModelSelection(snapshot),
   );
 }

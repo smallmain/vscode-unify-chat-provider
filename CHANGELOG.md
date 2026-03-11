@@ -1,5 +1,42 @@
 # Changelog
 
+## v5.5.0 - 2026-03-11
+
+### Features
+- add model display name template configuration (82294c0, SmallMain)
+
+### Chores
+- update ROADMAP (26ee61a, SmallMain)
+
+## v5.4.0 - 2026-03-11
+
+### Features
+- add service tier field to provider configuration (25db890, SmallMain)
+
+### Fixes
+- add response timeout support to custom fetch implementation (5159445, SmallMain)
+
+## v5.3.0 - 2026-03-10
+
+### Features
+- add transport mode configuration and WebSocket support for OpenAI Responses provider (36b1931, SmallMain)
+
+### Fixes
+- service tier resolution for non-OpenAI/Anthropic providers (8877ca9, SmallMain)
+
+## v5.2.2 - 2026-03-10
+
+### Fixes
+- Antigravity: normalize Claude model ID before appending -thinking suffix (526c467, SmallMain)
+- enhance model handling by adding models array to ModelViewRoute and updating related screens (eed4b64, SmallMain)
+- update section name from 'parameters' to 'capabilities' in model form schema (05e1031, SmallMain)
+
+## v5.2.1 - 2026-03-10
+
+### Fixes
+- add chatgpt.com to supported providers for OpenAIUsePreviousResponseId feature (315bc81, SmallMain)
+- only support previous_response_id continuation for compatible providers (aa782e7, SmallMain)
+
 ## v5.2.0 - 2026-03-10
 
 ### Features

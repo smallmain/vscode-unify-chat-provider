@@ -550,7 +550,7 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       type: 'picker',
       label: t('Service Tier'),
       icon: 'layers',
-      section: 'parameters',
+      section: 'capabilities',
       title: t('Service Tier'),
       placeholder: t('Choose service tier'),
       options: [

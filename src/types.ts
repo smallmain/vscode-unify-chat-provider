@@ -12,6 +12,8 @@ export interface ContextCacheConfig {
   ttl?: number;
 }
 
+export type ServiceTier = 'auto' | 'standard' | 'flex' | 'scale' | 'priority';
+
 /**
  * Configuration for a single provider endpoint
  */
@@ -22,6 +24,14 @@ export interface ProviderConfig {
   name: string;
   /** Base URL for the API (e.g., https://api.anthropic.com) */
   baseUrl: string;
+  /**
+   * Preferred transport mode for this provider.
+   *
+   * Leave undefined to let the provider choose its default behavior.
+   */
+  transport?: 'auto' | 'sse' | 'websocket';
+  /** Default service tier / processing tier for this provider. */
+  serviceTier?: ServiceTier;
   /**
    * Unified authentication configuration.
    */
@@ -110,7 +120,7 @@ export interface ModelConfig {
   /** Parallel tool calling (true to enable, false to disable, undefined to use default) */
   parallelToolCalling?: boolean;
   /** Service tier / processing tier */
-  serviceTier?: 'auto' | 'standard' | 'flex' | 'scale' | 'priority';
+  serviceTier?: ServiceTier;
   /**
    * Constrains response verbosity. Lower = concise, higher = verbose.
    * Supported values: low | medium | high.

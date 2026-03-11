@@ -16,7 +16,11 @@ import {
   resolveContextCacheConfig,
 } from '../utils';
 import { ProviderType, PROVIDER_TYPES } from '../client/definitions';
-import type { ContextCacheConfig, ContextCacheType, ProviderConfig } from '../types';
+import type {
+  ContextCacheConfig,
+  ContextCacheType,
+  ProviderConfig,
+} from '../types';
 import { type SecretStore } from '../secret';
 import type { EventedUriHandler } from '../uri-handler';
 import {
@@ -51,6 +55,19 @@ import {
   isLeaderUnavailableError,
   isVersionIncompatibleError,
 } from '../main-instance/errors';
+
+function getTransportModeDescription(draft: ProviderFormDraft): string {
+  switch (draft.transport) {
+    case 'auto':
+      return t('Auto');
+    case 'sse':
+      return t('SSE');
+    case 'websocket':
+      return t('WebSocket');
+    default:
+      return t('Default');
+  }
+}
 
 /**
  * Context for provider form fields.
@@ -163,6 +180,88 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       getDescription: (draft) => draft.baseUrl || t('(required)'),
     },
     {
+      key: 'transport',
+      type: 'custom',
+      label: t('Transport Mode'),
+      icon: 'plug',
+      section: 'primary',
+      edit: async (draft) => {
+        const { pickQuickItem } = await import('./component');
+        const picked = await pickQuickItem<
+          vscode.QuickPickItem & {
+            value: ProviderConfig['transport'];
+          }
+        >({
+          title: t('Transport Mode'),
+          placeholder: t('Select transport mode'),
+          items: [
+            {
+              label: t('Default'),
+              description: t('Let the provider choose its default transport.'),
+              value: undefined,
+            },
+            {
+              label: t('Auto'),
+              description: t('Let the provider auto switch transports.'),
+              value: 'auto',
+            },
+            {
+              label: t('SSE'),
+              description: t('Use Server-Sent Events only.'),
+              value: 'sse',
+            },
+            {
+              label: t('WebSocket'),
+              description: t('Use WebSocket only.'),
+              value: 'websocket',
+            },
+          ],
+        });
+        if (picked) {
+          draft.transport = picked.value;
+        }
+      },
+      getDescription: (draft) => getTransportModeDescription(draft),
+    },
+    {
+      key: 'serviceTier',
+      type: 'picker',
+      label: t('Service Tier'),
+      icon: 'layers',
+      section: 'primary',
+      title: t('Service Tier'),
+      placeholder: t('Choose service tier'),
+      options: [
+        {
+          label: t('Default'),
+          description: t('Use provider default behavior'),
+          value: undefined,
+        },
+        {
+          label: t('Auto'),
+          value: 'auto',
+        },
+        {
+          label: t('Standard'),
+          value: 'standard',
+        },
+        {
+          label: t('Flex'),
+          value: 'flex',
+        },
+        {
+          label: t('Scale'),
+          value: 'scale',
+        },
+        {
+          label: t('Priority'),
+          value: 'priority',
+        },
+      ],
+      getDescription: (draft) =>
+        draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
+    {
       key: 'contextCache',
       type: 'custom',
       label: t('Context Cache'),
@@ -180,7 +279,9 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
           Number.isFinite(draft.contextCache.ttl) &&
           Number.isInteger(draft.contextCache.ttl) &&
           draft.contextCache.ttl > 0;
-        const ttlLabel = hasCustomTtl ? `${resolved.ttlSeconds}s` : t('default');
+        const ttlLabel = hasCustomTtl
+          ? `${resolved.ttlSeconds}s`
+          : t('default');
         const summary = `${typeLabel}, ${ttlLabel}`;
         const isDefault =
           resolved.type === DEFAULT_CONTEXT_CACHE_TYPE && !hasCustomTtl;
@@ -375,7 +476,10 @@ async function editContextCacheField(draft: ProviderFormDraft): Promise<void> {
   let ttlValue: number | undefined = draft.contextCache?.ttl;
 
   const buildItems = (): ContextCacheSettingsItem[] => {
-    const resolved = resolveContextCacheConfig({ type: typeValue, ttl: ttlValue });
+    const resolved = resolveContextCacheConfig({
+      type: typeValue,
+      ttl: ttlValue,
+    });
     const resolvedTypeLabel =
       resolved.type === 'only-free' ? t('Only Free') : t('Allow Paid');
 
@@ -488,7 +592,10 @@ async function editContextCacheField(draft: ProviderFormDraft): Promise<void> {
     }
   }
 
-  const resolved = resolveContextCacheConfig({ type: typeValue, ttl: ttlValue });
+  const resolved = resolveContextCacheConfig({
+    type: typeValue,
+    ttl: ttlValue,
+  });
 
   const isDefault =
     resolved.type === DEFAULT_CONTEXT_CACHE_TYPE &&
@@ -988,8 +1095,7 @@ async function pickBalanceMethod(
     label: t('Not configured'),
     description: t('Disable balance monitoring'),
     balanceAction: { kind: 'none' },
-    picked:
-      !draft.balanceProvider || draft.balanceProvider.method === 'none',
+    picked: !draft.balanceProvider || draft.balanceProvider.method === 'none',
   });
 
   const methodDefs = Object.values(BALANCE_METHODS);
@@ -1030,7 +1136,9 @@ async function pickBalanceMethod(
 }
 
 function toAuthTokenInfo(
-  credential: { value: string; tokenType?: string; expiresAt?: number } | undefined,
+  credential:
+    | { value: string; tokenType?: string; expiresAt?: number }
+    | undefined,
 ): AuthTokenInfo {
   if (!credential?.value) {
     return { kind: 'none' };
@@ -1095,7 +1203,9 @@ async function resolveDraftCredential(
   }
 }
 
-async function forceRefreshSavedBalanceState(providerName: string): Promise<boolean> {
+async function forceRefreshSavedBalanceState(
+  providerName: string,
+): Promise<boolean> {
   try {
     await balanceManager.forceRefresh(providerName);
     return true;
@@ -1197,7 +1307,9 @@ async function showBalanceStatusView(options: {
         };
         return;
       }
-      const refreshedState = balanceManager.getProviderState(savedProvider.name);
+      const refreshedState = balanceManager.getProviderState(
+        savedProvider.name,
+      );
       localState = refreshedState
         ? {
             ...refreshedState,
@@ -1343,7 +1455,11 @@ async function showBalanceStatusView(options: {
         };
 
         const triggerInitialRefresh = async (): Promise<void> => {
-          if (localState?.snapshot || localState?.isRefreshing || localState?.lastError) {
+          if (
+            localState?.snapshot ||
+            localState?.isRefreshing ||
+            localState?.lastError
+          ) {
             return;
           }
           await refresh();
@@ -1385,8 +1501,9 @@ async function showBalanceStatusView(options: {
 
     if (picked?.action?.kind === 'close') {
       await picked.action.run();
-      options.draft.balanceProvider =
-        deepClone(balanceProvider.getConfig() ?? options.balanceProviderConfig);
+      options.draft.balanceProvider = deepClone(
+        balanceProvider.getConfig() ?? options.balanceProviderConfig,
+      );
       return 'stay';
     }
 
@@ -1489,7 +1606,8 @@ async function editBalanceField(
       return;
     }
 
-    const providerLabel = draft.name?.trim() || ctx.originalName || t('Provider');
+    const providerLabel =
+      draft.name?.trim() || ctx.originalName || t('Provider');
     const providerId = ctx.originalName ?? ensureDraftSessionId(draft);
 
     const balanceProvider = createBalanceProviderForMethod(
