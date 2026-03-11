@@ -1,5 +1,13 @@
 # Changelog
 
+## v5.5.0 - 2026-03-11
+
+### Features
+- add model display name template configuration (82294c0, SmallMain)
+
+### Chores
+- update ROADMAP (26ee61a, SmallMain)
+
 ## v5.4.0 - 2026-03-11
 
 ### Features
