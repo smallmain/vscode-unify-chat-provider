@@ -3140,6 +3140,39 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'grok-4.20-beta-0309-reasoning',
+    name: 'Grok 4.20 Beta 0309 (Reasoning)',
+    overrides: [
+      {
+        matchers: ['openrouter.ai'],
+        config: {
+          id: 'x-ai/grok-4.20-beta',
+          thinking: {
+            type: 'enabled',
+          },
+        },
+      },
+    ],
+    maxInputTokens: 2000000,
+    maxOutputTokens: 1000000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'grok-4.20-beta-0309-non-reasoning',
+    name: 'Grok 4.20 Beta 0309 (Non-Reasoning)',
+    maxInputTokens: 2000000,
+    maxOutputTokens: 1000000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'grok-4-1-fast-reasoning',
     name: 'Grok 4.1 Fast (Reasoning)',
     maxInputTokens: 2000000,
@@ -3655,6 +3688,21 @@ const _WELL_KNOWN_MODELS = [
     },
     extraBody: {
       reasoning_format: 'general',
+    },
+  },
+  {
+    id: 'nemotron-3-super-120b-a12b',
+    name: 'Nemotron 3 Super 120B A12B',
+    overrides: ['nvidia/nemotron-3-super-120b-a12b'],
+    maxInputTokens: 262144,
+    maxOutputTokens: 32768,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
     },
   },
 ] as const satisfies readonly WellKnownModelConfig[];

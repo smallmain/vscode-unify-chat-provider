@@ -300,7 +300,11 @@ export class ApiKeyAuthProvider implements AuthProvider {
       `${this.context.providerId}:api-key`,
       'Storing new API key in secret storage',
     );
-    const secretRef = createSecretRef();
+    const existingRef =
+      this.config?.apiKey && isSecretRef(this.config.apiKey)
+        ? this.config.apiKey
+        : undefined;
+    const secretRef = existingRef ?? createSecretRef();
     await this.context.secretStore.setApiKey(secretRef, trimmed);
 
     const next: ApiKeyAuthConfig = {
