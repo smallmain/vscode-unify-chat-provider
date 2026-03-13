@@ -1529,13 +1529,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     yield* this.extractThinkingParts(reasonings);
 
-    if (
-      this.hasEncryptedReasoning(reasonings) &&
-      !this.hasReasoningContentText(reasonings)
-    ) {
-      yield new vscode.LanguageModelThinkingPart('Encrypted thinking...');
-    }
-
     for (const item of message.output) {
       switch (item.type) {
         case 'reasoning':
@@ -1601,19 +1594,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return parseToolArguments(argumentsJson);
   }
 
-  private hasReasoningContentText(
-    reasonings: readonly ResponseReasoningItem[],
-  ): boolean {
-    for (const reasoning of reasonings) {
-      for (const part of reasoning.content ?? []) {
-        if (part.type === 'reasoning_text' && part.text) {
-          return true;
-        }
-      }
-    }
-    return false;
-  }
-
   private hasReasoningSummaryText(
     reasonings: readonly ResponseReasoningItem[],
   ): boolean {
@@ -1625,14 +1605,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
       }
     }
     return false;
-  }
-
-  private hasEncryptedReasoning(
-    reasonings: readonly ResponseReasoningItem[],
-  ): boolean {
-    return reasonings.some(
-      (reasoning) => typeof reasoning.encrypted_content === 'string',
-    );
   }
 
   private *extractThinkingParts(
@@ -1708,8 +1680,25 @@ export class OpenAIResponsesProvider implements ApiProvider {
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     let usage: ResponseUsage | undefined;
     let sawReasoningContentText = false;
+    let pendingReasoningSummaryText = '';
+    let emittedReasoningSummary = false;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
+    const flushPendingReasoningSummary = function* (): Generator<vscode.LanguageModelThinkingPart> {
+      if (
+        emittedReasoningSummary ||
+        sawReasoningContentText ||
+        !pendingReasoningSummaryText
+      ) {
+        pendingReasoningSummaryText = '';
+        return;
+      }
+
+      emittedReasoningSummary = true;
+      const summaryText = pendingReasoningSummaryText;
+      pendingReasoningSummaryText = '';
+      yield new vscode.LanguageModelThinkingPart(summaryText);
+    };
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -1731,12 +1720,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.output_text.delta':
           if (event.delta) {
+            yield* flushPendingReasoningSummary();
             yield new vscode.LanguageModelTextPart(event.delta);
           }
           break;
 
         case 'response.refusal.delta':
           if (event.delta) {
+            yield* flushPendingReasoningSummary();
             yield new vscode.LanguageModelTextPart(event.delta);
           }
           break;
@@ -1744,18 +1735,21 @@ export class OpenAIResponsesProvider implements ApiProvider {
         case 'response.reasoning_text.delta':
           if (event.delta) {
             sawReasoningContentText = true;
+            pendingReasoningSummaryText = '';
             yield* this.extractThinkingParts([event.delta], 'content-only');
           }
           break;
 
         case 'response.reasoning_summary_text.delta':
-          // Ignore streamed summary deltas. If the response contains no actual
-          // reasoning content, the final summary is emitted once on completion.
+          if (!sawReasoningContentText && event.delta) {
+            pendingReasoningSummaryText += event.delta;
+          }
           break;
 
         case 'response.output_item.done': {
           const item = event.item;
           if (item.type === 'function_call') {
+            yield* flushPendingReasoningSummary();
             yield new vscode.LanguageModelToolCallPart(
               item.call_id,
               item.name,
@@ -1773,20 +1767,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
             (v): v is ResponseReasoningItem => v.type === 'reasoning',
           );
 
-          if (
-            !sawReasoningContentText &&
-            this.hasReasoningSummaryText(reasonings)
-          ) {
-            yield* this.extractThinkingParts(reasonings, 'content-only');
-          }
+          yield* flushPendingReasoningSummary();
 
           if (
-            this.hasEncryptedReasoning(reasonings) &&
             !sawReasoningContentText &&
-            !this.hasReasoningSummaryText(reasonings) &&
-            !this.hasReasoningContentText(reasonings)
+            !emittedReasoningSummary &&
+            this.hasReasoningSummaryText(reasonings)
           ) {
-            yield new vscode.LanguageModelThinkingPart('Encrypted thinking...');
+            emittedReasoningSummary = true;
+            yield* this.extractThinkingParts(reasonings, 'content-only');
           }
 
           yield* this.extractThinkingParts(
