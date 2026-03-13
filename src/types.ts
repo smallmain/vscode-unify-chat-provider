@@ -1,8 +1,8 @@
-import { AuthConfig } from './auth/types';
-import { ProviderType } from './client/definitions';
+import type { AuthConfig } from './auth/types';
+import type { ProviderType } from './client/definitions';
 import type { RetryConfig } from './utils';
 import type { TokenizerId } from './tokenizer/tokenizers';
-import { BalanceConfig } from './balance/types';
+import type { BalanceConfig } from './balance/types';
 
 export type ContextCacheType = 'only-free' | 'allow-paid';
 
@@ -134,6 +134,11 @@ export interface ModelConfig {
      * Thinking effort level. Leave undefined to let the provider decide.
      */
     effort?: 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh';
+    /**
+     * Reasoning summary level for Responses-style APIs.
+     * Leave undefined to let the provider decide.
+     */
+    summary?: 'auto' | 'concise' | 'detailed' | null;
   };
   /**
    * Use native web search tool.

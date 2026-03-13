@@ -14,7 +14,7 @@ import {
   MODEL_VERSION_DELIMITER,
 } from '../model-id-utils';
 import type { ProviderType } from '../client/definitions';
-import { ModelConfig } from '../types';
+import type { ModelConfig } from '../types';
 import {
   DEFAULT_TOKEN_COUNT_MULTIPLIER,
   TOKENIZERS,
@@ -449,10 +449,45 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
             ],
           });
 
+          const summary = await pickQuickItem<
+            vscode.QuickPickItem & {
+              value: 'auto' | 'concise' | 'detailed' | undefined;
+            }
+          >({
+            title: t('Reasoning Summary'),
+            placeholder: t('Select reasoning summary level (optional)'),
+            items: [
+              {
+                label: t('Default'),
+                description: t('Let the provider decide'),
+                value: undefined,
+                picked:
+                  draft.thinking?.summary === undefined ||
+                  draft.thinking?.summary === null,
+              },
+              {
+                label: t('Auto'),
+                value: 'auto',
+                picked: draft.thinking?.summary === 'auto',
+              },
+              {
+                label: t('Concise'),
+                value: 'concise',
+                picked: draft.thinking?.summary === 'concise',
+              },
+              {
+                label: t('Detailed'),
+                value: 'detailed',
+                picked: draft.thinking?.summary === 'detailed',
+              },
+            ],
+          });
+
           draft.thinking = {
             type: picked.value,
             budgetTokens: budgetStr ? Number(budgetStr) : undefined,
             effort: effort ? effort.value : undefined,
+            summary: summary ? summary.value : undefined,
           };
         }
       },
@@ -467,6 +502,9 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
         }
         if (draft.thinking.effort) {
           details.push(t('{0} effort', draft.thinking.effort));
+        }
+        if (draft.thinking.summary) {
+          details.push(t('{0} summary', draft.thinking.summary));
         }
         return `${typeLabel}${
           details.length > 0 ? ` (${details.join(', ')})` : ''
