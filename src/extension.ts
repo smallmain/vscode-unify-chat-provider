@@ -24,6 +24,11 @@ import { t } from './i18n';
 import { AuthManager } from './auth';
 import { balanceManager } from './balance';
 import { registerBalanceStatusBar } from './ui/balance-status-bar';
+import {
+  cancelCommitMessageGeneration,
+  generateCommitMessageFromChanges,
+  selectCommitMessageGenerationModel,
+} from './commit-message-generator';
 import { mainInstance } from './main-instance';
 import {
   ensureMainInstanceCompatibility,
@@ -398,6 +403,19 @@ export function registerCommands(
           t('Refreshed balances for {0} provider(s).', refreshedCount),
         );
       },
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.generateCommitMessage',
+      (scmContext: unknown) =>
+        generateCommitMessageFromChanges(configStore, scmContext),
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.generateCommitMessageInProgress',
+      () => cancelCommitMessageGeneration(),
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.selectCommitMessageGenerationModel',
+      () => selectCommitMessageGenerationModel(configStore),
     ),
   );
 }

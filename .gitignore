@@ -5,6 +5,7 @@ out-tests
 *.vsix
 npm-debug.log*
 scripts/claude-proxy.log
+/.serena
 
 # Environment variables with sensitive credentials
 .env

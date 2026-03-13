@@ -37,6 +37,25 @@ import {
 } from './tokenizer/tokenizers';
 import type { BalanceManager } from './balance';
 import { evaluateBalanceWarning } from './balance/warning-utils';
+import {
+  isCommitMessageRequestName,
+  onCommitMessageCancellation,
+} from './commit-message-cancellation';
+
+/**
+ * Identify commit-message generation request by tagged user message name.
+ */
+function getCommitMessageRequestName(
+  messages: readonly vscode.LanguageModelChatRequestMessage[],
+): string | undefined {
+  const userMessage = messages.find(
+    (message) =>
+      message.role === vscode.LanguageModelChatMessageRole.User &&
+      isCommitMessageRequestName(message.name),
+  );
+
+  return userMessage?.name;
+}
 
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
   /\{(modelName|modelFamily|providerName|remainingBalance)\}/g;
@@ -61,7 +80,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
     private readonly balanceManager?: BalanceManager,
-  ) {}
+  ) { }
 
   /**
    * Provide information about available models (synchronous, non-blocking)
@@ -328,14 +347,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
         const message = isAuthError
           ? t(
-              'Authentication expired for "{0}". Please re-authorize.',
-              provider.name,
-            )
+            'Authentication expired for "{0}". Please re-authorize.',
+            provider.name,
+          )
           : t(
-              'Authentication error for "{0}": {1}',
-              provider.name,
-              lastError.error.message,
-            );
+            'Authentication error for "{0}": {1}',
+            provider.name,
+            lastError.error.message,
+          );
 
         const action = await vscode.window.showErrorMessage(
           message,
@@ -416,6 +435,38 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     progress: vscode.Progress<vscode.LanguageModelResponsePart2>,
     token: vscode.CancellationToken,
   ): Promise<void> {
+    const commitMessageRequestName = getCommitMessageRequestName(messages);
+    // Commit-message requests support an additional cancellation channel
+    // (toolbar command -> named request cancellation event).
+    // For regular chat requests, reusing the original VS Code token avoids
+    // per-request forwarding allocations without changing cancellation semantics.
+    const externalCancellationSource = commitMessageRequestName
+      ? new vscode.CancellationTokenSource()
+      : undefined;
+    const tokenForwarder = externalCancellationSource
+      ? token.onCancellationRequested(() => {
+        externalCancellationSource.cancel();
+      })
+      : undefined;
+    const commitMessageCancellationListener =
+      commitMessageRequestName && externalCancellationSource
+        ? onCommitMessageCancellation((requestName) => {
+          if (requestName === commitMessageRequestName) {
+            externalCancellationSource.cancel();
+          }
+        })
+        : undefined;
+
+    // Preserve already-requested cancellation when we are bridging through
+    // the external source; this keeps behavior consistent on immediate cancel.
+    if (externalCancellationSource && token.isCancellationRequested) {
+      externalCancellationSource.cancel();
+    }
+
+    // Commit-message flow listens to both cancellation channels through the
+    // bridged token; non-commit flow uses the original request token directly.
+    const effectiveToken = externalCancellationSource?.token ?? token;
+
     const logger = createRequestLogger();
     const performanceTrace: PerformanceTrace = {
       tts: Date.now(),
@@ -486,14 +537,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           messages,
           options,
           performanceTrace,
-          token,
+          effectiveToken,
           logger,
           credential,
         );
 
         try {
           for await (const part of stream) {
-            if (token.isCancellationRequested) {
+            if (effectiveToken.isCancellationRequested) {
               outcome = 'cancelled';
               break;
             }
@@ -503,7 +554,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             progress.report(part);
           }
         } catch (error) {
-          if (token.isCancellationRequested && isAbortLikeError(error)) {
+          if (effectiveToken.isCancellationRequested && isAbortLikeError(error)) {
             // User cancelled the request; treat provider abort errors as expected.
             outcome = 'cancelled';
           } else {
@@ -520,8 +571,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         }
 
         // If the stream produced data or was cancelled, we're done
-        if (partCount > 0 || token.isCancellationRequested) {
-          if (token.isCancellationRequested) {
+        if (partCount > 0 || effectiveToken.isCancellationRequested) {
+          if (effectiveToken.isCancellationRequested) {
             outcome = 'cancelled';
           }
           break;
@@ -556,6 +607,9 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           outcome,
         );
       }
+      commitMessageCancellationListener?.dispose();
+      tokenForwarder?.dispose();
+      externalCancellationSource?.dispose();
     }
   }
 
