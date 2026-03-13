@@ -1216,7 +1216,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             role: 'assistant',
             ...(content ? { content } : {}),
             ...(refusal ? { refusal } : {}),
-            ...(tool_calls ? { tool_calls } : {}),
+            ...(tool_calls && tool_calls.length > 0 ? { tool_calls } : {}),
             ...(reasoning ? { reasoning } : {}),
             ...(reasoning_content ? { reasoning_content } : {}),
             ...(reasoning_details ? { reasoning_details } : {}),
