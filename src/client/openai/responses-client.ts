@@ -1049,7 +1049,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
       sanitizedMessages,
       expectedIdentity,
     );
-    const tools = this.convertTools(options.tools);
+    const tools =
+      model.omitToolsDefinition === true
+        ? undefined
+        : this.convertTools(options.tools);
     const toolChoice = this.convertToolChoice(options.toolMode, tools);
     const streamEnabled = model.stream ?? true;
     const supportsPreviousResponseId =

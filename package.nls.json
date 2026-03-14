@@ -110,6 +110,7 @@
   "configuration.endpoints.models.capabilities.toolCalling.integer.description": "Maximum number of tools supported.",
   "configuration.endpoints.models.capabilities.imageInput.description": "Whether the model supports image input.",
   "configuration.endpoints.models.parallelToolCalling.description": "Enable or disable parallel tool calling (unset for provider default).",
+  "configuration.endpoints.models.omitToolsDefinition.description": "When enabled, omits the 'tools' block in outbound API calls. Useful for models that claim tool support but fail when sent tool definitions.",
   "configuration.endpoints.models.stream.description": "Whether to stream the response.",
   "configuration.endpoints.models.temperature.description": "Sampling temperature.",
   "configuration.endpoints.models.topK.description": "Top-k sampling.",
