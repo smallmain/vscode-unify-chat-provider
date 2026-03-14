@@ -24,6 +24,7 @@ export const MODEL_CONFIG_KEYS = [
   'frequencyPenalty',
   'presencePenalty',
   'parallelToolCalling',
+  'omitToolsDefinition',
   'serviceTier',
   'verbosity',
   'thinking',

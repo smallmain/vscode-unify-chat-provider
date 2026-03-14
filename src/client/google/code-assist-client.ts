@@ -1866,10 +1866,15 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       isClaudeModel && (thinkingEnabled || modelIdLower.includes('thinking'));
     const isClaudeThinking = claudeThinkingRequested; // && !disableThinkingConfig;
 
-    const sdkTools = this.convertTools(options.tools);
-    const tools = this.normalizeTools(sdkTools, {
-      hardenClaudeTools: isClaudeModel,
-    });
+    const sdkTools =
+      model.omitToolsDefinition === true
+        ? undefined
+        : this.convertTools(options.tools);
+    const tools = sdkTools
+      ? this.normalizeTools(sdkTools, {
+          hardenClaudeTools: isClaudeModel,
+        })
+      : undefined;
     const functionCallingConfig = this.buildAntigravityFunctionCallingConfig(
       options.toolMode,
       tools,
@@ -1881,7 +1886,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         modelIdLower,
         isClaudeModel,
       );
-    const toolsProvided = !!(options.tools && options.tools.length > 0);
+    const toolsProvided = !!(tools && tools.length > 0);
     const systemInstructionForRequest = this.buildSystemInstructionForRequest(
       systemInstruction,
       {

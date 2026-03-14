@@ -492,7 +492,10 @@ export class OllamaProvider implements ApiProvider {
       sanitizedMessages,
       expectedIdentity,
     );
-    const tools = this.convertTools(options.tools);
+    const tools =
+      model.omitToolsDefinition === true
+        ? undefined
+        : this.convertTools(options.tools);
     const requestOptions = this.buildOptions(model);
 
     const baseBody: ChatRequest = {

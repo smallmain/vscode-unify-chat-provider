@@ -287,6 +287,30 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
             ? t('enable')
             : t('disable'),
     },
+    // Omit Tools Definition
+    {
+      key: 'omitToolsDefinition',
+      type: 'picker',
+      label: t('Omit Tools Definition'),
+      icon: 'exclude',
+      section: 'capabilities',
+      title: t('Omit Tools Definition'),
+      placeholder: t('Omit tools block in API calls'),
+      options: [
+        {
+          label: t('Default'),
+          description: t('Use model defined behavior'),
+          value: undefined,
+        },
+        {
+          label: t('Enabled'),
+          description: t('Omit tools block in API calls'),
+          value: true,
+        },
+      ],
+      getDescription: (draft) =>
+        draft.omitToolsDefinition === true ? t('enabled') : t('default'),
+    },
     // Image Input (custom because it modifies capabilities nested object)
     {
       key: 'capabilities',

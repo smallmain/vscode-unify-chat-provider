@@ -715,7 +715,10 @@ export class GoogleAIStudioProvider implements ApiProvider {
       sanitizedMessages,
       expectedIdentity,
     );
-    const tools = this.convertTools(options.tools);
+    const tools =
+      model.omitToolsDefinition === true
+        ? undefined
+        : this.convertTools(options.tools);
     const functionCallingConfig = this.buildFunctionCallingConfig(
       options.toolMode,
       tools,

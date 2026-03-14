@@ -709,15 +709,6 @@ export class AnthropicProvider implements ApiProvider {
     const hasTools = (options.tools && options.tools.length > 0) ?? false;
     const stream = model.stream ?? true;
 
-    const anthropicInterleavedThinkingEnabled =
-      thinkingEnabled &&
-      hasTools &&
-      isFeatureSupported(
-        FeatureId.AnthropicInterleavedThinking,
-        this.config,
-        model,
-      );
-
     const {
       system,
       messages: anthropicMessages,
@@ -732,12 +723,23 @@ export class AnthropicProvider implements ApiProvider {
     // Also add tools if web search is enabled even without explicit tools
     const webSearchEnabled = model.webSearch?.enabled === true;
     const toolsResult =
-      hasTools || webSearchEnabled
-        ? this.convertTools(options.tools ?? [], model)
-        : undefined;
+      model.omitToolsDefinition === true
+        ? undefined
+        : hasTools || webSearchEnabled
+          ? this.convertTools(options.tools ?? [], model)
+          : undefined;
 
     const tools = toolsResult?.tools;
     const hasMemoryTool = toolsResult?.hasMemoryTool ?? false;
+
+    const anthropicInterleavedThinkingEnabled =
+      thinkingEnabled &&
+      (tools?.length ?? 0) > 0 &&
+      isFeatureSupported(
+        FeatureId.AnthropicInterleavedThinking,
+        this.config,
+        model,
+      );
 
     const fineGrainedToolStreamingEnabled =
       stream === true &&
@@ -784,11 +786,18 @@ export class AnthropicProvider implements ApiProvider {
 
     const headers = this.buildHeaders(credential, model, { stream });
 
+    const omitTools = model.omitToolsDefinition === true;
+    const effectiveToolMode =
+      omitTools && options.toolMode === vscode.LanguageModelChatToolMode.Required
+        ? vscode.LanguageModelChatToolMode.Auto
+        : options.toolMode;
     // Pass thinkingEnabled to convertToolChoice to enforce tool_choice restrictions
-    const toolChoice = this.applyParallelToolChoice(
-      this.convertToolChoice(options.toolMode, tools, thinkingEnabled),
-      model.parallelToolCalling,
-    );
+    const toolChoice = omitTools
+      ? undefined
+      : this.applyParallelToolChoice(
+          this.convertToolChoice(effectiveToolMode, tools, thinkingEnabled),
+          model.parallelToolCalling,
+        );
     const serviceTier = resolveAnthropicServiceTier(this.config, model);
 
     try {

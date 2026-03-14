@@ -110,6 +110,7 @@
   "configuration.endpoints.models.capabilities.toolCalling.integer.description": "支持的最大工具数量。",
   "configuration.endpoints.models.capabilities.imageInput.description": "模型是否支持图像输入。",
   "configuration.endpoints.models.parallelToolCalling.description": "启用或禁用并行工具调用（不设置则使用供应商默认行为）。",
+  "configuration.endpoints.models.omitToolsDefinition.description": "启用时，在对外 API 调用中省略 'tools' 块。适用于声称支持工具但在收到工具定义时出错的模型。",
   "configuration.endpoints.models.stream.description": "是否以流式方式返回响应。",
   "configuration.endpoints.models.temperature.description": "采样温度。",
   "configuration.endpoints.models.topK.description": "Top-k 采样。",
