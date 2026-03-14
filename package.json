@@ -711,6 +711,10 @@
                           "type": "boolean",
                           "description": "%configuration.endpoints.models.parallelToolCalling.description%"
                         },
+                        "omitToolsDefinition": {
+                          "type": "boolean",
+                          "description": "%configuration.endpoints.models.omitToolsDefinition.description%"
+                        },
                         "stream": {
                           "type": "boolean",
                           "description": "%configuration.endpoints.models.stream.description%"

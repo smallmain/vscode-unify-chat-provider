@@ -844,7 +844,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       reasoningType,
       expectedIdentity,
     );
-    const tools = this.convertTools(options.tools, shouldApplyCacheControl);
+    const tools =
+      model.omitToolsDefinition === true
+        ? undefined
+        : this.convertTools(options.tools, shouldApplyCacheControl);
     const toolChoice = this.convertToolChoice(options.toolMode, tools);
     const streamEnabled = model.stream ?? true;
 

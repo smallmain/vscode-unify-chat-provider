@@ -119,6 +119,8 @@ export interface ModelConfig {
   presencePenalty?: number;
   /** Parallel tool calling (true to enable, false to disable, undefined to use default) */
   parallelToolCalling?: boolean;
+  /** Omit tools definition in API calls (true to enable, false to disable, undefined to use default) */
+  omitToolsDefinition?: boolean;
   /** Service tier / processing tier */
   serviceTier?: ServiceTier;
   /**
