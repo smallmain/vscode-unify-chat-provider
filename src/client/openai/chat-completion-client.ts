@@ -967,7 +967,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     performanceTrace.ttft =
       Date.now() - (performanceTrace.tts + performanceTrace.ttf);
 
-    const choice = message.choices[0];
+    // Some providers wrap the response in a `data` field
+    const response = (message as any).data && !(message as any).choices
+      ? (message as any).data
+      : message;
+    const choice = response.choices[0];
     if (!choice) {
       throw new Error('OpenAI response did not include any choices');
     }
@@ -1138,6 +1142,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     let snapshot: ChatCompletionSnapshot | undefined;
     let usage: CompletionUsage | null | undefined;
+    const finalizedChoiceIndexes = new Set();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingTagParser = new StreamingThinkingTagParser();
@@ -1148,11 +1153,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       }
 
       logger.providerResponseChunk(JSON.stringify(event));
+      // Some providers may wrap chunks in a `data` field
+      const chunk = (event as any).data && !(event as any).choices
+        ? (event as any).data
+        : event;
 
-      snapshot = this.accumulateChatCompletion(snapshot, event);
-      if (event.usage) usage = event.usage;
-
-      const choice = event.choices[0];
+      snapshot = this.accumulateChatCompletion(snapshot, chunk);
+      if (chunk.usage) usage = chunk.usage;
+      const choice = chunk.choices[0];
       if (!choice) {
         continue;
       }
@@ -1177,7 +1185,29 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       }
 
       if (choice.finish_reason) {
-        const message = snapshot.choices[choice.index].message;
+        const choices = snapshot?.choices;
+        if (!choices || choices.length === 0) {
+          continue;
+        }
+
+        if (choice.index === null || choice.index === undefined) {
+          if (choices.length !== 1) {
+            continue;
+          }
+          choice.index = 0;
+        }
+
+        const finalizeKey = String(choice.index);
+        if (finalizedChoiceIndexes.has(finalizeKey)) {
+          continue;
+        }
+
+        const message = choices[choice.index]?.message;
+        if (!message) {
+          continue;
+        }
+
+        finalizedChoiceIndexes.add(finalizeKey);
 
         const {
           content,
