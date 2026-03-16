@@ -63,8 +63,8 @@ export const GEMINI_CLI_API_HEADERS = {
 export const GEMINI_CLI_CODE_ASSIST_PROVISION_HEADERS = {
   'X-Goog-Api-Client': 'google-cloud-sdk vscode_cloudshelleditor/0.1',
   'Client-Metadata': JSON.stringify({
-    ideType: 'ANTIGRAVITY',
-    platform: process.platform === 'win32' ? 'WINDOWS' : 'MACOS',
+    ideType: 'IDE_UNSPECIFIED',
+    platform: 'PLATFORM_UNSPECIFIED',
     pluginType: 'GEMINI',
   }),
 } as const;
@@ -121,8 +121,8 @@ export function buildGeminiCliCodeAssistMetadata(
   projectId?: string,
 ): Record<string, string> {
   const metadata: Record<string, string> = {
-    ideType: 'ANTIGRAVITY',
-    platform: process.platform === 'win32' ? 'WINDOWS' : 'MACOS',
+    ideType: 'IDE_UNSPECIFIED',
+    platform: 'PLATFORM_UNSPECIFIED',
     pluginType: 'GEMINI',
   };
 
