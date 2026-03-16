@@ -1078,7 +1078,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       ...this.buildReasoningParams(model, useThinkingParam2),
       ...(serviceTier !== undefined ? { service_tier: serviceTier } : {}),
       ...(model.verbosity ? { text: { verbosity: model.verbosity } } : {}),
-      ...(model.maxOutputTokens !== undefined
+      ...(model.maxOutputTokens !== undefined && model.maxOutputTokens !== 0
         ? { max_output_tokens: model.maxOutputTokens }
         : {}),
       ...(model.temperature !== undefined
