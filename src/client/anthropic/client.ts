@@ -1006,13 +1006,19 @@ export class AnthropicProvider implements ApiProvider {
           throw new Error(`Unsupported message block type: ${block.type}`);
       }
     }
-    yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
-      expectedIdentity,
-      {
-        raw,
-        userId: state.userId,
-      },
-    );
+
+    // Suppress purely empty responses (no content blocks) so callers see
+    // no parts at all instead of an empty message. The outer service
+    // treats Anthropic 0-part responses as valid and does not retry.
+    if (message.content.length > 0) {
+      yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
+        expectedIdentity,
+        {
+          raw,
+          userId: state.userId,
+        },
+      );
+    }
 
     if (message.usage) {
       this.processUsage(message.usage, performanceTrace, logger);
@@ -1145,15 +1151,27 @@ export class AnthropicProvider implements ApiProvider {
             }
           }
 
-          yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
-            expectedIdentity,
-            {
+          // Suppress purely empty responses (no content blocks). This
+          // specifically handles Anthropic Messages streams where the
+          // provider emits only `message_start` + `message_delta` (usage
+          // / stop_reason) + `message_stop` with an empty `content` array.
+          // In that case there is no assistant text or tool output, and
+          // Copilot Chat would otherwise see an "empty" assistant message
+          // (because only our internal stateful marker is emitted) and
+          // treat it as an error. By not emitting the marker when
+          // `raw.content` is empty, the outer service sees a 0-part
+          // response and accepts it as a valid no-op completion.
+          if (raw && raw.content.length > 0) {
+            yield encodeStatefulMarkerPart<{
+              raw: BetaMessage;
+              userId?: string;
+            }>(expectedIdentity, {
               raw,
               userId: state.userId,
-            },
-          );
+            });
+          }
 
-          if (raw.usage) {
+          if (raw?.usage) {
             this.processUsage(raw.usage, performanceTrace, logger);
           }
           break;

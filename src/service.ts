@@ -519,11 +519,23 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           }
         }
 
-        // If the stream produced data or was cancelled, we're done
+        // If the stream produced any parts or was cancelled, we're done
         if (partCount > 0 || token.isCancellationRequested) {
           if (token.isCancellationRequested) {
             outcome = 'cancelled';
           }
+          break;
+        }
+
+        // 0-part responses are valid for some providers. In particular,
+        // Anthropic Messages may legitimately return usage-only streams
+        // (e.g. `message_start` + `message_delta` with only usage /
+        // stop_reason + `message_stop`) where the final message has an empty
+        // content array. Copilot Chat interprets a visibly empty assistant
+        // response as an error, so the Anthropic client suppresses all
+        // parts in this scenario. We must treat those 0-part responses as
+        // successful no-op completions and not retry.
+        if (resolvedProvider.type === 'anthropic') {
           break;
         }
 
