@@ -461,9 +461,7 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
                 label: t('Default'),
                 description: t('Let the provider decide'),
                 value: undefined,
-                picked:
-                  draft.thinking?.summary === undefined ||
-                  draft.thinking?.summary === null,
+                picked: draft.thinking?.summary === undefined,
               },
               {
                 label: t('Auto'),

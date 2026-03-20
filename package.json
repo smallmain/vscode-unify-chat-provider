@@ -800,6 +800,20 @@
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.4%",
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.5%"
                                   ]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.enabled.summary.description%",
+                                  "enum": [
+                                    "auto",
+                                    "concise",
+                                    "detailed"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.1%",
+                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.2%"
+                                  ]
                                 }
                               },
                               "required": [
@@ -834,6 +848,20 @@
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.3%",
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.4%",
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.5%"
+                                  ]
+                                },
+                                "summary": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.auto.summary.description%",
+                                  "enum": [
+                                    "auto",
+                                    "concise",
+                                    "detailed"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.1%",
+                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.2%"
                                   ]
                                 }
                               },

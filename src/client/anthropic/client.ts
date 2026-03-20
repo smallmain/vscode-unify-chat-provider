@@ -64,6 +64,12 @@ import type { AuthTokenInfo } from '../../auth/types';
  */
 // TODO Citations support
 // TODO Context editing support
+type AnthropicThinkingContentType = 'content' | 'encrypted';
+
+type AnthropicThinkingOutputState = {
+  lastType?: AnthropicThinkingContentType;
+};
+
 export class AnthropicProvider implements ApiProvider {
   private readonly baseUrl: string;
 
@@ -937,6 +943,40 @@ export class AnthropicProvider implements ApiProvider {
     }
   }
 
+  private *emitThinkingText(
+    type: AnthropicThinkingContentType,
+    text: string,
+    emitMode: 'full' | 'metadata-only' | 'content-only',
+    metadata: ThinkingBlockMetadata | undefined,
+    state: AnthropicThinkingOutputState,
+    signature?: string,
+  ): Generator<vscode.LanguageModelThinkingPart> {
+    if (!text) {
+      return;
+    }
+
+    const prefix =
+      state.lastType !== undefined && state.lastType !== type ? '\n' : '';
+    const output = prefix + text;
+
+    if (emitMode !== 'metadata-only') {
+      yield new vscode.LanguageModelThinkingPart(output);
+    }
+
+    if (metadata) {
+      if (type === 'encrypted') {
+        metadata.redactedData = text;
+      } else {
+        metadata._completeThinking = (metadata._completeThinking || '') + text;
+      }
+      if (signature) {
+        metadata.signature = signature;
+      }
+    }
+
+    state.lastType = type;
+  }
+
   private async *parseMessage(
     message: Anthropic.Beta.Messages.BetaMessage,
     performanceTrace: PerformanceTrace,
@@ -959,13 +999,20 @@ export class AnthropicProvider implements ApiProvider {
 
     performanceTrace.ttft =
       Date.now() - (performanceTrace.tts + performanceTrace.ttf);
+    const thinkingOutputState: AnthropicThinkingOutputState = {};
 
     for (const block of message.content) {
       switch (block.type) {
         case 'text':
           for (const segment of parseThinkingTags(block.text)) {
             if (segment.type === 'thinking') {
-              yield new vscode.LanguageModelThinkingPart(segment.content);
+              yield* this.emitThinkingText(
+                'content',
+                segment.content,
+                'full',
+                undefined,
+                thinkingOutputState,
+              );
             } else {
               yield new vscode.LanguageModelTextPart(segment.content);
             }
@@ -973,24 +1020,30 @@ export class AnthropicProvider implements ApiProvider {
           break;
 
         case 'thinking':
-          yield new vscode.LanguageModelThinkingPart(
+          yield* this.emitThinkingText(
+            'content',
             block.thinking,
+            'full',
             undefined,
-            {
-              signature: block.signature,
-              _completeThinking: block.thinking,
-            } satisfies ThinkingBlockMetadata,
+            thinkingOutputState,
           );
+          yield new vscode.LanguageModelThinkingPart('', undefined, {
+            signature: block.signature,
+            _completeThinking: block.thinking,
+          } satisfies ThinkingBlockMetadata);
           break;
 
         case 'redacted_thinking':
-          yield new vscode.LanguageModelThinkingPart(
-            '',
+          yield* this.emitThinkingText(
+            'encrypted',
+            block.data,
+            'full',
             undefined,
-            {
-              redactedData: block.data,
-            } satisfies ThinkingBlockMetadata,
+            thinkingOutputState,
           );
+          yield new vscode.LanguageModelThinkingPart('', undefined, {
+            redactedData: block.data,
+          } satisfies ThinkingBlockMetadata);
           break;
 
         case 'tool_use':
@@ -1032,6 +1085,7 @@ export class AnthropicProvider implements ApiProvider {
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingTagParser = new StreamingThinkingTagParser();
+    const thinkingOutputState: AnthropicThinkingOutputState = {};
 
     for await (const event of stream) {
       if (token.isCancellationRequested) {
@@ -1054,7 +1108,13 @@ export class AnthropicProvider implements ApiProvider {
             case 'text':
               for (const segment of thinkingTagParser.push(block.text)) {
                 if (segment.type === 'thinking') {
-                  yield new vscode.LanguageModelThinkingPart(segment.content);
+                  yield* this.emitThinkingText(
+                    'content',
+                    segment.content,
+                    'content-only',
+                    undefined,
+                    thinkingOutputState,
+                  );
                 } else {
                   yield new vscode.LanguageModelTextPart(segment.content);
                 }
@@ -1062,10 +1122,23 @@ export class AnthropicProvider implements ApiProvider {
               break;
 
             case 'thinking':
-              yield new vscode.LanguageModelThinkingPart(block.thinking);
+              yield* this.emitThinkingText(
+                'content',
+                block.thinking,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
               break;
 
             case 'redacted_thinking':
+              yield* this.emitThinkingText(
+                'encrypted',
+                block.data,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
               break;
 
             default:
@@ -1081,7 +1154,13 @@ export class AnthropicProvider implements ApiProvider {
             case 'text_delta':
               for (const segment of thinkingTagParser.push(block.text)) {
                 if (segment.type === 'thinking') {
-                  yield new vscode.LanguageModelThinkingPart(segment.content);
+                  yield* this.emitThinkingText(
+                    'content',
+                    segment.content,
+                    'content-only',
+                    undefined,
+                    thinkingOutputState,
+                  );
                 } else {
                   yield new vscode.LanguageModelTextPart(segment.content);
                 }
@@ -1089,7 +1168,13 @@ export class AnthropicProvider implements ApiProvider {
               break;
 
             case 'thinking_delta':
-              yield new vscode.LanguageModelThinkingPart(block.thinking);
+              yield* this.emitThinkingText(
+                'content',
+                block.thinking,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
               break;
 
             default:
@@ -1136,7 +1221,13 @@ export class AnthropicProvider implements ApiProvider {
         case 'message_stop': {
           for (const segment of thinkingTagParser.flush()) {
             if (segment.type === 'thinking') {
-              yield new vscode.LanguageModelThinkingPart(segment.content);
+              yield* this.emitThinkingText(
+                'content',
+                segment.content,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
             } else {
               yield new vscode.LanguageModelTextPart(segment.content);
             }
@@ -1176,7 +1267,13 @@ export class AnthropicProvider implements ApiProvider {
 
     for (const segment of thinkingTagParser.flush()) {
       if (segment.type === 'thinking') {
-        yield new vscode.LanguageModelThinkingPart(segment.content);
+        yield* this.emitThinkingText(
+          'content',
+          segment.content,
+          'content-only',
+          undefined,
+          thinkingOutputState,
+        );
       } else {
         yield new vscode.LanguageModelTextPart(segment.content);
       }

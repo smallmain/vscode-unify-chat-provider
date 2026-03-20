@@ -138,7 +138,7 @@ export interface ModelConfig {
      * Reasoning summary level for Responses-style APIs.
      * Leave undefined to let the provider decide.
      */
-    summary?: 'auto' | 'concise' | 'detailed' | null;
+    summary?: 'auto' | 'concise' | 'detailed';
   };
   /**
    * Use native web search tool.
