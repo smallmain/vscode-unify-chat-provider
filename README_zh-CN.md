@@ -51,7 +51,6 @@ Unify Chat Provider
   - [添加 Nvidia 账号](#添加-nvidia-账号)
 - **Kimi、GLM、MiniMax、Qwen、DeepSeek、Llama 等系列模型**：
   - [添加 Synthetic 账号](#添加-synthetic-账号)
-- **OpenAI 兼容的 Kilo Gateway（通常包含免费模型，包括 stealth 模型与限时前沿模型）**：[添加 Kilo API Key](#添加-kilo-api-key)
 - 更多食谱：
   - [伪装 Claude Code 客户端](#伪装-claude-code-客户端)
 
@@ -140,21 +139,6 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
 2. 在列表中选择 `Synthetic`，并填入在用户面板生成的 API Key 直接回车。
 3. 点击配置界面最下方的 `保存` 按钮完成。
-
-</details>
-
-#### 添加 Kilo API Key
-
-<details>
-
-0. 你需要准备一个 Kilo API Key。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Kilo Code`。
-3. 输入你的 Kilo API Key 并回车。
-4. 保持默认基础 URL `https://api.kilo.ai/api/gateway`。
-5. 点击配置界面最下方的 `保存` 按钮完成。
-
-> Kilo 的免费模型可用性会频繁变化；stealth 模型和限时前沿模型会随时间出现或下线。
 
 </details>
 

@@ -51,7 +51,6 @@ Check out the [Cookbook](#-cookbook), you can start using it in minutes:
   - [Add Nvidia Account](#add-nvidia-account)
 - **Kimi, GLM, MiniMax, Qwen, DeepSeek, Llama Series Models**:
   - [Add Synthetic Account](#add-synthetic-account)
-- **OpenAI-compatible Kilo Gateway (often includes free stealth or limited-time frontier models)**: [Add Kilo API Key](#add-kilo-api-key)
 - More Recipes:
   - [Impersonate Claude Code Client](#impersonate-claude-code-client)
 
@@ -140,21 +139,6 @@ VS Code's Copilot Chat itself supports logging into a GitHub Copilot account, so
 1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
 2. Select `Synthetic` in the list, fill in the API Key generated in the user panel and press Enter.
 3. Click the `Save` button at the bottom of the configuration interface to complete.
-
-</details>
-
-#### Add Kilo API Key
-
-<details>
-
-0. You need to prepare a Kilo API key.
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Kilo Code` in the list.
-3. Fill in your Kilo API key and press Enter.
-4. Keep the default base URL `https://api.kilo.ai/api/gateway`.
-5. Click the `Save` button at the bottom of the configuration interface to complete.
-
-> Free model availability on Kilo can change frequently; stealth models and limited-time frontier models may appear/disappear over time.
 
 </details>
 
@@ -631,7 +615,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming            | [Details](#opencode-zen)   |
 | [OpenCode Zen (Gemini)](https://opencode.ai/)                                                   |                                                                 | [Details](#opencode-zen)   |
 | [Nvidia](https://build.nvidia.com/)                                                             |                                                                 | [Details](#nvidia)         |
-| [Kilo Code](https://kilo.ai/)                                                                    | <li>RawBaseUrl                                                  | [Details](#kilo-code)      |
+| [Kilo Code](https://kilo.ai/)                                                                   | <li>RawBaseUrl                                                  | [Details](#kilo-code)      |
 | [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                    | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Alibaba Cloud Model Studio (Coding Plan)](https://www.aliyun.com/product/bailian)              | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
 | [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio) | <li>ThinkingParam3 <li>ReasoningContent                         |                            |
