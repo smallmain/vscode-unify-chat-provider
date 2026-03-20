@@ -41,7 +41,10 @@ import { getBaseModelId } from '../../model-id-utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../../types';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
-import { ThinkingBlockMetadata } from '../types';
+import {
+  ENCRYPTED_THINKING_PLACEHOLDER,
+  ThinkingBlockMetadata,
+} from '../types';
 import { FeatureId } from '../definitions';
 import {
   buildBaseUrl,
@@ -957,7 +960,9 @@ export class AnthropicProvider implements ApiProvider {
 
     const prefix =
       state.lastType !== undefined && state.lastType !== type ? '\n' : '';
-    const output = prefix + text;
+    const output =
+      prefix +
+      (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
       yield new vscode.LanguageModelThinkingPart(output);

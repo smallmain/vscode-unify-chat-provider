@@ -47,6 +47,8 @@ export interface ThinkingBlockMetadata {
   _completeThinking?: string;
 }
 
+export const ENCRYPTED_THINKING_PLACEHOLDER = 'Encrypted thinking...';
+
 /**
  * `modelid\base64-encoded-raw-data`
  */

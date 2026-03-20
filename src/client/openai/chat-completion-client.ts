@@ -64,7 +64,10 @@ import { FunctionParameters } from 'openai/resources/shared';
 import { getBaseModelId } from '../../model-id-utils';
 import { CompletionUsage } from 'openai/resources/completions';
 import { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
-import { ThinkingBlockMetadata } from '../types';
+import {
+  ENCRYPTED_THINKING_PLACEHOLDER,
+  ThinkingBlockMetadata,
+} from '../types';
 import { FeatureId } from '../definitions';
 
 /**
@@ -1086,7 +1089,9 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     const prefix =
       state.lastType !== undefined && state.lastType !== type ? '\n' : '';
-    const output = prefix + text;
+    const output =
+      prefix +
+      (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
       yield new vscode.LanguageModelThinkingPart(output);
