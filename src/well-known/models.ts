@@ -257,7 +257,16 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-opus-4-6',
-    overrides: ['claude-opus-4.6', 'claude-opus-4-6-thinking'],
+    overrides: [
+      'claude-opus-4.6',
+      'claude-opus-4-6-thinking',
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'anthropic/claude-opus-4.6',
+        },
+      },
+    ],
     name: 'Claude Opus 4.6',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,
@@ -273,7 +282,16 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-sonnet-4-6',
-    overrides: ['claude-sonnet-4.6', 'claude-sonnet-4-6-thinking'],
+    overrides: [
+      'claude-sonnet-4.6',
+      'claude-sonnet-4-6-thinking',
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'anthropic/claude-sonnet-4.6',
+        },
+      },
+    ],
     name: 'Claude Sonnet 4.6',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -503,6 +521,14 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gpt-5.3-codex',
+    overrides: [
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'openai/gpt-5.3-codex',
+        },
+      },
+    ],
     name: 'GPT-5.3-Codex',
     maxInputTokens: 400000,
     maxOutputTokens: 128000,
@@ -1176,10 +1202,18 @@ const _WELL_KNOWN_MODELS = [
         matchers: [
           'dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'api-inference.modelscope.cn',
         ],
         config: {
           maxOutputTokens: 32768,
+        },
+      },
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'minimax/minimax-m2.7',
         },
       },
     ],
@@ -1227,10 +1261,18 @@ const _WELL_KNOWN_MODELS = [
         matchers: [
           'dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'api-inference.modelscope.cn',
         ],
         config: {
           maxOutputTokens: 32768,
+        },
+      },
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'minimax/minimax-m2.5',
         },
       },
     ],
@@ -1277,6 +1319,8 @@ const _WELL_KNOWN_MODELS = [
       {
         matchers: [
           'dashscope.aliyuncs.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
           'api-inference.modelscope.cn',
         ],
@@ -1326,6 +1370,8 @@ const _WELL_KNOWN_MODELS = [
       {
         matchers: [
           'dashscope.aliyuncs.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
           'api-inference.modelscope.cn',
         ],
@@ -1636,6 +1682,8 @@ const _WELL_KNOWN_MODELS = [
         matchers: [
           'ark.cn-beijing.volces.com',
           'ark.ap-southeast.bytepluses.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
           'api-inference.modelscope.cn',
@@ -1666,6 +1714,8 @@ const _WELL_KNOWN_MODELS = [
         matchers: [
           'ark.cn-beijing.volces.com',
           'ark.ap-southeast.bytepluses.com',
+          'coding-southeast.bytepluses.com',
+          'coding-intl.dashscope.aliyuncs.com',
           'dashscope.aliyuncs.com',
           'dashscope-intl.aliyuncs.com',
           'api-inference.modelscope.cn',
@@ -2910,6 +2960,12 @@ const _WELL_KNOWN_MODELS = [
           maxOutputTokens: 32768,
         },
       },
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'z-ai/glm-5',
+        },
+      },
     ],
     name: 'GLM-5',
     maxInputTokens: 200000,
@@ -3383,7 +3439,16 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3.1-pro-preview',
-    overrides: ['gemini-3.1-pro', 'gemini-3.1-pro-preview-customtools'],
+    overrides: [
+      'gemini-3.1-pro',
+      'gemini-3.1-pro-preview-customtools',
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'google/gemini-3.1-pro-preview',
+        },
+      },
+    ],
     name: 'Gemini 3.1 Pro Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65535,
@@ -3398,7 +3463,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3.1-flash-lite-preview',
-    overrides: ['gemini-3.1-flash-lite'],
+    overrides: [
+      'gemini-3.1-flash-lite',
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'google/gemini-3.1-flash-lite-preview',
+        },
+      },
+    ],
     name: 'Gemini 3.1 Flash Lite Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65535,
@@ -3428,7 +3501,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-flash-preview',
-    overrides: ['gemini-3-flash'],
+    overrides: [
+      'gemini-3-flash',
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'google/gemini-3-flash-preview',
+        },
+      },
+    ],
     name: 'Gemini 3 Flash Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -3596,6 +3677,14 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'kat-coder-pro-v1',
+    overrides: [
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'kwaipilot/kat-coder-pro',
+        },
+      },
+    ],
     name: 'KAT-Coder-Pro V1',
     maxInputTokens: 256000,
     maxOutputTokens: 32000,
