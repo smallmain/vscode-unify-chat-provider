@@ -735,6 +735,7 @@
   "Antigravity Usage": "Antigravity Usage",
   "Gemini CLI Usage": "Gemini CLI Usage",
   "Codex Usage": "Codex Usage",
+  "MiniMax Balance": "MiniMax Balance",
   "Last updated: {0}": "Last updated: {0}",
   "This month quota": "This month quota",
   "Monitor balance via AIHubMix remain API": "Monitor balance via AIHubMix remain API",
@@ -749,6 +750,7 @@
   "Monitor usage percentages via Gemini CLI retrieveUserQuota API": "Monitor usage percentages via Gemini CLI retrieveUserQuota API",
   "Monitor usage percentages via Codex usage APIs": "Monitor usage percentages via Codex usage APIs",
   "Monitor subscription and tool usage quotas via Synthetic API": "Monitor subscription and tool usage quotas via Synthetic API",
+  "Monitor balance via MiniMax coding plan API": "Monitor balance via MiniMax coding plan API",
   "Moonshot AI Balance": "Moonshot AI Balance",
   "New API Balance": "New API Balance",
   "New API Balance Configuration": "New API Balance Configuration",
@@ -855,5 +857,5 @@
   "Group": "Group",
   "User": "User",
   "5-hour limit": "5-hour limit",
-  "A weekly limit": "A weekly limit"
+  "Weekly limit": "Weekly limit"
 }

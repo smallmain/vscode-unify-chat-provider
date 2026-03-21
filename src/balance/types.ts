@@ -14,7 +14,8 @@ export type BalanceMethod =
   | 'antigravity'
   | 'gemini-cli'
   | 'codex'
-  | 'synthetic';
+  | 'synthetic'
+  | 'minimax';
 
 export interface NoBalanceConfig {
   method: 'none';
@@ -74,6 +75,10 @@ export interface SyntheticBalanceConfig {
   method: 'synthetic';
 }
 
+export interface MiniMaxBalanceConfig {
+  method: 'minimax';
+}
+
 export type BalanceConfig =
   | NoBalanceConfig
   | MoonshotAIBalanceConfig
@@ -87,10 +92,12 @@ export type BalanceConfig =
   | AntigravityBalanceConfig
   | GeminiCliBalanceConfig
   | CodexBalanceConfig
-  | SyntheticBalanceConfig;
+  | SyntheticBalanceConfig
+  | MiniMaxBalanceConfig;
 
 export type BalanceMetricType =
   | 'amount'
+  | 'integer'
   | 'token'
   | 'percent'
   | 'time'
@@ -121,6 +128,12 @@ export interface BalanceAmountMetric extends BalanceMetricBase {
   currencySymbol?: string;
 }
 
+export interface BalanceIntegerMetric extends BalanceMetricBase {
+  type: 'integer';
+  direction: 'remaining' | 'used' | 'limit';
+  value: number;
+}
+
 export interface BalanceTokenMetric extends BalanceMetricBase {
   type: 'token';
   used?: number;
@@ -149,6 +162,7 @@ export interface BalanceStatusMetric extends BalanceMetricBase {
 
 export type BalanceMetric =
   | BalanceAmountMetric
+  | BalanceIntegerMetric
   | BalanceTokenMetric
   | BalancePercentMetric
   | BalanceTimeMetric
@@ -250,4 +264,10 @@ export function isSyntheticBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is SyntheticBalanceConfig {
   return config?.method === 'synthetic';
+}
+
+export function isMiniMaxBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is MiniMaxBalanceConfig {
+  return config?.method === 'minimax';
 }

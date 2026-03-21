@@ -1033,6 +1033,21 @@ export class BalanceManager implements vscode.Disposable {
       };
     }
 
+    if (type === 'integer') {
+      const direction = this.toAmountDirection(raw.direction);
+      const value = this.toFiniteNumber(raw.value);
+      if (!direction || value === undefined) {
+        return undefined;
+      }
+
+      return {
+        ...base,
+        type,
+        direction,
+        value,
+      };
+    }
+
     if (type === 'token') {
       const used = this.toFiniteNumber(raw.used);
       const limit = this.toFiniteNumber(raw.limit);
@@ -1098,6 +1113,7 @@ export class BalanceManager implements vscode.Disposable {
 
   private toMetricType(value: unknown): BalanceMetric['type'] | undefined {
     return value === 'amount' ||
+      value === 'integer' ||
       value === 'token' ||
       value === 'percent' ||
       value === 'time' ||

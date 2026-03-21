@@ -61,6 +61,8 @@
   "configuration.endpoints.balanceProvider.method.antigravity.description": "使用 Antigravity 用量监控。",
   "configuration.endpoints.balanceProvider.method.geminiCli.description": "使用 Gemini CLI 用量监控。",
   "configuration.endpoints.balanceProvider.method.codex.description": "使用 Codex 用量监控。",
+  "configuration.endpoints.balanceProvider.method.synthetic.description": "使用 Synthetic 配额监控。",
+  "configuration.endpoints.balanceProvider.method.minimax.description": "使用 MiniMax 余额监控。",
   "configuration.endpoints.balanceProvider.method.newapi.description": "使用 New API 余额监控。",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API 用户 ID。",
   "configuration.endpoints.balanceProvider.newapi.systemToken.description": "New API 系统访问令牌。",

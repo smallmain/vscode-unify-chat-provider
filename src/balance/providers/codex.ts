@@ -236,7 +236,7 @@ function resolveRateLimitLabel(
   key: 'primary_window' | 'secondary_window',
 ): string {
   if (label === 'Primary rate limit') {
-    return key === 'primary_window' ? t('5-hour limit') : t('A weekly limit');
+    return key === 'primary_window' ? t('5-hour limit') : t('Weekly limit');
   }
 
   return `${label} (${resolveWindowLabel(key)})`;
@@ -302,7 +302,6 @@ function parseUsageMetrics(payload: unknown): ParsedLimitMetric[] {
     const parsedMetrics = parseRateLimitMetrics(
       primaryRateLimit,
       'Primary rate limit',
-      'primary',
     );
     if (parsedMetrics.length > 0) {
       metrics.push(...parsedMetrics);

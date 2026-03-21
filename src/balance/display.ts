@@ -2,6 +2,7 @@ import { isEnglish, t } from '../i18n';
 import { formatTokenCountCompact } from './token-display';
 import type {
   BalanceAmountMetric,
+  BalanceIntegerMetric,
   BalanceMetric,
   BalancePercentMetric,
   BalanceProviderState,
@@ -26,6 +27,10 @@ function formatAmount(value: number, currencySymbol?: string): string {
     maximumFractionDigits: 2,
   });
   return currencySymbol ? `${currencySymbol}${normalized}` : normalized;
+}
+
+function formatIntegerAmount(value: number): string {
+  return Math.round(value).toLocaleString();
 }
 
 function formatPercent(value: number): string {
@@ -91,7 +96,7 @@ function resolvePeriodText(metric: BalanceMetric): string | undefined {
 }
 
 function resolveTypeLabel(metric: BalanceMetric): string {
-  if (metric.type === 'amount') {
+  if (metric.type === 'amount' || metric.type === 'integer') {
     if (metric.direction === 'used') {
       return t('Used');
     }
@@ -233,6 +238,11 @@ function sortMetrics(metrics: readonly BalanceMetric[]): BalanceMetric[] {
 }
 
 type MetricGroupFamily = 'amount' | 'token' | 'status' | 'percent' | 'time';
+type AmountLikeMetric = BalanceAmountMetric | BalanceIntegerMetric;
+
+function getCurrencySymbol(metric: AmountLikeMetric | undefined): string | undefined {
+  return metric?.type === 'amount' ? metric.currencySymbol : undefined;
+}
 
 interface MetricLineGroup {
   key: string;
@@ -250,7 +260,7 @@ function normalizeGroupLabel(label: string | undefined): string | undefined {
 }
 
 function groupFamilyOf(metric: BalanceMetric): MetricGroupFamily {
-  return metric.type;
+  return metric.type === 'integer' ? 'amount' : metric.type;
 }
 
 function buildBaseGroupKey(metric: BalanceMetric): string {
@@ -429,10 +439,11 @@ function resolveUsedForQuota(input: {
 function pickAmountMetric(
   metrics: readonly BalanceMetric[],
   direction: BalanceAmountMetric['direction'],
-): BalanceAmountMetric | undefined {
+): BalanceAmountMetric | BalanceIntegerMetric | undefined {
   return metrics.find(
-    (metric): metric is BalanceAmountMetric =>
-      metric.type === 'amount' && metric.direction === direction,
+    (metric): metric is BalanceAmountMetric | BalanceIntegerMetric =>
+      (metric.type === 'amount' || metric.type === 'integer') &&
+      metric.direction === direction,
   );
 }
 
@@ -493,13 +504,23 @@ function resolveAmountValue(metrics: readonly BalanceMetric[]): {
   const usedForQuota = resolveUsedForQuota({ remaining, used, limit });
 
   const currencySymbol =
-    remainingMetric?.currencySymbol ??
-    usedMetric?.currencySymbol ??
-    limitMetric?.currencySymbol;
+    getCurrencySymbol(remainingMetric) ??
+    getCurrencySymbol(usedMetric) ??
+    getCurrencySymbol(limitMetric);
+  const amountFormat =
+    remainingMetric?.type === 'integer' ||
+    usedMetric?.type === 'integer' ||
+    limitMetric?.type === 'integer'
+      ? 'integer'
+      : 'decimal';
+  const formatAmountValue = (value: number): string =>
+    amountFormat === 'integer'
+      ? formatIntegerAmount(value)
+      : formatAmount(value, currencySymbol);
 
   if (usedForQuota !== undefined && limit !== undefined && limit > 0) {
     return {
-      text: `${formatAmount(usedForQuota, currencySymbol)} / ${formatAmount(limit, currencySymbol)}`,
+      text: `${formatAmountValue(usedForQuota)} / ${formatAmountValue(limit)}`,
       remaining,
       used: usedForQuota,
       limit,
@@ -508,7 +529,7 @@ function resolveAmountValue(metrics: readonly BalanceMetric[]): {
 
   if (remaining !== undefined) {
     return {
-      text: formatAmount(remaining, currencySymbol),
+      text: formatAmountValue(remaining),
       remaining,
       used: usedForQuota,
       limit,
@@ -517,7 +538,7 @@ function resolveAmountValue(metrics: readonly BalanceMetric[]): {
 
   if (used !== undefined) {
     return {
-      text: formatAmount(used, currencySymbol),
+      text: formatAmountValue(used),
       remaining,
       used: usedForQuota,
       limit,
@@ -526,7 +547,7 @@ function resolveAmountValue(metrics: readonly BalanceMetric[]): {
 
   if (limit !== undefined && limit > 0) {
     return {
-      text: formatAmount(limit, currencySymbol),
+      text: formatAmountValue(limit),
       remaining,
       used: usedForQuota,
       limit,
@@ -892,9 +913,10 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   return `${title}: ${renderedValue}`;
 }
 
-function getAmountMetrics(group: MetricLineGroup): BalanceAmountMetric[] {
+function getAmountMetrics(group: MetricLineGroup): AmountLikeMetric[] {
   return group.metrics.filter(
-    (metric): metric is BalanceAmountMetric => metric.type === 'amount',
+    (metric): metric is AmountLikeMetric =>
+      metric.type === 'amount' || metric.type === 'integer',
   );
 }
 
@@ -995,6 +1017,9 @@ export function getPrimaryMetric(
 export function formatMetricValue(metric: BalanceMetric): string | undefined {
   if (metric.type === 'amount') {
     return formatAmount(metric.value, metric.currencySymbol);
+  }
+  if (metric.type === 'integer') {
+    return formatIntegerAmount(metric.value);
   }
   if (metric.type === 'percent') {
     return formatPercent(metric.value);

@@ -484,6 +484,30 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "synthetic",
+                        "description": "%configuration.endpoints.balanceProvider.method.synthetic.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
+                        "const": "minimax",
+                        "description": "%configuration.endpoints.balanceProvider.method.minimax.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "newapi",
                         "description": "%configuration.endpoints.balanceProvider.method.newapi.description%"
                       },

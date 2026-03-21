@@ -8,8 +8,12 @@ import type { SecretStore } from '../../secret';
 import type { ProviderConfig } from '../../types';
 import type {
   BalanceConfig,
+  BalanceMetric,
+  BalancePercentMetric,
   BalanceRefreshInput,
   BalanceRefreshResult,
+  BalanceSnapshot,
+  BalanceTimeMetric,
 } from '../types';
 import { isAntigravityBalanceConfig } from '../types';
 import type {
@@ -35,6 +39,183 @@ function resolveAntigravityProjectId(provider: ProviderConfig): string {
   }
 
   return ANTIGRAVITY_DEFAULT_PROJECT_ID;
+}
+
+function normalizeMetricLabel(value: string): string {
+  return value.toLowerCase().replace(/[\s\-_/.]+/g, '');
+}
+
+function resolveAntigravityQuotaGroup(
+  metric: BalanceMetric,
+): string | undefined {
+  const joined = [
+    metric.label?.trim() ?? '',
+    metric.scope?.trim() ?? '',
+  ]
+    .filter((part) => part.length > 0)
+    .join(' ');
+  if (!joined) {
+    // Drop unlabeled entries.
+    return undefined;
+  }
+
+  const normalized = normalizeMetricLabel(joined);
+  const withoutRequestsPrefix = normalized
+    .replace(/^requests/, '')
+    .replace(/quota$/, '');
+
+  if (
+    withoutRequestsPrefix.includes('gemini25')
+  ) {
+    return undefined;
+  }
+
+  if (
+    withoutRequestsPrefix.includes('gemini') &&
+    withoutRequestsPrefix.includes('pro')
+  ) {
+    return 'Gemini 3.x Pro';
+  }
+
+  if (
+    (withoutRequestsPrefix.includes('gemini') &&
+      withoutRequestsPrefix.includes('flash'))
+  ) {
+    return 'Gemini 3 Flash';
+  }
+
+  if (
+    withoutRequestsPrefix.includes('claude') ||
+    withoutRequestsPrefix.includes('gptoss')
+  ) {
+    return 'Claude/GPT-OSS';
+  }
+
+  if (
+    withoutRequestsPrefix.startsWith('chat') ||
+    withoutRequestsPrefix.startsWith('tab')
+  ) {
+    return undefined;
+  }
+
+  // Drop unknown labelled buckets instead of surfacing extra noisy lines.
+  return undefined;
+}
+
+function buildPercentKey(metric: BalancePercentMetric, groupLabel: string): string {
+  return [
+    groupLabel,
+    metric.period,
+    metric.periodLabel?.trim() ?? '',
+    metric.basis ?? '',
+  ].join('|');
+}
+
+function buildTimeKey(metric: BalanceTimeMetric, groupLabel: string): string {
+  return [
+    groupLabel,
+    metric.period,
+    metric.periodLabel?.trim() ?? '',
+    metric.kind,
+  ].join('|');
+}
+
+function pickEarlierReset(
+  left: BalanceTimeMetric,
+  right: BalanceTimeMetric,
+): BalanceTimeMetric {
+  const leftTs = left.timestampMs;
+  const rightTs = right.timestampMs;
+  if (
+    typeof leftTs === 'number' &&
+    Number.isFinite(leftTs) &&
+    typeof rightTs === 'number' &&
+    Number.isFinite(rightTs)
+  ) {
+    return rightTs < leftTs ? right : left;
+  }
+  if (typeof rightTs === 'number' && Number.isFinite(rightTs)) {
+    return right;
+  }
+  if (typeof leftTs === 'number' && Number.isFinite(leftTs)) {
+    return left;
+  }
+  return left;
+}
+
+function groupAntigravitySnapshot(snapshot: BalanceSnapshot): BalanceSnapshot {
+  const passthrough: BalanceMetric[] = [];
+  const groupedPercent = new Map<string, BalancePercentMetric>();
+  const groupedTime = new Map<string, BalanceTimeMetric>();
+
+  for (const metric of snapshot.items) {
+    const groupLabel = resolveAntigravityQuotaGroup(metric);
+    if (!groupLabel) {
+      // Intentionally discard unlabeled/ungroupable entries to reduce duplicates.
+      continue;
+    }
+
+    if (metric.type === 'percent') {
+      const key = buildPercentKey(metric, groupLabel);
+      const existing = groupedPercent.get(key);
+      if (!existing || metric.value > existing.value) {
+        groupedPercent.set(key, {
+          ...metric,
+          label: groupLabel,
+          scope: undefined,
+          primary: false,
+        });
+      }
+      continue;
+    }
+
+    if (metric.type === 'time') {
+      const key = buildTimeKey(metric, groupLabel);
+      const existing = groupedTime.get(key);
+      if (!existing) {
+        groupedTime.set(key, {
+          ...metric,
+          label: groupLabel,
+          scope: undefined,
+        });
+      } else {
+        const chosen = pickEarlierReset(existing, metric);
+        groupedTime.set(key, {
+          ...chosen,
+          label: groupLabel,
+          scope: undefined,
+        });
+      }
+      continue;
+    }
+
+    passthrough.push(metric);
+  }
+
+  const mergedItems: BalanceMetric[] = [
+    ...passthrough,
+    ...groupedPercent.values(),
+    ...groupedTime.values(),
+  ];
+
+  let primaryPercent: BalancePercentMetric | undefined;
+  for (const item of mergedItems) {
+    if (item.type !== 'percent') {
+      continue;
+    }
+    item.primary = false;
+    if (!primaryPercent || item.value > primaryPercent.value) {
+      primaryPercent = item;
+    }
+  }
+  if (primaryPercent) {
+    primaryPercent.primary = true;
+  }
+
+  return {
+    ...snapshot,
+    items: mergedItems,
+  };
 }
 
 export class AntigravityBalanceProvider implements BalanceProvider {
@@ -106,12 +287,21 @@ export class AntigravityBalanceProvider implements BalanceProvider {
   }
 
   async refresh(input: BalanceRefreshInput): Promise<BalanceRefreshResult> {
-    return refreshCodeAssistQuota(input, {
+    const result = await refreshCodeAssistQuota(input, {
       providerName: 'Antigravity',
       endpointFallbacks: CODE_ASSIST_ENDPOINT_FALLBACKS,
       requestHeaders: CODE_ASSIST_HEADERS,
       resolveProjectId: (refreshInput) =>
         resolveAntigravityProjectId(refreshInput.provider),
     });
+
+    if (!result.success || !result.snapshot) {
+      return result;
+    }
+
+    return {
+      ...result,
+      snapshot: groupAntigravitySnapshot(result.snapshot),
+    };
   }
 }

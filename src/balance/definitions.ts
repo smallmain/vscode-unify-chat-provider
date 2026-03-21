@@ -17,6 +17,7 @@ import { AntigravityBalanceProvider } from './providers/antigravity';
 import { GeminiCliBalanceProvider } from './providers/gemini-cli';
 import { CodexBalanceProvider } from './providers/codex';
 import { SyntheticBalanceProvider } from './providers/synthetic';
+import { MiniMaxBalanceProvider } from './providers/minimax';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -217,6 +218,19 @@ export const BALANCE_METHODS = {
     resolveForExport: SyntheticBalanceProvider.resolveForExport,
     normalizeOnImport: SyntheticBalanceProvider.normalizeOnImport,
     prepareForDuplicate: SyntheticBalanceProvider.prepareForDuplicate,
+  },
+  minimax: {
+    id: 'minimax',
+    label: t('MiniMax Balance'),
+    description: t('Monitor balance via MiniMax coding plan API'),
+    category: 'General',
+    ctor: MiniMaxBalanceProvider,
+    supportsSensitiveDataInSettings:
+      MiniMaxBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: MiniMaxBalanceProvider.redactForExport,
+    resolveForExport: MiniMaxBalanceProvider.resolveForExport,
+    normalizeOnImport: MiniMaxBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: MiniMaxBalanceProvider.prepareForDuplicate,
   },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,

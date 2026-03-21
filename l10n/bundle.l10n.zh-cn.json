@@ -735,6 +735,7 @@
   "Antigravity Usage": "Antigravity 用量",
   "Gemini CLI Usage": "Gemini CLI 用量",
   "Codex Usage": "Codex 用量",
+  "MiniMax Balance": "MiniMax 余额",
   "Last updated: {0}": "上次更新：{0}",
   "This month quota": "本月限额",
   "Monitor balance via AIHubMix remain API": "通过 AIHubMix remain API 监控余额",
@@ -749,6 +750,7 @@
   "Monitor usage percentages via Gemini CLI retrieveUserQuota API": "通过 Gemini CLI retrieveUserQuota API 监控用量百分比",
   "Monitor usage percentages via Codex usage APIs": "通过 Codex usage API 监控用量百分比",
   "Monitor subscription and tool usage quotas via Synthetic API": "通过 Synthetic API 监控订阅与工具调用配额",
+  "Monitor balance via MiniMax coding plan API": "通过 MiniMax coding plan API 监控余额",
   "Moonshot AI Balance": "Moonshot AI 余额",
   "New API Balance": "New API 余额",
   "New API Balance Configuration": "New API 余额配置",
@@ -855,5 +857,5 @@
   "Group": "分组",
   "User": "用户",
   "5-hour limit": "5 小时限额",
-  "A weekly limit": "每周限额"
+  "Weekly limit": "每周限额"
 }
