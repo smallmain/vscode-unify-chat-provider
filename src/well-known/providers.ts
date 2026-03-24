@@ -226,7 +226,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
-    name: 'Alibaba Cloud Model Studio (Coding)',
+    name: 'Alibaba Cloud Model Studio (Coding Plan)',
     category: 'General',
     type: 'anthropic',
     baseUrl: 'https://coding.dashscope.aliyuncs.com/apps/anthropic',
@@ -243,7 +243,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
-    name: 'Alibaba Cloud Model Studio (Coding - Intl)',
+    name: 'Alibaba Cloud Model Studio (Coding Plan - International)',
     category: 'General',
     type: 'anthropic',
     baseUrl: 'https://coding-intl.dashscope.aliyuncs.com/apps/anthropic',

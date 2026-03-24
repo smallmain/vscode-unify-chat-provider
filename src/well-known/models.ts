@@ -263,7 +263,7 @@ const _WELL_KNOWN_MODELS = [
       {
         matchers: ['api.cline.bot'],
         config: {
-          id: 'anthropic/claude-opus-4.6',
+          id: 'anthropic/claude-opus-4-6',
         },
       },
     ],
@@ -288,7 +288,7 @@ const _WELL_KNOWN_MODELS = [
       {
         matchers: ['api.cline.bot'],
         config: {
-          id: 'anthropic/claude-sonnet-4.6',
+          id: 'anthropic/claude-sonnet-4-6',
         },
       },
     ],
