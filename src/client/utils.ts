@@ -19,6 +19,7 @@ import {
   normalizeBaseUrlInput,
   type RetryConfig,
 } from '../utils';
+import { reportUsageToContextWindow } from '../context-window-hook';
 import { FeatureId, FEATURES, PROVIDER_TYPES } from './definitions';
 import { ApiProvider } from './interface';
 import { ProviderPattern } from './types';
@@ -396,6 +397,11 @@ export function processUsage(
     performanceTrace.tps = NaN;
   }
   logger.usage(usage);
+
+  // Inject usage into VS Code's context window widget.
+  // This hooks into the Copilot Chat internal API to report token counts
+  // that the LanguageModelChatProvider API cannot natively convey.
+  reportUsageToContextWindow(usage);
 }
 
 /**

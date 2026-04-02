@@ -219,6 +219,18 @@ export async function activate(
     balanceManager,
   );
 
+  // Initialize context window hook to try to inject usage data
+  // into VS Code's context window widget
+  import('./context-window-hook').then(({ initializeContextWindowHook }) => {
+    initializeContextWindowHook().then((success) => {
+      console.log('[UnifyChatProvider] Context window hook initialized:', success);
+    }).catch((error) => {
+      console.error('[UnifyChatProvider] Failed to initialize context window hook:', error);
+    });
+  }).catch((error) => {
+    console.warn('[UnifyChatProvider] Context window hook module not loaded:', error);
+  });
+
   // Initialize official models manager
   await officialModelsManager.initialize(
     context,
