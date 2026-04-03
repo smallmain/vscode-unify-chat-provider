@@ -153,13 +153,25 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             editTools,
           };
 
+    // Calculate actual maxInputTokens: contextWindow - maxOutputTokens
+    // Some providers (like Cursor) define maxInputTokens as total context window,
+    // so we need to subtract maxOutputTokens to get the actual input limit.
+    const configuredMaxInput =
+      model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;
+    const configuredMaxOutput =
+      model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
+    const actualMaxInputTokens = Math.max(
+      0,
+      configuredMaxInput - configuredMaxOutput,
+    );
+
     return {
       id: modelId,
       name: displayName,
       family: resolvedModelFamily,
       version: '',
-      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
-      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      maxInputTokens: actualMaxInputTokens,
+      maxOutputTokens: configuredMaxOutput,
       capabilities,
       category: {
         label: provider.name,
