@@ -2216,6 +2216,20 @@ const _WELL_KNOWN_MODELS = [
     temperature: 0.6,
   },
   {
+    id: 'qwen3.6-plus',
+    name: 'Qwen3.6-Plus',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'qwen3.5-plus',
     name: 'Qwen3.5-Plus',
     maxInputTokens: 1000000,
@@ -3385,6 +3399,36 @@ const _WELL_KNOWN_MODELS = [
     presetTemplates: [thinkingMode()],
   },
   {
+    id: 'glm-5v-turbo',
+    name: 'GLM-5V-Turbo',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [thinkingMode()],
+  },
+  {
+    id: 'glm-5-turbo',
+    name: 'GLM-5-Turbo',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    presetTemplates: [thinkingMode()],
+  },
+  {
     id: 'glm-5',
     overrides: [
       {
@@ -3402,21 +3446,6 @@ const _WELL_KNOWN_MODELS = [
       },
     ],
     name: 'GLM-5',
-    maxInputTokens: 200000,
-    maxOutputTokens: 128000,
-    stream: true,
-    thinking: {
-      type: 'enabled',
-    },
-    capabilities: {
-      toolCalling: true,
-      imageInput: false,
-    },
-    presetTemplates: [thinkingMode()],
-  },
-  {
-    id: 'glm-5-turbo',
-    name: 'GLM-5-Turbo',
     maxInputTokens: 200000,
     maxOutputTokens: 128000,
     stream: true,
@@ -4066,6 +4095,66 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
+  },
+  {
+    id: 'gemma-4-31b-it',
+    overrides: ['gemma-4-31b'],
+    name: 'Gemma 4 31B',
+    maxInputTokens: 256000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [thinkingMode()],
+  },
+  {
+    id: 'gemma-4-26b-a4b-it',
+    overrides: ['gemma-4-26b-a4b'],
+    name: 'Gemma 4 26B A4B',
+    maxInputTokens: 256000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [thinkingMode()],
+  },
+  {
+    id: 'gemma-4-e4b-it',
+    overrides: ['gemma-4-e4b'],
+    name: 'Gemma 4 E4B',
+    maxInputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [thinkingMode()],
+  },
+  {
+    id: 'gemma-4-e2b-it',
+    overrides: ['gemma-4-e2b'],
+    name: 'Gemma 4 E2B',
+    maxInputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [thinkingMode()],
   },
   {
     id: 'hunyuan-2.0-thinking-20251109',

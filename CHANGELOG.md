@@ -1,5 +1,33 @@
 # Changelog
 
+## v5.13.0 - 2026-04-08
+
+### Features
+- add Xiaomi MIMO token plan providers (2b211d0, SmallMain)
+
+## v5.12.0 - 2026-04-08
+
+### Features
+- add Qwen3.6-Plus, GLM-5V-Turbo, Gemma 4 series to supported models list (7cca532, SmallMain)
+- update Qwen Code provider to use Qwen 3.6-Plus model (cb3f094, SmallMain)
+
+## v5.11.3 - 2026-04-08
+
+### Fixes
+- more robust rewrite code to avoid upstream non-standard data effects (3aa19b9, SmallMain)
+- the number of function response parts is equal to the number of function call parts of the function call turn (7124a3a, SmallMain)
+
+### Chores
+- add acknowledgements section to README files (362149a, SmallMain)
+
+## v5.11.2 - 2026-04-08
+
+### Features
+- add support for KAT-Coder-Pro V2 and GLM-5.1 models in well-known models and providers (3633449, SmallMain)
+
+### Fixes
+- some issues with non-standard implementations in certain upstream components (489fe09, SmallMain)
+
 ## v5.11.1 - 2026-03-27
 
 ### Fixes

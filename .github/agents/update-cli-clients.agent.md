@@ -42,8 +42,8 @@ tools:
 # 客户端列表
 
 - Claude Code Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
-- Github Copilot Client：参考 opencode 项目，本地路径：`/Users/smallmain/Documents/Work/opencode`
-- Open AI Codex Client：参考 opencode 项目，本地路径：`/Users/smallmain/Documents/Work/opencode`
+- Github Copilot Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Open AI Codex Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 - Antigravity / Gemini CLI Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 - Qwen Code Client: 参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
 - iFlow CLI Client: 参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`

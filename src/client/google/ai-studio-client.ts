@@ -56,6 +56,30 @@ import { FeatureId } from '../definitions';
 
 const TOOL_CALL_ID_PREFIX = 'google-tool:';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function mergeJsonRecord(
+  base: Record<string, unknown> | undefined,
+  delta: Record<string, unknown>,
+): Record<string, unknown> {
+  if (!base) {
+    return { ...delta };
+  }
+
+  const merged: Record<string, unknown> = { ...base };
+  for (const [key, value] of Object.entries(delta)) {
+    const existing = merged[key];
+    merged[key] =
+      isRecord(existing) && isRecord(value)
+        ? mergeJsonRecord(existing, value)
+        : value;
+  }
+
+  return merged;
+}
+
 export class GoogleAIStudioProvider implements ApiProvider {
   protected readonly baseUrl: string;
   protected readonly apiVersion: string;
@@ -324,6 +348,8 @@ export class GoogleAIStudioProvider implements ApiProvider {
       contents.at(-1)!,
     );
 
+    this.normalizeStreamingFunctionCallContents(contents);
+    this.mergeAdjacentFunctionResponseTurns(contents);
     this.reorderFunctionResponses(contents);
     this.normalizeFunctionResponseIds(contents);
 
@@ -398,6 +424,171 @@ export class GoogleAIStudioProvider implements ApiProvider {
       uuid: type === 'uuid' ? idOrUuid : undefined,
       id: type === 'id' ? idOrUuid : undefined,
     };
+  }
+
+  /**
+   * Gemini may stream function-call arguments as anonymous follow-up chunks.
+   * Merge those deltas into the last named function calls and remove the
+   * anonymous parts from replayed history.
+   */
+  private normalizeStreamingFunctionCallContents(contents: Content[]): void {
+    let lastModelContentWithNamedFunctionCalls: Content | undefined;
+    let index = 0;
+
+    while (index < contents.length) {
+      const content = contents[index];
+
+      if (content.role !== 'model' || !content.parts || content.parts.length === 0) {
+        if (content.role !== 'model') {
+          lastModelContentWithNamedFunctionCalls = undefined;
+        }
+        index++;
+        continue;
+      }
+
+      const anonymousParts = content.parts.filter(
+        (part) => part.functionCall !== undefined && !part.functionCall.name,
+      );
+
+      const hasNamedFunctionCalls = content.parts.some(
+        (part) => part.functionCall?.name !== undefined,
+      );
+
+      if (anonymousParts.length > 0) {
+        const targetContent =
+          hasNamedFunctionCalls
+            ? content
+            : lastModelContentWithNamedFunctionCalls;
+
+        if (targetContent) {
+          this.mergeAnonymousFunctionCallParts(targetContent, anonymousParts);
+        }
+
+        const remainingParts = content.parts.filter(
+          (part) => !(part.functionCall !== undefined && !part.functionCall.name),
+        );
+
+        if (remainingParts.length > 0) {
+          content.parts = remainingParts;
+        } else {
+          contents.splice(index, 1);
+          continue;
+        }
+      }
+
+      if (
+        content.parts.some((part) => part.functionCall?.name !== undefined)
+      ) {
+        lastModelContentWithNamedFunctionCalls = content;
+      }
+
+      index++;
+    }
+  }
+
+  private mergeAnonymousFunctionCallParts(
+    targetContent: Content,
+    anonymousParts: Part[],
+  ): void {
+    const targetParts = targetContent.parts;
+    if (!targetParts || targetParts.length === 0 || anonymousParts.length === 0) {
+      return;
+    }
+
+    const candidates = targetParts
+      .map((part, index) =>
+        part.functionCall?.name
+          ? { index, id: part.functionCall.id }
+          : undefined,
+      )
+      .filter(
+        (
+          candidate,
+        ): candidate is { index: number; id: string | undefined } =>
+          candidate !== undefined,
+      );
+
+    if (candidates.length === 0) {
+      return;
+    }
+
+    const usedFallbackTargets = new Set<number>();
+
+    for (const anonymousPart of anonymousParts) {
+      const anonymousCall = anonymousPart.functionCall;
+      if (!anonymousCall) {
+        continue;
+      }
+
+      let targetIndex = anonymousCall.id
+        ? candidates.find((candidate) => candidate.id === anonymousCall.id)?.index
+        : undefined;
+
+      if (targetIndex === undefined && candidates.length === 1) {
+        targetIndex = candidates[0].index;
+      }
+
+      if (targetIndex === undefined) {
+        targetIndex = candidates.find(
+          (candidate) => !usedFallbackTargets.has(candidate.index),
+        )?.index;
+      }
+
+      if (targetIndex === undefined) {
+        continue;
+      }
+
+      usedFallbackTargets.add(targetIndex);
+
+      const targetPart = targetParts[targetIndex];
+      const targetCall = targetPart.functionCall;
+      if (!targetCall) {
+        continue;
+      }
+
+      targetPart.functionCall = {
+        ...targetCall,
+        ...(anonymousCall.id ? { id: anonymousCall.id } : undefined),
+        ...(anonymousCall.args !== undefined
+          ? { args: mergeJsonRecord(targetCall.args, anonymousCall.args) }
+          : undefined),
+      };
+    }
+  }
+
+  private hasOnlyFunctionResponseParts(content: Content): boolean {
+    return (
+      content.role === 'user' &&
+      content.parts !== undefined &&
+      content.parts.length > 0 &&
+      content.parts.every((part) => part.functionResponse !== undefined)
+    );
+  }
+
+  /**
+   * Google requires parallel tool results to be returned in a single user turn.
+   */
+  private mergeAdjacentFunctionResponseTurns(contents: Content[]): void {
+    let index = 1;
+
+    while (index < contents.length) {
+      const previous = contents[index - 1];
+      const current = contents[index];
+
+      if (
+        this.hasOnlyFunctionResponseParts(previous) &&
+        this.hasOnlyFunctionResponseParts(current)
+      ) {
+        previous.parts = [
+          ...(previous.parts ?? []),
+          ...(current.parts ?? []),
+        ];
+        contents.splice(index, 1);
+        continue;
+      }
+
+      index++;
+    }
   }
 
   /**

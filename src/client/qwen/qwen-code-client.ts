@@ -163,15 +163,8 @@ export class QwenCodeProvider extends OpenAIChatCompletionProvider {
 
   async getAvailableModels(_credential: AuthTokenInfo): Promise<ModelConfig[]> {
     this.assertQwenCodeAuth();
-    const coderModel = mergeWithWellKnownModel({ id: 'qwen3.5-plus' });
+    const coderModel = mergeWithWellKnownModel({ id: 'qwen3.6-plus' });
     coderModel.id = 'coder-model';
-    const visionModel = mergeWithWellKnownModel({ id: 'qwen3-vl-plus' });
-    visionModel.id = 'vision-model';
-    return [
-      { id: 'qwen3-coder-plus' },
-      { id: 'qwen3-coder-flash' },
-      coderModel,
-      visionModel,
-    ];
+    return [coderModel];
   }
 }

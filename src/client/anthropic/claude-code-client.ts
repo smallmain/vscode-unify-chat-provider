@@ -51,6 +51,10 @@ function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+function isNonEmptyString(value: unknown): value is string {
+  return typeof value === 'string' && value.trim() !== '';
+}
+
 function createToolNameTextRewriter(
   map: ReadonlyMap<string, string>,
 ): (text: string) => string {
@@ -266,14 +270,17 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
 
   private createMcpToolNameTextRewriter(
     requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
-  ): (text: string) => string {
+  ): {
+    rewriteKnownToolName: (name: string) => string;
+    rewriteText: (text: string) => string;
+  } {
     const map = new Map<string, string>();
 
-    const registerName = (name: string): void => {
-      const trimmed = name.trim();
-      if (!trimmed) {
+    const registerName = (name: unknown): void => {
+      if (!isNonEmptyString(name)) {
         return;
       }
+      const trimmed = name.trim();
       const localName = this.fromProviderToolName(trimmed);
       const providerName = this.toProviderToolName(localName);
       if (localName !== providerName) {
@@ -289,7 +296,10 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
       }
     }
 
-    if (requestBase.tool_choice?.type === 'tool') {
+    if (
+      requestBase.tool_choice?.type === 'tool' &&
+      isNonEmptyString(requestBase.tool_choice.name)
+    ) {
       registerName(requestBase.tool_choice.name);
     }
 
@@ -297,31 +307,47 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
       if (typeof message.content === 'string') {
         continue;
       }
+      if (!Array.isArray(message.content)) {
+        continue;
+      }
       for (const block of message.content) {
-        if (block && block.type === 'tool_use') {
+        if (
+          block &&
+          (block.type === 'tool_use' || block.type === 'mcp_tool_use')
+        ) {
           registerName(block.name);
         }
       }
     }
 
-    return createToolNameTextRewriter(map);
+    return {
+      rewriteKnownToolName: (name: string) => map.get(name) ?? name,
+      rewriteText: createToolNameTextRewriter(map),
+    };
   }
 
   private rewriteToolNameReferences(
     requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
   ): void {
-    const rewriteText = this.createMcpToolNameTextRewriter(requestBase);
+    const { rewriteKnownToolName, rewriteText } =
+      this.createMcpToolNameTextRewriter(requestBase);
 
     if (requestBase.system) {
       const systemBlocks = toTextBlocks(requestBase.system);
       for (const block of systemBlocks) {
-        block.text = rewriteText(block.text);
+        if (typeof block.text === 'string') {
+          block.text = rewriteText(block.text);
+        }
       }
       requestBase.system = systemBlocks;
     }
 
     for (const message of requestBase.messages) {
-      this.rewriteToolNameReferencesInMessage(message, rewriteText);
+      this.rewriteToolNameReferencesInMessage(
+        message,
+        rewriteKnownToolName,
+        rewriteText,
+      );
     }
 
     if (requestBase.tools) {
@@ -339,7 +365,10 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
       }
     }
 
-    if (requestBase.tool_choice?.type === 'tool') {
+    if (
+      requestBase.tool_choice?.type === 'tool' &&
+      typeof requestBase.tool_choice.name === 'string'
+    ) {
       requestBase.tool_choice.name = this.toProviderToolName(
         requestBase.tool_choice.name,
       );
@@ -348,47 +377,77 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
 
   private rewriteToolNameReferencesInMessage(
     message: BetaMessageParam,
+    rewriteKnownToolName: (name: string) => string,
     rewriteText: (text: string) => string,
   ): void {
     if (typeof message.content === 'string') {
       message.content = rewriteText(message.content);
       return;
     }
+    if (!Array.isArray(message.content)) {
+      return;
+    }
 
     for (const block of message.content) {
       if (!block) continue;
-      this.rewriteToolNameReferencesInContentBlock(block, rewriteText);
+      this.rewriteToolNameReferencesInContentBlock(
+        block,
+        rewriteKnownToolName,
+        rewriteText,
+      );
     }
   }
 
   private rewriteToolNameReferencesInContentBlock(
     block: BetaContentBlockParam,
+    rewriteKnownToolName: (name: string) => string,
     rewriteText: (text: string) => string,
   ): void {
     switch (block.type) {
       case 'text':
-        block.text = rewriteText(block.text);
+        if (typeof block.text === 'string') {
+          block.text = rewriteText(block.text);
+        }
         break;
 
       case 'thinking':
-        block.thinking = rewriteText(block.thinking);
+        if (typeof block.thinking === 'string') {
+          block.thinking = rewriteText(block.thinking);
+        }
         break;
 
       case 'tool_use':
-        block.name = this.toProviderToolName(block.name);
+      case 'mcp_tool_use':
+        if (typeof block.name === 'string') {
+          block.name = this.toProviderToolName(block.name);
+        }
         break;
 
       case 'tool_result':
+      case 'mcp_tool_result':
         if (block.content === undefined) {
           break;
         }
         if (typeof block.content === 'string') {
           block.content = rewriteText(block.content);
-        } else {
-          for (const item of block.content) {
-            if (item.type === 'text') {
-              item.text = rewriteText(item.text);
-            }
+          break;
+        }
+        if (!Array.isArray(block.content)) {
+          break;
+        }
+        for (const item of block.content) {
+          if (!item) {
+            continue;
+          }
+          if (item.type === 'text' && typeof item.text === 'string') {
+            item.text = rewriteText(item.text);
+            continue;
+          }
+          if (
+            item.type === 'tool_reference' &&
+            typeof item.tool_name === 'string'
+          ) {
+            item.tool_name = rewriteKnownToolName(item.tool_name);
           }
         }
         break;

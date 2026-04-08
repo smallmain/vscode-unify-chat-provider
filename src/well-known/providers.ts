@@ -219,7 +219,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'qwen3-max-2026-01-23',
-      'qwen3.5-plus',
+      'qwen3.6-plus',
       'qwen3.5-flash',
       'qwen3-coder-plus',
       'qwen3-coder-flash',
@@ -267,7 +267,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'qwen3-max-2026-01-23',
-      'qwen3.5-plus',
+      'qwen3.6-plus',
       'qwen3.5-flash',
       'qwen3-coder-plus',
       'qwen3-coder-flash',
@@ -407,6 +407,30 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: ['mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'],
   },
   {
+    name: 'Xiaomi MIMO (China, Token Plan)',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://token-plan-cn.xiaomimimo.com/v1',
+    authTypes: ['api-key'],
+    models: ['mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'],
+  },
+  {
+    name: 'Xiaomi MIMO (Singapore, Token Plan)',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://token-plan-sgp.xiaomimimo.com/v1',
+    authTypes: ['api-key'],
+    models: ['mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'],
+  },
+  {
+    name: 'Xiaomi MIMO (Europe, Token Plan)',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://token-plan-ams.xiaomimimo.com/v1',
+    authTypes: ['api-key'],
+    models: ['mimo-v2-pro', 'mimo-v2-omni', 'mimo-v2-flash'],
+  },
+  {
     name: 'StepFun (China)',
     category: 'General',
     type: 'openai-chat-completion',
@@ -447,7 +471,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'glm-5.1',
-      'glm-5',
+      'glm-5v-turbo',
       'glm-5-turbo',
       'glm-4.7',
       'glm-4.6v',
@@ -464,7 +488,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'glm-5.1',
-      'glm-5',
+      'glm-5v-turbo',
       'glm-5-turbo',
       'glm-4.7',
       'glm-4.6',
@@ -480,7 +504,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'glm-5.1',
-      'glm-5',
+      'glm-5v-turbo',
       'glm-5-turbo',
       'glm-4.7',
       'glm-4.6v',
@@ -497,7 +521,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'glm-5.1',
-      'glm-5',
+      'glm-5v-turbo',
       'glm-5-turbo',
       'glm-4.7',
       'glm-4.6',

@@ -1818,6 +1818,54 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
   }
 
+  private resolveCompletedStreamOutputItems(
+    response: OpenAIResponse,
+    addedOutputItems: ReadonlyMap<number, ResponseOutputItem>,
+    completedOutputItems: ReadonlyMap<number, ResponseOutputItem>,
+    logger: RequestLogger,
+  ): ResponseOutputItem[] {
+    const responseOutput = response.output.slice();
+    if (
+      responseOutput.length === 0 &&
+      addedOutputItems.size === 0 &&
+      completedOutputItems.size === 0
+    ) {
+      return responseOutput;
+    }
+
+    const outputIndexes = new Set<number>();
+    for (let index = 0; index < responseOutput.length; index++) {
+      outputIndexes.add(index);
+    }
+    for (const index of addedOutputItems.keys()) {
+      outputIndexes.add(index);
+    }
+    for (const index of completedOutputItems.keys()) {
+      outputIndexes.add(index);
+    }
+
+    const resolvedOutput = Array.from(outputIndexes)
+      .sort((leftIndex, rightIndex) => leftIndex - rightIndex)
+      .map(
+        (index) =>
+          completedOutputItems.get(index) ??
+          responseOutput[index] ??
+          addedOutputItems.get(index),
+      )
+      .filter((item): item is ResponseOutputItem => item !== undefined);
+
+    if (
+      responseOutput.length !== resolvedOutput.length ||
+      (responseOutput.length === 0 && completedOutputItems.size > 0)
+    ) {
+      logger.verbose(
+        `OpenAI Responses stream output differed from response.completed payload; merged ${resolvedOutput.length} output item(s) from stream state and completion payload.`,
+      );
+    }
+
+    return resolvedOutput;
+  }
+
   private async *parseMessageStream(
     stream: AsyncIterable<ResponseStreamEvent>,
     sessionId: string,
@@ -1831,6 +1879,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
     let usage: ResponseUsage | undefined;
     const emittedFunctionCallIds = new Set<string>();
+    const addedOutputItems = new Map<number, ResponseOutputItem>();
+    const completedOutputItems = new Map<number, ResponseOutputItem>();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingOutputState: ResponseThinkingOutputState = {};
@@ -1872,6 +1922,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
       switch (event.type) {
         case 'response.output_item.added':
+          addedOutputItems.set(event.output_index, event.item);
           if (event.item.type === 'reasoning' && event.item.encrypted_content) {
             yield* this.emitThinkingText(
               'encrypted',
@@ -1921,6 +1972,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.output_item.done': {
           const item = event.item;
+          completedOutputItems.set(event.output_index, item);
           if (item.type === 'function_call') {
             const part = emitFunctionCallPart(item);
             if (part) {
@@ -1932,9 +1984,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.completed': {
           const response = event.response;
+          const completedOutput = this.resolveCompletedStreamOutputItems(
+            response,
+            addedOutputItems,
+            completedOutputItems,
+            logger,
+          );
           usage = response.usage ?? undefined;
 
-          for (const item of response.output) {
+          for (const item of completedOutput) {
             if (item.type === 'function_call') {
               const part = emitFunctionCallPart(item);
               if (part) {
@@ -1953,14 +2011,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
               }
             }
           }
-          const reasonings = response.output.filter(
+          const reasonings = completedOutput.filter(
             (v): v is ResponseReasoningItem => v.type === 'reasoning',
           );
 
           yield* this.extractThinkingParts(reasonings, 'metadata-only');
 
           const markerData: OpenAIResponsesMarkerData = {
-            data: response.output,
+            data: completedOutput,
             sessionId,
           };
           if (includeResponseIdInMarker) {
