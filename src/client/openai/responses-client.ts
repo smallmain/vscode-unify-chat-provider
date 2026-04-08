@@ -6,6 +6,7 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import {
+  ENCRYPTED_THINKING_PLACEHOLDER,
   ThinkingBlockMetadata,
 } from '../types';
 import { FeatureId } from '../definitions';
@@ -126,7 +127,7 @@ type OpenAIResponsesRequestContext = {
   imageGenerationOutputMimeType: string;
 };
 
-type ResponseThinkingContentType = 'summary' | 'content';
+type ResponseThinkingContentType = 'encrypted' | 'summary' | 'content';
 
 type ResponseThinkingOutputState = {
   lastType?: ResponseThinkingContentType;
@@ -1795,28 +1796,22 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     const prefix =
       state.lastType !== undefined && state.lastType !== type ? '\n' : '';
-    const output = prefix + text;
+    const output =
+      prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
       yield new vscode.LanguageModelThinkingPart(output);
     }
 
     if (metadata) {
-      metadata._completeThinking = (metadata._completeThinking || '') + text;
+      if (type === 'encrypted') {
+        metadata.redactedData = text;
+      } else {
+        metadata._completeThinking = (metadata._completeThinking || '') + text;
+      }
     }
 
     state.lastType = type;
-  }
-
-  private setEncryptedThinkingMetadata(
-    encryptedContent: string,
-    metadata: OpenAIResponsesThinkingMetadata | undefined,
-  ): void {
-    if (!encryptedContent || !metadata) {
-      return;
-    }
-
-    metadata.redactedData = encryptedContent;
   }
 
   private appendThinkingMetadata(
@@ -1884,7 +1879,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     for (const reasoning of reasonings) {
       if (reasoning.encrypted_content) {
-        this.setEncryptedThinkingMetadata(reasoning.encrypted_content, metadata);
+        yield* this.emitThinkingText(
+          'encrypted',
+          reasoning.encrypted_content,
+          emitMode,
+          metadata,
+          state,
+        );
       }
 
       for (const part of reasoning.summary) {
@@ -2030,6 +2031,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
       switch (event.type) {
         case 'response.output_item.added':
           addedOutputItems.set(event.output_index, event.item);
+          if (event.item.type === 'reasoning' && event.item.encrypted_content) {
+            yield* this.emitThinkingText(
+              'encrypted',
+              event.item.encrypted_content,
+              'content-only',
+              undefined,
+              thinkingOutputState,
+            );
+          }
           break;
 
         case 'response.output_text.delta':
