@@ -20,7 +20,6 @@ import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
 import { OpenAIResponsesProvider } from '../openai/responses-client';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
 import type { ChatCompletionSnapshot } from 'openai/lib/ChatCompletionStream';
-import type { ResponseCreateParamsBase } from 'openai/resources/responses/responses';
 import { buildOpencodeUserAgent } from '../../utils';
 
 function resolveCopilotApiBaseUrl(config: ProviderConfig): string {
@@ -230,14 +229,6 @@ class GitHubCopilotChatCompletionProvider extends OpenAIChatCompletionProvider {
 class GitHubCopilotResponsesProvider extends OpenAIResponsesProvider {
   protected override resolveBaseUrl(config: ProviderConfig): string {
     return resolveCopilotApiBaseUrl(config);
-  }
-
-  protected override handleRequest(
-    sessionId: string,
-    baseBody: ResponseCreateParamsBase,
-  ): void {
-    super.handleRequest(sessionId, baseBody);
-    baseBody.store ??= false;
   }
 
   protected override buildHeaders(
