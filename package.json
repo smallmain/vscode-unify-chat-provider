@@ -348,6 +348,10 @@
                 "type": "string",
                 "description": "%configuration.endpoints.baseUrl.description%"
               },
+              "store": {
+                "type": "boolean",
+                "description": "%configuration.endpoints.store.description%"
+              },
               "balanceProvider": {
                 "type": "object",
                 "description": "%configuration.endpoints.balanceProvider.description%",

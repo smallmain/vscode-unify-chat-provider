@@ -6,7 +6,6 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import {
-  ENCRYPTED_THINKING_PLACEHOLDER,
   ThinkingBlockMetadata,
 } from '../types';
 import { FeatureId } from '../definitions';
@@ -127,10 +126,14 @@ type OpenAIResponsesRequestContext = {
   imageGenerationOutputMimeType: string;
 };
 
-type ResponseThinkingContentType = 'encrypted' | 'summary' | 'content';
+type ResponseThinkingContentType = 'summary' | 'content';
 
 type ResponseThinkingOutputState = {
   lastType?: ResponseThinkingContentType;
+};
+
+type OpenAIResponsesThinkingMetadata = ThinkingBlockMetadata & {
+  rawState?: OpenAIResponsesMarkerData;
 };
 
 type ResponseImageGenerationCall = Extract<
@@ -352,6 +355,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return payload;
   }
 
+  protected shouldRenderReasoningContent(): boolean {
+    return true;
+  }
+
   protected getInputMessageRole(
     role: vscode.LanguageModelChatMessageRole,
   ): EasyInputMessage['role'] {
@@ -452,6 +459,36 @@ export class OpenAIResponsesProvider implements ApiProvider {
               } catch {
                 // fall back to best-effort conversion
               }
+            }
+
+            const thinkingRawState = this.extractThinkingRawState(
+              msg.content,
+              expectedIdentity,
+            );
+            if (thinkingRawState) {
+              if (firstSessionId == null && thinkingRawState.sessionId) {
+                firstSessionId = thinkingRawState.sessionId;
+              }
+              if (
+                typeof thinkingRawState.responseId === 'string' &&
+                thinkingRawState.responseId.trim()
+              ) {
+                latestResponseId = thinkingRawState.responseId;
+                latestResponseBoundaryIndex =
+                  messageOriginIndexes?.[messageIndex] ?? messageIndex;
+                outItemsAfterLatestResponse = [];
+              } else {
+                latestResponseId = undefined;
+                latestResponseBoundaryIndex = undefined;
+                outItemsAfterLatestResponse = [];
+              }
+              const item: EasyInputMessage = {
+                role: 'assistant',
+                content: '',
+              };
+              rawMap.set(item, thinkingRawState.data);
+              outItems.push(item);
+              break;
             }
 
             for (const part of msg.content) {
@@ -809,7 +846,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
   protected handleRequest(
     sessionId: string,
     baseBody: ResponseCreateParamsBase,
-  ) {}
+  ): void {
+    const storeOverride = this.config.store;
+    if (storeOverride !== undefined) {
+      baseBody.store = storeOverride;
+    }
+  }
 
   private resolveTransportMode(streamEnabled: boolean): ResolvedTransportMode {
     switch (this.config.transport) {
@@ -1613,7 +1655,22 @@ export class OpenAIResponsesProvider implements ApiProvider {
       (v): v is ResponseReasoningItem => v.type === 'reasoning',
     );
 
-    yield* this.extractThinkingParts(reasonings);
+    const markerData: OpenAIResponsesMarkerData = {
+      data: message.output,
+      identity: expectedIdentity,
+      sessionId,
+    };
+    if (includeResponseIdInMarker) {
+      markerData.responseId = message.id;
+    }
+
+    yield* this.extractThinkingParts(
+      reasonings,
+      'full',
+      undefined,
+      undefined,
+      markerData,
+    );
 
     for (const item of message.output) {
       switch (item.type) {
@@ -1662,13 +1719,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
       }
     }
 
-    const markerData: OpenAIResponsesMarkerData = {
-      data: message.output,
-      sessionId,
-    };
-    if (includeResponseIdInMarker) {
-      markerData.responseId = message.id;
-    }
     yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
       expectedIdentity,
       markerData,
@@ -1736,7 +1786,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     type: ResponseThinkingContentType,
     text: string,
     emitMode: 'full' | 'metadata-only' | 'content-only',
-    metadata: ThinkingBlockMetadata | undefined,
+    metadata: OpenAIResponsesThinkingMetadata | undefined,
     state: ResponseThinkingOutputState,
   ): Generator<vscode.LanguageModelThinkingPart> {
     if (!text) {
@@ -1745,43 +1795,96 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     const prefix =
       state.lastType !== undefined && state.lastType !== type ? '\n' : '';
-    const output =
-      prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
+    const output = prefix + text;
 
     if (emitMode !== 'metadata-only') {
       yield new vscode.LanguageModelThinkingPart(output);
     }
 
     if (metadata) {
-      if (type === 'encrypted') {
-        metadata.redactedData = text;
-      } else {
-        metadata._completeThinking = (metadata._completeThinking || '') + text;
-      }
+      metadata._completeThinking = (metadata._completeThinking || '') + text;
     }
 
     state.lastType = type;
   }
 
+  private setEncryptedThinkingMetadata(
+    encryptedContent: string,
+    metadata: OpenAIResponsesThinkingMetadata | undefined,
+  ): void {
+    if (!encryptedContent || !metadata) {
+      return;
+    }
+
+    metadata.redactedData = encryptedContent;
+  }
+
+  private appendThinkingMetadata(
+    text: string,
+    metadata: OpenAIResponsesThinkingMetadata | undefined,
+  ): void {
+    if (!text || !metadata) {
+      return;
+    }
+
+    metadata._completeThinking = (metadata._completeThinking || '') + text;
+  }
+
+  private applyThinkingRawState(
+    metadata: OpenAIResponsesThinkingMetadata | undefined,
+    rawState: OpenAIResponsesMarkerData | undefined,
+  ): void {
+    if (!metadata || !rawState) {
+      return;
+    }
+
+    metadata.rawState = rawState;
+  }
+
+  private extractThinkingRawState(
+    parts: readonly unknown[],
+    expectedIdentity?: string,
+  ): OpenAIResponsesMarkerData | undefined {
+    for (const part of parts) {
+      if (!(part instanceof vscode.LanguageModelThinkingPart)) {
+        continue;
+      }
+
+      const metadata = part.metadata as OpenAIResponsesThinkingMetadata | undefined;
+      const rawState = metadata?.rawState;
+      if (
+        rawState &&
+        Array.isArray(rawState.data) &&
+        (expectedIdentity === undefined ||
+          rawState.identity === undefined ||
+          rawState.identity === expectedIdentity) &&
+        rawState.data.every(
+          (item) => typeof item === 'object' && item !== null && 'type' in item,
+        )
+      ) {
+        return rawState;
+      }
+    }
+
+    return undefined;
+  }
+
   private *extractThinkingParts(
     reasonings: readonly ResponseReasoningItem[],
     emitMode: 'full' | 'metadata-only' | 'content-only' = 'full',
-    metadata?: ThinkingBlockMetadata,
+    metadata?: OpenAIResponsesThinkingMetadata,
     state: ResponseThinkingOutputState = {},
+    rawState?: OpenAIResponsesMarkerData,
   ): Generator<vscode.LanguageModelThinkingPart> {
     if (emitMode !== 'content-only' && metadata == null) {
       metadata = {};
     }
 
+    this.applyThinkingRawState(metadata, rawState);
+
     for (const reasoning of reasonings) {
       if (reasoning.encrypted_content) {
-        yield* this.emitThinkingText(
-          'encrypted',
-          reasoning.encrypted_content,
-          emitMode,
-          metadata,
-          state,
-        );
+        this.setEncryptedThinkingMetadata(reasoning.encrypted_content, metadata);
       }
 
       for (const part of reasoning.summary) {
@@ -1798,13 +1901,17 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
       for (const part of reasoning.content ?? []) {
         if (part.type === 'reasoning_text') {
-          yield* this.emitThinkingText(
-            'content',
-            part.text,
-            emitMode,
-            metadata,
-            state,
-          );
+          if (this.shouldRenderReasoningContent()) {
+            yield* this.emitThinkingText(
+              'content',
+              part.text,
+              emitMode,
+              metadata,
+              state,
+            );
+          } else {
+            this.appendThinkingMetadata(part.text, metadata);
+          }
         }
       }
     }
@@ -1923,15 +2030,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
       switch (event.type) {
         case 'response.output_item.added':
           addedOutputItems.set(event.output_index, event.item);
-          if (event.item.type === 'reasoning' && event.item.encrypted_content) {
-            yield* this.emitThinkingText(
-              'encrypted',
-              event.item.encrypted_content,
-              'content-only',
-              undefined,
-              thinkingOutputState,
-            );
-          }
           break;
 
         case 'response.output_text.delta':
@@ -1947,7 +2045,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
           break;
 
         case 'response.reasoning_text.delta':
-          if (event.delta) {
+          if (event.delta && this.shouldRenderReasoningContent()) {
             yield* this.emitThinkingText(
               'content',
               event.delta,
@@ -2015,15 +2113,23 @@ export class OpenAIResponsesProvider implements ApiProvider {
             (v): v is ResponseReasoningItem => v.type === 'reasoning',
           );
 
-          yield* this.extractThinkingParts(reasonings, 'metadata-only');
-
           const markerData: OpenAIResponsesMarkerData = {
             data: completedOutput,
+            identity: expectedIdentity,
             sessionId,
           };
           if (includeResponseIdInMarker) {
             markerData.responseId = response.id;
           }
+
+          yield* this.extractThinkingParts(
+            reasonings,
+            'metadata-only',
+            undefined,
+            undefined,
+            markerData,
+          );
+
           yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
             expectedIdentity,
             markerData,
@@ -2141,6 +2247,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 export type OpenAIResponsesMarkerData = {
   /** Raw `response.output` items, preserved verbatim for follow-up requests. */
   data: ResponseOutputItem[];
+  identity?: string;
   sessionId?: string;
   responseId?: string;
 };

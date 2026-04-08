@@ -220,11 +220,10 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     sessionId: string,
     baseBody: ResponseCreateParamsBase,
   ): void {
-    Object.assign(baseBody, {
-      store: false,
-      prompt_cache_key: sessionId,
-      instructions: '',
-    });
+    super.handleRequest(sessionId, baseBody);
+    baseBody.store ??= false;
+    baseBody.prompt_cache_key = sessionId;
+    baseBody.instructions = '';
   }
 
   protected override createClient(

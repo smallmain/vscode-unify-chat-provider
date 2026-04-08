@@ -62,6 +62,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'models',
   'extraHeaders',
   'extraBody',
+  'store',
   'timeout',
   'retry',
   'autoFetchOfficialModels',

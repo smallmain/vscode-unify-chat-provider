@@ -1,5 +1,9 @@
 import { createHash, randomBytes, timingSafeEqual } from 'node:crypto';
-import { DataPartMimeTypes, StatefulMarkerData } from './client/types';
+import {
+  DataPartMimeTypes,
+  StatefulMarkerData,
+  type ThinkingBlockMetadata,
+} from './client/types';
 import type { ProviderHttpLogger } from './logger';
 import { officialModelsManager } from './official-models-manager';
 import type {
@@ -1237,6 +1241,28 @@ function collectToolResultIds(
   );
 }
 
+function hasMatchingThinkingRawState(
+  message: vscode.LanguageModelChatRequestMessage,
+  expectedIdentity: string,
+): boolean {
+  if (message.role !== vscode.LanguageModelChatMessageRole.Assistant) {
+    return false;
+  }
+
+  return message.content.some((part) => {
+    if (!(part instanceof vscode.LanguageModelThinkingPart)) {
+      return false;
+    }
+
+    const metadata = part.metadata as ThinkingBlockMetadata | undefined;
+    if (!metadata || !isRecord(metadata.rawState)) {
+      return false;
+    }
+
+    return metadata.rawState['identity'] === expectedIdentity;
+  });
+}
+
 function sanitizeMessageForModelSwitch(
   message: vscode.LanguageModelChatRequestMessage,
   imageRetention: SanitizedImagePartRetention,
@@ -1361,6 +1387,11 @@ export function sanitizeMessagesForModelSwitchDetailed(
           continue;
         }
 
+        const hasTrustedThinkingRawState = hasMatchingThinkingRawState(
+          message,
+          options.expectedIdentity,
+        );
+
         const markerParts = message.content.filter(
           (part): part is vscode.LanguageModelDataPart =>
             part instanceof vscode.LanguageModelDataPart &&
@@ -1368,8 +1399,11 @@ export function sanitizeMessagesForModelSwitchDetailed(
         );
 
         if (markerParts.length !== 1) {
-          isRoundValid = false;
-          break;
+          if (!hasTrustedThinkingRawState) {
+            isRoundValid = false;
+            break;
+          }
+          continue;
         }
 
         const decoded = tryDecodeStatefulMarkerPart<object>(
@@ -1377,7 +1411,7 @@ export function sanitizeMessagesForModelSwitchDetailed(
           options.modelId,
           markerParts[0],
         );
-        if (!decoded) {
+        if (!decoded && !hasTrustedThinkingRawState) {
           isRoundValid = false;
           break;
         }

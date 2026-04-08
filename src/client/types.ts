@@ -45,6 +45,11 @@ export interface ThinkingBlockMetadata {
    * VSCode use this.
    */
   _completeThinking?: string;
+
+  /**
+   * Provider-specific raw response state used to restore reasoning across turns.
+   */
+  rawState?: unknown;
 }
 
 export const ENCRYPTED_THINKING_PLACEHOLDER = 'Encrypted thinking...';

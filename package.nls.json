@@ -50,6 +50,7 @@
   "configuration.endpoints.type.enumDescriptions.11": "Qwen Code",
   "configuration.endpoints.name.description": "Display name for this provider.",
   "configuration.endpoints.baseUrl.description": "API base URL (e.g., https://api.anthropic.com).",
+  "configuration.endpoints.store.description": "Whether to store responses on the provider side (OpenAI Responses `store` flag). For Codex, the default was false; set true to enable storing.",
   "configuration.endpoints.balanceProvider.description": "Provider balance monitoring configuration.",
   "configuration.endpoints.balanceProvider.method.none.description": "Disable balance monitoring.",
   "configuration.endpoints.balanceProvider.method.moonshot.description": "Use Moonshot AI balance monitor.",

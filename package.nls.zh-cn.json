@@ -50,6 +50,7 @@
   "configuration.endpoints.type.enumDescriptions.11": "Qwen Code",
   "configuration.endpoints.name.description": "此供应商的显示名称。",
   "configuration.endpoints.baseUrl.description": "API 基础 URL（例如：https://api.anthropic.com）。",
+  "configuration.endpoints.store.description": "是否在供应商侧存储响应（OpenAI Responses 的 `store` 参数）。Codex 之前默认是 false；设为 true 可启用存储。",
   "configuration.endpoints.balanceProvider.description": "供应商余额监控配置。",
   "configuration.endpoints.balanceProvider.method.none.description": "禁用余额监控。",
   "configuration.endpoints.balanceProvider.method.moonshot.description": "使用 Moonshot AI 余额监控。",
