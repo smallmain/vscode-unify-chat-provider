@@ -17,6 +17,7 @@
   "configuration.verbose.description": "Enable verbose logging of requests and responses.",
   "configuration.modelDisplayNameTemplate.description": "Template for chat model names. \nSupported variables: \n- {modelName}\n- {modelFamily}\n- {providerName}\n- {remainingBalance}",
   "configuration.storeApiKeyInSettings.description": "Store sync-safe sensitive data (e.g., API keys) in settings.json instead of VS Code Secret Storage.\n\nOAuth credentials are always kept in Secret Storage to avoid multi-device token refresh conflicts.\n\nDANGER: Changing this setting will migrate existing data between storage locations (may expose secrets in plain text).",
+  "configuration.fixes.fix001ContextIndicatorDisplay.description": "Fix Context Indicator Display (#30). Enable this compatibility fix to patch VS Code's context indicator until the upstream issue is fixed.",
   "configuration.balanceRefreshIntervalMs.description": "Periodic refresh interval for provider balances in milliseconds. Default: 60000 (60 seconds).",
   "configuration.balanceThrottleWindowMs.description": "Throttle window for post-request balance refresh in milliseconds. Default: 10000 (10 seconds).",
   "configuration.balanceStatusBarIcon.description": "Status bar icon for provider balances. Set to empty to hide.",

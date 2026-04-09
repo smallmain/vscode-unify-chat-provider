@@ -42,6 +42,10 @@ import {
 import type { BalanceManager } from './balance';
 import { evaluateBalanceWarning } from './balance/warning-utils';
 import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
+import {
+  clearContextWindowRequest,
+  reportProgressWithContextWindowRequest,
+} from './context-window-hook-bridge';
 
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
   /\{(modelName|modelFamily|providerName|remainingBalance)\}/g;
@@ -153,25 +157,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             editTools,
           };
 
-    // Calculate actual maxInputTokens: contextWindow - maxOutputTokens
-    // Some providers (like Cursor) define maxInputTokens as total context window,
-    // so we need to subtract maxOutputTokens to get the actual input limit.
-    const configuredMaxInput =
-      model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS;
-    const configuredMaxOutput =
-      model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS;
-    const actualMaxInputTokens = Math.max(
-      0,
-      configuredMaxInput - configuredMaxOutput,
-    );
-
     return {
       id: modelId,
       name: displayName,
       family: resolvedModelFamily,
       version: '',
-      maxInputTokens: actualMaxInputTokens,
-      maxOutputTokens: configuredMaxOutput,
+      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
+      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
       capabilities,
       category: {
         label: provider.name,
@@ -529,7 +521,15 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             partCount++;
             // Log VSCode output (verbose only)
             logger.vscodeOutput(part);
-            progress.report(part);
+            if (this.configStore.fix001ContextIndicatorDisplay) {
+              reportProgressWithContextWindowRequest(
+                logger.requestId,
+                progress,
+                part,
+              );
+            } else {
+              progress.report(part);
+            }
           }
         } catch (error) {
           if (token.isCancellationRequested && isAbortLikeError(error)) {
@@ -588,6 +588,9 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       }
       throw error;
     } finally {
+      if (this.configStore.fix001ContextIndicatorDisplay) {
+        clearContextWindowRequest(logger.requestId);
+      }
       if (providerForBalance) {
         this.balanceManager?.notifyChatRequestFinished(
           providerForBalance.name,

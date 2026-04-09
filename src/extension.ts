@@ -33,6 +33,10 @@ import { registerMainInstanceHandlers } from './main-instance/register-handlers'
 import { authLog } from './logger';
 import { webSocketSessionManager } from './client/websocket-session-manager';
 import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
+import {
+  disposeContextWindowHookBridge,
+  initializeContextWindowHookBridge,
+} from './context-window-hook-bridge';
 
 const VENDOR_ID = 'unify-chat-provider';
 const CONFIG_NAMESPACE = 'unifyChatProvider';
@@ -219,17 +223,72 @@ export async function activate(
     balanceManager,
   );
 
+  let contextWindowHookInitialization: Promise<boolean> | undefined;
+  let contextWindowHookTouched = false;
+
+  const ensureContextWindowHookInitialized = (): void => {
+    if (
+      !configStore.fix001ContextIndicatorDisplay ||
+      contextWindowHookInitialization
+      ) {
+      return;
+    }
+
+    contextWindowHookTouched = true;
+    contextWindowHookInitialization = initializeContextWindowHookBridge()
+      .then((success) => {
+        if (!success) {
+          contextWindowHookInitialization = undefined;
+        }
+        console.log(
+          '[UnifyChatProvider] Context window hook initialized:',
+          success,
+        );
+        return success;
+      })
+      .catch((error) => {
+        contextWindowHookInitialization = undefined;
+        console.error(
+          '[UnifyChatProvider] Failed to initialize context window hook:',
+          error,
+        );
+        return false;
+      });
+  };
+
+  const disposeContextWindowHook = (): void => {
+    if (!contextWindowHookTouched) {
+      return;
+    }
+
+    contextWindowHookInitialization = undefined;
+    disposeContextWindowHookBridge()
+      .then((disposed) => {
+        console.log(
+          '[UnifyChatProvider] Context window hook disposed:',
+          disposed,
+        );
+      })
+      .catch((error) => {
+        console.warn(
+          '[UnifyChatProvider] Failed to dispose context window hook:',
+          error,
+        );
+      });
+  };
+
+  const syncContextWindowHook = (): void => {
+    if (configStore.fix001ContextIndicatorDisplay) {
+      ensureContextWindowHookInitialized();
+      return;
+    }
+
+    disposeContextWindowHook();
+  };
+
   // Initialize context window hook to try to inject usage data
-  // into VS Code's context window widget
-  import('./context-window-hook').then(({ initializeContextWindowHook }) => {
-    initializeContextWindowHook().then((success) => {
-      console.log('[UnifyChatProvider] Context window hook initialized:', success);
-    }).catch((error) => {
-      console.error('[UnifyChatProvider] Failed to initialize context window hook:', error);
-    });
-  }).catch((error) => {
-    console.warn('[UnifyChatProvider] Context window hook module not loaded:', error);
-  });
+  // into VS Code's context window widget when the compatibility fix is enabled.
+  syncContextWindowHook();
 
   // Initialize official models manager
   await officialModelsManager.initialize(
@@ -274,6 +333,7 @@ export async function activate(
   // Re-register provider when configuration changes to pick up new models
   context.subscriptions.push(
     configStore.onDidChange(() => {
+      syncContextWindowHook();
       chatProvider.handleConfigurationChange();
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);

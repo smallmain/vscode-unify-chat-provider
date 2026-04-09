@@ -17,7 +17,7 @@ import {
   ServiceTier,
 } from './types';
 
-const CONFIG_NAMESPACE = 'unifyChatProvider';
+export const CONFIG_NAMESPACE = 'unifyChatProvider';
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_BALANCE_THROTTLE_WINDOW_MS = 10_000;
 const DEFAULT_BALANCE_STATUS_BAR_ICON = '$(credit-card)';
@@ -28,6 +28,9 @@ const DEFAULT_BALANCE_WARNING_ENABLED = true;
 const DEFAULT_BALANCE_WARNING_TIME_THRESHOLD_DAYS = 1;
 const DEFAULT_BALANCE_WARNING_AMOUNT_THRESHOLD = 1;
 const DEFAULT_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 1;
+export const FIX001_CONTEXT_INDICATOR_DISPLAY_CONFIG_KEY =
+  'fixes.fix001ContextIndicatorDisplay';
+export const DEFAULT_FIX001_CONTEXT_INDICATOR_DISPLAY = true;
 const MIN_BALANCE_WARNING_TIME_THRESHOLD_DAYS = 0;
 const MIN_BALANCE_WARNING_AMOUNT_THRESHOLD = 0;
 const MIN_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 0;
@@ -36,6 +39,7 @@ const GLOBAL_ONLY_CONFIG_KEYS = [
   'verbose',
   'modelDisplayNameTemplate',
   'storeApiKeyInSettings',
+  FIX001_CONTEXT_INDICATOR_DISPLAY_CONFIG_KEY,
   'balanceRefreshIntervalMs',
   'balanceThrottleWindowMs',
   'balanceStatusBarIcon',
@@ -52,10 +56,15 @@ export interface ExtensionConfiguration {
   endpoints: ProviderConfig[];
   modelDisplayNameTemplate: string;
   storeApiKeyInSettings: boolean;
+  fixes: FixesConfiguration;
   balanceRefreshIntervalMs: number;
   balanceThrottleWindowMs: number;
   balanceWarning: BalanceWarningConfiguration;
   verbose: boolean;
+}
+
+export interface FixesConfiguration {
+  fix001ContextIndicatorDisplay: boolean;
 }
 
 export interface BalanceWarningConfiguration {
@@ -140,6 +149,21 @@ export class ConfigStore {
     return typeof raw === 'boolean' ? raw : false;
   }
 
+  get fix001ContextIndicatorDisplay(): boolean {
+    const raw = this.readGlobalUnknown(
+      FIX001_CONTEXT_INDICATOR_DISPLAY_CONFIG_KEY,
+    );
+    return typeof raw === 'boolean'
+      ? raw
+      : DEFAULT_FIX001_CONTEXT_INDICATOR_DISPLAY;
+  }
+
+  get fixes(): FixesConfiguration {
+    return {
+      fix001ContextIndicatorDisplay: this.fix001ContextIndicatorDisplay,
+    };
+  }
+
   /**
    * Global periodic refresh interval for provider balances (milliseconds).
    */
@@ -219,6 +243,7 @@ export class ConfigStore {
       endpoints: this.endpoints,
       modelDisplayNameTemplate: this.modelDisplayNameTemplate,
       storeApiKeyInSettings: this.storeApiKeyInSettings,
+      fixes: this.fixes,
       balanceRefreshIntervalMs: this.balanceRefreshIntervalMs,
       balanceThrottleWindowMs: this.balanceThrottleWindowMs,
       balanceWarning: this.balanceWarning,

@@ -199,6 +199,11 @@
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
         },
+        "unifyChatProvider.fixes.fix001ContextIndicatorDisplay": {
+          "type": "boolean",
+          "description": "%configuration.fixes.fix001ContextIndicatorDisplay.description%",
+          "default": true
+        },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
           "description": "%configuration.balanceRefreshIntervalMs.description%",
