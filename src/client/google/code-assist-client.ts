@@ -408,7 +408,6 @@ function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
     'readOnly',
     'writeOnly',
     'deprecated',
-    // VS Code / JSON schema UI annotations that Antigravity does not accept.
     'enumDescriptions',
     'markdownEnumDescriptions',
     'markdownDescription',
