@@ -221,7 +221,9 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     options.betaFeatures.add('interleaved-thinking-2025-05-14');
     options.betaFeatures.add('context-management-2025-06-27');
-    options.betaFeatures.add('context-1m-2025-08-07');
+    if ((options.model.maxInputTokens ?? 0) >= 1_000_000) {
+      options.betaFeatures.add('context-1m-2025-08-07');
+    }
     options.betaFeatures.add('prompt-caching-scope-2026-01-05');
   }
 
