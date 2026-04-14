@@ -10,8 +10,16 @@ import type {
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AnthropicProvider } from './client';
 
-const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.5';
+const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.105';
 const DEFAULT_CLAUDE_SDK_VERSION = '0.71.2';
+const CLAUDE_CODE_ENV_HEADERS: Readonly<Record<string, string>> = {
+  CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC: '1',
+  CLAUDE_CODE_ATTRIBUTION_HEADER: '0',
+  CLAUDE_CODE_DISABLE_EXPERIMENTAL_BETAS: '1',
+  DISABLE_INSTALLATION_CHECKS: '1',
+  ENABLE_TOOL_SEARCH: '1',
+  ENABLE_1M_CONTEXT: '1',
+};
 
 const CLAUDE_CODE_SYSTEM_PROMPT_TEXT =
   "You are Claude Code, Anthropic's official CLI for Claude.";
@@ -179,6 +187,10 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
       ? 'identity'
       : 'gzip, deflate, br, zstd';
 
+    for (const [name, value] of Object.entries(CLAUDE_CODE_ENV_HEADERS)) {
+      headers[name] = value;
+    }
+
     headers['X-Stainless-Lang'] = 'js';
     headers['X-Stainless-Package-Version'] = sdkVersion;
     headers['X-Stainless-OS'] = 'Linux';
@@ -209,6 +221,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     options.betaFeatures.add('interleaved-thinking-2025-05-14');
     options.betaFeatures.add('context-management-2025-06-27');
+    options.betaFeatures.add('context-1m-2025-08-07');
     options.betaFeatures.add('prompt-caching-scope-2026-01-05');
   }
 
