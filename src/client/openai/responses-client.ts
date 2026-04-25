@@ -162,6 +162,64 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function readResponseInputItemType(
+  item: ResponseInputItem,
+): string | undefined {
+  if (!isRecord(item)) {
+    return undefined;
+  }
+
+  const type = item.type;
+  return typeof type === 'string' ? type : undefined;
+}
+
+function readResponseInputItemCallId(
+  item: ResponseInputItem,
+): string | undefined {
+  if (!isRecord(item)) {
+    return undefined;
+  }
+
+  const callId = item.call_id;
+  return typeof callId === 'string' && callId.trim() ? callId : undefined;
+}
+
+function omitFunctionCallsWithoutFollowingOutput(
+  input: OpenAIResponsesRequestBody['input'],
+): OpenAIResponsesRequestBody['input'] {
+  if (!Array.isArray(input)) {
+    return input;
+  }
+
+  const outputCallIdsAfter = new Set<string>();
+  const retainedIndexes = new Set<number>();
+
+  for (let index = input.length - 1; index >= 0; index--) {
+    const item = input[index];
+    const type = readResponseInputItemType(item);
+    const callId = readResponseInputItemCallId(item);
+
+    if (type === 'function_call_output') {
+      if (callId) {
+        outputCallIdsAfter.add(callId);
+      }
+      retainedIndexes.add(index);
+      continue;
+    }
+
+    if (
+      type !== 'function_call' ||
+      (callId && outputCallIdsAfter.has(callId))
+    ) {
+      retainedIndexes.add(index);
+    }
+  }
+
+  return retainedIndexes.size === input.length
+    ? input
+    : input.filter((_, index) => retainedIndexes.has(index));
+}
+
 function isResponseImageGenerationCall(
   item: ResponseOutputItem,
 ): item is ResponseImageGenerationCall {
@@ -929,6 +987,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
       body.input = continuation.inputAfterPreviousResponse;
     }
 
+    body.input = omitFunctionCallsWithoutFollowingOutput(body.input);
+
     return body;
   }
 
@@ -950,6 +1010,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
       body.previous_response_id = continuation.previousResponseId;
       body.input = continuation.inputAfterPreviousResponse;
     }
+
+    body.input = omitFunctionCallsWithoutFollowingOutput(body.input);
 
     return {
       type: 'response.create',
