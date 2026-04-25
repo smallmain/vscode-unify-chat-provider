@@ -105,6 +105,13 @@ export interface ModelConfig {
    */
   maxOutputTokens?: number;
   /**
+   * Maximum output tokens reported to VS Code for context window metadata.
+   *
+   * Use this when the provider should expose an output reserve to VS Code but
+   * should not receive an output token limit in API requests.
+   */
+  reportedMaxOutputTokens?: number;
+  /**
    * Tokenizer used for VS Code token counting (`provideTokenCount`).
    *
    * Default: `default`

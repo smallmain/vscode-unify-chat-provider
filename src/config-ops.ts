@@ -16,6 +16,7 @@ export const MODEL_CONFIG_KEYS = [
   'family',
   'maxInputTokens',
   'maxOutputTokens',
+  'reportedMaxOutputTokens',
   'tokenizer',
   'tokenCountMultiplier',
   'capabilities',
@@ -39,6 +40,7 @@ export const MODEL_CONFIG_KEYS = [
 export const BUILT_IN_SYNC_MODEL_CONFIG_KEYS = [
   'maxInputTokens',
   'maxOutputTokens',
+  'reportedMaxOutputTokens',
   'tokenizer',
   'tokenCountMultiplier',
   'capabilities',
