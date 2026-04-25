@@ -488,6 +488,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
+      (model, provider) =>
+        (model.family ?? getBaseModelId(model.id)).includes('deepseek-v4'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -510,12 +512,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   [FeatureId.OpenAIUseDeepSeekReasoningEffortParam]: {
     customCheckers: [
       (model, provider) =>
-        matchProvider(provider.baseUrl, 'api.deepseek.com') &&
-        matchModelFamily(model.family ?? getBaseModelId(model.id), [
-          'deepseek-v4-',
-          'deepseek-chat',
-          'deepseek-reasoner',
-        ]),
+        (model.family ?? getBaseModelId(model.id)).includes('deepseek-v4'),
     ],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
@@ -628,14 +625,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.longcat.chat',
       'api.synthetic.new',
       'qianfan.baidubce.com',
-    ],
-    customCheckers: [
-      // Checker for Nvidia GLM models:
-      (model, provider) =>
-        matchProvider(provider.baseUrl, 'integrate.api.nvidia.com') &&
-        matchModelFamily(model.family ?? getBaseModelId(model.id), [
-          'z-ai/glm',
-        ]),
+      'integrate.api.nvidia.com',
     ],
   },
   [FeatureId.OpenAIUseClearThinking]: {
