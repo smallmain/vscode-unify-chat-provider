@@ -1,4 +1,9 @@
-import type { ModelConfig, ProviderConfig, ThinkingEffort } from '../types';
+import type {
+  ModelConfig,
+  PresetTemplate,
+  ProviderConfig,
+  ThinkingEffort,
+} from '../types';
 import type { ProviderPattern } from '../client/types';
 import { matchProvider } from '../client/utils';
 import {
@@ -102,9 +107,7 @@ function anthropicAdaptiveReasoningEffort<T extends readonly ThinkingEffort[]>(
   });
 }
 
-function withThinkingSummaryAuto(
-  template: ReturnType<typeof adaptiveReasoningEffort>,
-): ReturnType<typeof adaptiveReasoningEffort> {
+function withThinkingSummaryAuto(template: PresetTemplate): PresetTemplate {
   return {
     ...template,
     presets: template.presets.map((preset) => ({
@@ -817,6 +820,7 @@ const _WELL_KNOWN_MODELS = [
     thinking: {
       type: 'enabled',
       effort: 'xhigh',
+      summary: 'auto',
     },
     capabilities: {
       toolCalling: true,
@@ -824,7 +828,9 @@ const _WELL_KNOWN_MODELS = [
       editTools: 'apply-patch',
     },
     presetTemplates: [
-      openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      withThinkingSummaryAuto(
+        openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      ),
     ],
   },
   {
@@ -845,6 +851,7 @@ const _WELL_KNOWN_MODELS = [
     thinking: {
       type: 'enabled',
       effort: 'xhigh',
+      summary: 'auto',
     },
     capabilities: {
       toolCalling: true,
@@ -852,7 +859,9 @@ const _WELL_KNOWN_MODELS = [
       editTools: 'apply-patch',
     },
     presetTemplates: [
-      openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      withThinkingSummaryAuto(
+        openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      ),
     ],
   },
   {
@@ -865,6 +874,7 @@ const _WELL_KNOWN_MODELS = [
     thinking: {
       type: 'enabled',
       effort: 'xhigh',
+      summary: 'auto',
     },
     capabilities: {
       toolCalling: true,
@@ -872,7 +882,9 @@ const _WELL_KNOWN_MODELS = [
       editTools: 'apply-patch',
     },
     presetTemplates: [
-      openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      withThinkingSummaryAuto(
+        openAiReasoningEffort(OPENAI_CODEX_REASONING_EFFORTS, 'xhigh'),
+      ),
     ],
   },
   {
