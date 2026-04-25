@@ -26,6 +26,11 @@ let reportProgressImpl = (
 
 let clearRequestImpl = (_localRequestId: string): void => {};
 
+let setOutputBufferImpl = (
+  _localRequestId: string,
+  _outputBuffer: number,
+): void => {};
+
 function installNoopImplementations(): void {
   reportUsageImpl = (_localRequestId: string, _usage: ProviderUsage): boolean =>
     false;
@@ -37,6 +42,10 @@ function installNoopImplementations(): void {
     progress.report(part);
   };
   clearRequestImpl = (_localRequestId: string): void => {};
+  setOutputBufferImpl = (
+    _localRequestId: string,
+    _outputBuffer: number,
+  ): void => {};
 }
 
 function installHookImplementations(
@@ -45,6 +54,7 @@ function installHookImplementations(
   reportUsageImpl = hookModule.reportUsageToContextWindowForRequest;
   reportProgressImpl = hookModule.reportProgressWithContextWindowRequest;
   clearRequestImpl = hookModule.clearContextWindowRequest;
+  setOutputBufferImpl = hookModule.setContextWindowOutputBufferForRequest;
 }
 
 async function loadContextWindowHookModule(): Promise<ContextWindowHookModule | null> {
@@ -86,6 +96,13 @@ export function reportProgressWithContextWindowRequest(
 
 export function clearContextWindowRequest(localRequestId: string): void {
   clearRequestImpl(localRequestId);
+}
+
+export function setContextWindowOutputBufferForRequest(
+  localRequestId: string,
+  outputBuffer: number,
+): void {
+  setOutputBufferImpl(localRequestId, outputBuffer);
 }
 
 export async function initializeContextWindowHookBridge(): Promise<boolean> {

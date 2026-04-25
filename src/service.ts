@@ -45,6 +45,7 @@ import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
 import {
   clearContextWindowRequest,
   reportProgressWithContextWindowRequest,
+  setContextWindowOutputBufferForRequest,
 } from './context-window-hook-bridge';
 
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
@@ -484,6 +485,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         modelName: resolvedRequestModel.name,
       });
       logger.vscodeInput(messages, options);
+
+      if (this.configStore.fix001ContextIndicatorDisplay) {
+        setContextWindowOutputBufferForRequest(
+          logger.requestId,
+          resolvedRequestModel.maxOutputTokens ?? model.maxOutputTokens,
+        );
+      }
 
       const client = this.getClient(resolvedProvider);
       const chatNetwork = resolveChatNetwork(resolvedProvider);

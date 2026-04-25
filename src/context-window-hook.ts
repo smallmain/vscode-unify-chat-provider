@@ -49,6 +49,12 @@ type CapturedProxy = {
   originalHandleProgressChunk: HandleProgressChunkFn;
 };
 
+type ContextWindowUsage = {
+  promptTokens: number;
+  completionTokens: number;
+  outputBuffer?: number;
+};
+
 type SetAddFn = typeof Set.prototype.add;
 type SetDeleteFn = typeof Set.prototype.delete;
 
@@ -73,19 +79,15 @@ const vsCodeToLocalRequestIds = new Map<string, string>();
  * requestId → real usage for requests that went through our model.
  * Cleaned up when the in-flight request is removed.
  */
-const pendingUsage = new Map<
-  string,
-  { promptTokens: number; completionTokens: number }
->();
+const pendingUsage = new Map<string, ContextWindowUsage>();
 
 /**
  * Local request logger ID → usage reported before we have observed a progress
  * chunk and therefore before we know the VS Code internal requestId.
  */
-const pendingUsageByLocalRequestId = new Map<
-  string,
-  { promptTokens: number; completionTokens: number }
->();
+const pendingUsageByLocalRequestId = new Map<string, ContextWindowUsage>();
+
+const outputBuffersByLocalRequestId = new Map<string, number>();
 
 const requestContextStorage = new AsyncLocalStorage<string>();
 const queuedProgressLocalRequestIds: string[] = [];
@@ -108,18 +110,19 @@ function isContextIndicatorDisplayFixEnabled(): boolean {
   );
 }
 
-function createUsageChunk(usage: {
-  promptTokens: number;
-  completionTokens: number;
-}): {
+function createUsageChunk(usage: ContextWindowUsage): {
   kind: 'usage';
   promptTokens: number;
   completionTokens: number;
+  outputBuffer?: number;
 } {
   return {
     kind: 'usage',
     promptTokens: usage.promptTokens,
     completionTokens: usage.completionTokens,
+    ...(usage.outputBuffer !== undefined
+      ? { outputBuffer: usage.outputBuffer }
+      : {}),
   };
 }
 
@@ -158,7 +161,7 @@ function takeQueuedProgressBinding(): string | undefined {
 
 function injectUsageChunk(
   requestId: string,
-  usage: { promptTokens: number; completionTokens: number },
+  usage: ContextWindowUsage,
 ): void {
   if (!proxyTarget || !originalHandleProgressChunk) {
     return;
@@ -187,6 +190,7 @@ function bindLocalRequestToVsCodeRequest(
   if (previousLocalRequestId && previousLocalRequestId !== localRequestId) {
     localToVsCodeRequestIds.delete(previousLocalRequestId);
     pendingUsageByLocalRequestId.delete(previousLocalRequestId);
+    outputBuffersByLocalRequestId.delete(previousLocalRequestId);
   }
 
   localToVsCodeRequestIds.set(localRequestId, requestId);
@@ -214,6 +218,7 @@ function cleanupVsCodeRequest(requestId: string): void {
   if (mappedRequestId === requestId) {
     localToVsCodeRequestIds.delete(localRequestId);
   }
+  outputBuffersByLocalRequestId.delete(localRequestId);
 }
 
 // ---------- 1. Proxy capture via Map.prototype.set ----------
@@ -308,6 +313,9 @@ function patchProxy(captured: CapturedProxy): void {
         if (chunk && chunk.kind === 'usage') {
           chunk.promptTokens = stored.promptTokens;
           chunk.completionTokens = stored.completionTokens;
+          if (stored.outputBuffer !== undefined) {
+            chunk.outputBuffer = stored.outputBuffer;
+          }
         }
       }
     }
@@ -405,7 +413,7 @@ function uninstallRequestTracking(): void {
 
 export function normalizeUsage(
   usage: ProviderUsage,
-): { promptTokens: number; completionTokens: number } | null {
+): ContextWindowUsage | null {
   try {
     // OpenAI Responses
     if (
@@ -470,6 +478,22 @@ export function normalizeUsage(
   return null;
 }
 
+function normalizeOutputBuffer(outputBuffer: number): number | undefined {
+  if (!Number.isFinite(outputBuffer) || outputBuffer <= 0) {
+    return undefined;
+  }
+
+  return Math.floor(outputBuffer);
+}
+
+function withOutputBuffer(
+  localRequestId: string,
+  usage: ContextWindowUsage,
+): ContextWindowUsage {
+  const outputBuffer = outputBuffersByLocalRequestId.get(localRequestId);
+  return outputBuffer !== undefined ? { ...usage, outputBuffer } : usage;
+}
+
 // ---------- Public API ----------
 
 /**
@@ -510,15 +534,55 @@ export function reportUsageToContextWindowForRequest(
     return false;
   }
 
+  const usageWithOutputBuffer = withOutputBuffer(localRequestId, normalized);
+
   const requestId = localToVsCodeRequestIds.get(localRequestId);
   if (!requestId) {
-    pendingUsageByLocalRequestId.set(localRequestId, normalized);
+    pendingUsageByLocalRequestId.set(localRequestId, usageWithOutputBuffer);
     return false;
   }
 
-  pendingUsage.set(requestId, normalized);
-  injectUsageChunk(requestId, normalized);
+  pendingUsage.set(requestId, usageWithOutputBuffer);
+  injectUsageChunk(requestId, usageWithOutputBuffer);
   return true;
+}
+
+export function setContextWindowOutputBufferForRequest(
+  localRequestId: string,
+  outputBuffer: number,
+): void {
+  if (!isContextIndicatorDisplayFixEnabled()) {
+    return;
+  }
+
+  const normalizedOutputBuffer = normalizeOutputBuffer(outputBuffer);
+  if (normalizedOutputBuffer === undefined) {
+    outputBuffersByLocalRequestId.delete(localRequestId);
+    return;
+  }
+
+  outputBuffersByLocalRequestId.set(localRequestId, normalizedOutputBuffer);
+
+  const pendingLocalUsage = pendingUsageByLocalRequestId.get(localRequestId);
+  if (pendingLocalUsage) {
+    pendingUsageByLocalRequestId.set(localRequestId, {
+      ...pendingLocalUsage,
+      outputBuffer: normalizedOutputBuffer,
+    });
+  }
+
+  const requestId = localToVsCodeRequestIds.get(localRequestId);
+  if (!requestId) {
+    return;
+  }
+
+  const pendingRequestUsage = pendingUsage.get(requestId);
+  if (pendingRequestUsage) {
+    pendingUsage.set(requestId, {
+      ...pendingRequestUsage,
+      outputBuffer: normalizedOutputBuffer,
+    });
+  }
 }
 
 export function withContextWindowRequest<T>(
@@ -542,6 +606,7 @@ export function reportProgressWithContextWindowRequest(
 export function clearContextWindowRequest(localRequestId: string): void {
   discardQueuedProgressBinding(localRequestId);
   pendingUsageByLocalRequestId.delete(localRequestId);
+  outputBuffersByLocalRequestId.delete(localRequestId);
 }
 
 export function disposeContextWindowHook(): boolean {
@@ -551,6 +616,7 @@ export function disposeContextWindowHook(): boolean {
     inFlightRequestIds.size > 0 ||
     pendingUsage.size > 0 ||
     pendingUsageByLocalRequestId.size > 0 ||
+    outputBuffersByLocalRequestId.size > 0 ||
     localToVsCodeRequestIds.size > 0 ||
     vsCodeToLocalRequestIds.size > 0 ||
     queuedProgressLocalRequestIdSet.size > 0;
@@ -561,6 +627,7 @@ export function disposeContextWindowHook(): boolean {
   inFlightRequestIds.clear();
   pendingUsage.clear();
   pendingUsageByLocalRequestId.clear();
+  outputBuffersByLocalRequestId.clear();
   localToVsCodeRequestIds.clear();
   vsCodeToLocalRequestIds.clear();
   queuedProgressLocalRequestIds.length = 0;
