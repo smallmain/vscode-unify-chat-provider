@@ -9,7 +9,11 @@ import {
   resolveOpenAISdkTimeoutMs,
 } from '../../utils';
 import type { ModelConfig } from '../../types';
-import { createCustomFetch, getToken } from '../utils';
+import {
+  createCustomFetch,
+  createQueryParamsUrlTransformer,
+  getToken,
+} from '../utils';
 import { OpenAIResponsesProvider } from './responses-client';
 import { randomUUID } from 'crypto';
 import type {
@@ -350,10 +354,12 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
       responseTimeoutMs: effectiveTimeout.response,
       logger,
       retryConfig: chatNetwork?.retry,
-      urlTransformer:
+      urlTransformer: createQueryParamsUrlTransformer(
+        this.config.queryParams,
         this.config.auth?.method === 'openai-codex'
           ? rewriteToCodexEndpoint
           : undefined,
+      ),
       type: mode,
       abortSignal,
     });

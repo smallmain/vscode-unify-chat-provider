@@ -461,6 +461,8 @@ Use this feature to monitor provider balances in `Provider Settings`.
 
 The following fields correspond to `ProviderConfig` (field names used in import/export JSON).
 
+Azure OpenAI endpoints that already include the final route can disable automatic `/v1` suffixing and put `api-version` in `queryParams`, for example: `baseUrl: "https://deployment.openai.azure.com/openai/responses"`, `appendV1: false`, `queryParams: { "api-version": "2025-04-01-preview" }`.
+
 | Name                        | ID                        | Description                                                                                                                                                      |
 | --------------------------- | ------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | API Format                  | `type`                    | Provider type (determines the API format and compatibility logic).                                                                                               |
@@ -475,6 +477,8 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | Balance Monitor             | `balanceProvider`         | Provider-level balance monitoring config.                                                                                                                        |
 | Models                      | `models`                  | Array of model configurations (`ModelConfig[]`).                                                                                                                 |
 | Extra Headers               | `extraHeaders`            | HTTP headers appended to every request (`Record<string, string>`).                                                                                               |
+| Append `/v1`                | `appendV1`                | Whether OpenAI-compatible providers automatically append `/v1` to `baseUrl`. Defaults to `true`; set to `false` for routed endpoints such as Azure OpenAI `/openai/responses`. |
+| Query Parameters            | `queryParams`             | Query parameters appended to every request URL (`Record<string, string>`). For example, Azure OpenAI can use `{ "api-version": "2025-04-01-preview" }`.       |
 | Extra Body Fields           | `extraBody`               | Extra fields appended to request body (`Record<string, unknown>`), for provider-specific parameters.                                                             |
 | Timeout                     | `timeout`                 | Timeout settings for HTTP requests and SSE streaming (milliseconds).                                                                                             |
 | Connection Timeout          | `timeout.connection`      | Maximum time to wait for establishing a TCP connection; default `60000` (60 seconds).                                                                            |

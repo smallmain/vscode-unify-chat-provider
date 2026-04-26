@@ -67,6 +67,8 @@ function getProviderForWellKnownModelMatching(
       baseUrl: normalizeBaseUrlInput(draft.baseUrl),
       models: [],
       extraHeaders: draft.extraHeaders,
+      appendV1: draft.appendV1,
+      queryParams: draft.queryParams,
       extraBody: draft.extraBody,
       timeout: draft.timeout,
       autoFetchOfficialModels: draft.autoFetchOfficialModels,
@@ -728,6 +730,8 @@ function buildOfficialModelsDraftInput(
     baseUrl: draft.baseUrl,
     auth: draft.auth,
     extraHeaders: draft.extraHeaders,
+    appendV1: draft.appendV1,
+    queryParams: draft.queryParams,
     extraBody: draft.extraBody,
     timeout: draft.timeout,
   };

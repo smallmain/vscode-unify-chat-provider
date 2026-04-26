@@ -32,6 +32,7 @@ import {
   buildBaseUrl,
   createCustomFetch,
   createFirstTokenRecorder,
+  createQueryParamsUrlTransformer,
   estimateTokenCount as sharedEstimateTokenCount,
   getToken,
   getTokenType,
@@ -44,6 +45,7 @@ import {
   processUsage as sharedProcessUsage,
   resolveOpenAIServiceTier,
   setUserAgentHeader,
+  shouldAppendV1,
 } from '../utils';
 import * as vscode from 'vscode';
 import {
@@ -111,6 +113,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       return buildBaseUrl(config.baseUrl);
     }
 
+    if (!shouldAppendV1(config)) {
+      return buildBaseUrl(config.baseUrl);
+    }
+
     return buildBaseUrl(config.baseUrl, {
       ensureSuffix: '/v1',
       skipSuffixIfMatch: /\/v\d+$/,
@@ -168,6 +174,9 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         connectionTimeoutMs: effectiveTimeout.connection,
         responseTimeoutMs: effectiveTimeout.response,
         logger,
+        urlTransformer: createQueryParamsUrlTransformer(
+          this.config.queryParams,
+        ),
         retryConfig: chatNetwork?.retry,
         type: mode,
         abortSignal,

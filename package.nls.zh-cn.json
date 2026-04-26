@@ -106,6 +106,8 @@
   "configuration.endpoints.serviceTier.enumDescriptions.3": "巨量层级，映射到 OpenAI \"scale\" 与 Anthropic \"standard_only\"。",
   "configuration.endpoints.serviceTier.enumDescriptions.4": "快速层级，映射到 OpenAI \"priority\" 与 Anthropic \"standard_only\"。",
   "configuration.endpoints.extraHeaders.description": "请求中要附加的额外 Header。Header 值支持使用 `${APIKEY}` 引用该供应商的凭据。",
+  "configuration.endpoints.appendV1.description": "OpenAI 兼容供应商是否自动在基础 URL 后附加 `/v1`。默认开启。",
+  "configuration.endpoints.queryParams.description": "请求 URL 中要附加的额外查询参数。",
   "configuration.endpoints.extraBody.description": "请求中要附加的额外 Body 参数。",
   "configuration.endpoints.timeout.description": "聊天请求的超时设置（毫秒）。",
   "configuration.endpoints.timeout.connection.description": "TCP 连接超时（毫秒）（聊天请求）。",

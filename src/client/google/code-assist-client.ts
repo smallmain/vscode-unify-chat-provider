@@ -27,6 +27,7 @@ import {
   type RetryConfig,
 } from '../../utils';
 import {
+  appendQueryParams,
   createCustomFetch,
   getToken,
   getTokenType,
@@ -2185,7 +2186,10 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         }
 
         const endpointBase = endpointBases[i];
-        const endpoint = `${endpointBase}/v1internal:${streamEnabled ? 'streamGenerateContent' : 'generateContent'}${streamEnabled ? '?alt=sse' : ''}`;
+        const endpoint = appendQueryParams(
+          `${endpointBase}/v1internal:${streamEnabled ? 'streamGenerateContent' : 'generateContent'}${streamEnabled ? '?alt=sse' : ''}`,
+          this.config.queryParams,
+        );
 
         try {
           const attemptResponse = await fetchWithRetryInfo(endpoint, {

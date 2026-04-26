@@ -42,6 +42,7 @@ import {
 import { getBaseModelId } from '../../model-id-utils';
 import { ThinkingBlockMetadata } from '../types';
 import {
+  appendQueryParams,
   createFirstTokenRecorder,
   estimateTokenCount as sharedEstimateTokenCount,
   getToken,
@@ -974,13 +975,21 @@ export class GoogleAIStudioProvider implements ApiProvider {
       if (streamEnabled) {
         const responseTimeoutMs = chatNetwork.timeout.response;
 
-        const stream = await withGoogleFetchLogger(logger, async () => {
-          return client.models.generateContentStream({
-            model: getBaseModelId(model.id),
-            contents,
-            config: generateConfig,
-          });
-        }, { connectionTimeoutMs: requestTimeoutMs, retryConfig: chatNetwork.retry });
+        const stream = await withGoogleFetchLogger(
+          logger,
+          async () => {
+            return client.models.generateContentStream({
+              model: getBaseModelId(model.id),
+              contents,
+              config: generateConfig,
+            });
+          },
+          {
+            connectionTimeoutMs: requestTimeoutMs,
+            retryConfig: chatNetwork.retry,
+            queryParams: this.config.queryParams,
+          },
+        );
 
         const timedStream = withIdleTimeout(
           stream,
@@ -996,14 +1005,27 @@ export class GoogleAIStudioProvider implements ApiProvider {
           expectedIdentity,
         );
       } else {
-        const data = await withGoogleFetchLogger(logger, async () => {
-          return client.models.generateContent({
-            model: getBaseModelId(model.id),
-            contents,
-            config: generateConfig,
-          });
-        }, { connectionTimeoutMs: requestTimeoutMs, retryConfig: chatNetwork.retry });
-        yield* this.parseMessage(data, performanceTrace, logger, expectedIdentity);
+        const data = await withGoogleFetchLogger(
+          logger,
+          async () => {
+            return client.models.generateContent({
+              model: getBaseModelId(model.id),
+              contents,
+              config: generateConfig,
+            });
+          },
+          {
+            connectionTimeoutMs: requestTimeoutMs,
+            retryConfig: chatNetwork.retry,
+            queryParams: this.config.queryParams,
+          },
+        );
+        yield* this.parseMessage(
+          data,
+          performanceTrace,
+          logger,
+          expectedIdentity,
+        );
       }
     } finally {
       cancellationListener.dispose();
@@ -1204,16 +1226,20 @@ export class GoogleAIStudioProvider implements ApiProvider {
     try {
       const client = this.createClient(undefined, false, credential, 'normal');
       const result: ModelConfig[] = [];
-      const pager = await withGoogleFetchLogger(logger, async () => {
-        return client.models.list({
-          config: {
-            httpOptions: {
-              headers: this.buildHeaders(credential),
-              extraBody: this.buildExtraBody(),
+      const pager = await withGoogleFetchLogger(
+        logger,
+        async () => {
+          return client.models.list({
+            config: {
+              httpOptions: {
+                headers: this.buildHeaders(credential),
+                extraBody: this.buildExtraBody(),
+              },
             },
-          },
-        });
-      });
+          });
+        },
+        { queryParams: this.config.queryParams },
+      );
       for await (const model of pager) {
         if (model.name) {
           result.push({ id: model.name });
@@ -1231,6 +1257,7 @@ type FetchLoggerContext = {
   logger: ProviderHttpLogger;
   connectionTimeoutMs?: number;
   retryConfig?: RetryConfig;
+  queryParams?: Record<string, string>;
 };
 
 const fetchLoggerContext = new AsyncLocalStorage<FetchLoggerContext>();
@@ -1280,7 +1307,8 @@ function ensureInstalled(): void {
       return baseFetch(input, init);
     }
 
-    const endpoint = getEndpoint(input);
+    const endpoint = appendQueryParams(getEndpoint(input), ctx.queryParams);
+    const fetchInput = typeof input === 'string' ? endpoint : input;
     const headersInit: HeadersInit | undefined =
       init?.headers ??
       (typeof Request !== 'undefined' && input instanceof Request
@@ -1310,14 +1338,14 @@ function ensureInstalled(): void {
       ctx.retryConfig !== undefined || ctx.connectionTimeoutMs !== undefined;
 
     const response = useRetry
-      ? await fetchWithRetryUsingFetch(baseFetch, input, {
+      ? await fetchWithRetryUsingFetch(baseFetch, fetchInput, {
           ...(init ?? {}),
           signal: upstreamSignal,
           logger: ctx.logger,
           retryConfig: ctx.retryConfig,
           connectionTimeoutMs: ctx.connectionTimeoutMs,
         })
-      : await baseFetch(input, init);
+      : await baseFetch(fetchInput, init);
 
     ctx.logger.providerResponseMeta(response);
 
@@ -1350,7 +1378,10 @@ function ensureInstalled(): void {
 async function withGoogleFetchLogger<T>(
   logger: ProviderHttpLogger,
   fn: () => Promise<T>,
-  options?: Pick<FetchLoggerContext, 'connectionTimeoutMs' | 'retryConfig'>,
+  options?: Pick<
+    FetchLoggerContext,
+    'connectionTimeoutMs' | 'retryConfig' | 'queryParams'
+  >,
 ): Promise<T> {
   ensureInstalled();
   return fetchLoggerContext.run({ logger, ...options }, fn);

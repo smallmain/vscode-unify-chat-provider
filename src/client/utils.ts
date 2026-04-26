@@ -169,6 +169,43 @@ export function setUserAgentHeader(
   headers['User-Agent'] = userAgent;
 }
 
+export function appendQueryParams(
+  rawUrl: string,
+  queryParams: Record<string, string> | undefined,
+): string {
+  if (!queryParams || Object.keys(queryParams).length === 0) {
+    return rawUrl;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(rawUrl);
+  } catch {
+    return rawUrl;
+  }
+
+  for (const [key, value] of Object.entries(queryParams)) {
+    parsed.searchParams.set(key, value);
+  }
+
+  return parsed.toString();
+}
+
+export function createQueryParamsUrlTransformer(
+  queryParams: Record<string, string> | undefined,
+  previousTransformer?: (url: string) => string,
+): ((url: string) => string) | undefined {
+  if (!queryParams || Object.keys(queryParams).length === 0) {
+    return previousTransformer;
+  }
+
+  return (url: string): string =>
+    appendQueryParams(
+      previousTransformer ? previousTransformer(url) : url,
+      queryParams,
+    );
+}
+
 /**
  * Check if a feature is supported by a specific model and provider.
  * @param featureId The feature ID to check
@@ -276,6 +313,10 @@ export function buildBaseUrl(
   }
 
   return normalized;
+}
+
+export function shouldAppendV1(provider: ProviderConfig): boolean {
+  return provider.appendV1 ?? true;
 }
 
 export function getToken(info: AuthTokenInfo | undefined): string | undefined {

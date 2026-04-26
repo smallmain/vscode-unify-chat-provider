@@ -5,7 +5,10 @@ import {
   PROVIDER_CONFIG_KEYS,
   withoutKeys,
 } from './config-ops';
-import { normalizeBaseUrlInput } from './utils';
+import {
+  extractQueryParamsFromUrlInput,
+  normalizeBaseUrlInput,
+} from './utils';
 import { PROVIDER_KEYS, ProviderType } from './client/definitions';
 import { getRenamedProviderType } from './secret/migration';
 import { normalizePresetTemplates } from './preset-templates';
@@ -343,6 +346,11 @@ export class ConfigStore {
     provider.transport = this.normalizeTransportMode(provider.transport);
     provider.serviceTier = this.normalizeServiceTier(provider.serviceTier);
     provider.extraHeaders = this.normalizeStringRecord(provider.extraHeaders);
+    provider.appendV1 = this.normalizeOptionalBoolean(provider.appendV1);
+    provider.queryParams = this.mergeStringRecords(
+      extractQueryParamsFromUrlInput(obj.baseUrl),
+      this.normalizeStringRecord(provider.queryParams),
+    );
     provider.extraBody = this.normalizeObjectRecord(provider.extraBody);
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,
@@ -358,6 +366,31 @@ export class ConfigStore {
     }
 
     return provider;
+  }
+
+  private normalizeOptionalBoolean(raw: unknown): boolean | undefined {
+    return typeof raw === 'boolean' ? raw : undefined;
+  }
+
+  private mergeStringRecords(
+    ...sources: (Record<string, string> | undefined)[]
+  ): Record<string, string> | undefined {
+    const result: Record<string, string> = {};
+    for (const source of sources) {
+      if (!source) {
+        continue;
+      }
+
+      for (const [key, value] of Object.entries(source)) {
+        const trimmedKey = key.trim();
+        if (!trimmedKey) {
+          continue;
+        }
+        result[trimmedKey] = value;
+      }
+    }
+
+    return Object.keys(result).length > 0 ? result : undefined;
   }
 
   private normalizeTransportMode(

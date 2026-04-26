@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "6.8.3",
+  "version": "6.8.4",
   "categories": [
     "AI",
     "Chat"
@@ -695,6 +695,17 @@
               "extraHeaders": {
                 "type": "object",
                 "description": "%configuration.endpoints.extraHeaders.description%",
+                "additionalProperties": {
+                  "type": "string"
+                }
+              },
+              "appendV1": {
+                "type": "boolean",
+                "description": "%configuration.endpoints.appendV1.description%"
+              },
+              "queryParams": {
+                "type": "object",
+                "description": "%configuration.endpoints.queryParams.description%",
                 "additionalProperties": {
                   "type": "string"
                 }
@@ -1479,7 +1490,8 @@
     "l10n:check": "bun run scripts/l10n-audit.ts",
     "l10n:sync": "bun run scripts/l10n-audit.ts --write --write-locales",
     "count-loc": "bun run scripts/count-loc.ts",
-    "release": "bun run scripts/release.ts"
+    "release": "bun run scripts/release.ts",
+    "build": "npx @vscode/vsce package -o extension.vsix"
   },
   "devDependencies": {
     "@types/node": "^22",

@@ -14,7 +14,10 @@ import {
 import {
   normalizeConfiguredModelCapabilities,
 } from '../model-capabilities';
-import { normalizeBaseUrlInput } from '../utils';
+import {
+  extractQueryParamsFromUrlInput,
+  normalizeBaseUrlInput,
+} from '../utils';
 import { showValidationErrors } from './component';
 import type { BalanceMetric, BalanceSnapshot } from '../balance/types';
 import {
@@ -89,6 +92,27 @@ export function createModelDraft(existing?: ModelConfig): ModelConfig {
   return deepClone(existing);
 }
 
+function mergeProviderQueryParams(
+  ...sources: (Record<string, string> | undefined)[]
+): Record<string, string> | undefined {
+  const result: Record<string, string> = {};
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      const trimmedKey = key.trim();
+      if (!trimmedKey) {
+        continue;
+      }
+      result[trimmedKey] = value;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
 /**
  * Remove a model from a list by ID.
  */
@@ -104,12 +128,24 @@ export function normalizeProviderDraft(
   draft: ProviderFormDraft,
 ): ProviderConfig {
   const cloned = deepClone(draft);
-  const { _draftSessionId: _, ...rest } = cloned;
+  const {
+    _draftSessionId: _,
+    queryParams: draftQueryParams,
+    ...rest
+  } = cloned;
+  const queryParams = mergeProviderQueryParams(
+    extractQueryParamsFromUrlInput(draft.baseUrl!),
+    draftQueryParams,
+  );
   return {
     ...rest,
     type: draft.type!,
     name: draft.name!.trim(),
     baseUrl: normalizeBaseUrlInput(draft.baseUrl!),
+    ...(typeof draft.appendV1 === 'boolean'
+      ? { appendV1: draft.appendV1 }
+      : {}),
+    ...(queryParams ? { queryParams } : {}),
   };
 }
 

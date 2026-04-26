@@ -41,6 +41,7 @@ import {
   buildBaseUrl,
   createCustomFetch,
   createFirstTokenRecorder,
+  createQueryParamsUrlTransformer,
   estimateTokenCount as sharedEstimateTokenCount,
   getToken,
   getTokenType,
@@ -100,6 +101,9 @@ export class OllamaProvider implements ApiProvider {
         connectionTimeoutMs: effectiveTimeout.connection,
         responseTimeoutMs: effectiveTimeout.response,
         logger,
+        urlTransformer: createQueryParamsUrlTransformer(
+          this.config.queryParams,
+        ),
         retryConfig: chatNetwork?.retry,
         type: mode,
         abortSignal,

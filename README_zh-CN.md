@@ -461,6 +461,8 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
 以下字段对应 `ProviderConfig`（导入/导出 JSON 使用的字段名）。
 
+对于已经包含最终路由的 Azure OpenAI 端点，可以关闭自动附加 `/v1`，并把 `api-version` 放到 `queryParams` 中，例如：`baseUrl: "https://deployment.openai.azure.com/openai/responses"`、`appendV1: false`、`queryParams: { "api-version": "2025-04-01-preview" }`。
+
 | 名称             | ID                        | 介绍                                                                                                                     |
 | ---------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
 | API 格式         | `type`                    | 供应商类型（决定 API 格式与兼容逻辑）。                                                                                  |
@@ -475,6 +477,8 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | 余额监控         | `balanceProvider`         | 供应商级余额监控配置。                                                                                                   |
 | 模型列表         | `models`                  | 模型配置数组（`ModelConfig[]`）。                                                                                        |
 | 额外 Header      | `extraHeaders`            | 会附加到每次请求的 HTTP Header（`Record<string, string>`）。                                                             |
+| 附加 `/v1`       | `appendV1`                | OpenAI 兼容供应商是否自动在 `baseUrl` 后附加 `/v1`。默认 `true`；对于 Azure OpenAI `/openai/responses` 等已路由端点可设为 `false`。 |
+| 查询参数         | `queryParams`             | 会附加到每次请求 URL 的查询参数（`Record<string, string>`）。例如 Azure OpenAI 可使用 `{ "api-version": "2025-04-01-preview" }`。 |
 | 额外 Body 字段   | `extraBody`               | 会附加到请求 body 的额外字段（`Record<string, unknown>`），用于对齐供应商私有参数。                                      |
 | 超时配置         | `timeout`                 | HTTP 请求与 SSE 流式的超时配置（毫秒）。                                                                                 |
 | 建连超时         | `timeout.connection`      | TCP 建立连接的最大等待时间；默认 `60000`（60 秒）。                                                                      |

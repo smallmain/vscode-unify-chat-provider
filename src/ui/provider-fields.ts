@@ -50,11 +50,53 @@ import {
   type WellKnownAuthPreset,
 } from '../well-known/auths';
 import { deepClone, stableStringify } from '../config-ops';
+import { booleanOptions, formatBoolean } from './field-editors';
 import { mainInstance } from '../main-instance';
 import {
   isLeaderUnavailableError,
   isVersionIncompatibleError,
 } from '../main-instance/errors';
+
+function mergeProviderQueryParams(
+  ...sources: (Record<string, string> | undefined)[]
+): Record<string, string> | undefined {
+  const result: Record<string, string> = {};
+  for (const source of sources) {
+    if (!source) {
+      continue;
+    }
+
+    for (const [key, value] of Object.entries(source)) {
+      const trimmedKey = key.trim();
+      if (!trimmedKey) {
+        continue;
+      }
+      result[trimmedKey] = value;
+    }
+  }
+
+  return Object.keys(result).length > 0 ? result : undefined;
+}
+
+function normalizeBaseUrlAndExtractQueryParams(
+  raw: string,
+  draft: ProviderFormDraft,
+): { value: string } {
+  const trimmed = raw.trim();
+  const parsed = new URL(
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+  );
+  const queryParams = Object.fromEntries(parsed.searchParams.entries());
+  if (Object.keys(queryParams).length > 0) {
+    draft.queryParams = mergeProviderQueryParams(
+      draft.queryParams,
+      queryParams,
+    );
+  }
+  parsed.search = '';
+  parsed.hash = '';
+  return { value: parsed.toString() };
+}
 
 function getTransportModeDescription(draft: ProviderFormDraft): string {
   switch (draft.transport) {
@@ -67,6 +109,15 @@ function getTransportModeDescription(draft: ProviderFormDraft): string {
     default:
       return t('Default');
   }
+}
+
+function isOpenAICompatibleProvider(type: ProviderType | undefined): boolean {
+  return (
+    type === 'openai-chat-completion' ||
+    type === 'openai-responses' ||
+    type === 'openai-codex' ||
+    type === 'github-copilot'
+  );
 }
 
 /**
@@ -176,6 +227,8 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       placeholder: t('e.g., https://api.example.com'),
       required: true,
       validate: (value) => validateBaseUrl(value),
+      onWillAccept: (value, draft) =>
+        normalizeBaseUrlAndExtractQueryParams(value, draft),
       transform: (value) => normalizeBaseUrlInput(value),
       getDescription: (draft) => draft.baseUrl || t('(required)'),
     },
@@ -260,6 +313,27 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       ],
       getDescription: (draft) =>
         draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
+    {
+      key: 'appendV1',
+      type: 'picker',
+      label: t('Append /v1'),
+      icon: 'symbol-operator',
+      section: 'primary',
+      title: t('Append /v1'),
+      placeholder: t('Select whether to append /v1 to the base URL'),
+      options: booleanOptions({
+        default: t('Default'),
+        defaultDesc: t('Use provider default behavior'),
+        true: t('True'),
+        trueDesc: t('Automatically append /v1 to OpenAI-compatible base URLs.'),
+        false: t('False'),
+        falseDesc: t('Use the configured base URL without appending /v1.'),
+      }),
+      getDescription: (draft) =>
+        isOpenAICompatibleProvider(draft.type)
+          ? formatBoolean(draft.appendV1)
+          : t('Not applicable'),
     },
     {
       key: 'contextCache',
@@ -362,6 +436,34 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       getDescription: (draft) =>
         draft.extraHeaders
           ? t('{0} headers', Object.keys(draft.extraHeaders).length)
+          : t('Not configured'),
+    },
+    // Query Parameters
+    {
+      key: 'queryParams',
+      type: 'custom',
+      label: t('Query Parameters'),
+      icon: 'symbol-parameter',
+      section: 'others',
+      edit: async () => {
+        vscode.window
+          .showInformationMessage(
+            t(
+              'Query parameters must be configured in VS Code settings (JSON).',
+            ),
+            t('Open Settings'),
+          )
+          .then((choice) => {
+            if (choice === t('Open Settings')) {
+              vscode.commands.executeCommand(
+                'workbench.action.openSettingsJson',
+              );
+            }
+          });
+      },
+      getDescription: (draft) =>
+        draft.queryParams
+          ? t('{0} parameters', Object.keys(draft.queryParams).length)
           : t('Not configured'),
     },
     // Extra Body

@@ -377,6 +377,8 @@ function parseProviderConfig(value: unknown, method: string): ProviderConfig {
   const transport = parseTransportMode(record['transport']);
   const serviceTier = parseServiceTier(record['serviceTier']);
   const extraHeaders = parseStringRecord(record['extraHeaders']);
+  const appendV1 = optionalBoolean(record['appendV1']);
+  const queryParams = parseStringRecord(record['queryParams']);
   const timeout = parseTimeoutConfig(record['timeout']);
   const retry = parseRetryConfig(record['retry']);
   const contextCache = parseContextCacheConfig(record['contextCache']);
@@ -391,6 +393,8 @@ function parseProviderConfig(value: unknown, method: string): ProviderConfig {
     ...(auth ? { auth } : {}),
     ...(balanceProvider ? { balanceProvider } : {}),
     ...(extraHeaders ? { extraHeaders } : {}),
+    ...(appendV1 !== undefined ? { appendV1 } : {}),
+    ...(queryParams ? { queryParams } : {}),
     ...(isRecord(record['extraBody'])
       ? { extraBody: record['extraBody'] as Record<string, unknown> }
       : {}),
@@ -508,6 +512,14 @@ function parseOfficialModelsFetchState(
         method,
         'state.lastConfigSignature.extraHeadersHash',
       ),
+      appendV1:
+        typeof signature['appendV1'] === 'string'
+          ? signature['appendV1']
+          : '',
+      queryParamsHash:
+        typeof signature['queryParamsHash'] === 'string'
+          ? signature['queryParamsHash']
+          : '',
       extraBodyHash: requireString(
         signature['extraBodyHash'],
         method,

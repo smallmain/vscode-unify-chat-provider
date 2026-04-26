@@ -15,7 +15,7 @@ import type {
 } from '../../types';
 import { isImageMarker } from '../../utils';
 import type { ApiProvider } from '../interface';
-import { buildBaseUrl } from '../utils';
+import { buildBaseUrl, shouldAppendV1 } from '../utils';
 import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
 import { OpenAIResponsesProvider } from '../openai/responses-client';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
@@ -38,6 +38,10 @@ function resolveCopilotApiBaseUrl(config: ProviderConfig): string {
 
   // Auto-switch to the enterprise Copilot base URL when user has configured
   // enterprise auth but still uses the default github.com base URL.
+  if (!shouldAppendV1(config)) {
+    return buildBaseUrl(baseUrl);
+  }
+
   return buildBaseUrl(baseUrl, {
     ensureSuffix: '/v1',
     skipSuffixIfMatch: /\/v\d+$/,

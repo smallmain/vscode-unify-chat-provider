@@ -12,6 +12,10 @@ import {
 } from '../well-known/providers';
 import type { ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
+import {
+  extractQueryParamsFromUrlInput,
+  normalizeBaseUrlInput,
+} from '../utils';
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -126,7 +130,9 @@ function buildClaudeCodeProvider(
     throw new Error('Claude Code provider not found in well-known providers');
   }
 
-  const baseUrl = settings.baseUrl ?? claudeCodeWellKnown.baseUrl;
+  const rawBaseUrl = settings.baseUrl ?? claudeCodeWellKnown.baseUrl;
+  const baseUrl = normalizeBaseUrlInput(rawBaseUrl);
+  const queryParams = extractQueryParamsFromUrlInput(rawBaseUrl);
   const models = resolveProviderModels(claudeCodeWellKnown);
 
   const provider: Partial<ProviderConfig> = {
@@ -134,6 +140,7 @@ function buildClaudeCodeProvider(
     name: claudeCodeWellKnown.name,
     baseUrl,
     models,
+    ...(queryParams ? { queryParams } : {}),
   };
 
   if (settings.authMethod === 'api-key' && settings.apiKey) {

@@ -1628,7 +1628,9 @@ export function normalizeBaseUrlInput(raw: string): string {
   if (!trimmed) {
     throw new Error('Base URL is required');
   }
-  const parsed = new URL(trimmed);
+  const parsed = new URL(
+    /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed) ? trimmed : `https://${trimmed}`,
+  );
   parsed.search = '';
   parsed.hash = '';
 
@@ -1639,6 +1641,29 @@ export function normalizeBaseUrlInput(raw: string): string {
   // URL.toString re-adds a trailing slash when pathname is empty; strip it.
   const normalized = parsed.toString().replace(/\/+$/, '');
   return normalized;
+}
+
+export function extractQueryParamsFromUrlInput(
+  raw: string,
+): Record<string, string> | undefined {
+  const trimmed = raw.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  let parsed: URL;
+  try {
+    parsed = new URL(
+      /^[a-z][a-z0-9+.-]*:\/\//i.test(trimmed)
+        ? trimmed
+        : `https://${trimmed}`,
+    );
+  } catch {
+    return undefined;
+  }
+
+  const queryParams = Object.fromEntries(parsed.searchParams.entries());
+  return Object.keys(queryParams).length > 0 ? queryParams : undefined;
 }
 
 export function isCacheControlMarker(

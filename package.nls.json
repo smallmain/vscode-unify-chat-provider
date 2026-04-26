@@ -106,6 +106,8 @@
   "configuration.endpoints.serviceTier.enumDescriptions.3": "Scale tier for OpenAI; Anthropic falls back to standard_only.",
   "configuration.endpoints.serviceTier.enumDescriptions.4": "Priority tier for OpenAI; Anthropic falls back to standard_only.",
   "configuration.endpoints.extraHeaders.description": "Extra headers to include in requests. Header values support `${APIKEY}` to reference the provider credential.",
+  "configuration.endpoints.appendV1.description": "Whether OpenAI-compatible providers should automatically append `/v1` to the base URL. Defaults to true.",
+  "configuration.endpoints.queryParams.description": "Extra query parameters to include in request URLs.",
   "configuration.endpoints.extraBody.description": "Extra body parameters to include in requests.",
   "configuration.endpoints.timeout.description": "Timeout settings for chat requests (milliseconds).",
   "configuration.endpoints.timeout.connection.description": "TCP connection timeout in milliseconds (chat requests).",

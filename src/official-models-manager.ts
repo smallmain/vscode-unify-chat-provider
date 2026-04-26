@@ -55,6 +55,8 @@ export interface FetchConfigSignature {
   authMethod: string;
   authHash: string;
   extraHeadersHash: string;
+  appendV1: string;
+  queryParamsHash: string;
   extraBodyHash: string;
 }
 
@@ -68,6 +70,8 @@ export interface OfficialModelsDraftInput {
   baseUrl?: string;
   auth?: AuthConfig;
   extraHeaders?: ProviderConfig['extraHeaders'];
+  appendV1?: ProviderConfig['appendV1'];
+  queryParams?: ProviderConfig['queryParams'];
   extraBody?: ProviderConfig['extraBody'];
   timeout?: ProviderConfig['timeout'];
 }
@@ -964,6 +968,10 @@ export class OfficialModelsManager {
       extraHeadersHash: this.hashString(
         stableStringify(input.extraHeaders ?? {}),
       ),
+      appendV1: this.formatAppendV1ForSignature(input.appendV1),
+      queryParamsHash: this.hashString(
+        stableStringify(input.queryParams ?? {}),
+      ),
       extraBodyHash: this.hashString(stableStringify(input.extraBody ?? {})),
     };
   }
@@ -1014,6 +1022,8 @@ export class OfficialModelsManager {
       auth: input.auth,
       models: [],
       extraHeaders: input.extraHeaders,
+      appendV1: input.appendV1,
+      queryParams: input.queryParams,
       extraBody: input.extraBody,
       timeout: input.timeout,
     };
@@ -1227,6 +1237,10 @@ export class OfficialModelsManager {
       extraHeadersHash: this.hashString(
         stableStringify(provider.extraHeaders ?? {}),
       ),
+      appendV1: this.formatAppendV1ForSignature(provider.appendV1),
+      queryParamsHash: this.hashString(
+        stableStringify(provider.queryParams ?? {}),
+      ),
       extraBodyHash: this.hashString(stableStringify(provider.extraBody ?? {})),
     };
   }
@@ -1289,6 +1303,8 @@ export class OfficialModelsManager {
           authMethod: 'none',
           authHash: '',
           extraHeadersHash: '',
+          appendV1: '',
+          queryParamsHash: '',
           extraBodyHash: '',
         },
       };
@@ -1358,8 +1374,14 @@ export class OfficialModelsManager {
       a.authMethod === b.authMethod &&
       a.authHash === b.authHash &&
       a.extraHeadersHash === b.extraHeadersHash &&
+      a.appendV1 === b.appendV1 &&
+      a.queryParamsHash === b.queryParamsHash &&
       a.extraBodyHash === b.extraBodyHash
     );
+  }
+
+  private formatAppendV1ForSignature(value: boolean | undefined): string {
+    return value === undefined ? '' : String(value);
   }
 
   /**

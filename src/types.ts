@@ -62,6 +62,10 @@ export interface ProviderConfig {
   models: ModelConfig[];
   /** Extra headers to include in requests */
   extraHeaders?: Record<string, string>;
+  /** Whether OpenAI-compatible clients should append /v1 to the base URL */
+  appendV1?: boolean;
+  /** Extra query parameters to include in request URLs */
+  queryParams?: Record<string, string>;
   /** Extra body parameters to include in requests */
   extraBody?: Record<string, unknown>;
   /** Timeout configuration */

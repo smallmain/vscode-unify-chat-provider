@@ -740,6 +740,8 @@ export function resolveProviderModels(
     models: [],
     balanceProvider: provider.balanceProvider,
     extraHeaders: provider.extraHeaders,
+    appendV1: provider.appendV1,
+    queryParams: provider.queryParams,
     extraBody: provider.extraBody,
     timeout: provider.timeout,
     autoFetchOfficialModels: provider.autoFetchOfficialModels,

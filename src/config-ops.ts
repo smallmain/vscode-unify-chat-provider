@@ -61,6 +61,8 @@ export const PROVIDER_CONFIG_KEYS = [
   'balanceProvider',
   'models',
   'extraHeaders',
+  'appendV1',
+  'queryParams',
   'extraBody',
   'timeout',
   'retry',

@@ -19,6 +19,10 @@ import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
 import { CodexOAuthDetectedError } from './errors';
+import {
+  extractQueryParamsFromUrlInput,
+  normalizeBaseUrlInput,
+} from '../utils';
 
 function normalizeBaseUrlForCompare(value: string): string {
   return value.replace(/\/+$/, '');
@@ -183,7 +187,8 @@ async function buildCodexProviderFromToml(
     );
   }
 
-  const baseUrl = providerBaseUrl;
+  const baseUrl = normalizeBaseUrlInput(providerBaseUrl);
+  const queryParams = extractQueryParamsFromUrlInput(providerBaseUrl);
 
   const providerForMatching: ProviderConfig = {
     type: providerType,
@@ -194,6 +199,7 @@ async function buildCodexProviderFromToml(
       apiKey,
     },
     models: [],
+    ...(queryParams ? { queryParams } : {}),
   };
 
   const models: ModelConfig[] = [];
