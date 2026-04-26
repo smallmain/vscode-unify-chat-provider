@@ -825,6 +825,18 @@ function normalizeToolSchemaValue(value: unknown): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
+    if (key === 'properties' && isToolSchemaRecord(child)) {
+      const normalizedProperties: Record<string, unknown> = {};
+
+      for (const [propertyName, propertySchema] of Object.entries(child)) {
+        normalizedProperties[propertyName] =
+          normalizeToolSchemaValue(propertySchema);
+      }
+
+      out[key] = normalizedProperties;
+      continue;
+    }
+
     out[key] = normalizeToolSchemaValue(child);
   }
 
