@@ -469,6 +469,27 @@ export function parseToolArguments(
   }
 }
 
+/**
+ * VS Code / OpenAI-specific non-standard JSON Schema annotation fields that
+ * cause 400 errors on strict API backends (e.g. Gemini's protobuf validation
+ * rejects unknown fields like "enumDescriptions").
+ *
+ * Note: cleanJsonSchemaForAntigravity has its own broader droppedKeys set
+ * that also covers standard-but-unsupported fields like $schema, title, etc.
+ * This set only targets the non-standard VS Code UI annotation fields.
+ */
+const NON_STANDARD_SCHEMA_KEYS: ReadonlySet<string> = new Set([
+  'enumDescriptions',
+  'markdownEnumDescriptions',
+  'markdownDescription',
+  'deprecationMessage',
+  'errorMessage',
+  'patternErrorMessage',
+  'defaultSnippets',
+  'enumItemLabels',
+  'doNotSuggest',
+]);
+
 function isToolSchemaRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -781,22 +802,6 @@ function normalizeToolSchemaValue(value: unknown): unknown {
       simplifyToolSchemaUnion(base, variants, unionKey),
     );
   }
-
-  // Strip VS Code / OpenAI-specific non-standard JSON Schema annotation fields
-  // that cause 400 errors on strict API backends (e.g. Gemini's protobuf
-  // validation rejects unknown fields like "enumDescriptions").
-  // Aligned with the droppedKeys set in cleanJsonSchemaForAntigravity.
-  const NON_STANDARD_SCHEMA_KEYS: ReadonlySet<string> = new Set([
-    'enumDescriptions',
-    'markdownEnumDescriptions',
-    'markdownDescription',
-    'deprecationMessage',
-    'errorMessage',
-    'patternErrorMessage',
-    'defaultSnippets',
-    'enumItemLabels',
-    'doNotSuggest',
-  ]);
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
