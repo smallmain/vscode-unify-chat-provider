@@ -782,8 +782,27 @@ function normalizeToolSchemaValue(value: unknown): unknown {
     );
   }
 
+  // Strip VS Code / OpenAI-specific non-standard JSON Schema annotation fields
+  // that cause 400 errors on strict API backends (e.g. Gemini's protobuf
+  // validation rejects unknown fields like "enumDescriptions").
+  // Aligned with the droppedKeys set in cleanJsonSchemaForAntigravity.
+  const NON_STANDARD_SCHEMA_KEYS: ReadonlySet<string> = new Set([
+    'enumDescriptions',
+    'markdownEnumDescriptions',
+    'markdownDescription',
+    'deprecationMessage',
+    'errorMessage',
+    'patternErrorMessage',
+    'defaultSnippets',
+    'enumItemLabels',
+    'doNotSuggest',
+  ]);
+
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
+    if (NON_STANDARD_SCHEMA_KEYS.has(key)) {
+      continue;
+    }
     out[key] = normalizeToolSchemaValue(child);
   }
 
