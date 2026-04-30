@@ -124,6 +124,7 @@
   "configuration.endpoints.models.family.description": "模型系列（例如：gpt-4、claude-3）。默认使用模型 ID。",
   "configuration.endpoints.models.maxInputTokens.description": "最大输入/上下文令牌数。",
   "configuration.endpoints.models.maxOutputTokens.description": "最大输出令牌数。",
+  "configuration.endpoints.models.reportedMaxOutputTokens.description": "汇报给 VS Code 上下文窗口元数据的最大输出令牌数，不影响 API 请求参数。",
   "configuration.endpoints.models.tokenizer.description": "用于 VS Code 令牌计数的分词器。",
   "configuration.endpoints.models.tokenizer.enumDescriptions.0": "char4 的别名。使用 VS Code 官方近似算法（约 4 字符/令牌）。",
   "configuration.endpoints.models.tokenizer.enumDescriptions.1": "基于 UTF-8 字节的保守分词器，可以确保不会超出模型上下文限制，但由于可能与实际消耗的偏差较大导致更快地触发上下文压缩。",

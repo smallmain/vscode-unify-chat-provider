@@ -124,6 +124,7 @@
   "configuration.endpoints.models.family.description": "Model family (e.g., gpt-4, claude-3). Defaults to model ID.",
   "configuration.endpoints.models.maxInputTokens.description": "Maximum input/context tokens.",
   "configuration.endpoints.models.maxOutputTokens.description": "Maximum output tokens.",
+  "configuration.endpoints.models.reportedMaxOutputTokens.description": "Maximum output tokens reported to VS Code for context window metadata. Does not affect API request parameters.",
   "configuration.endpoints.models.tokenizer.description": "Tokenizer used for token counting in VS Code.",
   "configuration.endpoints.models.tokenizer.enumDescriptions.0": "Alias of char4. The approximate algorithm used by VS Code officially (about 4 characters per token).",
   "configuration.endpoints.models.tokenizer.enumDescriptions.1": "A conservative tokenizer based on UTF-8 bytes ensures that the model’s context limit is not exceeded, but it may trigger context compression more quickly due to significant deviations from actual token consumption.",

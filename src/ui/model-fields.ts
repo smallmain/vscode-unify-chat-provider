@@ -258,6 +258,23 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
         return t('provider decides');
       },
     },
+    // Reported Max Output Tokens
+    {
+      key: 'reportedMaxOutputTokens',
+      type: 'number',
+      label: t('Reported Max Output Tokens'),
+      icon: 'eye',
+      section: 'details',
+      prompt: t(
+        'Enter max output tokens reported to VS Code (leave blank to use max output tokens)',
+      ),
+      placeholder: t('Leave blank for default'),
+      positiveInteger: true,
+      getDescription: (draft) =>
+        draft.reportedMaxOutputTokens !== undefined
+          ? draft.reportedMaxOutputTokens.toLocaleString()
+          : t('uses max output tokens'),
+    },
     // Tool Calling (custom due to special limit option)
     {
       key: 'capabilities',

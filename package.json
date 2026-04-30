@@ -793,6 +793,10 @@
                           "description": "%configuration.endpoints.models.maxOutputTokens.description%",
                           "default": 8192
                         },
+                        "reportedMaxOutputTokens": {
+                          "type": "number",
+                          "description": "%configuration.endpoints.models.reportedMaxOutputTokens.description%"
+                        },
                         "tokenizer": {
                           "type": "string",
                           "description": "%configuration.endpoints.models.tokenizer.description%",

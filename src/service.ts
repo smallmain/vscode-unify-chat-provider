@@ -166,7 +166,10 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       family: resolvedModelFamily,
       version: '',
       maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
-      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      maxOutputTokens:
+        model.reportedMaxOutputTokens ??
+        model.maxOutputTokens ??
+        DEFAULT_MAX_OUTPUT_TOKENS,
       capabilities,
       category: {
         label: provider.name,
