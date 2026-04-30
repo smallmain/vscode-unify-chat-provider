@@ -620,13 +620,50 @@ function toSubject(message: string): string {
   return message.split(/\r?\n/, 1)[0].trim();
 }
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null;
+}
+
+function readStringProperty(
+  value: unknown,
+  propertyName: string,
+): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const propertyValue = value[propertyName];
+  return typeof propertyValue === 'string' ? propertyValue : undefined;
+}
+
+function buildGitErrorSearchText(error: unknown): string {
+  const parts: string[] = [];
+
+  if (error instanceof Error) {
+    parts.push(error.message);
+  } else if (typeof error === 'string') {
+    parts.push(error);
+  } else {
+    parts.push(String(error));
+  }
+
+  for (const propertyName of ['stderr', 'stdout', 'gitErrorCode']) {
+    const propertyValue = readStringProperty(error, propertyName);
+    if (propertyValue) {
+      parts.push(propertyValue);
+    }
+  }
+
+  return parts.join('\n').toLowerCase();
+}
+
 function isNoCommitHistoryError(error: unknown): boolean {
-  const message = error instanceof Error ? error.message : String(error);
-  const normalizedMessage = message.toLowerCase();
+  const normalizedMessage = buildGitErrorSearchText(error);
 
   return (
     normalizedMessage.includes('does not have any commits yet') ||
     normalizedMessage.includes("ambiguous argument 'head'") ||
+    normalizedMessage.includes("bad default revision 'head'") ||
     normalizedMessage.includes('bad revision') ||
     normalizedMessage.includes('unborn branch')
   );
