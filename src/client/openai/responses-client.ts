@@ -133,6 +133,11 @@ type ResponseThinkingOutputState = {
   lastType?: ResponseThinkingContentType;
 };
 
+type PendingEncryptedReasoningOutput = {
+  text: string;
+  hasReadableContent: boolean;
+};
+
 type ResponseImageGenerationCall = Extract<
   ResponseOutputItem,
   { type: 'image_generation_call' }
@@ -1788,15 +1793,35 @@ export class OpenAIResponsesProvider implements ApiProvider {
       yield new vscode.LanguageModelThinkingPart(output);
     }
 
-    if (metadata) {
-      if (type === 'encrypted') {
-        metadata.redactedData = text;
-      } else {
-        metadata._completeThinking = (metadata._completeThinking || '') + text;
-      }
-    }
+    this.recordThinkingMetadata(type, text, metadata);
 
     state.lastType = type;
+  }
+
+  private recordThinkingMetadata(
+    type: ResponseThinkingContentType,
+    text: string,
+    metadata: ThinkingBlockMetadata | undefined,
+  ): void {
+    if (!metadata || !text) {
+      return;
+    }
+
+    if (type === 'encrypted') {
+      metadata.redactedData = text;
+      return;
+    }
+
+    metadata._completeThinking = (metadata._completeThinking || '') + text;
+  }
+
+  private hasReadableThinkingContent(reasoning: ResponseReasoningItem): boolean {
+    return (
+      reasoning.summary.some((part) => part.type === 'summary_text' && part.text) ||
+      (reasoning.content?.some(
+        (part) => part.type === 'reasoning_text' && part.text,
+      ) ?? false)
+    );
   }
 
   private *extractThinkingParts(
@@ -1810,14 +1835,24 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
 
     for (const reasoning of reasonings) {
+      const hasReadableContent = this.hasReadableThinkingContent(reasoning);
+
       if (reasoning.encrypted_content) {
-        yield* this.emitThinkingText(
-          'encrypted',
-          reasoning.encrypted_content,
-          emitMode,
-          metadata,
-          state,
-        );
+        if (hasReadableContent && emitMode !== 'metadata-only') {
+          this.recordThinkingMetadata(
+            'encrypted',
+            reasoning.encrypted_content,
+            metadata,
+          );
+        } else {
+          yield* this.emitThinkingText(
+            'encrypted',
+            reasoning.encrypted_content,
+            emitMode,
+            metadata,
+            state,
+          );
+        }
       }
 
       for (const part of reasoning.summary) {
@@ -1917,9 +1952,20 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const emittedFunctionCallIds = new Set<string>();
     const addedOutputItems = new Map<number, ResponseOutputItem>();
     const completedOutputItems = new Map<number, ResponseOutputItem>();
+    const pendingEncryptedReasoningOutputs = new Map<
+      number,
+      PendingEncryptedReasoningOutput
+    >();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingOutputState: ResponseThinkingOutputState = {};
+
+    const markReadableReasoningOutput = (outputIndex: number): void => {
+      const pending = pendingEncryptedReasoningOutputs.get(outputIndex);
+      if (pending) {
+        pending.hasReadableContent = true;
+      }
+    };
 
     const emitFunctionCallPart = (
       item: ResponseFunctionToolCall,
@@ -1960,13 +2006,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
         case 'response.output_item.added':
           addedOutputItems.set(event.output_index, event.item);
           if (event.item.type === 'reasoning' && event.item.encrypted_content) {
-            yield* this.emitThinkingText(
-              'encrypted',
-              event.item.encrypted_content,
-              'content-only',
-              undefined,
-              thinkingOutputState,
-            );
+            pendingEncryptedReasoningOutputs.set(event.output_index, {
+              text: event.item.encrypted_content,
+              hasReadableContent: this.hasReadableThinkingContent(event.item),
+            });
           }
           break;
 
@@ -1984,6 +2027,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.reasoning_text.delta':
           if (event.delta) {
+            markReadableReasoningOutput(event.output_index);
             yield* this.emitThinkingText(
               'content',
               event.delta,
@@ -1996,6 +2040,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.reasoning_summary_text.delta':
           if (event.delta) {
+            markReadableReasoningOutput(event.output_index);
             yield* this.emitThinkingText(
               'summary',
               event.delta,
@@ -2009,6 +2054,30 @@ export class OpenAIResponsesProvider implements ApiProvider {
         case 'response.output_item.done': {
           const item = event.item;
           completedOutputItems.set(event.output_index, item);
+          if (item.type === 'reasoning') {
+            const pending = pendingEncryptedReasoningOutputs.get(
+              event.output_index,
+            );
+            const encryptedContent =
+              pending?.text ?? item.encrypted_content ?? undefined;
+            const hasReadableContent =
+              (pending?.hasReadableContent ?? false) ||
+              this.hasReadableThinkingContent(item);
+
+            if (encryptedContent && !hasReadableContent) {
+              yield* this.emitThinkingText(
+                'encrypted',
+                encryptedContent,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
+            }
+
+            pendingEncryptedReasoningOutputs.delete(event.output_index);
+            break;
+          }
+
           if (item.type === 'function_call') {
             const part = emitFunctionCallPart(item);
             if (part) {
