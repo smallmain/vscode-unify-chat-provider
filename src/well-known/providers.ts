@@ -89,6 +89,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
+    name: 'AWS Bedrock',
+    category: 'General',
+    type: 'bedrock',
+    baseUrl: 'https://bedrock-runtime.us-east-1.amazonaws.com',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'xAI',
     category: 'General',
     type: 'openai-responses',

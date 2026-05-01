@@ -692,6 +692,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Google AI Studio](https://aistudio.google.com/)                                                              |                                                                 |                            |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                                        | <li>Authentication                                              |                            |
 | [Anthropic](https://www.anthropic.com/)                                                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming            |                            |
+| [AWS Bedrock](https://aws.amazon.com/bedrock/)                                                               | <li>Vision <li>ToolUse <li>DynamicDiscovery <li>InferenceProfiles | [Details](#aws-bedrock)    |
 | [xAI](https://docs.x.ai/)                                                                                     |                                                                 |                            |
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)                         |                                                                 |                            |
 | [OpenRouter](https://openrouter.ai/)                                                                          | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails        | [Details](#openrouter)     |       ✅        |
@@ -798,6 +799,14 @@ Long-Term Free Quotas:
   - GPT-OSS-120B
   - Qwen 3 235B Instruct
   - ...
+
+#### AWS Bedrock
+
+- **Authentication**: Currently supports **API Key** (sent as `Bearer` token) for use with Bedrock proxies or compatible services. Native AWS IAM (Access Key/Secret Key) authentication is not supported.
+- **Endpoint**: Set the `Base URL` to your proxy or regional Bedrock runtime endpoint (Defaults to `us-east-1`: `https://bedrock-runtime.us-east-1.amazonaws.com`).
+- **Service Tiers**: Supports Bedrock `serviceTier` / `service_tier` selection, including values such as `standard`, `flex`, `priority`, `scale`, `reserved`, and `auto` when supported by the target model/account.
+- **Dynamic Discovery**: Automatically fetches available foundation models and inference profiles from the configured endpoint.
+- **Inference Profiles**: Supports invoking models via inference profile IDs (e.g., `us.anthropic.claude-3-5-sonnet-20240620-v1:0`) or full ARNs.
 
 #### Nvidia
 

@@ -348,10 +348,30 @@ export function resolveAnthropicServiceTier(
     case 'flex':
     case 'scale':
     case 'priority':
+    case 'reserved':
       return 'standard_only';
     default:
       return undefined;
   }
+}
+
+export function resolveBedrockServiceTier(
+  provider: ProviderConfig,
+  model: ModelConfig,
+): string | undefined {
+  const serviceTier = model.serviceTier ?? provider.serviceTier;
+  if (serviceTier === 'auto' || serviceTier === 'reserved') {
+    return serviceTier;
+  }
+  if (
+    serviceTier === 'standard' ||
+    serviceTier === 'flex' ||
+    serviceTier === 'scale' ||
+    serviceTier === 'priority'
+  ) {
+    return serviceTier;
+  }
+  return undefined;
 }
 
 const HEADER_VALUE_PLACEHOLDER_PATTERN = /\$\{([A-Z0-9_]+)\}/g;

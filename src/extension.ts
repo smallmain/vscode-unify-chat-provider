@@ -38,6 +38,8 @@ import {
   initializeContextWindowHookBridge,
 } from './context-window-hook-bridge';
 import { registerCommitMessageGeneration } from './commit-message';
+import { bedrockConversePreferenceCache } from './client/bedrock/converse-preference-cache';
+import { bedrockModelLimitCache } from './client/bedrock/model-limit-cache';
 
 const VENDOR_ID = 'unify-chat-provider';
 /**
@@ -298,6 +300,12 @@ export async function activate(
   );
   context.subscriptions.push(officialModelsManager);
 
+  await bedrockConversePreferenceCache.initialize(context);
+  context.subscriptions.push(bedrockConversePreferenceCache);
+
+  await bedrockModelLimitCache.initialize(context);
+  context.subscriptions.push(bedrockModelLimitCache);
+
   registerMainInstanceHandlers({
     configStore,
     authManager,
@@ -474,6 +482,15 @@ export function registerCommands(
     vscode.commands.registerCommand(
       'unifyChatProvider.syncBuiltInParamsToAllConfigs',
       () => syncBuiltInParamsToAllConfigs(configStore),
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.clearBedrockConversePreferenceCache',
+      async () => {
+        await bedrockConversePreferenceCache.clear();
+        vscode.window.showInformationMessage(
+          t('Cleared Bedrock Converse preference cache.'),
+        );
+      },
     ),
   );
 }

@@ -12,7 +12,7 @@ export interface ContextCacheConfig {
   ttl?: number;
 }
 
-export type ServiceTier = 'auto' | 'standard' | 'flex' | 'scale' | 'priority';
+export type ServiceTier = 'auto' | 'standard' | 'flex' | 'scale' | 'priority' | 'reserved';
 export type ThinkingEffort =
   | 'max'
   | 'none'

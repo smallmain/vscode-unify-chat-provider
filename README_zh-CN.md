@@ -692,6 +692,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Google AI Studio](https://aistudio.google.com/)                                          |                                                                 |                       |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                    | <li>Authentication                                              |                       |
 | [Anthropic](https://www.anthropic.com/)                                                   | <li>InterleavedThinking <li>FineGrainedToolStreaming            |                       |
+| [AWS Bedrock](https://aws.amazon.com/bedrock/)                                            | <li>Vision <li>ToolUse <li>DynamicDiscovery <li>InferenceProfiles | [详情](#aws-bedrock)  |
 | [xAI](https://docs.x.ai/)                                                                 |                                                                 |                       |
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)     |                                                                 |                       |
 | [OpenRouter](https://openrouter.ai/)                                                      | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails        | [详情](#openrouter)   |    ✅    |
@@ -798,6 +799,14 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
   - GPT-OSS-120B
   - Qwen 3 235B Instruct
   - ...
+
+#### AWS Bedrock
+
+- **身份验证**：目前支持 **API Key**（作为 `Bearer` 令牌发送），适用于 Bedrock 代理或兼容服务。不支持原生 AWS IAM（访问密钥/私有密钥）身份验证。
+- **端点**：将 `Base URL` 设置为您的代理地址或区域性 Bedrock 运行时端点（默认为 `us-east-1`：`https://bedrock-runtime.us-east-1.amazonaws.com`）。
+- **服务层级**：支持 Bedrock 的 `serviceTier` / `service_tier` 设置；在目标模型和账户支持时，可使用 `standard`、`flex`、`priority`、`scale`、`reserved`、`auto` 等值。
+- **动态发现**：自动从配置的端点获取可用的基础模型和推理配置文件。
+- **推理配置文件**：支持通过推理配置文件 ID（例如 `us.anthropic.claude-3-5-sonnet-20240620-v1:0`）或完整 ARN 调用模型。
 
 #### 英伟达
 

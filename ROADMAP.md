@@ -11,6 +11,5 @@
 - Optimize the storage content in the settings.json file and the logic for displaying the UI, fixing some issues with the OAuth process (for example, reauthorization not working properly, etc.).
 - Optimize the display strategy for balance monitoring.
 - add Kiro provider.
-- add Amazon Bedrock provider.
 - The current Features use “Feature” as the key and should also use conditions to determine which Features should be enabled. In addition to boolean values, other types of data are also supported. So user can override the support of a Feature in the configuration.
 - Automatic configuration update: It is possible to configure a URL (which will be automatically set when importing from the URL) and a switch. Once the switch is turned on, the latest configuration will be fetched periodically.
