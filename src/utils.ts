@@ -493,16 +493,91 @@ function tryGetErrorCode(value: unknown): string | undefined {
   return typeof code === 'string' ? code : undefined;
 }
 
+function hasErrorCause(value: unknown): value is { cause: unknown } {
+  return typeof value === 'object' && value !== null && 'cause' in value;
+}
+
 function getErrorCode(error: unknown): string | undefined {
-  const direct = tryGetErrorCode(error);
-  if (direct) {
-    return direct;
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+
+    const code = tryGetErrorCode(current);
+    if (code) {
+      return code;
+    }
+
+    if (!hasErrorCause(current)) {
+      break;
+    }
+
+    current = current.cause;
   }
-  if (typeof error === 'object' && error !== null && 'cause' in error) {
-    return tryGetErrorCode((error as { cause: unknown }).cause);
-  }
+
   return undefined;
 }
+
+function tryGetErrorMessage(value: unknown): string | undefined {
+  if (value instanceof Error) {
+    return value.message;
+  }
+  if (typeof value !== 'object' || value === null) {
+    return undefined;
+  }
+  if (!('message' in value)) {
+    return undefined;
+  }
+  const message = (value as { message: unknown }).message;
+  return typeof message === 'string' ? message : undefined;
+}
+
+function hasRetryableNetworkErrorMessageText(message: string): boolean {
+  const normalizedMessage = message.toLowerCase();
+  return (
+    normalizedMessage.includes('fetch failed') ||
+    normalizedMessage.includes('network error') ||
+    normalizedMessage.includes('connection timeout') ||
+    normalizedMessage.includes('socket hang up') ||
+    normalizedMessage.includes('other side closed')
+  );
+}
+
+function hasRetryableNetworkErrorMessage(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current && !seen.has(current)) {
+    seen.add(current);
+
+    const message = tryGetErrorMessage(current);
+    if (message && hasRetryableNetworkErrorMessageText(message)) {
+      return true;
+    }
+
+    if (!hasErrorCause(current)) {
+      break;
+    }
+
+    current = current.cause;
+  }
+
+  return false;
+}
+
+const RETRYABLE_NETWORK_ERROR_CODES = new Set<string>([
+  'ECONNRESET',
+  'ETIMEDOUT',
+  'ECONNREFUSED',
+  'EAI_AGAIN',
+  'ENOTFOUND',
+  // undici / fetch (Node) internal error codes
+  'UND_ERR_CONNECT_TIMEOUT',
+  'UND_ERR_HEADERS_TIMEOUT',
+  'UND_ERR_BODY_TIMEOUT',
+  'UND_ERR_SOCKET',
+]);
 
 const ABORT_LIKE_ERROR_CODES = new Set<string>([
   'ABORT_ERR',
@@ -715,6 +790,27 @@ export function describeNetworkError(error: unknown): string {
     return `${code}: ${message}`;
   }
   return message;
+}
+
+export function isRetryableNetworkError(
+  error: unknown,
+  options: { timedOut?: boolean } = {},
+): boolean {
+  if (!error) {
+    return false;
+  }
+
+  // Retry on our own connection-timeout aborts (may surface as AbortError).
+  if (options.timedOut && isAbortError(error)) {
+    return true;
+  }
+
+  const code = getErrorCode(error);
+  if (code && RETRYABLE_NETWORK_ERROR_CODES.has(code)) {
+    return true;
+  }
+
+  return hasRetryableNetworkErrorMessage(error);
 }
 
 /**
@@ -1272,72 +1368,6 @@ export async function fetchWithRetryUsingFetch(
   let lastError: Error | undefined;
   let attempt = 0;
 
-  const hasCause = (value: unknown): value is { cause: unknown } =>
-    typeof value === 'object' && value !== null && 'cause' in value;
-
-  const tryGetErrorCode = (value: unknown): string | undefined => {
-    if (typeof value !== 'object' || value === null) {
-      return undefined;
-    }
-    if (!('code' in value)) {
-      return undefined;
-    }
-    const code = (value as { code: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
-  };
-
-  const retryableCodes = new Set<string>([
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'ECONNREFUSED',
-    'EAI_AGAIN',
-    'ENOTFOUND',
-    // undici / fetch (Node) internal error codes
-    'UND_ERR_CONNECT_TIMEOUT',
-    'UND_ERR_HEADERS_TIMEOUT',
-    'UND_ERR_BODY_TIMEOUT',
-    'UND_ERR_SOCKET',
-  ]);
-
-  const isRetryableNetworkError = (
-    error: unknown,
-    options: { timedOut: boolean },
-  ): boolean => {
-    if (!error) {
-      return false;
-    }
-
-    // Retry on our own connection-timeout aborts (may surface as AbortError).
-    if (options.timedOut && isAbortError(error)) {
-      return true;
-    }
-
-    const directCode = tryGetErrorCode(error);
-    if (directCode && retryableCodes.has(directCode)) {
-      return true;
-    }
-
-    if (hasCause(error)) {
-      const causeCode = tryGetErrorCode(error.cause);
-      if (causeCode && retryableCodes.has(causeCode)) {
-        return true;
-      }
-    }
-
-    if (error instanceof Error) {
-      const message = error.message.toLowerCase();
-      if (
-        message.includes('fetch failed') ||
-        message.includes('network error') ||
-        message.includes('socket hang up')
-      ) {
-        return true;
-      }
-    }
-
-    return false;
-  };
-
   while (attempt <= maxRetries) {
     // Create timeout controller for connection timeout
     const timeoutController = new AbortController();
@@ -1449,8 +1479,6 @@ export async function fetchWithRetryUsingFetch(
 
       // Retryable connection/network errors.
       if (
-        (error instanceof Error &&
-          error.message.includes('Connection timeout')) ||
         isRetryableNetworkError(error, {
           timedOut: timeoutController.signal.aborted,
         })

@@ -20,6 +20,7 @@ import {
   DEFAULT_CHAT_RETRY_CONFIG,
   describeNetworkError,
   isAbortLikeError,
+  isRetryableNetworkError,
   isRetryableStatusCode,
   resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
@@ -194,65 +195,6 @@ function calculateBackoffDelay(
   const jitterRange = cappedDelay * config.jitterFactor;
   const jitter = (Math.random() * 2 - 1) * jitterRange;
   return Math.round(cappedDelay + jitter);
-}
-
-function isRetryableNetworkError(error: unknown): boolean {
-  const retryableCodes = new Set<string>([
-    'ECONNRESET',
-    'ETIMEDOUT',
-    'ECONNREFUSED',
-    'EAI_AGAIN',
-    'ENOTFOUND',
-    // undici / fetch (Node) internal error codes
-    'UND_ERR_CONNECT_TIMEOUT',
-    'UND_ERR_HEADERS_TIMEOUT',
-    'UND_ERR_BODY_TIMEOUT',
-    'UND_ERR_SOCKET',
-  ]);
-
-  const hasCause = (value: unknown): value is { cause: unknown } =>
-    typeof value === 'object' && value !== null && 'cause' in value;
-
-  const tryGetErrorCode = (value: unknown): string | undefined => {
-    if (typeof value !== 'object' || value === null) {
-      return undefined;
-    }
-    if (!('code' in value)) {
-      return undefined;
-    }
-    const code = (value as { code: unknown }).code;
-    return typeof code === 'string' ? code : undefined;
-  };
-
-  if (!error) {
-    return false;
-  }
-
-  const directCode = tryGetErrorCode(error);
-  if (directCode && retryableCodes.has(directCode)) {
-    return true;
-  }
-
-  if (hasCause(error)) {
-    const causeCode = tryGetErrorCode(error.cause);
-    if (causeCode && retryableCodes.has(causeCode)) {
-      return true;
-    }
-  }
-
-  if (error instanceof Error) {
-    const message = error.message.toLowerCase();
-    if (
-      message.includes('connection timeout') ||
-      message.includes('fetch failed') ||
-      message.includes('network error') ||
-      message.includes('socket hang up')
-    ) {
-      return true;
-    }
-  }
-
-  return false;
 }
 
 function hashConversationSeed(seed: string): string {

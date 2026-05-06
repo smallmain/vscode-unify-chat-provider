@@ -16,11 +16,13 @@ import {
 } from './ui/form-utils';
 import {
   calculateBackoffDelay,
+  describeNetworkError,
   delay,
   getAllModelsForProvider,
   getAllModelsForProviderSync,
   isAbortLikeError,
   isPlaceholderModelId,
+  isRetryableNetworkError,
   resolveMeaningfulError,
   resolveChatNetwork,
 } from './utils';
@@ -555,6 +557,27 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             if (token.isCancellationRequested && isAbortLikeError(error)) {
               // User cancelled the request; treat provider abort errors as expected.
               outcome = 'cancelled';
+            } else if (
+              partCount === 0 &&
+              !token.isCancellationRequested &&
+              isRetryableNetworkError(error) &&
+              emptyStreamAttempt < retryConfig.maxRetries
+            ) {
+              const delayMs = calculateBackoffDelay(
+                emptyStreamAttempt,
+                retryConfig,
+              );
+              logger.retry(
+                emptyStreamAttempt + 1,
+                retryConfig.maxRetries,
+                0,
+                delayMs,
+                undefined,
+                describeNetworkError(error),
+              );
+              await delay(delayMs, retryAbortController.signal);
+              emptyStreamAttempt++;
+              continue;
             } else {
               outcome = 'error';
               const normalizedError = resolveMeaningfulError(error);
