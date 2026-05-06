@@ -531,6 +531,73 @@ function readToolSchemaRequiredNames(value: unknown): string[] {
   );
 }
 
+function isToolSchemaMapKey(key: string): boolean {
+  return (
+    key === '$defs' ||
+    key === 'definitions' ||
+    key === 'dependentSchemas' ||
+    key === 'patternProperties' ||
+    key === 'properties'
+  );
+}
+
+function isToolSchemaOrBooleanKey(key: string): boolean {
+  return key === 'additionalProperties' || key === 'unevaluatedProperties';
+}
+
+function normalizeToolSchemaOrBoolean(
+  value: unknown,
+): Record<string, unknown> | boolean | undefined {
+  if (typeof value === 'boolean') {
+    return value;
+  }
+
+  const normalized = normalizeToolSchemaValue(value);
+  if (typeof normalized === 'boolean') {
+    return normalized;
+  }
+
+  return isToolSchemaRecord(normalized) ? normalized : undefined;
+}
+
+function normalizeToolSchemaMap(
+  value: unknown,
+): Record<string, unknown> | undefined {
+  if (!isToolSchemaRecord(value)) {
+    return undefined;
+  }
+
+  const out: Record<string, unknown> = {};
+  for (const [key, child] of Object.entries(value)) {
+    const normalized = normalizeToolSchemaOrBoolean(child);
+    if (normalized !== undefined) {
+      out[key] = normalized;
+    }
+  }
+
+  return out;
+}
+
+function normalizeToolSchemaItems(
+  value: unknown,
+):
+  | Record<string, unknown>
+  | boolean
+  | Array<Record<string, unknown> | boolean>
+  | undefined {
+  if (Array.isArray(value)) {
+    const items = value
+      .map((item) => normalizeToolSchemaOrBoolean(item))
+      .filter(
+        (item): item is Record<string, unknown> | boolean => item !== undefined,
+      );
+
+    return items.length > 0 ? items : undefined;
+  }
+
+  return normalizeToolSchemaOrBoolean(value);
+}
+
 function mergeToolSchemaRequired(
   target: Record<string, unknown>,
   incoming: Record<string, unknown>,
@@ -784,6 +851,30 @@ function normalizeToolSchemaValue(value: unknown): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value)) {
+    if (isToolSchemaMapKey(key)) {
+      const normalizedMap = normalizeToolSchemaMap(child);
+      if (normalizedMap !== undefined) {
+        out[key] = normalizedMap;
+      }
+      continue;
+    }
+
+    if (isToolSchemaOrBooleanKey(key)) {
+      const normalizedSchema = normalizeToolSchemaOrBoolean(child);
+      if (normalizedSchema !== undefined) {
+        out[key] = normalizedSchema;
+      }
+      continue;
+    }
+
+    if (key === 'items' || key === 'prefixItems') {
+      const normalizedItems = normalizeToolSchemaItems(child);
+      if (normalizedItems !== undefined) {
+        out[key] = normalizedItems;
+      }
+      continue;
+    }
+
     out[key] = normalizeToolSchemaValue(child);
   }
 
