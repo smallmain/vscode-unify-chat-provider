@@ -118,10 +118,23 @@ function isBaiduQianfanModel(
   provider: { baseUrl: string },
   modelIds: readonly string[],
 ): boolean {
-  return (
-    matchProvider(provider.baseUrl, 'qianfan.baidubce.com') &&
-    modelIds.includes(getBaseModelId(model.id))
-  );
+  if (!matchProvider(provider.baseUrl, 'qianfan.baidubce.com')) {
+    return false;
+  }
+
+  const baseModelId = getBaseModelId(model.id).toLowerCase();
+  return modelIds.some((modelId) => modelId.toLowerCase() === baseModelId);
+}
+
+function getModelFamily(model: { id: string; family?: string }): string {
+  return model.family ?? getBaseModelId(model.id);
+}
+
+function modelFamilyIncludes(
+  model: { id: string; family?: string },
+  expected: string,
+): boolean {
+  return getModelFamily(model).toLowerCase().includes(expected.toLowerCase());
 }
 
 export enum FeatureId {
@@ -488,8 +501,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
-      (model, provider) =>
-        (model.family ?? getBaseModelId(model.id)).includes('deepseek-v4'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -511,8 +523,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseDeepSeekReasoningEffortParam]: {
     customCheckers: [
-      (model, provider) =>
-        (model.family ?? getBaseModelId(model.id)).includes('deepseek-v4'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
     ],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
