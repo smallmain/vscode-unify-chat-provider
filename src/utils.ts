@@ -2075,6 +2075,43 @@ export interface GetAllModelsOptions {
   forceFetch?: boolean;
 }
 
+function isLikelyBedrockModelId(modelId: string): boolean {
+  const trimmed = modelId.trim();
+  if (!trimmed) {
+    return false;
+  }
+
+  // Filter only known invalid shorthand aliases that may leak from generic
+  // well-known model IDs and are not valid Bedrock model IDs.
+  const knownInvalidAliases = [
+    /^claude-(?:sonnet|haiku|opus)-/i,
+    /^claude-3(?:\.|-)/i,
+    /^claude-4(?:\.|-)/i,
+  ];
+
+  if (knownInvalidAliases.some((pattern) => pattern.test(trimmed))) {
+    return false;
+  }
+
+  // Allow canonical IDs and ARNs; keep permissive to avoid hiding valid models.
+  if (trimmed.startsWith('arn:')) {
+    return true;
+  }
+
+  return true;
+}
+
+function sanitizeBedrockModels(
+  provider: ProviderConfig,
+  models: readonly ModelConfig[],
+): ModelConfig[] {
+  if (provider.type !== 'bedrock') {
+    return [...models];
+  }
+
+  return models.filter((model) => isLikelyBedrockModelId(model.id));
+}
+
 /**
  * Get all models for a provider (user models + official models)
  * - Automatically deduplicates, user models take priority
@@ -2084,7 +2121,7 @@ export async function getAllModelsForProvider(
   provider: ProviderConfig,
   options?: GetAllModelsOptions,
 ): Promise<ModelConfig[]> {
-  const userModels = provider.models;
+  const userModels = sanitizeBedrockModels(provider, provider.models);
   const userModelIds = new Set(userModels.map((m) => m.id));
 
   let officialModels: ModelConfig[] = [];
@@ -2093,6 +2130,7 @@ export async function getAllModelsForProvider(
       provider,
       options?.forceFetch,
     );
+    officialModels = sanitizeBedrockModels(provider, officialModels);
   }
 
   // Filter out official models that conflict with user models
@@ -2117,7 +2155,7 @@ export async function getAllModelsForProvider(
 export function getAllModelsForProviderSync(
   provider: ProviderConfig,
 ): ModelConfig[] {
-  const userModels = provider.models;
+  const userModels = sanitizeBedrockModels(provider, provider.models);
   const userModelIds = new Set(userModels.map((m) => m.id));
 
   let officialModels: ModelConfig[] = [];
@@ -2128,7 +2166,7 @@ export function getAllModelsForProviderSync(
 
     if (state && state.models.length > 0) {
       // Cache exists - use it
-      officialModels = state.models;
+      officialModels = sanitizeBedrockModels(provider, state.models);
     } else {
       // No cache - return placeholder
       officialModels = [

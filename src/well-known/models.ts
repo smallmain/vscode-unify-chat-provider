@@ -6,6 +6,7 @@ import type {
 } from '../types';
 import type { ProviderPattern } from '../client/types';
 import { matchProvider } from '../client/utils';
+import { getBaseModelId } from '../model-id-utils';
 import {
   adaptiveReasoningEffort,
   budgetReasoningEffort,
@@ -13,6 +14,9 @@ import {
   thinkingMode,
 } from './preset-templates';
 import { mergeModelCapabilities } from '../model-capabilities';
+
+const isBedrockProvider = (provider: ProviderConfig): boolean =>
+  provider.type === 'bedrock';
 
 const DOUBAO_REASONING_EFFORTS = ['high', 'medium', 'low', 'minimal'] as const;
 const OPENAI_FULL_REASONING_EFFORTS = [
@@ -453,7 +457,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-opus-4-7',
-    overrides: ['claude-opus-4.7', 'claude-opus-4-7-thinking'],
+    overrides: [
+      'claude-opus-4.7',
+      'claude-opus-4-7-thinking',
+      'anthropic.claude-opus-4-7',
+      'us.anthropic.claude-opus-4-7',
+      'eu.anthropic.claude-opus-4-7',
+      'ap.anthropic.claude-opus-4-7',
+      'global.anthropic.claude-opus-4-7',
+    ],
     name: 'Claude Opus 4.7',
     maxInputTokens: 1000000,
     maxOutputTokens: 128000,
@@ -482,6 +494,11 @@ const _WELL_KNOWN_MODELS = [
     overrides: [
       'claude-opus-4.6',
       'claude-opus-4-6-thinking',
+      'anthropic.claude-opus-4-6',
+      'us.anthropic.claude-opus-4-6',
+      'eu.anthropic.claude-opus-4-6',
+      'ap.anthropic.claude-opus-4-6',
+      'global.anthropic.claude-opus-4-6',
       {
         matchers: ['api.cline.bot'],
         config: {
@@ -514,6 +531,11 @@ const _WELL_KNOWN_MODELS = [
     overrides: [
       'claude-sonnet-4.6',
       'claude-sonnet-4-6-thinking',
+      'anthropic.claude-sonnet-4-6',
+      'us.anthropic.claude-sonnet-4-6',
+      'eu.anthropic.claude-sonnet-4-6',
+      'ap.anthropic.claude-sonnet-4-6',
+      'global.anthropic.claude-sonnet-4-6',
       {
         matchers: ['api.cline.bot'],
         config: {
@@ -543,7 +565,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-opus-4-5',
-    overrides: ['claude-opus-4.5', 'claude-opus-4-5-thinking'],
+    overrides: [
+      'claude-opus-4.5',
+      'claude-opus-4-5-thinking',
+      'anthropic.claude-opus-4-5',
+      'us.anthropic.claude-opus-4-5',
+      'eu.anthropic.claude-opus-4-5',
+      'ap.anthropic.claude-opus-4-5',
+      'global.anthropic.claude-opus-4-5',
+    ],
     name: 'Claude Opus 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -561,7 +591,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-sonnet-4-5',
-    overrides: ['claude-sonnet-4.5', 'claude-sonnet-4-5-thinking'],
+    overrides: [
+      'claude-sonnet-4.5',
+      'claude-sonnet-4-5-thinking',
+      'anthropic.claude-sonnet-4-5',
+      'us.anthropic.claude-sonnet-4-5',
+      'eu.anthropic.claude-sonnet-4-5',
+      'ap.anthropic.claude-sonnet-4-5',
+      'global.anthropic.claude-sonnet-4-5',
+    ],
     name: 'Claude Sonnet 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -579,7 +617,14 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'claude-haiku-4-5',
-    overrides: ['claude-haiku-4.5'],
+    overrides: [
+      'claude-haiku-4.5',
+      'anthropic.claude-haiku-4-5',
+      'us.anthropic.claude-haiku-4-5',
+      'eu.anthropic.claude-haiku-4-5',
+      'ap.anthropic.claude-haiku-4-5',
+      'global.anthropic.claude-haiku-4-5',
+    ],
     name: 'Claude Haiku 4.5',
     maxInputTokens: 200000,
     maxOutputTokens: 64000,
@@ -2296,6 +2341,7 @@ const _WELL_KNOWN_MODELS = [
     overrides: [
       'moonshotai/kimi-k2-thinking',
       'hf:moonshotai/Kimi-K2-Thinking',
+      'moonshot.kimi-k2-thinking',
       {
         matchers: [
           'ark.cn-beijing.volces.com',
@@ -2682,6 +2728,16 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-coder-next',
+    overrides: [
+      'qwen.qwen3-coder-next',
+      {
+        matchers: [isBedrockProvider],
+        config: {
+          maxInputTokens: 128000,
+          maxOutputTokens: 16000,
+        },
+      },
+    ],
     name: 'Qwen3-Coder-Next',
     maxInputTokens: 262144,
     maxOutputTokens: 65536,
@@ -2970,6 +3026,8 @@ const _WELL_KNOWN_MODELS = [
     id: 'llama-3.1-8b',
     overrides: [
       'llama3.1-8b',
+      'meta.llama3-1-8b-instruct-v1:0',
+      'us.meta.llama3-1-8b-instruct-v1:0',
       {
         matchers: ['api.cerebras.ai'],
         config: {
@@ -2988,7 +3046,11 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'llama-3.1-70b',
-    overrides: ['llama3.1-70b'],
+    overrides: [
+      'llama3.1-70b',
+      'meta.llama3-1-70b-instruct-v1:0',
+      'us.meta.llama3-1-70b-instruct-v1:0',
+    ],
     name: 'Llama 3.1 70B',
     maxInputTokens: 128000,
     stream: true,
@@ -3010,7 +3072,12 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'llama-3.3-70b',
-    overrides: ['llama3.3-70b', 'hf:meta-llama/Llama-3.3-70B-Instruct'],
+    overrides: [
+      'llama3.3-70b',
+      'hf:meta-llama/Llama-3.3-70B-Instruct',
+      'meta.llama3-3-70b-instruct-v1:0',
+      'us.meta.llama3-3-70b-instruct-v1:0',
+    ],
     name: 'Llama 3.3 70B',
     maxInputTokens: 128000,
     stream: true,
@@ -3287,7 +3354,19 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-32b',
-    overrides: ['qwen3:32b', 'qwen-3-32b'],
+    overrides: [
+      'qwen3:32b',
+      'qwen-3-32b',
+      'qwen.qwen3-32b',
+      'qwen.qwen3-32b-v1:0',
+      {
+        matchers: [isBedrockProvider],
+        config: {
+          maxInputTokens: 128000,
+          maxOutputTokens: 8000,
+        },
+      },
+    ],
     name: 'Qwen3 32B',
     maxInputTokens: 129024,
     stream: true,
@@ -3328,7 +3407,19 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-next-80b-a3b-instruct',
-    overrides: ['qwen3-next:80b', 'qwen/qwen3-next-80b-a3b-instruct'],
+    overrides: [
+      'qwen3-next:80b',
+      'qwen/qwen3-next-80b-a3b-instruct',
+      'qwen.qwen3-next-80b-a3b',
+      'qwen.qwen3-next-80b-a3b-instruct',
+      {
+        matchers: [isBedrockProvider],
+        config: {
+          maxInputTokens: 128000,
+          maxOutputTokens: 8000,
+        },
+      },
+    ],
     name: 'Qwen3 Next 80B A3B Instruct',
     maxInputTokens: 129024,
     stream: true,
@@ -3395,7 +3486,18 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'qwen3-coder-30b-a3b-instruct',
-    overrides: ['qwen3-coder:30b', 'qwen3-coder:latest'],
+    overrides: [
+      'qwen3-coder:30b',
+      'qwen3-coder:latest',
+      'qwen.qwen3-coder-30b-a3b-instruct',
+      {
+        matchers: [isBedrockProvider],
+        config: {
+          maxInputTokens: 128000,
+          maxOutputTokens: 16000,
+        },
+      },
+    ],
     name: 'Qwen3 Coder 30B A3B Instruct',
     stream: true,
     capabilities: {
@@ -3683,6 +3785,7 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'glm-5',
     overrides: [
+      'zai.glm-5',
       {
         matchers: ['integrate.api.nvidia.com'],
         config: {
@@ -4734,7 +4837,285 @@ const _WELL_KNOWN_MODELS = [
       effort: 'high',
     },
   },
-] as const satisfies readonly WellKnownModelConfig[];
+  {
+    id: 'nova-2-lite',
+    overrides: [
+      'amazon.nova-2-lite-v1:0',
+      'us.amazon.nova-2-lite-v1:0',
+      'eu.amazon.nova-2-lite-v1:0',
+      'global.amazon.nova-2-lite-v1:0',
+    ],
+    name: 'Nova 2 Lite',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 64000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'nova-lite',
+    overrides: [
+      'amazon.nova-lite-v1:0',
+      'us.amazon.nova-lite-v1:0',
+      'eu.amazon.nova-lite-v1:0',
+      'global.amazon.nova-lite-v1:0',
+    ],
+    name: 'Nova Lite',
+    maxInputTokens: 300000,
+    maxOutputTokens: 5000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'nova-micro',
+    overrides: [
+      'amazon.nova-micro-v1:0',
+      'us.amazon.nova-micro-v1:0',
+      'eu.amazon.nova-micro-v1:0',
+    ],
+    name: 'Nova Micro',
+    maxInputTokens: 128000,
+    maxOutputTokens: 5000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'nova-pro',
+    overrides: [
+      'amazon.nova-pro-v1:0',
+      'us.amazon.nova-pro-v1:0',
+      'eu.amazon.nova-pro-v1:0',
+      'global.amazon.nova-pro-v1:0',
+    ],
+    name: 'Nova Pro',
+    maxInputTokens: 300000,
+    maxOutputTokens: 5000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'jamba-1.5-large',
+    overrides: ['ai21.jamba-1-5-large-v1:0'],
+    name: 'Jamba 1.5 Large',
+    maxInputTokens: 256000,
+    maxOutputTokens: 4000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'jamba-1.5-mini',
+    overrides: ['ai21.jamba-1-5-mini-v1:0'],
+    name: 'Jamba 1.5 Mini',
+    maxInputTokens: 256000,
+    maxOutputTokens: 4000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'llama-4-maverick-17b-instruct',
+    overrides: [
+      'meta.llama4-maverick-17b-instruct-v1:0',
+      'us.meta.llama4-maverick-17b-instruct-v1:0',
+    ],
+    name: 'Llama 4 Maverick 17B Instruct',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'llama-4-scout-17b-instruct',
+    overrides: [
+      'meta.llama4-scout-17b-instruct-v1:0',
+      'us.meta.llama4-scout-17b-instruct-v1:0',
+    ],
+    name: 'Llama 4 Scout 17B Instruct',
+    maxInputTokens: 10000000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3-vl-235b-a22b',
+    overrides: ['qwen.qwen3-vl-235b-a22b'],
+    name: 'Qwen3 VL 235B A22B',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gemma-3-4b-it',
+    overrides: ['google.gemma-3-4b-it'],
+    name: 'Gemma 3 4B IT',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'gemma-3-12b-it',
+    overrides: ['google.gemma-3-12b-it'],
+    name: 'Gemma 3 12B IT',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'gemma-3-27b-pt',
+    overrides: ['google.gemma-3-27b-it'],
+    name: 'Gemma 3 27B PT',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'magistral-small-2509',
+    overrides: ['mistral.magistral-small-2509'],
+    name: 'Magistral Small 2509',
+    maxInputTokens: 128000,
+    maxOutputTokens: 40000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'voxtral-mini-3b-2507',
+    overrides: ['mistral.voxtral-mini-3b-2507'],
+    name: 'Voxtral Mini 3B 2507',
+    maxInputTokens: 32000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'voxtral-small-24b-2507',
+    overrides: ['mistral.voxtral-small-24b-2507'],
+    name: 'Voxtral Small 24B 2507',
+    maxInputTokens: 32000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'ministral-3b',
+    overrides: ['mistral.ministral-3-3b-instruct'],
+    name: 'Ministral 3B',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'ministral-3-8b',
+    overrides: ['mistral.ministral-3-8b-instruct'],
+    name: 'Ministral 3 8B',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'ministral-14b-3.0',
+    overrides: ['mistral.ministral-3-14b-instruct'],
+    name: 'Ministral 14B 3.0',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'mistral-large-3',
+    overrides: ['mistral.mistral-large-3-675b-instruct'],
+    name: 'Mistral Large 3',
+    maxInputTokens: 128000,
+    maxOutputTokens: 32000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'nemotron-nano-9b-v2',
+    overrides: ['nvidia.nemotron-nano-9b-v2'],
+    name: 'NVIDIA Nemotron Nano 9B v2',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'nemotron-nano-12b-v2-vl-bf16',
+    overrides: ['nvidia.nemotron-nano-12b-v2'],
+    name: 'NVIDIA Nemotron Nano 12B v2 VL BF16',
+    maxInputTokens: 128000,
+    maxOutputTokens: 8000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  ] as const satisfies readonly WellKnownModelConfig[];
 export const WELL_KNOWN_MODELS: readonly WellKnownModelConfig[] =
   _WELL_KNOWN_MODELS;
 
@@ -4916,7 +5297,9 @@ export function mergeWithWellKnownModel(
   apiModel: ModelConfig,
   provider?: ProviderConfig,
 ): ModelConfig {
-  const wellKnown = findBestMatchingWellKnownModel(apiModel.id);
+  const wellKnown =
+    findBestMatchingWellKnownModel(apiModel.id) ??
+    findBestMatchingWellKnownModel(getBaseModelId(apiModel.id));
 
   const defaultConfig: Partial<ModelConfig> = {
     capabilities: { toolCalling: true },

@@ -176,6 +176,10 @@
         "title": "%command.syncBuiltInParamsToAllConfigs.title%"
       },
       {
+        "command": "unifyChatProvider.clearBedrockConversePreferenceCache",
+        "title": "%command.clearBedrockConversePreferenceCache.title%"
+      },
+      {
         "command": "unifyChatProvider.commitMessageGeneration.generate",
         "title": "%command.commitMessageGeneration.generate.title%",
         "icon": "$(edit-sparkle)"
@@ -411,6 +415,7 @@
                 "description": "%configuration.endpoints.type.description%",
                 "enum": [
                   "anthropic",
+                  "bedrock",
                   "google-ai-studio",
                   "google-vertex-ai",
                   "google-antigravity",
@@ -424,6 +429,7 @@
                 ],
                 "enumDescriptions": [
                   "%configuration.endpoints.type.enumDescriptions.0%",
+                  "%configuration.endpoints.type.enumDescriptions.11%",
                   "%configuration.endpoints.type.enumDescriptions.1%",
                   "%configuration.endpoints.type.enumDescriptions.2%",
                   "%configuration.endpoints.type.enumDescriptions.6%",
