@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "6.9.0",
+  "version": "6.9.2",
   "categories": [
     "AI",
     "Chat"
@@ -68,9 +68,6 @@
     "vscode": "^1.104.0"
   },
   "packageManager": "npm@10.8.2",
-  "extensionDependencies": [
-    "GitHub.copilot-chat"
-  ],
   "enabledApiProposals": [
     "extensionsAny",
     "newSymbolNamesProvider",

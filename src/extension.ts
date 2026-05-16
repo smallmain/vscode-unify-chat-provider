@@ -316,6 +316,18 @@ export async function activate(
   context.subscriptions.push(providerRegistration);
   context.subscriptions.push(chatProvider);
 
+  // Copilot Chat is built into VS Code, but Remote-SSH hosts may not enumerate
+  // it early enough for a hard extension dependency to work reliably.
+  // Activate it opportunistically before we fire the first model refresh.
+  try {
+    await vscode.extensions.getExtension('github.copilot-chat')?.activate();
+  } catch {
+    authLog.warn(
+      'main-instance',
+      'Copilot Chat activation unavailable; initial model refresh may be delayed',
+    );
+  }
+
   // Trigger initial model cache refresh
   chatProvider.handleConfigurationChange();
 
