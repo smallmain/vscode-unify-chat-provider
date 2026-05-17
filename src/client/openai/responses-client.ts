@@ -1195,6 +1195,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
     );
   }
 
+  protected getMinimumStreamReadRetries(): number {
+    return 0;
+  }
+
+  protected shouldFallbackToNonStreamingAfterStreamReadError(
+    _error: unknown,
+  ): boolean {
+    return false;
+  }
+
   private describeTransportError(error: unknown): string {
     const parts: string[] = [];
 
@@ -1472,6 +1482,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
     let shouldUseContinuation = context.continuation !== undefined;
     let attempt = 0;
     const retryConfig = resolveChatNetwork(this.config).retry;
+    const streamReadMaxRetries = Math.max(
+      retryConfig.maxRetries,
+      this.getMinimumStreamReadRetries(),
+    );
+    let didFallbackToNonStreaming = false;
 
     while (true) {
       attempt += 1;
@@ -1548,14 +1563,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
             error,
             emittedPartCount,
             attempt,
-            retryConfig.maxRetries,
+            streamReadMaxRetries,
             context.token,
           )
         ) {
           const delayMs = calculateBackoffDelay(attempt - 1, retryConfig);
           context.logger.retry(
             attempt,
-            retryConfig.maxRetries,
+            streamReadMaxRetries,
             0,
             delayMs,
             undefined,
@@ -1563,6 +1578,53 @@ export class OpenAIResponsesProvider implements ApiProvider {
           );
           await delay(delayMs, context.abortController.signal);
           continue;
+        }
+
+        if (
+          context.streamEnabled &&
+          emittedPartCount === 0 &&
+          !didFallbackToNonStreaming &&
+          !context.token.isCancellationRequested &&
+          this.isRetryableStreamReadError(error) &&
+          this.shouldFallbackToNonStreamingAfterStreamReadError(error)
+        ) {
+          didFallbackToNonStreaming = true;
+          context.logger.verbose(
+            `OpenAI Responses stream read failed before output after ${attempt} attempt(s); retrying once with non-streaming HTTP.`,
+          );
+          const fallbackClient = this.createClient(
+            context.logger,
+            false,
+            context.credential,
+            context.abortController.signal,
+          );
+          const fallbackRequestBody = this.buildRequestBodyForAttempt(
+            context.baseBody,
+            context.fullInput,
+            context.continuation,
+            shouldUseContinuation,
+            false,
+          );
+          const data = await fallbackClient.responses.create(
+            { ...fallbackRequestBody, stream: false },
+            {
+              headers: context.headers,
+              signal: context.abortController.signal,
+            },
+          );
+          for await (const part of this.parseMessage(
+            data,
+            context.sessionId,
+            context.performanceTrace,
+            context.logger,
+            context.expectedIdentity,
+            context.includeResponseIdInMarker,
+            'http',
+            context.imageGenerationOutputMimeType,
+          )) {
+            yield part;
+          }
+          return;
         }
 
         if (
