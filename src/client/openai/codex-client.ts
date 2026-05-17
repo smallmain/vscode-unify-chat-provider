@@ -337,6 +337,14 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     ensureCodexImageGenerationTool(baseBody);
   }
 
+  protected override getMinimumStreamReadRetries(): number {
+    return 1;
+  }
+
+  protected override shouldFallbackToNonStreamingAfterStreamReadError(): boolean {
+    return true;
+  }
+
   protected override createClient(
     logger: ProviderHttpLogger | undefined,
     stream: boolean,

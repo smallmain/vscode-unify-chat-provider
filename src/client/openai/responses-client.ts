@@ -29,6 +29,10 @@ import {
   resolveOpenAISdkTimeoutMs,
   sanitizeMessagesForModelSwitchDetailed,
   withIdleTimeout,
+  calculateBackoffDelay,
+  delay,
+  describeNetworkError,
+  isAbortLikeError,
 } from '../../utils';
 import {
   buildBaseUrl,
@@ -79,6 +83,9 @@ const VOLC_CONTEXT_CACHE_MAX_TTL_SECONDS = 604_800;
 const PREVIOUS_RESPONSE_ID_ERROR_CODES = new Set<string>([
   'invalid_previous_response_id',
   'previous_response_not_found',
+]);
+const STREAM_READ_RETRYABLE_ERROR_CODES = new Set<string>([
+  'stream_read_error',
 ]);
 const WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE =
   'websocket_connection_limit_reached';
@@ -1145,6 +1152,59 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return this.isPreviousResponseIdTextMatch(details.message);
   }
 
+  private isRetryableStreamReadError(error: unknown): boolean {
+    if (isAbortLikeError(error)) {
+      return false;
+    }
+
+    const details = this.extractResponseError(error);
+    if (details.status !== undefined && details.status < 500) {
+      return false;
+    }
+
+    if (
+      details.code &&
+      STREAM_READ_RETRYABLE_ERROR_CODES.has(details.code)
+    ) {
+      return true;
+    }
+
+    const message = details.message.toLowerCase();
+    return (
+      message.includes('stream_read_error') ||
+      message.includes('stream read error') ||
+      message.includes('terminated') ||
+      message.includes('socket hang up') ||
+      message.includes('connection reset') ||
+      message.includes('econnreset')
+    );
+  }
+
+  private shouldRetryStreamReadError(
+    error: unknown,
+    emittedPartCount: number,
+    attempt: number,
+    maxRetries: number,
+    token: CancellationToken,
+  ): boolean {
+    return (
+      !token.isCancellationRequested &&
+      emittedPartCount === 0 &&
+      attempt <= maxRetries &&
+      this.isRetryableStreamReadError(error)
+    );
+  }
+
+  protected getMinimumStreamReadRetries(): number {
+    return 0;
+  }
+
+  protected shouldFallbackToNonStreamingAfterStreamReadError(
+    _error: unknown,
+  ): boolean {
+    return false;
+  }
+
   private describeTransportError(error: unknown): string {
     const parts: string[] = [];
 
@@ -1421,6 +1481,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     let shouldUseContinuation = context.continuation !== undefined;
     let attempt = 0;
+    const retryConfig = resolveChatNetwork(this.config).retry;
+    const streamReadMaxRetries = Math.max(
+      retryConfig.maxRetries,
+      this.getMinimumStreamReadRetries(),
+    );
+    let didFallbackToNonStreaming = false;
 
     while (true) {
       attempt += 1;
@@ -1492,6 +1558,75 @@ export class OpenAIResponsesProvider implements ApiProvider {
         }
         return;
       } catch (error) {
+        if (
+          this.shouldRetryStreamReadError(
+            error,
+            emittedPartCount,
+            attempt,
+            streamReadMaxRetries,
+            context.token,
+          )
+        ) {
+          const delayMs = calculateBackoffDelay(attempt - 1, retryConfig);
+          context.logger.retry(
+            attempt,
+            streamReadMaxRetries,
+            0,
+            delayMs,
+            undefined,
+            `OpenAI Responses stream read failed before output: ${describeNetworkError(error)}`,
+          );
+          await delay(delayMs, context.abortController.signal);
+          continue;
+        }
+
+        if (
+          context.streamEnabled &&
+          emittedPartCount === 0 &&
+          !didFallbackToNonStreaming &&
+          !context.token.isCancellationRequested &&
+          this.isRetryableStreamReadError(error) &&
+          this.shouldFallbackToNonStreamingAfterStreamReadError(error)
+        ) {
+          didFallbackToNonStreaming = true;
+          context.logger.verbose(
+            `OpenAI Responses stream read failed before output after ${attempt} attempt(s); retrying once with non-streaming HTTP.`,
+          );
+          const fallbackClient = this.createClient(
+            context.logger,
+            false,
+            context.credential,
+            context.abortController.signal,
+          );
+          const fallbackRequestBody = this.buildRequestBodyForAttempt(
+            context.baseBody,
+            context.fullInput,
+            context.continuation,
+            shouldUseContinuation,
+            false,
+          );
+          const data = await fallbackClient.responses.create(
+            { ...fallbackRequestBody, stream: false },
+            {
+              headers: context.headers,
+              signal: context.abortController.signal,
+            },
+          );
+          for await (const part of this.parseMessage(
+            data,
+            context.sessionId,
+            context.performanceTrace,
+            context.logger,
+            context.expectedIdentity,
+            context.includeResponseIdInMarker,
+            'http',
+            context.imageGenerationOutputMimeType,
+          )) {
+            yield part;
+          }
+          return;
+        }
+
         if (
           !shouldUseContinuation ||
           emittedPartCount > 0 ||
