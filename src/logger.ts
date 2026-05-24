@@ -7,7 +7,6 @@ import type { GenerateContentResponseUsageMetadata } from '@google/genai';
 import { CONFIG_NAMESPACE } from './config-store';
 
 const CHANNEL_NAME = 'Unify Chat Provider';
-const MAX_LOG_PAYLOAD_CHARS = 12000;
 
 let channel: vscode.LogOutputChannel | undefined;
 let nextRequestId = 1;
@@ -54,29 +53,6 @@ function maskValue(value?: string): string {
     return '*'.repeat(value.length);
   }
   return `${value.slice(0, 4)}…${value.slice(-4)}`;
-}
-
-function isSensitiveLogKey(key: string): boolean {
-  const lower = key.toLowerCase();
-  return (
-    lower === 'authorization' ||
-    lower === 'x-api-key' ||
-    lower === 'token' ||
-    lower.endsWith('_token') ||
-    lower.endsWith('-token') ||
-    lower.includes('api_key') ||
-    lower.includes('apikey') ||
-    lower.includes('password') ||
-    lower.includes('secret')
-  );
-}
-
-function truncateLogPayload(text: string): string {
-  if (text.length <= MAX_LOG_PAYLOAD_CHARS) {
-    return text;
-  }
-  const omitted = text.length - MAX_LOG_PAYLOAD_CHARS;
-  return `${text.slice(0, MAX_LOG_PAYLOAD_CHARS)}\n... [truncated ${omitted} chars]`;
 }
 
 function sanitizeForLog(value: unknown, seen: WeakSet<object>): unknown {
@@ -145,10 +121,6 @@ function sanitizeForLog(value: unknown, seen: WeakSet<object>): unknown {
 
   const out: Record<string, unknown> = {};
   for (const [key, child] of Object.entries(value as Record<string, unknown>)) {
-    if (isSensitiveLogKey(key)) {
-      out[key] = typeof child === 'string' ? maskValue(child) : '[Redacted]';
-      continue;
-    }
     out[key] = sanitizeForLog(child, seen);
   }
   return out;
@@ -157,7 +129,7 @@ function sanitizeForLog(value: unknown, seen: WeakSet<object>): unknown {
 function stringifyForLog(value: unknown): string {
   try {
     const json = JSON.stringify(sanitizeForLog(value, new WeakSet()), null, 2);
-    return truncateLogPayload(json ?? 'undefined');
+    return json ?? 'undefined';
   } catch (error) {
     const message = error instanceof Error ? error.message : String(error);
     return `<<Failed to stringify for log: ${message}>>`;
@@ -298,8 +270,10 @@ export class RequestLogger implements ProviderHttpLogger {
         )}`,
       );
       this.ch.info(
-        `[${this.requestId}] Provider Request Body:\n${stringifyForLog(
+        `[${this.requestId}] Provider Request Body:\n${JSON.stringify(
           details.body ?? null,
+          null,
+          2,
         )}`,
       );
       this.providerContext.logged = true;
@@ -520,7 +494,11 @@ export class RequestLogger implements ProviderHttpLogger {
       )}`,
     );
     this.ch.error(
-      `[${this.requestId}] Provider Request Body:\n${stringifyForLog(ctx.body)}`,
+      `[${this.requestId}] Provider Request Body:\n${JSON.stringify(
+        ctx.body,
+        null,
+        2,
+      )}`,
     );
     ctx.logged = true;
   }
