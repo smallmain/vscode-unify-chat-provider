@@ -338,7 +338,7 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
   }
 
   protected override getMinimumStreamReadRetries(): number {
-    return 1;
+    return 2;
   }
 
   protected override shouldFallbackToNonStreamingAfterStreamReadError(): boolean {

@@ -86,6 +86,7 @@ const PREVIOUS_RESPONSE_ID_ERROR_CODES = new Set<string>([
 ]);
 const STREAM_READ_RETRYABLE_ERROR_CODES = new Set<string>([
   'stream_read_error',
+  'internal_server_error',
 ]);
 const WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE =
   'websocket_connection_limit_reached';
@@ -1169,10 +1170,21 @@ export class OpenAIResponsesProvider implements ApiProvider {
       return true;
     }
 
+    if (details.type === 'internal_server_error') {
+      return true;
+    }
+
     const message = details.message.toLowerCase();
+    const isInternalStreamError =
+      (message.includes('internal_server_error') ||
+        message.includes('internal_error')) &&
+      (message.includes('stream error') ||
+        message.includes('stream id') ||
+        message.includes('received from peer'));
     return (
       message.includes('stream_read_error') ||
       message.includes('stream read error') ||
+      isInternalStreamError ||
       this.isRetryableProviderProcessingError(message) ||
       message.includes('terminated') ||
       message.includes('socket hang up') ||
