@@ -1173,10 +1173,19 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return (
       message.includes('stream_read_error') ||
       message.includes('stream read error') ||
+      this.isRetryableProviderProcessingError(message) ||
       message.includes('terminated') ||
       message.includes('socket hang up') ||
       message.includes('connection reset') ||
       message.includes('econnreset')
+    );
+  }
+
+  private isRetryableProviderProcessingError(message: string): boolean {
+    return (
+      message.includes('an error occurred while processing your request') &&
+      (message.includes('retry your request') ||
+        message.includes('try again'))
     );
   }
 
