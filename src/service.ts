@@ -47,6 +47,7 @@ import {
   reportProgressWithContextWindowRequest,
   setContextWindowOutputBufferForRequest,
 } from './context-window-hook-bridge';
+import type { ProviderType } from './client/definitions';
 
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
   /\{(modelId|modelName|modelFamily|providerName|remainingBalance)\}/g;
@@ -72,6 +73,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
     private readonly balanceManager?: BalanceManager,
+    private readonly providerTypeFilter?: ProviderType,
   ) {}
 
   /**
@@ -81,8 +83,11 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     options: { silent: boolean },
     _token: vscode.CancellationToken,
   ): Promise<vscode.LanguageModelChatInformation[]> {
+    const configuredProviders = this.configStore.endpoints;
+    const visibleProviders = this.getVisibleProviders(configuredProviders);
+
     // Check if user has configured any providers with models or auto-fetch enabled
-    const hasConfiguredProviders = this.configStore.endpoints.some(
+    const hasConfiguredProviders = configuredProviders.some(
       (provider) =>
         provider.models.length > 0 || provider.autoFetchOfficialModels,
     );
@@ -95,7 +100,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     // Build model list synchronously
     const models: vscode.LanguageModelChatInformation[] = [];
 
-    for (const provider of this.configStore.endpoints) {
+    for (const provider of visibleProviders) {
       const allModels = getAllModelsForProviderSync(provider);
 
       for (const model of allModels) {
@@ -219,6 +224,18 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     return `${this.encodeProviderName(providerName)}/${modelId}`;
   }
 
+  private getVisibleProviders(
+    providers: readonly ProviderConfig[],
+  ): ProviderConfig[] {
+    if (!this.providerTypeFilter) {
+      return [...providers];
+    }
+
+    return providers.filter(
+      (provider) => provider.type === this.providerTypeFilter,
+    );
+  }
+
   /**
    * Parse model ID to extract provider and model names
    */
@@ -279,6 +296,12 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       (p) => p.name === decodedProviderName,
     );
     if (!provider) {
+      return null;
+    }
+    if (
+      this.providerTypeFilter !== undefined &&
+      provider.type !== this.providerTypeFilter
+    ) {
       return null;
     }
 

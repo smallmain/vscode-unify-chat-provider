@@ -38,8 +38,8 @@ import {
   initializeContextWindowHookBridge,
 } from './context-window-hook-bridge';
 import { registerCommitMessageGeneration } from './commit-message';
-
-const VENDOR_ID = 'unify-chat-provider';
+import { PROVIDER_KEYS } from './client/definitions';
+import { getLanguageModelVendorId } from './language-model-vendors';
 /**
  * Extension activation
  */
@@ -214,11 +214,15 @@ export async function activate(
   context.subscriptions.push(balanceManager);
   context.subscriptions.push(webSocketSessionManager);
 
-  const chatProvider = new UnifyChatService(
-    configStore,
-    secretStore,
-    authManager,
-    balanceManager,
+  const chatProviders = PROVIDER_KEYS.map(
+    (providerType) =>
+      new UnifyChatService(
+        configStore,
+        secretStore,
+        authManager,
+        balanceManager,
+        providerType,
+      ),
   );
 
   let contextWindowHookInitialization: Promise<boolean> | undefined;
@@ -308,13 +312,18 @@ export async function activate(
   authLog.verbose('main-instance', 'Main-instance handlers registered');
   setMainInstanceReadyIfPossible();
 
-  // Register the language model chat provider
-  const providerRegistration = vscode.lm.registerLanguageModelChatProvider(
-    VENDOR_ID,
-    chatProvider,
-  );
-  context.subscriptions.push(providerRegistration);
-  context.subscriptions.push(chatProvider);
+  // Register one language model chat provider per supported provider type so
+  // the model picker can group models by provider family.
+  for (let index = 0; index < PROVIDER_KEYS.length; index += 1) {
+    const providerType = PROVIDER_KEYS[index];
+    const chatProvider = chatProviders[index];
+    const providerRegistration = vscode.lm.registerLanguageModelChatProvider(
+      getLanguageModelVendorId(providerType),
+      chatProvider,
+    );
+    context.subscriptions.push(providerRegistration);
+    context.subscriptions.push(chatProvider);
+  }
 
   // Copilot Chat is built into VS Code, but Remote-SSH hosts may not enumerate
   // it early enough for a hard extension dependency to work reliably.
@@ -329,7 +338,9 @@ export async function activate(
   }
 
   // Trigger initial model cache refresh
-  chatProvider.handleConfigurationChange();
+  for (const chatProvider of chatProviders) {
+    chatProvider.handleConfigurationChange();
+  }
 
   // Register commands
   registerCommands(context, configStore, secretStore, uriHandler);
@@ -345,7 +356,9 @@ export async function activate(
   context.subscriptions.push(
     configStore.onDidChange(() => {
       syncContextWindowHook();
-      chatProvider.handleConfigurationChange();
+      for (const chatProvider of chatProviders) {
+        chatProvider.handleConfigurationChange();
+      }
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });
@@ -355,14 +368,18 @@ export async function activate(
   // Re-register provider when official models are updated
   context.subscriptions.push(
     officialModelsManager.onDidUpdate(() => {
-      chatProvider.handleConfigurationChange();
+      for (const chatProvider of chatProviders) {
+        chatProvider.handleConfigurationChange();
+      }
     }),
   );
 
   // Re-register provider when balance states are updated
   context.subscriptions.push(
     balanceManager.onDidUpdate(() => {
-      chatProvider.handleConfigurationChange();
+      for (const chatProvider of chatProviders) {
+        chatProvider.handleConfigurationChange();
+      }
     }),
   );
 

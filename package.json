@@ -125,8 +125,58 @@
   "contributes": {
     "languageModelChatProviders": [
       {
-        "vendor": "unify-chat-provider",
-        "displayName": "%languageModelChatProviders.displayName%",
+        "vendor": "unify-chat-provider.anthropic",
+        "displayName": "%languageModelChatProviders.anthropic.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.claude-code",
+        "displayName": "%languageModelChatProviders.claudeCode.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.google-ai-studio",
+        "displayName": "%languageModelChatProviders.googleAiStudio.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.google-vertex-ai",
+        "displayName": "%languageModelChatProviders.googleVertexAi.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.google-antigravity",
+        "displayName": "%languageModelChatProviders.googleAntigravity.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.google-gemini-cli",
+        "displayName": "%languageModelChatProviders.googleGeminiCli.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.github-copilot",
+        "displayName": "%languageModelChatProviders.githubCopilot.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.openai-chat-completion",
+        "displayName": "%languageModelChatProviders.openAiChatCompletion.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.openai-codex",
+        "displayName": "%languageModelChatProviders.openAiCodex.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.openai-responses",
+        "displayName": "%languageModelChatProviders.openAiResponses.displayName%",
+        "managementCommand": "unifyChatProvider.manageProviders"
+      },
+      {
+        "vendor": "unify-chat-provider.ollama",
+        "displayName": "%languageModelChatProviders.ollama.displayName%",
         "managementCommand": "unifyChatProvider.manageProviders"
       }
     ],
@@ -209,7 +259,7 @@
           "type": "string",
           "scope": "application",
           "description": "%configuration.modelDisplayNameTemplate.description%",
-          "default": "{modelName}"
+          "default": "{providerName} / {modelName}"
         },
         "unifyChatProvider.storeApiKeyInSettings": {
           "type": "boolean",

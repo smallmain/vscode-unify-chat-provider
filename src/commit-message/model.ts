@@ -7,8 +7,11 @@ import {
 import type { CommitMessageGenerationModelConfiguration } from './types';
 import { NoLanguageModelsAvailableError } from './types';
 import { t } from '../i18n';
+import {
+  getLanguageModelVendorDisplayName,
+  isUnifyChatProviderVendor,
+} from '../language-model-vendors';
 
-const EXTENSION_VENDOR_ID = 'unify-chat-provider';
 const MODEL_NAME_COLLATOR = new Intl.Collator(undefined, {
   numeric: true,
   sensitivity: 'base',
@@ -29,25 +32,51 @@ function formatConfiguredModel(
     return t('Not configured');
   }
 
+  if (isUnifyChatProviderVendor(model.vendor)) {
+    const parsed = parseExtensionModelId(model.id);
+    if (parsed) {
+      return `${getLanguageModelVendorDisplayName(model.vendor)} / ${parsed.providerName} / ${parsed.modelId}`;
+    }
+  }
+
   return `${model.vendor}/${model.id}`;
 }
 
-function getExtensionProviderName(model: vscode.LanguageModelChat): string {
-  if (model.vendor !== EXTENSION_VENDOR_ID) {
-    return '';
-  }
-
-  const slashIndex = model.id.indexOf('/');
+function parseExtensionModelId(
+  modelId: string,
+): { providerName: string; modelId: string } | undefined {
+  const slashIndex = modelId.indexOf('/');
   if (slashIndex === -1) {
+    return undefined;
+  }
+
+  const encodedProviderName = modelId.slice(0, slashIndex);
+  const resolvedModelId = modelId.slice(slashIndex + 1);
+  try {
+    return {
+      providerName: decodeURIComponent(encodedProviderName),
+      modelId: resolvedModelId,
+    };
+  } catch {
+    return {
+      providerName: encodedProviderName,
+      modelId: resolvedModelId,
+    };
+  }
+}
+
+function getExtensionProviderName(model: vscode.LanguageModelChat): string {
+  if (!isUnifyChatProviderVendor(model.vendor)) {
     return '';
   }
 
-  const encodedProviderName = model.id.slice(0, slashIndex);
-  try {
-    return decodeURIComponent(encodedProviderName);
-  } catch {
-    return encodedProviderName;
-  }
+  return parseExtensionModelId(model.id)?.providerName ?? '';
+}
+
+function getModelVendorLabel(model: vscode.LanguageModelChat): string {
+  return isUnifyChatProviderVendor(model.vendor)
+    ? getLanguageModelVendorDisplayName(model.vendor)
+    : model.vendor;
 }
 
 async function getAvailableLanguageModels(): Promise<vscode.LanguageModelChat[]> {
@@ -60,8 +89,8 @@ async function getAvailableLanguageModels(): Promise<vscode.LanguageModelChat[]>
 
   return [...dedupedModels.values()].sort((left, right) => {
     const vendorComparison = MODEL_NAME_COLLATOR.compare(
-      left.vendor,
-      right.vendor,
+      getModelVendorLabel(left),
+      getModelVendorLabel(right),
     );
     if (vendorComparison !== 0) {
       return vendorComparison;
@@ -132,8 +161,10 @@ async function pickModel(): Promise<vscode.LanguageModelChat | undefined> {
 
   const items: ModelQuickPickItem[] = models.map((model) => ({
     label: model.name,
-    description: model.vendor,
-    detail: model.id,
+    description: getExtensionProviderName(model) || getModelVendorLabel(model),
+    detail: isUnifyChatProviderVendor(model.vendor)
+      ? `${getModelVendorLabel(model)} | ${model.id}`
+      : model.id,
     model,
   }));
 
@@ -185,8 +216,18 @@ async function resolveConfiguredModel(
     vendor: model.vendor,
     id: model.id,
   });
+  if (models[0]) {
+    return models[0];
+  }
 
-  return models[0];
+  if (!isUnifyChatProviderVendor(model.vendor)) {
+    return undefined;
+  }
+
+  const fallbackModels = await vscode.lm.selectChatModels({ id: model.id });
+  return fallbackModels.find((candidate) =>
+    isUnifyChatProviderVendor(candidate.vendor),
+  );
 }
 
 export async function resolveCommitMessageGenerationModel(): Promise<vscode.LanguageModelChat> {
