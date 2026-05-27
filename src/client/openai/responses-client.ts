@@ -1922,7 +1922,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     completedOutputItems: ReadonlyMap<number, ResponseOutputItem>,
     logger: RequestLogger,
   ): ResponseOutputItem[] {
-    const responseOutput = response.output.slice();
+    const responseOutput = Array.isArray(response.output) ? response.output.slice() : [];
     if (
       responseOutput.length === 0 &&
       addedOutputItems.size === 0 &&
