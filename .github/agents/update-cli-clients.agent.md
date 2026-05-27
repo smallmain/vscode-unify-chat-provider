@@ -33,38 +33,38 @@ tools:
   ]
 ---
 
-# 目标
+# Goal
 
-以下列出的客户端需要定期维护和更新，因为它们是通过模拟授权和请求实现的，官方可能会更改其授权或请求方式，导致客户端失效。
+The following clients require regular maintenance and updates, because they are implemented through simulated auth and requests — the official providers may change their auth or request methods, causing the client to break.
 
-维护的方式是参考指定的参考项目的源码。
+The maintenance approach is to reference the source code of the specified reference project.
 
-# 客户端列表
+# Client List
 
-- Claude Code Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
-- Github Copilot Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
-- Open AI Codex Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
-- Antigravity / Gemini CLI Client：参考 CLIProxyAPI 项目，本地路径：`/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Claude Code Client: Reference CLIProxyAPI project, local path: `/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Github Copilot Client: Reference CLIProxyAPI project, local path: `/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Open AI Codex Client: Reference CLIProxyAPI project, local path: `/Users/smallmain/Documents/Work/CLIProxyAPI`
+- Antigravity / Gemini CLI Client: Reference CLIProxyAPI project, local path: `/Users/smallmain/Documents/Work/CLIProxyAPI`
 
-如果用户明确指定了客户端，那么只维护指定的客户端；否则，维护所有列出的客户端。
+If the user explicitly specifies a client, only maintain that client; otherwise, maintain all listed clients.
 
-# 你的职责
+# Your Role
 
-你负责运行 subAgent，让每个子代理分别负责一个客户端的维护。
+You are responsible for running subAgents, each handling maintenance of one client.
 
-对于每个子代理，它们需要：
+For each subAgent, they need to:
 
-- 如果用户明确提到需要完整地检查一遍，那么拉取参考项目的最新代码进行检查。
-- 如果用户没有明确提到，那么只检查参考项目当前提交与最新提交之间的代码改动即可。
-- 了解项目中客户端的授权、请求的实现，重点在于模拟请求。
-- 参考指定的参考项目的源码，检查客户端是否需要更新。
-- 同步客户端支持的模型列表。
-- 如果需要更新，那么修改相应的代码。
-- 最后，将参考项目同步到最新提交（注意如果多个客户端共用一个参考项目，那么需都完成之后再同步到最新提交）。
+- If the user explicitly requests a full check, pull the latest code from the reference project and inspect it.
+- If the user didn't explicitly request it, only check the code changes between the reference project's current commit and the latest commit.
+- Understand the client's auth and request implementation in the project, focusing on request simulation.
+- Reference the specified reference project's source code to check if the client needs updating.
+- Sync the client's supported model list.
+- If updates are needed, modify the corresponding code.
+- Finally, sync the reference project to the latest commit (note: if multiple clients share the same reference project, all must be completed before syncing to the latest commit).
 
-## 模型 ID 同步规则（重要）
+## Model ID Sync Rules (Important)
 
-- 本项目的请求模型 ID 以“本项目的模型配置”作为输入，不直接照搬参考项目的前缀模型 ID 或复杂 alias 解析（例如 `antigravity-*`）。
-- 允许的改动仅限“协议必需转换”：例如 Gemini 3 Pro 的 tier 后缀、Claude 的 `-thinking`、Gemini CLI 的 `-preview`/`-preview-customtools` 处理。
-- 同步模型列表时，先核对本项目 `getAvailableModels` 与本项目已有配置/命名，再决定是否增删；不要把参考项目的内部路由 ID 当作本项目配置 ID 直接写入。
-- 以参考项目的模型列表为准，删除本项目中在参考项目中没有的模型，并添加参考项目中有但本项目没有的模型，确保最终列表与参考项目保持一致。
+- This project uses its own model config IDs as request input — do not directly copy the reference project's prefixed model IDs or complex alias resolution (e.g. `antigravity-*`).
+- Only "protocol-required transformations" are allowed: e.g. Gemini 3 Pro tier suffix, Claude's `-thinking`, Gemini CLI's `-preview`/`-preview-customtools` handling.
+- When syncing the model list, first cross-check with this project's `getAvailableModels` and existing config/naming, then decide whether to add or remove; do not write the reference project's internal routing IDs directly as this project's config IDs.
+- Use the reference project's model list as the source of truth: delete models from this project that don't exist in the reference project, and add models from the reference project that are missing here, ensuring the final list matches the reference project.
