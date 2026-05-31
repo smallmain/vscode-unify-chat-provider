@@ -120,6 +120,18 @@ type ExtractedResponseError = {
   param?: string;
 };
 
+type StreamRetryReplayChannel = {
+  emitted: string;
+  replayTargetLength: number;
+  replayOffset: number;
+};
+
+type StreamReadRetryState = {
+  text: StreamRetryReplayChannel;
+  thinking: StreamRetryReplayChannel;
+  hasNonReplayableOutput: boolean;
+};
+
 type OpenAIResponsesRequestContext = {
   sessionId: string;
   streamEnabled: boolean;
@@ -1203,14 +1215,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
   private shouldRetryStreamReadError(
     error: unknown,
-    emittedPartCount: number,
+    retryState: StreamReadRetryState,
     attempt: number,
     maxRetries: number,
     token: CancellationToken,
   ): boolean {
     return (
       !token.isCancellationRequested &&
-      emittedPartCount === 0 &&
+      this.canReplayStreamReadOutput(retryState) &&
       attempt <= maxRetries &&
       this.isRetryableStreamReadError(error)
     );
@@ -1224,6 +1236,129 @@ export class OpenAIResponsesProvider implements ApiProvider {
     _error: unknown,
   ): boolean {
     return false;
+  }
+
+  private createStreamReadRetryState(): StreamReadRetryState {
+    const createChannel = (): StreamRetryReplayChannel => ({
+      emitted: '',
+      replayTargetLength: 0,
+      replayOffset: 0,
+    });
+
+    return {
+      text: createChannel(),
+      thinking: createChannel(),
+      hasNonReplayableOutput: false,
+    };
+  }
+
+  private prepareStreamReadRetryAttempt(state: StreamReadRetryState): void {
+    state.text.replayTargetLength = state.text.emitted.length;
+    state.text.replayOffset = 0;
+    state.thinking.replayTargetLength = state.thinking.emitted.length;
+    state.thinking.replayOffset = 0;
+  }
+
+  private hasStreamReadOutput(state: StreamReadRetryState): boolean {
+    return (
+      state.hasNonReplayableOutput ||
+      state.text.emitted.length > 0 ||
+      state.thinking.emitted.length > 0
+    );
+  }
+
+  private canReplayStreamReadOutput(state: StreamReadRetryState): boolean {
+    return !state.hasNonReplayableOutput;
+  }
+
+  private describeStreamReadRetry(
+    error: unknown,
+    state: StreamReadRetryState,
+  ): string {
+    const timing = this.hasStreamReadOutput(state)
+      ? 'after replayable text/thinking output'
+      : 'before output';
+    return `OpenAI Responses stream read failed ${timing}: ${describeNetworkError(error)}`;
+  }
+
+  private countCommonPrefixLength(left: string, right: string): number {
+    const limit = Math.min(left.length, right.length);
+    let index = 0;
+    while (index < limit && left.charCodeAt(index) === right.charCodeAt(index)) {
+      index++;
+    }
+    return index;
+  }
+
+  private filterReplayPrefix(
+    value: string,
+    channel: StreamRetryReplayChannel,
+  ): string | undefined {
+    const remainingReplayPrefix = channel.emitted.slice(
+      channel.replayOffset,
+      channel.replayTargetLength,
+    );
+    if (remainingReplayPrefix.length === 0) {
+      channel.emitted += value;
+      return value;
+    }
+
+    const skipLength = this.countCommonPrefixLength(
+      value,
+      remainingReplayPrefix,
+    );
+    channel.replayOffset += skipLength;
+
+    const suffix = value.slice(skipLength);
+    if (!suffix) {
+      return undefined;
+    }
+
+    if (channel.replayOffset < channel.replayTargetLength) {
+      channel.replayOffset = channel.replayTargetLength;
+    }
+    channel.emitted += suffix;
+    return suffix;
+  }
+
+  private normalizeThinkingPartValue(value: string | string[]): string {
+    return Array.isArray(value) ? value.join('') : value;
+  }
+
+  private filterStreamReadRetryPart(
+    part: vscode.LanguageModelResponsePart2,
+    state: StreamReadRetryState,
+  ): vscode.LanguageModelResponsePart2 | undefined {
+    if (part instanceof vscode.LanguageModelTextPart) {
+      const value = part.value;
+      const suffix = this.filterReplayPrefix(value, state.text);
+      return suffix === undefined
+        ? undefined
+        : suffix === value
+          ? part
+          : new vscode.LanguageModelTextPart(suffix);
+    }
+
+    if (part instanceof vscode.LanguageModelThinkingPart) {
+      const value = this.normalizeThinkingPartValue(part.value);
+      if (!value) {
+        state.hasNonReplayableOutput = true;
+        return part;
+      }
+      const suffix = this.filterReplayPrefix(value, state.thinking);
+      return suffix === undefined
+        ? undefined
+        : suffix === value
+          ? part
+          : new vscode.LanguageModelThinkingPart(
+              suffix,
+              part.id,
+              part.metadata,
+            );
+    }
+
+    state.hasNonReplayableOutput = true;
+    return part;
   }
 
   private describeTransportError(error: unknown): string {
@@ -1508,9 +1643,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
       this.getMinimumStreamReadRetries(),
     );
     let didFallbackToNonStreaming = false;
+    const retryState = this.createStreamReadRetryState();
 
     while (true) {
       attempt += 1;
+      this.prepareStreamReadRetryAttempt(retryState);
       context.performanceTrace.ttf = Date.now() - context.performanceTrace.tts;
       const requestBody = this.buildRequestBodyForAttempt(
         context.baseBody,
@@ -1522,7 +1659,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
       context.logger.verbose(
         `OpenAI Responses HTTP attempt ${attempt} | transport=${context.streamEnabled ? 'sse' : 'http'} | session=${context.sessionId} | continuation=${shouldUseContinuation ? 'previous_response_id' : 'full_input'} | inputItems=${this.countInputItems(requestBody.input)} | store=${requestBody.store === false ? 'false' : 'default/true'}`,
       );
-      let emittedPartCount = 0;
 
       try {
         if (context.streamEnabled) {
@@ -1552,8 +1688,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
             context.streamEnabled ? 'sse' : 'http',
             context.imageGenerationOutputMimeType,
           )) {
-            emittedPartCount++;
-            yield part;
+            const filteredPart = this.filterStreamReadRetryPart(
+              part,
+              retryState,
+            );
+            if (filteredPart) {
+              yield filteredPart;
+            }
           }
         } else {
           const data = await client.responses.create(
@@ -1573,8 +1714,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
             'http',
             context.imageGenerationOutputMimeType,
           )) {
-            emittedPartCount++;
-            yield part;
+            const filteredPart = this.filterStreamReadRetryPart(
+              part,
+              retryState,
+            );
+            if (filteredPart) {
+              yield filteredPart;
+            }
           }
         }
         return;
@@ -1582,7 +1728,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
         if (
           this.shouldRetryStreamReadError(
             error,
-            emittedPartCount,
+            retryState,
             attempt,
             streamReadMaxRetries,
             context.token,
@@ -1595,7 +1741,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             0,
             delayMs,
             undefined,
-            `OpenAI Responses stream read failed before output: ${describeNetworkError(error)}`,
+            this.describeStreamReadRetry(error, retryState),
           );
           await delay(delayMs, context.abortController.signal);
           continue;
@@ -1603,15 +1749,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         if (
           context.streamEnabled &&
-          emittedPartCount === 0 &&
           !didFallbackToNonStreaming &&
           !context.token.isCancellationRequested &&
+          this.canReplayStreamReadOutput(retryState) &&
           this.isRetryableStreamReadError(error) &&
           this.shouldFallbackToNonStreamingAfterStreamReadError(error)
         ) {
           didFallbackToNonStreaming = true;
+          this.prepareStreamReadRetryAttempt(retryState);
           context.logger.verbose(
-            `OpenAI Responses stream read failed before output after ${attempt} attempt(s); retrying once with non-streaming HTTP.`,
+            `OpenAI Responses stream read failed before completion after ${attempt} attempt(s); retrying once with non-streaming HTTP.`,
           );
           const fallbackClient = this.createClient(
             context.logger,
@@ -1643,14 +1790,20 @@ export class OpenAIResponsesProvider implements ApiProvider {
             'http',
             context.imageGenerationOutputMimeType,
           )) {
-            yield part;
+            const filteredPart = this.filterStreamReadRetryPart(
+              part,
+              retryState,
+            );
+            if (filteredPart) {
+              yield filteredPart;
+            }
           }
           return;
         }
 
         if (
           !shouldUseContinuation ||
-          emittedPartCount > 0 ||
+          this.hasStreamReadOutput(retryState) ||
           !this.shouldRetryWithoutPreviousResponseId(error)
         ) {
           throw error;
