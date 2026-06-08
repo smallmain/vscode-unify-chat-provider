@@ -2,6 +2,7 @@ import { getBaseModelId } from '../model-id-utils';
 import { t } from '../i18n';
 import { AnthropicProvider } from './anthropic/client';
 import { AnthropicClaudeCodeProvider } from './anthropic/claude-code-client';
+import { BedrockProvider } from './bedrock/client';
 import { GoogleAIStudioProvider } from './google/ai-studio-client';
 import { GoogleAntigravityProvider } from './google/antigravity-client';
 import { GoogleGeminiCLIProvider } from './google/gemini-cli-client';
@@ -17,6 +18,7 @@ import { matchProvider, matchModelFamily } from './utils';
 
 export type ProviderType =
   | 'anthropic'
+  | 'bedrock'
   | 'claude-code'
   | 'google-ai-studio'
   | 'google-vertex-ai'
@@ -35,6 +37,13 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/v1/messages',
     category: 'General',
     class: AnthropicProvider,
+  },
+  bedrock: {
+    type: 'bedrock',
+    label: t('AWS Bedrock Converse API'),
+    description: '/model/{id}/converse-stream',
+    category: 'General',
+    class: BedrockProvider,
   },
   'google-ai-studio': {
     type: 'google-ai-studio',

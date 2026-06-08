@@ -98,6 +98,10 @@ const SERVICE_TIER_PRESET_METADATA = {
     name: t('Priority'),
     description: t('Higher price and faster speed'),
   },
+  reserved: {
+    name: t('Reserved'),
+    description: t('Dedicated capacity with lower latency'),
+  },
 } satisfies Record<ServiceTier, { name: string; description: string }>;
 
 const BUDGET_REASONING_EFFORT_ORDER: readonly BudgetReasoningEffort[] = [
