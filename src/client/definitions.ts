@@ -346,6 +346,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicInterleavedThinking]: {
     supportedFamilys: [
+      'claude-opus-4-8',
+      'claude-opus-4.8',
       'claude-opus-4-7',
       'claude-opus-4.7',
       'claude-opus-4-6',
@@ -363,7 +365,12 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.AnthropicXHighEffort]: {
-    supportedFamilys: ['claude-opus-4-7', 'claude-opus-4.7'],
+    supportedFamilys: [
+      'claude-opus-4-8',
+      'claude-opus-4.8',
+      'claude-opus-4-7',
+      'claude-opus-4.7',
+    ],
   },
   [FeatureId.AnthropicWebSearch]: {
     supportedFamilys: [
@@ -399,6 +406,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicContext1M]: {
     supportedFamilys: [
+      'claude-opus-4-8',
+      'claude-opus-4.8',
       'claude-opus-4-7',
       'claude-opus-4.7',
       'claude-opus-4-6',
@@ -475,6 +484,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
       (model, provider) =>
         matchProvider(provider.baseUrl, 'openrouter.ai') &&
         [
+          'claude-opus-4-8',
+          'claude-opus-4.8',
+          'claude-4-8-opus',
+          'claude-4.8-opus',
           'claude-opus-4-7',
           'claude-opus-4.7',
           'claude-4-7-opus',

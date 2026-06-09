@@ -452,6 +452,32 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'claude-opus-4-8',
+    overrides: ['claude-opus-4.8', 'claude-opus-4-8-thinking'],
+    name: 'Claude Opus 4.8',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'max',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_OPUS_4_7_REASONING_EFFORTS,
+          'max',
+        ),
+      ),
+    ],
+  },
+  {
     id: 'claude-opus-4-7',
     overrides: ['claude-opus-4.7', 'claude-opus-4-7-thinking'],
     name: 'Claude Opus 4.7',

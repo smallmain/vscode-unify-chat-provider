@@ -81,6 +81,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.anthropic.com',
     authTypes: ['api-key'],
     models: [
+      'claude-opus-4-8',
       'claude-opus-4-7',
       'claude-opus-4-6',
       'claude-opus-4-5',
@@ -715,6 +716,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.anthropic.com',
     authTypes: ['api-key', 'claude-code'],
     models: [
+      'claude-opus-4-8',
       'claude-opus-4-7',
       'claude-opus-4-6',
       'claude-sonnet-4-6',
