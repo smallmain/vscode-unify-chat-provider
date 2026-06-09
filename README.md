@@ -442,7 +442,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
 | Name                               | ID                                           | Description                                                                                           |
 | ---------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
 | Global Network Settings            | `networkSettings`                            | Network timeout/retry settings, which only affect chat requests.                                      |
-| Model Display Name Template        | `modelDisplayNameTemplate`                   | Template for chat model names. Example: `{modelName} ({modelId}) [{providerName}{remainingBalance}]`. |
+| Model Display Name Template        | `modelDisplayNameTemplate`                   | Template for chat model names. Default: `{modelName}{{ ({providerName})}}`.                           |
 | Balance Refresh Interval           | `balanceRefreshIntervalMs`                   | Periodic refresh interval for provider balances (milliseconds).                                       |
 | Balance Throttle Window            | `balanceThrottleWindowMs`                    | Throttle window for post-request balance refresh (milliseconds).                                      |
 | Store API Key in Settings          | `storeApiKeyInSettings`                      | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details.                         |

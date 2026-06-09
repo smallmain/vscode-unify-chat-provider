@@ -59,6 +59,12 @@ interface ModelDisplayNameTemplateValues {
   remainingBalance: string;
 }
 
+interface ModelInfoDraft {
+  provider: ProviderConfig;
+  model: ModelConfig;
+  resolvedModelName: string;
+}
+
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
   private readonly onDidChangeModelInfoEmitter =
@@ -93,17 +99,30 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     }
 
     // Build model list synchronously
-    const models: vscode.LanguageModelChatInformation[] = [];
+    const modelDrafts: ModelInfoDraft[] = [];
+    const modelNameCounts = new Map<string, number>();
 
     for (const provider of this.configStore.endpoints) {
       const allModels = getAllModelsForProviderSync(provider);
 
       for (const model of allModels) {
-        models.push(this.createModelInfo(provider, model));
+        const resolvedModelName = model.name ?? model.id;
+        modelDrafts.push({ provider, model, resolvedModelName });
+        modelNameCounts.set(
+          resolvedModelName,
+          (modelNameCounts.get(resolvedModelName) ?? 0) + 1,
+        );
       }
     }
 
-    return models;
+    return modelDrafts.map((draft) =>
+      this.createModelInfo(
+        draft.provider,
+        draft.model,
+        draft.resolvedModelName,
+        (modelNameCounts.get(draft.resolvedModelName) ?? 0) > 1,
+      ),
+    );
   }
 
   /**
@@ -112,9 +131,10 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private createModelInfo(
     provider: ProviderConfig,
     model: ModelConfig,
+    resolvedModelName: string,
+    hasDuplicateModelName: boolean,
   ): vscode.LanguageModelChatInformation {
     const modelId = this.createModelId(provider.name, model.id);
-    const resolvedModelName = model.name ?? model.id;
     const resolvedModelFamily = model.family ?? getBaseModelId(model.id);
     const balanceSnapshot = this.balanceManager?.getProviderState(
       provider.name,
@@ -127,7 +147,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       modelFamily: resolvedModelFamily,
       providerName: provider.name,
       remainingBalance,
-    });
+    }, hasDuplicateModelName);
     const detail = formatProviderDetailForModelSelection(
       provider.name,
       balanceSnapshot,
@@ -178,14 +198,72 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
   private renderModelDisplayName(
     values: ModelDisplayNameTemplateValues,
+    hasDuplicateModelName: boolean,
   ): string {
-    const rendered = this.configStore.modelDisplayNameTemplate.replace(
+    const rendered = this.renderModelDisplayNameTemplate(
+      this.configStore.modelDisplayNameTemplate,
+      values,
+      hasDuplicateModelName,
+    );
+    const trimmed = rendered.trim();
+    return trimmed || values.modelName;
+  }
+
+  private renderModelDisplayNameTemplate(
+    template: string,
+    values: ModelDisplayNameTemplateValues,
+    hasDuplicateModelName: boolean,
+  ): string {
+    let rendered = '';
+    let index = 0;
+
+    while (index < template.length) {
+      const blockStart = template.indexOf('{{', index);
+
+      if (blockStart === -1) {
+        rendered += this.renderModelDisplayNamePlaceholders(
+          template.slice(index),
+          values,
+        );
+        break;
+      }
+
+      rendered += this.renderModelDisplayNamePlaceholders(
+        template.slice(index, blockStart),
+        values,
+      );
+
+      const blockEnd = template.indexOf('}}', blockStart + 2);
+      if (blockEnd === -1) {
+        rendered += this.renderModelDisplayNamePlaceholders(
+          template.slice(blockStart),
+          values,
+        );
+        break;
+      }
+
+      if (hasDuplicateModelName) {
+        rendered += this.renderModelDisplayNamePlaceholders(
+          template.slice(blockStart + 2, blockEnd),
+          values,
+        );
+      }
+
+      index = blockEnd + 2;
+    }
+
+    return rendered;
+  }
+
+  private renderModelDisplayNamePlaceholders(
+    template: string,
+    values: ModelDisplayNameTemplateValues,
+  ): string {
+    return template.replace(
       MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN,
       (_match, key: string) =>
         this.resolveModelDisplayNameTemplateValue(key, values),
     );
-    const trimmed = rendered.trim();
-    return trimmed || values.modelName;
   }
 
   private resolveModelDisplayNameTemplateValue(

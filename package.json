@@ -210,7 +210,7 @@
           "type": "string",
           "scope": "application",
           "description": "%configuration.modelDisplayNameTemplate.description%",
-          "default": "{modelName}"
+          "default": "{modelName}{{ ({providerName})}}"
         },
         "unifyChatProvider.storeApiKeyInSettings": {
           "type": "boolean",
