@@ -8,11 +8,6 @@ import * as vscode from 'vscode';
 import { Agent } from 'undici';
 import type { Dispatcher } from 'undici';
 import type { AuthTokenInfo } from '../auth/types';
-import {
-  CONFIG_NAMESPACE,
-  DEFAULT_FIX001_CONTEXT_INDICATOR_DISPLAY,
-  FIX001_CONTEXT_INDICATOR_DISPLAY_CONFIG_KEY,
-} from '../config-store';
 import { ModelConfig, PerformanceTrace, ProviderConfig } from '../types';
 import {
   bodyInitToLoggableValue,
@@ -24,7 +19,6 @@ import {
   normalizeBaseUrlInput,
   type RetryConfig,
 } from '../utils';
-import { reportUsageToContextWindowForRequest } from '../context-window-hook-bridge';
 import { FeatureId, FEATURES, PROVIDER_TYPES } from './definitions';
 import { ApiProvider } from './interface';
 import { ProviderPattern } from './types';
@@ -402,19 +396,6 @@ export function processUsage(
     performanceTrace.tps = NaN;
   }
   logger.usage(usage);
-
-  // Inject usage into VS Code's context window widget.
-  // This hooks into the Copilot Chat internal API to report token counts
-  // that the LanguageModelChatProvider API cannot natively convey.
-  const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
-  const fixEnabled = config.get<boolean>(
-    FIX001_CONTEXT_INDICATOR_DISPLAY_CONFIG_KEY,
-    DEFAULT_FIX001_CONTEXT_INDICATOR_DISPLAY,
-  );
-
-  if (fixEnabled) {
-    reportUsageToContextWindowForRequest(logger.requestId, usage);
-  }
 }
 
 /**

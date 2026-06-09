@@ -22,7 +22,6 @@
   "configuration.verbose.description": "启用请求与响应的详细日志。",
   "configuration.modelDisplayNameTemplate.description": "聊天模型名称模板。\n 支持变量：\n- {modelId}\n- {modelName}\n- {modelFamily}\n- {providerName}\n- {remainingBalance}\n使用 {{...}} 可仅在返回列表中存在相同 {modelName} 的模型时显示其中内容。示例：{modelName}{{ ({providerName})}}",
   "configuration.storeApiKeyInSettings.description": "将支持多设备同步的敏感数据（例如 API Key）存储在 settings.json 中，而不是 VS Code Secret Storage 中。\n\n为避免多设备同步导致 token 刷新冲突，OAuth 凭证将始终保存在 Secret Storage 中。\n\n危险：修改此设置会在存储位置之间迁移已有的数据（可能会以明文形式暴露密钥）。",
-  "configuration.fixes.fix001ContextIndicatorDisplay.description": "修复上下文指示器显示（#30）。勾选后启用此兼容性修复，在上游问题修复前修正 VS Code 的上下文指示器显示。",
   "configuration.balanceRefreshIntervalMs.description": "供应商余额的定时刷新间隔（毫秒）。默认值：60000（60 秒）。",
   "configuration.balanceThrottleWindowMs.description": "请求后余额刷新节流窗口（毫秒）。默认值：10000（10 秒）。",
   "configuration.balanceStatusBarIcon.description": "供应商余额状态栏图标。设为空字符串可隐藏。",

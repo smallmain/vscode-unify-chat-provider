@@ -42,11 +42,6 @@ import {
 import type { BalanceManager } from './balance';
 import { evaluateBalanceWarning } from './balance/warning-utils';
 import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
-import {
-  clearContextWindowRequest,
-  reportProgressWithContextWindowRequest,
-  setContextWindowOutputBufferForRequest,
-} from './context-window-hook-bridge';
 
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
   /\{(modelId|modelName|modelFamily|providerName|remainingBalance)\}/g;
@@ -560,13 +555,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       });
       logger.vscodeInput(messages, options);
 
-      if (this.configStore.fix001ContextIndicatorDisplay) {
-        setContextWindowOutputBufferForRequest(
-          logger.requestId,
-          resolvedRequestModel.maxOutputTokens ?? model.maxOutputTokens,
-        );
-      }
-
       const client = this.getClient(resolvedProvider);
       const chatNetwork = resolveChatNetwork(resolvedProvider);
       const retryConfig = chatNetwork.retry;
@@ -615,15 +603,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
               partCount++;
               // Log VSCode output (verbose only)
               logger.vscodeOutput(part);
-              if (this.configStore.fix001ContextIndicatorDisplay) {
-                reportProgressWithContextWindowRequest(
-                  logger.requestId,
-                  progress,
-                  part,
-                );
-              } else {
-                progress.report(part);
-              }
+              progress.report(part);
             }
           } catch (error) {
             if (token.isCancellationRequested && isAbortLikeError(error)) {
@@ -690,9 +670,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       }
       throw error;
     } finally {
-      if (this.configStore.fix001ContextIndicatorDisplay) {
-        clearContextWindowRequest(logger.requestId);
-      }
       if (providerForBalance) {
         this.balanceManager?.notifyChatRequestFinished(
           providerForBalance.name,

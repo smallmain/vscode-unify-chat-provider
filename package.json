@@ -218,12 +218,6 @@
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
         },
-        "unifyChatProvider.fixes.fix001ContextIndicatorDisplay": {
-          "type": "boolean",
-          "scope": "application",
-          "description": "%configuration.fixes.fix001ContextIndicatorDisplay.description%",
-          "default": true
-        },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
           "scope": "application",
