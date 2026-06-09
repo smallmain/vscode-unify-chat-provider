@@ -1632,6 +1632,51 @@ const _WELL_KNOWN_MODELS = [
     presetTemplates: [thinkingMode()],
   },
   {
+    id: 'MiniMax-M3',
+    overrides: [
+      'minimax-m3',
+      'hf:MiniMaxAI/MiniMax-M3',
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'minimaxai/minimax-m3',
+          maxOutputTokens: 32768,
+        },
+      },
+      {
+        matchers: [
+          'dashscope.aliyuncs.com',
+          'dashscope-intl.aliyuncs.com',
+          'coding.dashscope.aliyuncs.com',
+          'coding-intl.dashscope.aliyuncs.com',
+          'api-inference.modelscope.cn',
+        ],
+        config: {
+          maxOutputTokens: 32768,
+        },
+      },
+      {
+        matchers: ['api.cline.bot'],
+        config: {
+          id: 'minimax/minimax-m3',
+        },
+      },
+    ],
+    name: 'MiniMax-M3',
+    maxInputTokens: 204800,
+    maxOutputTokens: 102400,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    temperature: 1.0,
+    presetTemplates: [thinkingMode()],
+  },
+  {
     id: 'MiniMax-M2.5',
     overrides: [
       'minimax-m2.5-free',
@@ -2428,6 +2473,34 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'qwen3.6-flash',
     name: 'Qwen3.6-Flash',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.7-max',
+    name: 'Qwen3.7-Max',
+    maxInputTokens: 256000,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'qwen3.7-plus',
+    name: 'Qwen3.7-Plus',
     maxInputTokens: 1000000,
     maxOutputTokens: 64000,
     stream: true,

@@ -217,12 +217,11 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
       'kimi-k2.6',
       'deepseek-v4-pro',
       'deepseek-v4-flash',
-      'mimo-v2-pro',
-      'mimo-v2-omni',
-      'mimo-v2.5-pro',
       'mimo-v2.5',
+      'mimo-v2.5-pro',
+      'qwen3.7-max',
+      'qwen3.7-plus',
       'qwen3.6-plus',
-      'qwen3.5-plus',
     ],
   },
   {
@@ -231,7 +230,11 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'anthropic',
     baseUrl: 'https://opencode.ai/zen/go/v1',
     authTypes: ['api-key'],
-    models: ['MiniMax-M2.7', 'MiniMax-M2.5'],
+    models: [
+      'MiniMax-M3',
+      'MiniMax-M2.7',
+      'MiniMax-M2.5',
+    ],
   },
   {
     name: 'Nvidia',
