@@ -348,7 +348,14 @@ export function parseXaiGrokCallbackInput(
   let state = expectedState;
 
   try {
-    const url = new URL(raw);
+    // Support absolute URLs, pasted query fragments (?code=...&state=...), and bare codes.
+    // new URL on a bare query or path fragment throws, so synthesize a dummy base.
+    let candidate = raw;
+    if (!/^[a-zA-Z][a-zA-Z0-9+.-]*:\/\//.test(candidate)) {
+      // Not absolute http(s):// — treat as path/query/fragment for console-paste flows.
+      candidate = 'http://localhost' + (candidate.startsWith('/') || candidate.startsWith('?') ? candidate : '/' + candidate);
+    }
+    const url = new URL(candidate);
     const oauthError = url.searchParams.get('error');
     if (oauthError) {
       return {
@@ -356,10 +363,21 @@ export function parseXaiGrokCallbackInput(
         error: url.searchParams.get('error_description') ?? oauthError,
       };
     }
-    code = url.searchParams.get('code') ?? '';
-    state = url.searchParams.get('state') ?? '';
+    const extractedCode = url.searchParams.get('code')?.trim();
+    const extractedState = url.searchParams.get('state')?.trim();
+    if (extractedCode) {
+      code = extractedCode;
+    }
+    if (extractedState) {
+      state = extractedState;
+    }
+    // If we synthesized a base and no code param was present, fall back to treating the original raw as a bare code.
+    if (!extractedCode && !raw.includes('?') && !raw.includes('://')) {
+      code = raw;
+      state = expectedState;
+    }
   } catch {
-    // bare code or query fragment; keep expected state
+    // bare code (or unparseable); keep raw as code and expected state
   }
 
   if (!code) {

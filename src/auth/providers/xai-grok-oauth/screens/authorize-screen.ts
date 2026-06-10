@@ -77,19 +77,29 @@ export async function performXaiGrokAuthorization(options: {
       return null;
     }
 
-    const parsed = parseUrlOrNull(pasted.trim());
+    const input = pasted.trim();
+
+    // Give the robust parser first chance (bare code, ?code=... fragment, or full URL).
+    // This is the code path needed when xAI shows a bare code in remote/browser-only consoles.
+    const robust = parseXaiGrokCallbackInput(input, options.expectedState);
+    if (robust.type === 'success') {
+      return robust;
+    }
+
+    const parsed = parseUrlOrNull(input);
     if (!parsed) {
-      vscode.window.showErrorMessage(t('Invalid URL'));
+      vscode.window.showErrorMessage(robust.type === 'error' ? robust.error : t('Invalid URL'));
       return null;
     }
 
     if (parsed.pathname !== XAI_GROK_OAUTH_REDIRECT_PATH) {
-      // Also accept bare code or query-only pastes (some consoles render the code directly)
-      const bare = parseXaiGrokCallbackInput(pasted.trim(), options.expectedState);
-      if (bare.type === 'success') {
-        return bare;
-      }
       vscode.window.showErrorMessage(t('Invalid callback URL path'));
+      return null;
+    }
+
+    // Correct path but parser saw a problem (state, code, error param) — surface the detail.
+    if (robust.type === 'error') {
+      vscode.window.showErrorMessage(robust.error);
       return null;
     }
 

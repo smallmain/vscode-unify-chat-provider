@@ -7,6 +7,9 @@ export const XAI_GROK_OAUTH_TOKEN_URL = `${XAI_OAUTH_ISSUER}/oauth2/token`; // F
 
 export const XAI_GROK_OAUTH_CALLBACK_PORT = 56121;
 export const XAI_GROK_OAUTH_REDIRECT_PATH = '/callback';
+// IMPORTANT: Must be exactly 127.0.0.1 (IPv4 loopback). xAI's public client registration
+// (used by Hermes, this extension, and similar tools) only allows this form.
+// Using "localhost" will be rejected with "redirect_uri does not match any registered URI".
 export const XAI_GROK_OAUTH_REDIRECT_URI = `http://127.0.0.1:${XAI_GROK_OAUTH_CALLBACK_PORT}${XAI_GROK_OAUTH_REDIRECT_PATH}`;
 
 export const XAI_GROK_OAUTH_SCOPE =
