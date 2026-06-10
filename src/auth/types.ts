@@ -8,6 +8,7 @@ export type AuthMethod =
   | 'google-vertex-ai-auth'
   | 'claude-code'
   | 'openai-codex'
+  | 'xai-grok-oauth'
   | 'github-copilot';
 
 export type AuthTokenInfo =
@@ -182,6 +183,15 @@ export interface ClaudeCodeAuthConfig {
   email?: string;
 }
 
+export interface XaiGrokOAuthConfig {
+  method: 'xai-grok-oauth';
+  label?: string;
+  description?: string;
+  identityId?: string;
+  token?: string;
+  email?: string;
+}
+
 export interface GitHubCopilotAuthConfig {
   method: 'github-copilot';
   label?: string;
@@ -262,6 +272,7 @@ export type AuthConfig =
   | GeminiCliOAuthConfig
   | OpenAICodexAuthConfig
   | ClaudeCodeAuthConfig
+  | XaiGrokOAuthConfig
   | GitHubCopilotAuthConfig
   | GoogleVertexAIAuthConfig;
 

@@ -8,6 +8,7 @@ import { GitHubCopilotAuthProvider } from './providers/github-copilot';
 import { GoogleVertexAIAuthProvider } from './providers/google-vertex-ai-auth';
 import { ClaudeCodeAuthProvider } from './providers/claude-code';
 import { OpenAICodexAuthProvider } from './providers/openai-codex';
+import { XaiGrokOAuthProvider } from './providers/xai-grok-oauth';
 import { OAuth2AuthProvider } from './providers/oauth2';
 import { AuthConfig } from './types';
 
@@ -92,6 +93,13 @@ export const AUTH_METHODS = {
     description: t('Authenticate using OpenAI Codex OAuth (ChatGPT Plus/Pro)'),
     category: 'Experimental',
     ctor: OpenAICodexAuthProvider,
+  },
+  'xai-grok-oauth': {
+    id: 'xai-grok-oauth',
+    label: t('xAI Grok OAuth (SuperGrok)'),
+    description: t('Authenticate using xAI Grok OAuth (SuperGrok / X Premium+)'),
+    category: 'Experimental',
+    ctor: XaiGrokOAuthProvider,
   },
   'claude-code': {
     id: 'claude-code',

@@ -12,6 +12,7 @@ import { OllamaProvider } from './ollama/client';
 import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
 import { OpenAICodexProvider } from './openai/codex-client';
 import { OpenAIResponsesProvider } from './openai/responses-client';
+import { XaiGrokOAuthProvider } from './openai/xai-grok-oauth-client';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
@@ -25,6 +26,7 @@ export type ProviderType =
   | 'github-copilot'
   | 'openai-chat-completion'
   | 'openai-codex'
+  | 'xai-grok-oauth'
   | 'openai-responses'
   | 'ollama';
 
@@ -105,6 +107,13 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/backend-api/codex/responses',
     category: 'Experimental',
     class: OpenAICodexProvider,
+  },
+  'xai-grok-oauth': {
+    type: 'xai-grok-oauth',
+    label: t('xAI Grok OAuth (SuperGrok)'),
+    description: 'api.x.ai Responses (SuperGrok / X Premium+ OAuth bearer)',
+    category: 'Experimental',
+    class: XaiGrokOAuthProvider,
   },
 };
 

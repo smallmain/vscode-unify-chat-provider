@@ -692,6 +692,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     autoFetchOfficialModels: true,
   },
   {
+    name: 'xAI Grok OAuth (SuperGrok / X Premium+)',
+    category: 'Experimental',
+    type: 'xai-grok-oauth',
+    baseUrl: 'https://api.x.ai',
+    authTypes: ['xai-grok-oauth'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'GitHub Copilot',
     category: 'Experimental',
     type: 'github-copilot',
