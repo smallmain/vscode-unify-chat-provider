@@ -583,9 +583,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUseDeepSeekReasoningEffortParam]: {
-    customCheckers: [
-      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
-    ],
+    customCheckers: [(model) => modelFamilyIncludes(model, 'deepseek-v4')],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
     supportedProviders: [
@@ -731,6 +729,11 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.GeminiUseThinkingLevel]: {
-    supportedFamilys: ['gemini-3-'],
+    supportedFamilys: [
+      'gemini-3-',
+      'gemma-4-',
+      'models/gemini-3-',
+      'models/gemma-4-',
+    ],
   },
 };

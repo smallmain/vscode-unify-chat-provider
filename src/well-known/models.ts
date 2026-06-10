@@ -4310,6 +4310,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3.5-flash',
+    overrides: ['models/gemini-3.5-flash'],
     name: 'Gemini 3.5 Flash',
     maxInputTokens: 1048576,
     maxOutputTokens: 65535,
@@ -4329,7 +4330,9 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'gemini-3.1-pro-preview',
     overrides: [
+      'models/gemini-3.1-pro-preview',
       'gemini-3.1-pro',
+      'models/gemini-3.1-pro',
       'gemini-3.1-pro-preview-customtools',
       {
         matchers: ['api.cline.bot'],
@@ -4357,7 +4360,9 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'gemini-3.1-flash-lite-preview',
     overrides: [
+      'models/gemini-3.1-flash-lite-preview',
       'gemini-3.1-flash-lite',
+      'models/gemini-3.1-flash-lite',
       {
         matchers: ['api.cline.bot'],
         config: {
@@ -4383,7 +4388,11 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-3-pro-preview',
-    overrides: ['gemini-3-pro'],
+    overrides: [
+      'models/gemini-3-pro-preview',
+      'gemini-3-pro',
+      'models/gemini-3-pro',
+    ],
     name: 'Gemini 3 Pro Preview',
     maxInputTokens: 1048576,
     maxOutputTokens: 65535,
@@ -4403,7 +4412,9 @@ const _WELL_KNOWN_MODELS = [
   {
     id: 'gemini-3-flash-preview',
     overrides: [
+      'models/gemini-3-flash-preview',
       'gemini-3-flash',
+      'models/gemini-3-flash',
       {
         matchers: ['api.cline.bot'],
         config: {
@@ -4429,6 +4440,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.5-pro',
+    overrides: ['models/gemini-2.5-pro'],
     name: 'Gemini 2.5 Pro',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -4446,6 +4458,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.5-flash',
+    overrides: ['models/gemini-2.5-flash'],
     name: 'Gemini 2.5 Flash',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -4465,6 +4478,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.5-flash-lite',
+    overrides: ['models/gemini-2.5-flash-lite'],
     name: 'Gemini 2.5 Flash-Lite',
     maxInputTokens: 1048576,
     maxOutputTokens: 65536,
@@ -4485,7 +4499,13 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.0-flash',
-    overrides: ['gemini-2.0-flash-001', 'gemini-2.0-flash-exp'],
+    overrides: [
+      'models/gemini-2.0-flash',
+      'gemini-2.0-flash-001',
+      'models/gemini-2.0-flash-001',
+      'gemini-2.0-flash-exp',
+      'models/gemini-2.0-flash-exp',
+    ],
     name: 'Gemini 2.0 Flash',
     maxInputTokens: 1048576,
     maxOutputTokens: 8192,
@@ -4497,7 +4517,11 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemini-2.0-flash-lite',
-    overrides: ['gemini-2.0-flash-lite-001'],
+    overrides: [
+      'models/gemini-2.0-flash-lite',
+      'gemini-2.0-flash-lite-001',
+      'models/gemini-2.0-flash-lite-001',
+    ],
     name: 'Gemini 2.0 Flash-Lite',
     maxInputTokens: 1048576,
     maxOutputTokens: 8192,
@@ -4509,12 +4533,13 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemma-4-31b-it',
-    overrides: ['gemma-4-31b'],
+    overrides: ['models/gemma-4-31b-it', 'gemma-4-31b', 'models/gemma-4-31b'],
     name: 'Gemma 4 31B',
     maxInputTokens: 256000,
     stream: true,
     thinking: {
       type: 'enabled',
+      effort: 'high',
     },
     capabilities: {
       toolCalling: true,
@@ -4524,12 +4549,17 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemma-4-26b-a4b-it',
-    overrides: ['gemma-4-26b-a4b'],
+    overrides: [
+      'models/gemma-4-26b-a4b-it',
+      'gemma-4-26b-a4b',
+      'models/gemma-4-26b-a4b',
+    ],
     name: 'Gemma 4 26B A4B',
     maxInputTokens: 256000,
     stream: true,
     thinking: {
       type: 'enabled',
+      effort: 'high',
     },
     capabilities: {
       toolCalling: true,
@@ -4539,12 +4569,13 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemma-4-e4b-it',
-    overrides: ['gemma-4-e4b'],
+    overrides: ['models/gemma-4-e4b-it', 'gemma-4-e4b', 'models/gemma-4-e4b'],
     name: 'Gemma 4 E4B',
     maxInputTokens: 128000,
     stream: true,
     thinking: {
       type: 'enabled',
+      effort: 'high',
     },
     capabilities: {
       toolCalling: true,
@@ -4554,12 +4585,13 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'gemma-4-e2b-it',
-    overrides: ['gemma-4-e2b'],
+    overrides: ['models/gemma-4-e2b-it', 'gemma-4-e2b', 'models/gemma-4-e2b'],
     name: 'Gemma 4 E2B',
     maxInputTokens: 128000,
     stream: true,
     thinking: {
       type: 'enabled',
+      effort: 'high',
     },
     capabilities: {
       toolCalling: true,
