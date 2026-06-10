@@ -34,10 +34,7 @@ import { SecretStore } from './secret';
 import { AuthManager } from './auth';
 import type { AuthCredential, AuthTokenInfo } from './auth/types';
 import { t } from './i18n';
-import {
-  applyPresetTemplateSelections,
-  buildPresetTemplateConfigurationSchema,
-} from './preset-templates';
+import { applyPresetTemplateSelections } from './preset-templates';
 import { runUiStack } from './ui/router/stack-router';
 import type { UiContext } from './ui/router/types';
 import {
@@ -45,7 +42,7 @@ import {
   resolveTokenCountMultiplier,
   resolveTokenizerId,
 } from './tokenizer/tokenizers';
-import type { BalanceManager } from './balance';
+import { formatPrimaryBadge, type BalanceManager } from './balance';
 import { evaluateBalanceWarning } from './balance/warning-utils';
 import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
 
@@ -142,17 +139,21 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     )?.snapshot;
     const remainingBalance =
       formatProviderBadgeSuffixForModelSelection(balanceSnapshot);
-    const displayName = this.renderModelDisplayName({
-      modelId: model.id,
-      modelName: resolvedModelName,
-      modelFamily: resolvedModelFamily,
-      providerName: provider.name,
-      remainingBalance,
-    }, hasDuplicateModelName);
+    const displayName = this.renderModelDisplayName(
+      {
+        modelId: model.id,
+        modelName: resolvedModelName,
+        modelFamily: resolvedModelFamily,
+        providerName: provider.name,
+        remainingBalance,
+      },
+      hasDuplicateModelName,
+    );
     const detail = formatProviderDetailForModelSelection(
       provider.name,
       balanceSnapshot,
     );
+    const pricing = formatPrimaryBadge(balanceSnapshot)?.trim();
     const tooltip = formatModelTooltipForModelSelection(
       provider,
       model,
@@ -193,7 +194,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       tooltip,
       isUserSelectable: true,
       statusIcon,
-      configurationSchema: buildPresetTemplateConfigurationSchema(model),
+      multiplierNumeric: 1,
+      pricing,
     };
   }
 
