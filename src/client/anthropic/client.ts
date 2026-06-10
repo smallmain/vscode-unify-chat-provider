@@ -223,9 +223,16 @@ export class AnthropicProvider implements ApiProvider {
 
   private resolveAnthropicThinkingRequestParam(
     thinking: ModelConfig['thinking'] | undefined,
+    alwaysOnAdaptiveThinking: boolean,
   ): AnthropicThinkingRequestParam | undefined {
     if (thinking === undefined) {
       return undefined;
+    }
+
+    if (alwaysOnAdaptiveThinking) {
+      return thinking.effort !== undefined || thinking.summary !== undefined
+        ? 'effort'
+        : undefined;
     }
 
     const hasBudgetTokens = thinking.budgetTokens !== undefined;
@@ -813,12 +820,22 @@ export class AnthropicProvider implements ApiProvider {
         model.capabilities?.imageInput === true ? 'all' : 'discard',
     });
 
-    const anthropicThinkingRequestParam =
-      this.resolveAnthropicThinkingRequestParam(model.thinking);
-    const thinkingEnabled = this.isAnthropicThinkingEnabled(
-      anthropicThinkingRequestParam,
-      model.thinking,
+    const alwaysOnAdaptiveThinking = isFeatureSupported(
+      FeatureId.AnthropicAlwaysOnAdaptiveThinking,
+      this.config,
+      model,
     );
+    const anthropicThinkingRequestParam =
+      this.resolveAnthropicThinkingRequestParam(
+        model.thinking,
+        alwaysOnAdaptiveThinking,
+      );
+    const thinkingEnabled =
+      alwaysOnAdaptiveThinking ||
+      this.isAnthropicThinkingEnabled(
+        anthropicThinkingRequestParam,
+        model.thinking,
+      );
     const thinkingDisplay = this.resolveThinkingDisplay(model, thinkingEnabled);
     const hasTools = (options.tools && options.tools.length > 0) ?? false;
     const stream = model.stream ?? true;
@@ -826,6 +843,7 @@ export class AnthropicProvider implements ApiProvider {
     const anthropicInterleavedThinkingEnabled =
       thinkingEnabled &&
       hasTools &&
+      !alwaysOnAdaptiveThinking &&
       isFeatureSupported(
         FeatureId.AnthropicInterleavedThinking,
         this.config,
@@ -962,16 +980,18 @@ export class AnthropicProvider implements ApiProvider {
             };
             break;
           case 'effort':
-            if (effort === 'none') {
+            if (effort === 'none' && !alwaysOnAdaptiveThinking) {
               requestBase.thinking = {
                 type: 'disabled',
               };
             } else {
-              requestBase.thinking = {
-                type: 'adaptive',
-                ...(thinkingDisplay ? { display: thinkingDisplay } : {}),
-              };
-              if (effort !== undefined) {
+              if (!alwaysOnAdaptiveThinking || thinkingDisplay) {
+                requestBase.thinking = {
+                  type: 'adaptive',
+                  ...(thinkingDisplay ? { display: thinkingDisplay } : {}),
+                };
+              }
+              if (effort !== undefined && effort !== 'none') {
                 requestBase.output_config ??= {};
                 requestBase.output_config.effort =
                   this.normalizeAnthropicOutputEffort(effort, model);

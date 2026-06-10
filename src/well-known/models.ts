@@ -43,9 +43,16 @@ const OPENAI_CODEX_REASONING_EFFORTS = [
   'low',
 ] as const;
 const OPENAI_OSS_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
+const TENCENT_HY3_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const DEEPSEEK_V4_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
 const ANTHROPIC_OPUS_4_7_REASONING_EFFORTS = [
   'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
+const ANTHROPIC_FABLE_5_REASONING_EFFORTS = [
   'xhigh',
   'high',
   'medium',
@@ -450,6 +457,56 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: false,
       imageInput: false,
     },
+  },
+  {
+    id: 'claude-fable-5',
+    name: 'Claude Fable 5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'high',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_FABLE_5_REASONING_EFFORTS,
+          'high',
+        ),
+      ),
+    ],
+  },
+  {
+    id: 'claude-mythos-5',
+    name: 'Claude Mythos 5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'high',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_FABLE_5_REASONING_EFFORTS,
+          'high',
+        ),
+      ),
+    ],
   },
   {
     id: 'claude-opus-4-8',
@@ -1597,6 +1654,22 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'MiniMax-M3',
+    name: 'MiniMax-M3',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 102400,
+    stream: true,
+    thinking: {
+      type: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    temperature: 1.0,
+    presetTemplates: [thinkingMode({ default: 'auto' })],
+  },
+  {
     id: 'MiniMax-M2.7',
     overrides: [
       'minimax-m2.7-free',
@@ -2422,6 +2495,34 @@ const _WELL_KNOWN_MODELS = [
       imageInput: false,
     },
     temperature: 0.6,
+  },
+  {
+    id: 'qwen3.7-max',
+    name: 'Qwen3.7-Max',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'qwen3.7-plus',
+    name: 'Qwen3.7-Plus',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 64000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
   },
   {
     id: 'qwen3.6-max-preview',
@@ -3577,6 +3678,20 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'mimo-v2.5-pro-ultraspeed',
+    name: 'MiMo V2.5 Pro UltraSpeed',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
     id: 'mimo-v2.5-pro',
     name: 'MiMo V2.5 Pro',
     maxInputTokens: 1000000,
@@ -4194,6 +4309,24 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gemini-3.5-flash',
+    name: 'Gemini 3.5 Flash',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65535,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      geminiReasoningEffort(GEMINI_3_FLASH_REASONING_EFFORTS, 'medium'),
+    ],
+  },
+  {
     id: 'gemini-3.1-pro-preview',
     overrides: [
       'gemini-3.1-pro',
@@ -4433,6 +4566,24 @@ const _WELL_KNOWN_MODELS = [
       imageInput: true,
     },
     presetTemplates: [thinkingMode()],
+  },
+  {
+    id: 'hy3-preview',
+    name: 'Hy3 Preview',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    presetTemplates: [
+      openAiReasoningEffort(TENCENT_HY3_REASONING_EFFORTS, 'high'),
+    ],
   },
   {
     id: 'hunyuan-2.0-thinking-20251109',

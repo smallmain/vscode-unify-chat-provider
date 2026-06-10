@@ -163,6 +163,12 @@ export enum FeatureId {
    */
   AnthropicInterleavedThinking = 'anthropic_interleaved-thinking',
   /**
+   * Adaptive thinking is always enabled and cannot be disabled.
+   *
+   * @see https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
+   */
+  AnthropicAlwaysOnAdaptiveThinking = 'anthropic_always-on-adaptive-thinking',
+  /**
    * The `xhigh` effort level is currently documented for Claude Opus 4.7.
    *
    * @see https://platform.claude.com/docs/en/build-with-claude/effort
@@ -358,6 +364,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'claude-opus-4',
     ],
   },
+  [FeatureId.AnthropicAlwaysOnAdaptiveThinking]: {
+    supportedFamilys: ['claude-fable-5', 'claude-mythos-5'],
+  },
   [FeatureId.AnthropicXHighEffort]: {
     supportedFamilys: [
       'claude-opus-4-8',
@@ -453,6 +462,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+      'tokenhub.tencentmaas.com',
+      'tokenhub-intl.tencentmaas.com',
+      'api.lkeap.cloud.tencent.com',
       'router.huggingface.co',
       'qianfan.baidubce.com',
       'portal.qwen.ai',
@@ -521,6 +533,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+      'tokenhub.tencentmaas.com',
+      'tokenhub-intl.tencentmaas.com',
+      'api.lkeap.cloud.tencent.com',
       'api.deepseek.com',
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
@@ -557,6 +572,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+      'tokenhub.tencentmaas.com',
+      'tokenhub-intl.tencentmaas.com',
+      'api.lkeap.cloud.tencent.com',
       'api.synthetic.new',
     ],
     customCheckers: [
@@ -664,6 +682,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedProviders: [
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
+      'tokenhub.tencentmaas.com',
+      'tokenhub-intl.tencentmaas.com',
+      'api.lkeap.cloud.tencent.com',
       'api.deepseek.com',
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
