@@ -5,6 +5,7 @@ import type { NormalizedUsage, PersistedUsageState, UsageRecord, UsageRequestOut
 
 const STATE_KEY = 'usage.state';
 const STATE_VERSION = 1;
+const PERSIST_DEBOUNCE_MS = 1_000;
 
 export interface UsageRecordInput {
   timestamp?: number;
@@ -30,6 +31,7 @@ export class UsageStore implements vscode.Disposable {
   private context: vscode.ExtensionContext | undefined;
   private records: UsageRecord[] = [];
   private persistChain = Promise.resolve();
+  private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private canPersist = true;
   private syncAdapter: UsageStoreSyncAdapter | undefined;
   private readonly pendingRemoteRecords = new Map<string, UsageRecord>();
@@ -135,12 +137,10 @@ export class UsageStore implements vscode.Disposable {
   async clear(): Promise<void> {
     this.records = [];
     this.pendingRemoteRecords.clear();
+    this.cancelPersistTimer();
     this.cancelPendingRemoteFlush();
     if (this.context && this.canPersist) {
-      await this.context.globalState.update(STATE_KEY, {
-        version: STATE_VERSION,
-        records: [],
-      } satisfies PersistedUsageState);
+      await this.queuePersistSnapshot(this.context, []);
     } else if (this.context) {
       await this.syncAdapter?.forwardClear();
     }
@@ -150,12 +150,10 @@ export class UsageStore implements vscode.Disposable {
   async clearFromRemote(): Promise<void> {
     this.records = [];
     this.pendingRemoteRecords.clear();
+    this.cancelPersistTimer();
     this.cancelPendingRemoteFlush();
     if (this.context && this.canPersist) {
-      await this.context.globalState.update(STATE_KEY, {
-        version: STATE_VERSION,
-        records: [],
-      } satisfies PersistedUsageState);
+      await this.queuePersistSnapshot(this.context, []);
     }
     this.onDidChangeEmitter.fire();
   }
@@ -250,32 +248,69 @@ export class UsageStore implements vscode.Disposable {
       return;
     }
 
-    this.persistChain = this.persistChain
-      .catch(() => undefined)
-      .then(() => this.saveState())
-      .catch((error) => {
-        console.error('[unify-chat-provider] Failed to persist usage state.', error);
-      });
-  }
-
-  private async saveState(): Promise<void> {
-    if (!this.context || !this.canPersist) {
+    if (this.persistTimer) {
       return;
     }
 
-    await this.context.globalState.update(STATE_KEY, {
+    this.persistTimer = setTimeout(() => {
+      this.persistTimer = undefined;
+      this.queuePersistStateNow();
+    }, PERSIST_DEBOUNCE_MS);
+  }
+
+  private queuePersistStateNow(): void {
+    const context = this.context;
+    if (!context || !this.canPersist) {
+      return;
+    }
+
+    void this.queuePersistSnapshot(context, this.records);
+  }
+
+  private queuePersistSnapshot(
+    context: vscode.ExtensionContext,
+    records: readonly UsageRecord[],
+  ): Promise<void> {
+    const snapshot = [...records];
+    this.persistChain = this.persistChain
+      .catch(() => undefined)
+      .then(() => this.saveState(context, snapshot))
+      .catch((error) => {
+        console.error('[unify-chat-provider] Failed to persist usage state.', error);
+      });
+    return this.persistChain;
+  }
+
+  private async saveState(
+    context: vscode.ExtensionContext,
+    records: readonly UsageRecord[],
+  ): Promise<void> {
+    await context.globalState.update(STATE_KEY, {
       version: STATE_VERSION,
-      records: this.records,
+      records: [...records],
     } satisfies PersistedUsageState);
   }
 
   private disposeRuntime(): void {
+    if (this.persistTimer && this.context && this.canPersist) {
+      this.cancelPersistTimer();
+      this.queuePersistStateNow();
+    }
+    this.cancelPersistTimer();
     this.context = undefined;
     this.records = [];
     this.persistChain = Promise.resolve();
     this.syncAdapter = undefined;
     this.pendingRemoteRecords.clear();
     this.cancelPendingRemoteFlush();
+  }
+
+  private cancelPersistTimer(): void {
+    if (!this.persistTimer) {
+      return;
+    }
+    clearTimeout(this.persistTimer);
+    this.persistTimer = undefined;
   }
 
   dispose(): void {

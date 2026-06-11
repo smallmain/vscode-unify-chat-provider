@@ -41,6 +41,50 @@ function decodeCloseReason(reason: Buffer | string): string | undefined {
   return decoded || undefined;
 }
 
+interface WebSocketReadyStateConstants {
+  CONNECTING: number;
+  OPEN: number;
+  CLOSING: number;
+  CLOSED: number;
+}
+
+const STANDARD_READY_STATE: WebSocketReadyStateConstants = {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3,
+};
+
+function getReadyStateConstants(
+  socket: unknown,
+): WebSocketReadyStateConstants {
+  if (!isRecord(socket)) {
+    return STANDARD_READY_STATE;
+  }
+
+  const candidate = isRecord(socket['platformSocket'])
+    ? socket['platformSocket']
+    : socket;
+  const constructorValue = candidate['constructor'];
+  const constants = isReadyStateConstants(constructorValue)
+    ? constructorValue
+    : candidate;
+
+  return isReadyStateConstants(constants) ? constants : STANDARD_READY_STATE;
+}
+
+function isReadyStateConstants(
+  value: unknown,
+): value is WebSocketReadyStateConstants {
+  return (
+    isRecord(value) &&
+    typeof value['CONNECTING'] === 'number' &&
+    typeof value['OPEN'] === 'number' &&
+    typeof value['CLOSING'] === 'number' &&
+    typeof value['CLOSED'] === 'number'
+  );
+}
+
 function normalizeSDKError(error: Error): WebSocketSessionError {
   const message = error.message || 'OpenAI Responses WebSocket runtime error.';
   const normalizedMessage = message.toLowerCase();
@@ -95,7 +139,9 @@ export class OpenAIResponsesWebSocketTransport
     ResponsesClientEvent,
     ResponseStreamEvent
   >['readyState'] {
-    const { CONNECTING, OPEN, CLOSING, CLOSED } = globalThis.WebSocket;
+    const { CONNECTING, OPEN, CLOSING, CLOSED } = getReadyStateConstants(
+      this.ws.socket,
+    );
     switch (this.ws.socket.readyState) {
       case CONNECTING:
         return 'connecting';

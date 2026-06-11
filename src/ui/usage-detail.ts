@@ -1,5 +1,5 @@
+import { randomBytes } from 'node:crypto';
 import * as vscode from 'vscode';
-import { randomBytes } from 'crypto';
 import { t } from '../i18n';
 import { createUsageSnapshot } from '../usage/usage-aggregates';
 import { formatDateTime, formatInteger } from '../usage/format';

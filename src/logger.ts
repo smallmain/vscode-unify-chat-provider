@@ -358,9 +358,7 @@ export class RequestLogger implements ProviderHttpLogger {
   }
 
   setNormalizedUsage(usage: NormalizedUsage | null): void {
-    if (usage) {
-      this.lastUsage = usage;
-    }
+    this.lastUsage = usage ?? undefined;
   }
 
   getNormalizedUsage(): NormalizedUsage | undefined {
