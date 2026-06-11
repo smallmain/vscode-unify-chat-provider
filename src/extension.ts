@@ -45,6 +45,10 @@ const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
 const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
 
+function filterUsageRecords(value: unknown): UsageRecord[] {
+  return Array.isArray(value) ? value.filter(isUsageRecord) : [];
+}
+
 function isUsageRecord(value: unknown): value is UsageRecord {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
     return false;
@@ -97,9 +101,7 @@ export async function activate(
     void mainInstance
       .runInLeaderWhenAvailable('usage.getSnapshot', {}, { timeoutMs: 2_000 })
       .then((records) => {
-        if (Array.isArray(records)) {
-          usageStore.replaceRecords(records);
-        }
+        usageStore.replaceRecords(filterUsageRecords(records));
         usageStore.flushPendingRemoteRecords();
       })
       .catch((error) => {
@@ -365,7 +367,7 @@ export async function activate(
       } else if (event === 'usage.clear') {
         void usageStore.clearFromRemote();
       } else if (event === 'usage.snapshot' && Array.isArray(payload)) {
-        usageStore.replaceRecords(payload);
+        usageStore.replaceRecords(filterUsageRecords(payload));
       }
     }),
   );

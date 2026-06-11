@@ -112,9 +112,9 @@ function startOfLocalDayOffset(daysAgo: number): number {
   return date.getTime();
 }
 
-function createCustomRange(): UsageTimeRange {
+function createCustomRange(): UsageTimeRange | undefined {
   if (!detailsCustomRange) {
-    detailsCustomRange = [startOfLocalDayOffset(0), endOfLocalDay(Date.now())];
+    return undefined;
   }
 
   const [start, end] = detailsCustomRange;
@@ -193,7 +193,7 @@ function createTexts(): UsageDetailTexts {
 
 function createPayload(): UsageDetailPayload {
   const ranges = buildPresetRanges();
-  const range = createCustomRange();
+  const range = createCustomRange() ?? ranges[0];
   const snapshot = createUsageSnapshot(usageStore.getRecords(), range, RECENT_LIMIT);
   const historicalSnapshot = createUsageSnapshot(usageStore.getRecords(), { id: 'all', label: t('Historical Total Usage') }, 0);
   return {

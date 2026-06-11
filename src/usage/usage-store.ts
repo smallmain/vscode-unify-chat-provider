@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import type { ProviderType } from '../client/definitions';
+import { PROVIDER_TYPES, type ProviderType } from '../client/definitions';
 import type { NormalizedUsage, PersistedUsageState, UsageRecord, UsageRequestOutcome } from './types';
 
 const STATE_KEY = 'usage.state';
@@ -235,6 +235,7 @@ export class UsageStore implements vscode.Disposable {
       Number.isFinite(candidate.timestamp) &&
       typeof candidate.providerName === 'string' &&
       typeof candidate.providerType === 'string' &&
+      Object.prototype.hasOwnProperty.call(PROVIDER_TYPES, candidate.providerType) &&
       typeof candidate.vscodeModelId === 'string' &&
       typeof candidate.modelId === 'string' &&
       (candidate.outcome === 'success' ||
