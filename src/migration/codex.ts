@@ -25,25 +25,14 @@ import {
   OPENAI_CODEX_API_ENDPOINT,
   OPENAI_CODEX_SCOPE,
 } from '../auth/providers/openai-codex/constants';
+import {
+  extractAccountIdFromClaims,
+  OpenAICodexIdTokenClaims,
+  parseJwtClaims,
+} from '../auth/providers/openai-codex/oauth-client';
 
-type CodexAuthJson = {
-  OPENAI_API_KEY?: unknown;
-  tokens?: {
-    id_token?: unknown;
-    access_token?: unknown;
-    refresh_token?: unknown;
-    account_id?: unknown;
-  };
-};
-
-type JwtClaims = {
+type OpenAICodexAccessTokenClaims = OpenAICodexIdTokenClaims & {
   exp?: unknown;
-  email?: unknown;
-  chatgpt_account_id?: unknown;
-  organizations?: unknown;
-  'https://api.openai.com/auth'?: {
-    chatgpt_account_id?: unknown;
-  };
 };
 
 function normalizeBaseUrlForCompare(value: string): string {
@@ -130,12 +119,12 @@ function getCodexHome(): string {
   return process.env.CODEX_HOME?.trim() || path.join(home, '.codex');
 }
 
-async function readAuthJson(): Promise<CodexAuthJson | undefined> {
+async function readAuthJson(): Promise<Record<string, unknown> | undefined> {
   const authJsonPath = path.join(getCodexHome(), 'auth.json');
   try {
     const content = await fs.readFile(authJsonPath, 'utf-8');
     const parsed: unknown = JSON.parse(content);
-    return isObjectRecord(parsed) ? (parsed as CodexAuthJson) : undefined;
+    return getRecord(parsed);
   } catch {
     return undefined;
   }
@@ -149,51 +138,31 @@ async function readAuthJsonApiKey(): Promise<string | undefined> {
     : undefined;
 }
 
-function parseJwtClaims(token: string | undefined): JwtClaims | undefined {
-  if (!token) return undefined;
-  const [, payload] = token.split('.');
-  if (!payload) return undefined;
-
-  try {
-    const parsed: unknown = JSON.parse(
-      Buffer.from(payload, 'base64url').toString('utf8'),
-    );
-    return isObjectRecord(parsed) ? (parsed as JwtClaims) : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 function getClaimString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value.trim() : undefined;
 }
 
-function firstOrganizationId(claims: JwtClaims | undefined): string | undefined {
-  const organizations = claims?.organizations;
-  if (!Array.isArray(organizations)) return undefined;
-
-  for (const organization of organizations) {
-    if (!isObjectRecord(organization)) continue;
-    const id = getClaimString(organization['id']);
-    if (id) return id;
-  }
-
-  return undefined;
+function getOpenAICodexClaims(
+  token: string | undefined,
+): OpenAICodexIdTokenClaims | undefined {
+  return token ? parseJwtClaims(token) : undefined;
 }
 
-function extractAccountId(
+function getOpenAICodexAccessClaims(
+  token: string,
+): OpenAICodexAccessTokenClaims | undefined {
+  return parseJwtClaims(token) as OpenAICodexAccessTokenClaims | undefined;
+}
+
+function extractCodexAccountId(
   explicitAccountId: unknown,
-  idClaims: JwtClaims | undefined,
-  accessClaims: JwtClaims | undefined,
+  idClaims: OpenAICodexIdTokenClaims | undefined,
+  accessClaims: OpenAICodexIdTokenClaims | undefined,
 ): string | undefined {
   return (
     getClaimString(explicitAccountId) ??
-    getClaimString(idClaims?.chatgpt_account_id) ??
-    getClaimString(idClaims?.['https://api.openai.com/auth']?.chatgpt_account_id) ??
-    firstOrganizationId(idClaims) ??
-    getClaimString(accessClaims?.chatgpt_account_id) ??
-    getClaimString(accessClaims?.['https://api.openai.com/auth']?.chatgpt_account_id) ??
-    firstOrganizationId(accessClaims)
+    (idClaims ? extractAccountIdFromClaims(idClaims) : undefined) ??
+    (accessClaims ? extractAccountIdFromClaims(accessClaims) : undefined)
   );
 }
 
@@ -201,21 +170,21 @@ async function buildCodexOAuthProviderFromAuthJson(
   modelId: string | undefined,
 ): Promise<ProviderMigrationCandidate | undefined> {
   const auth = await readAuthJson();
-  const tokens = auth?.tokens;
+  const tokens = getRecord(auth?.['tokens']);
   const accessToken = getClaimString(tokens?.access_token);
   const refreshToken = getClaimString(tokens?.refresh_token);
   if (!accessToken || !refreshToken) return undefined;
 
   const idToken = getClaimString(tokens?.id_token);
-  const idClaims = parseJwtClaims(idToken);
-  const accessClaims = parseJwtClaims(accessToken);
+  const idClaims = getOpenAICodexClaims(idToken);
+  const accessClaims = getOpenAICodexAccessClaims(accessToken);
   const expiresAt =
     typeof accessClaims?.exp === 'number'
       ? accessClaims.exp * 1000
       : undefined;
   const email =
     getClaimString(idClaims?.email) ?? getClaimString(accessClaims?.email);
-  const accountId = extractAccountId(
+  const accountId = extractCodexAccountId(
     tokens?.account_id,
     idClaims,
     accessClaims,
