@@ -19,6 +19,30 @@ import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
 import { CodexOAuthDetectedError } from './errors';
+import type { OAuth2TokenData } from '../auth/types';
+
+const CODEX_API_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
+const CODEX_OAUTH_SCOPE = 'openid profile email offline_access';
+
+type CodexAuthJson = {
+  OPENAI_API_KEY?: unknown;
+  tokens?: {
+    id_token?: unknown;
+    access_token?: unknown;
+    refresh_token?: unknown;
+    account_id?: unknown;
+  };
+};
+
+type JwtClaims = {
+  exp?: unknown;
+  email?: unknown;
+  chatgpt_account_id?: unknown;
+  organizations?: unknown;
+  'https://api.openai.com/auth'?: {
+    chatgpt_account_id?: unknown;
+  };
+};
 
 function normalizeBaseUrlForCompare(value: string): string {
   return value.replace(/\/+$/, '');
@@ -81,21 +105,125 @@ function parseWireApi(value: unknown): CodexWireApi | undefined {
   return undefined;
 }
 
-async function readAuthJsonApiKey(): Promise<string | undefined> {
+function getCodexHome(): string {
   const home = os.homedir();
-  const codexHome = process.env.CODEX_HOME?.trim() || path.join(home, '.codex');
-  const authJsonPath = path.join(codexHome, 'auth.json');
+  return process.env.CODEX_HOME?.trim() || path.join(home, '.codex');
+}
 
+async function readAuthJson(): Promise<CodexAuthJson | undefined> {
+  const authJsonPath = path.join(getCodexHome(), 'auth.json');
   try {
     const content = await fs.readFile(authJsonPath, 'utf-8');
-    const parsed = JSON.parse(content);
-    const apiKey = parsed?.OPENAI_API_KEY;
-    return typeof apiKey === 'string' && apiKey.trim()
-      ? apiKey.trim()
-      : undefined;
+    const parsed: unknown = JSON.parse(content);
+    return isObjectRecord(parsed) ? (parsed as CodexAuthJson) : undefined;
   } catch {
     return undefined;
   }
+}
+
+async function readAuthJsonApiKey(): Promise<string | undefined> {
+  const parsed = await readAuthJson();
+  const apiKey = parsed?.OPENAI_API_KEY;
+  return typeof apiKey === 'string' && apiKey.trim()
+    ? apiKey.trim()
+    : undefined;
+}
+
+function parseJwtClaims(token: string | undefined): JwtClaims | undefined {
+  if (!token) return undefined;
+  const [, payload] = token.split('.');
+  if (!payload) return undefined;
+
+  try {
+    const parsed: unknown = JSON.parse(
+      Buffer.from(payload, 'base64url').toString('utf8'),
+    );
+    return isObjectRecord(parsed) ? (parsed as JwtClaims) : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function getClaimString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function firstOrganizationId(claims: JwtClaims | undefined): string | undefined {
+  const organizations = claims?.organizations;
+  if (!Array.isArray(organizations)) return undefined;
+
+  for (const organization of organizations) {
+    if (!isObjectRecord(organization)) continue;
+    const id = getClaimString(organization['id']);
+    if (id) return id;
+  }
+
+  return undefined;
+}
+
+function extractAccountId(
+  explicitAccountId: unknown,
+  idClaims: JwtClaims | undefined,
+  accessClaims: JwtClaims | undefined,
+): string | undefined {
+  return (
+    getClaimString(explicitAccountId) ??
+    getClaimString(idClaims?.chatgpt_account_id) ??
+    getClaimString(idClaims?.['https://api.openai.com/auth']?.chatgpt_account_id) ??
+    firstOrganizationId(idClaims) ??
+    getClaimString(accessClaims?.chatgpt_account_id) ??
+    getClaimString(accessClaims?.['https://api.openai.com/auth']?.chatgpt_account_id) ??
+    firstOrganizationId(accessClaims)
+  );
+}
+
+async function buildCodexOAuthProviderFromAuthJson(
+  modelId: string | undefined,
+): Promise<ProviderMigrationCandidate | undefined> {
+  const auth = await readAuthJson();
+  const tokens = auth?.tokens;
+  const accessToken = getClaimString(tokens?.access_token);
+  const refreshToken = getClaimString(tokens?.refresh_token);
+  if (!accessToken || !refreshToken) return undefined;
+
+  const idToken = getClaimString(tokens?.id_token);
+  const idClaims = parseJwtClaims(idToken);
+  const accessClaims = parseJwtClaims(accessToken);
+  const expiresAt =
+    typeof accessClaims?.exp === 'number'
+      ? accessClaims.exp * 1000
+      : undefined;
+  const email =
+    getClaimString(idClaims?.email) ?? getClaimString(accessClaims?.email);
+  const accountId = extractAccountId(
+    tokens?.account_id,
+    idClaims,
+    accessClaims,
+  );
+
+  const tokenData: OAuth2TokenData = {
+    accessToken,
+    refreshToken,
+    tokenType: 'Bearer',
+    scope: CODEX_OAUTH_SCOPE,
+    ...(expiresAt ? { expiresAt } : {}),
+  };
+
+  const provider: Partial<ProviderConfig> = {
+    type: 'openai-codex',
+    name: 'OpenAI Codex (ChatGPT Plus/Pro)',
+    baseUrl: CODEX_API_ENDPOINT,
+    auth: {
+      method: 'openai-codex',
+      token: JSON.stringify(tokenData),
+      ...(accountId ? { accountId } : {}),
+      ...(email ? { email } : {}),
+    },
+    models: modelId ? [{ id: modelId }] : [],
+    autoFetchOfficialModels: true,
+  };
+
+  return { provider };
 }
 
 async function buildCodexProviderFromToml(
@@ -159,6 +287,10 @@ async function buildCodexProviderFromToml(
     }
 
     if (effectiveProviderId === 'openai') {
+      const oauthProvider = await buildCodexOAuthProviderFromAuthJson(modelId);
+      if (oauthProvider) {
+        return oauthProvider;
+      }
       throw new CodexOAuthDetectedError();
     }
 
