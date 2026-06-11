@@ -14,6 +14,7 @@
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: Refresh All Providers' Balance Information",
   "command.syncBuiltInParamsToAllConfigs.title": "Unify Chat Provider: Sync Built-in Parameters to All Configs",
   "command.commitMessageGeneration.generate.title": "Unify Chat Provider: Generate Commit Message",
+  "command.commitMessageGeneration.generateAll.title": "Unify Chat Provider: Generate Commit Message(All Changes)",
   "command.commitMessageGeneration.generateStaged.title": "Unify Chat Provider: Generate Commit Message(Staged Changes)",
   "command.commitMessageGeneration.generateWorkingTree.title": "Unify Chat Provider: Generate Commit Message(Unstaged Changes)",
   "command.commitMessageGeneration.changeModel.title": "Unify Chat Provider: Change Commit Message Generation Model",

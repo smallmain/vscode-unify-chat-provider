@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.2.0",
+  "version": "7.2.1",
   "categories": [
     "AI",
     "Chat"
@@ -187,22 +187,26 @@
       {
         "command": "unifyChatProvider.commitMessageGeneration.generate",
         "title": "%command.commitMessageGeneration.generate.title%",
-        "icon": "$(edit-sparkle)"
+        "icon": "$(sparkle)"
+      },
+      {
+        "command": "unifyChatProvider.commitMessageGeneration.generateAll",
+        "title": "%command.commitMessageGeneration.generateAll.title%",
+        "icon": "$(sparkle)"
       },
       {
         "command": "unifyChatProvider.commitMessageGeneration.generateStaged",
         "title": "%command.commitMessageGeneration.generateStaged.title%",
-        "icon": "$(edit-sparkle)"
+        "icon": "$(sparkle)"
       },
       {
         "command": "unifyChatProvider.commitMessageGeneration.generateWorkingTree",
         "title": "%command.commitMessageGeneration.generateWorkingTree.title%",
-        "icon": "$(edit-sparkle)"
+        "icon": "$(sparkle)"
       },
       {
         "command": "unifyChatProvider.commitMessageGeneration.changeModel",
-        "title": "%command.commitMessageGeneration.changeModel.title%",
-        "icon": "$(edit-sparkle)"
+        "title": "%command.commitMessageGeneration.changeModel.title%"
       }
     ],
     "configuration": {
@@ -1585,23 +1589,10 @@
       }
     },
     "menus": {
-      "scm/title": [
+      "scm/inputBox": [
         {
           "command": "unifyChatProvider.commitMessageGeneration.generate",
-          "group": "navigation@-4",
           "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled"
-        }
-      ],
-      "scm/resourceGroup/context": [
-        {
-          "command": "unifyChatProvider.commitMessageGeneration.generateStaged",
-          "group": "inline@-3",
-          "when": "config.git.enabled && scmProvider == git && scmResourceGroup == index && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled"
-        },
-        {
-          "command": "unifyChatProvider.commitMessageGeneration.generateWorkingTree",
-          "group": "inline@-3",
-          "when": "config.git.enabled && scmProvider == git && scmResourceGroup == workingTree && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled"
         }
       ]
     }

@@ -1,5 +1,15 @@
 # Changelog
 
+## v7.2.1 - 2026-06-11
+
+### Features
+- add "Generate All Changes" command option in README (4e275be, SmallMain)
+- add 'Generate All Changes' command and auto-scope for commit messages (6a21ab5, SmallMain)
+- surface abnormal stop reasons as errors across providers (bcc9067, SmallMain)
+
+### Other
+- Support New API quota transform (5981281, 董艺宽)
+
 ## v7.2.0 - 2026-06-11
 
 ### Features

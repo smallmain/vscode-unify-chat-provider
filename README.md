@@ -401,14 +401,11 @@ This is typically used after a new version updates or optimizes built-in model p
 You can generate commit messages via the following commands:
 
 - `Unify Chat Provider: Generate Commit Message`
+- `Unify Chat Provider: Generate Commit Message(All Changes)`
 - `Unify Chat Provider: Generate Commit Message(Staged Changes)`
 - `Unify Chat Provider: Generate Commit Message(Unstaged Changes)`
 
-You can also click the commit message generation button in the Source Control view. Different button locations correspond to different context ranges:
-
-- Repository view: all changes
-- Staged Changes group: staged changes
-- Changes group: unstaged changes
+You can also click the sparkle button on the right side of the commit message input box in the Source Control view to generate a commit message (on first use, you need to click the dropdown arrow next to the button and select `Unify Chat Provider: Generate Commit Message` from the dropdown menu).
 
 ## Balance Monitoring
 
@@ -449,21 +446,21 @@ Usage statistics record token usage from completed chat requests and keep the da
 
 <details>
 
-| Name                               | ID                                           | Description                                                                                           |
-| ---------------------------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| Name                               | ID                                           | Description                                                                                            |
+| ---------------------------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
 | Global Network Settings            | `networkSettings`                            | Global network settings. Timeout and retry affect chat requests; proxy affects provider HTTP requests. |
-| Model Display Name Template        | `modelDisplayNameTemplate`                   | Template for chat model names. Default: `{modelName}{{ ({providerName})}}`.                           |
-| Balance Refresh Interval           | `balanceRefreshIntervalMs`                   | Periodic refresh interval for provider balances (milliseconds).                                       |
-| Balance Throttle Window            | `balanceThrottleWindowMs`                    | Throttle window for post-request balance refresh (milliseconds).                                      |
-| Display Balance in Configuration   | `displayBalanceInConfiguration`              | Shows refreshed balance information in the model configuration button area. Default: disabled.        |
-| Usage Detail Retention Days        | `usageDetailRetentionDays`                   | Number of days to keep detailed usage records. Default: `100`.                                        |
-| Store API Key in Settings          | `storeApiKeyInSettings`                      | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details.                         |
-| Enable Detailed Logging            | `verbose`                                    | Enables more detailed logging for troubleshooting errors.                                             |
-| Commit Message Buttons             | `commitMessageGeneration.enableButtons`      | Controls whether commit message generation buttons are shown in the Source Control view.              |
-| Commit Message Model               | `commitMessageGeneration.model`              | Model selection used for commit message generation.                                                   |
-| Commit Message Format              | `commitMessageGeneration.format`             | Commit message format used for commit message generation.                                             |
-| Commit Message Custom Instructions | `commitMessageGeneration.customInstructions` | Additional instructions appended to the commit message generation system prompt.                      |
-| Commit Message Exclude Files       | `commitMessageGeneration.excludeFiles`       | VS Code glob patterns for files whose diffs should be omitted from commit message generation prompts. |
+| Model Display Name Template        | `modelDisplayNameTemplate`                   | Template for chat model names. Default: `{modelName}{{ ({providerName})}}`.                            |
+| Balance Refresh Interval           | `balanceRefreshIntervalMs`                   | Periodic refresh interval for provider balances (milliseconds).                                        |
+| Balance Throttle Window            | `balanceThrottleWindowMs`                    | Throttle window for post-request balance refresh (milliseconds).                                       |
+| Display Balance in Configuration   | `displayBalanceInConfiguration`              | Shows refreshed balance information in the model configuration button area. Default: disabled.         |
+| Usage Detail Retention Days        | `usageDetailRetentionDays`                   | Number of days to keep detailed usage records. Default: `100`.                                         |
+| Store API Key in Settings          | `storeApiKeyInSettings`                      | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details.                          |
+| Enable Detailed Logging            | `verbose`                                    | Enables more detailed logging for troubleshooting errors.                                              |
+| Commit Message Buttons             | `commitMessageGeneration.enableButtons`      | Controls whether commit message generation buttons are shown in the Source Control view.               |
+| Commit Message Model               | `commitMessageGeneration.model`              | Model selection used for commit message generation.                                                    |
+| Commit Message Format              | `commitMessageGeneration.format`             | Commit message format used for commit message generation.                                              |
+| Commit Message Custom Instructions | `commitMessageGeneration.customInstructions` | Additional instructions appended to the commit message generation system prompt.                       |
+| Commit Message Exclude Files       | `commitMessageGeneration.excludeFiles`       | VS Code glob patterns for files whose diffs should be omitted from commit message generation prompts.  |
 
 </details>
 
@@ -747,63 +744,63 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 
 <details>
 
-| Provider                                                                                                      | Supported Features                                                                   | Free Quota                 | Balance Monitor |
-| :------------------------------------------------------------------------------------------------------------ | :----------------------------------------------------------------------------------- | :------------------------- | :-------------: |
-| [Open AI](https://openai.com/)                                                                                |                                                                                      |                            |
-| [Google AI Studio](https://aistudio.google.com/)                                                              |                                                                                      |                            |
-| [Google Vertex AI](https://cloud.google.com/vertex-ai)                                                        | <li>Authentication                                                                   |                            |
-| [Anthropic](https://www.anthropic.com/)                                                                       | <li>InterleavedThinking <li>FineGrainedToolStreaming <li>AlwaysOnAdaptiveThinking    |                            |
-| [xAI](https://docs.x.ai/)                                                                                     |                                                                                      |                            |
-| [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)                         |                                                                                      |                            |
-| [OpenRouter](https://openrouter.ai/)                                                                          | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [Details](#openrouter)     |       ✅        |
-| [AIHubMix](https://aihubmix.com/)                                                                             |                                                                                      |                            |       ✅        |
-| [Cerebras](https://www.cerebras.ai/)                                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
-| [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                                                 | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
-| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                                       | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
-| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                                     | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [Details](#opencode-zen)   |
-| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                                 |                                                                                      | [Details](#opencode-zen)   |
-| [OpenCode Go (OpenAI Chat Completion)](https://opencode.ai/)                                                  | <li>ReasoningContent                                                                 | [Details](#opencode-go)    |
-| [OpenCode Go (Anthropic Messages)](https://opencode.ai/)                                                      | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [Details](#opencode-go)    |
-| [Nvidia](https://build.nvidia.com/)                                                                           |                                                                                      | [Details](#nvidia)         |
-| [Kilo Code](https://kilo.ai/)                                                                                 | <li>RawBaseUrl                                                                       | [Details](#kilo-code)      |
-| [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                                  | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
-| [Alibaba Cloud Model Studio (Team Token Plan)](https://www.aliyun.com/product/bailian)                        | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
-| [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio)               | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
-| [Tencent Cloud TokenHub (China)](https://cloud.tencent.com/document/product/1823/130078)                      | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |
-| [Tencent Cloud TokenHub (International)](https://cloud.tencent.com/document/product/1823/130078)              | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |
-| [Tencent Cloud TokenHub (Personal Token Plan)](https://cloud.tencent.com/document/product/1823/130060)        | <li>RawBaseUrl <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent       |                            |
-| [Tencent Cloud Token Plan (Enterprise)](https://cloud.tencent.com/document/product/1823/130660)               | <li>RawBaseUrl <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent       |                            |
-| [Model Scope (API-Inference)](https://modelscope.cn/)                                                         | <li>ThinkingParam3 <li>ReasoningContent                                              | [Details](#model-scope)    |
-| [Cline Bot](https://docs.cline.bot/api/overview)                                                              |                                                                                      | [Details](#cline-bot)      |
-| [Volcano Engine](https://www.volcengine.com/product/ark)                                                      | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching                           | [Details](#volcano-engine) |
-| [Volcano Engine (Coding Plan)](https://www.volcengine.com/activity/codingplan)                                | <li>AutoThinking <li>ThinkingParam2                                                  |                            |
-| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                                     | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching                           |                            |
-| [DeepSeek](https://www.deepseek.com/)                                                                         | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |       ✅        |
-| [Gitee AI](https://ai.gitee.com/)                                                                             |                                                                                      |                            |
-| [Xiaomi MIMO](https://mimo.xiaomi.com/)                                                                       | <li>ThinkingParam <li>ReasoningContent                                               |                            |
-| [Xiaomi MIMO (China, Token Plan)](https://mimo.xiaomi.com/)                                                   | <li>ThinkingParam <li>ReasoningContent                                               |                            |
-| [Xiaomi MIMO (Singapore, Token Plan)](https://mimo.xiaomi.com/)                                               | <li>ThinkingParam <li>ReasoningContent                                               |                            |
-| [Xiaomi MIMO (Europe, Token Plan)](https://mimo.xiaomi.com/)                                                  | <li>ThinkingParam <li>ReasoningContent                                               |                            |
-| [Ollama Local](https://ollama.com/)                                                                           |                                                                                      |                            |
-| [Ollama Cloud](https://ollama.com/)                                                                           |                                                                                      |                            |
-| [StepFun (China)](https://platform.stepfun.com/)                                                              | <li>ReasoningField                                                                   |                            |
-| [StepFun (International)](https://platform.stepfun.com/)                                                      | <li>ReasoningField                                                                   |                            |
-| [ZhiPu AI](https://open.bigmodel.cn/)                                                                         | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [Details](#zhipu-ai--zai)  |
-| [ZhiPu AI (Coding Plan)](https://open.bigmodel.cn/)                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                            |
-| [Z.AI](https://z.ai/)                                                                                         | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [Details](#zhipu-ai--zai)  |
-| [Z.AI (Coding Plan)](https://z.ai/)                                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                            |
-| [MiniMax (China)](https://www.minimaxi.com/)                                                                  | <li>ReasoningDetails                                                                 |                            |
-| [MiniMax (International)](https://www.minimax.io/)                                                            | <li>ReasoningDetails                                                                 |                            |
-| [LongCat](https://longcat.chat/)                                                                              |                                                                                      | [Details](#longcat)        |
-| [Moonshot AI (China)](https://www.moonshot.cn/)                                                               | <li>ReasoningContent                                                                 |                            |       ✅        |
-| [Moonshot AI (International)](https://www.moonshot.ai/)                                                       | <li>ReasoningContent                                                                 |                            |       ✅        |
-| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                                      | <li>ReasoningContent                                                                 |                            |       ✅        |
-| [StreamLake Vanchin (China)](https://streamlake.com/)                                                         |                                                                                      | [Details](#streamlake)     |
-| [StreamLake Vanchin (China, Coding Plan)](https://streamlake.com/)                                            |                                                                                      |                            |
-| [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                              |                                                                                      | [Details](#streamlake)     |
-| [StreamLake Vanchin (International, Coding Plan)](https://www.streamlake.ai/)                                 |                                                                                      |                            |
-| [SiliconFlow (China)](https://siliconflow.cn/)                                                                | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent                      | [Details](#siliconflow)    |       ✅        |
-| [SiliconFlow (International)](https://siliconflow.com/)                                                       | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent                      | [Details](#siliconflow)    |       ✅        |
+| Provider                                                                                               | Supported Features                                                                   | Free Quota                 | Balance Monitor |
+| :----------------------------------------------------------------------------------------------------- | :----------------------------------------------------------------------------------- | :------------------------- | :-------------: |
+| [Open AI](https://openai.com/)                                                                         |                                                                                      |                            |
+| [Google AI Studio](https://aistudio.google.com/)                                                       |                                                                                      |                            |
+| [Google Vertex AI](https://cloud.google.com/vertex-ai)                                                 | <li>Authentication                                                                   |                            |
+| [Anthropic](https://www.anthropic.com/)                                                                | <li>InterleavedThinking <li>FineGrainedToolStreaming <li>AlwaysOnAdaptiveThinking    |                            |
+| [xAI](https://docs.x.ai/)                                                                              |                                                                                      |                            |
+| [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)                  |                                                                                      |                            |
+| [OpenRouter](https://openrouter.ai/)                                                                   | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [Details](#openrouter)     |       ✅        |
+| [AIHubMix](https://aihubmix.com/)                                                                      |                                                                                      |                            |       ✅        |
+| [Cerebras](https://www.cerebras.ai/)                                                                   | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
+| [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                                          | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
+| [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                                | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
+| [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                              | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [Details](#opencode-zen)   |
+| [OpenCode Zen (Gemini)](https://opencode.ai/)                                                          |                                                                                      | [Details](#opencode-zen)   |
+| [OpenCode Go (OpenAI Chat Completion)](https://opencode.ai/)                                           | <li>ReasoningContent                                                                 | [Details](#opencode-go)    |
+| [OpenCode Go (Anthropic Messages)](https://opencode.ai/)                                               | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [Details](#opencode-go)    |
+| [Nvidia](https://build.nvidia.com/)                                                                    |                                                                                      | [Details](#nvidia)         |
+| [Kilo Code](https://kilo.ai/)                                                                          | <li>RawBaseUrl                                                                       | [Details](#kilo-code)      |
+| [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                           | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
+| [Alibaba Cloud Model Studio (Team Token Plan)](https://www.aliyun.com/product/bailian)                 | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
+| [Alibaba Cloud Model Studio (International)](https://www.alibabacloud.com/help/en/model-studio)        | <li>ThinkingParam3 <li>ReasoningContent                                              |                            |
+| [Tencent Cloud TokenHub (China)](https://cloud.tencent.com/document/product/1823/130078)               | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |
+| [Tencent Cloud TokenHub (International)](https://cloud.tencent.com/document/product/1823/130078)       | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |
+| [Tencent Cloud TokenHub (Personal Token Plan)](https://cloud.tencent.com/document/product/1823/130060) | <li>RawBaseUrl <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent       |                            |
+| [Tencent Cloud Token Plan (Enterprise)](https://cloud.tencent.com/document/product/1823/130660)        | <li>RawBaseUrl <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent       |                            |
+| [Model Scope (API-Inference)](https://modelscope.cn/)                                                  | <li>ThinkingParam3 <li>ReasoningContent                                              | [Details](#model-scope)    |
+| [Cline Bot](https://docs.cline.bot/api/overview)                                                       |                                                                                      | [Details](#cline-bot)      |
+| [Volcano Engine](https://www.volcengine.com/product/ark)                                               | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching                           | [Details](#volcano-engine) |
+| [Volcano Engine (Coding Plan)](https://www.volcengine.com/activity/codingplan)                         | <li>AutoThinking <li>ThinkingParam2                                                  |                            |
+| [Byte Plus](https://www.byteplus.com/en/product/modelark)                                              | <li>AutoThinking <li>ThinkingParam2 <li>VolcContextCaching                           |                            |
+| [DeepSeek](https://www.deepseek.com/)                                                                  | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent                      |                            |       ✅        |
+| [Gitee AI](https://ai.gitee.com/)                                                                      |                                                                                      |                            |
+| [Xiaomi MIMO](https://mimo.xiaomi.com/)                                                                | <li>ThinkingParam <li>ReasoningContent                                               |                            |
+| [Xiaomi MIMO (China, Token Plan)](https://mimo.xiaomi.com/)                                            | <li>ThinkingParam <li>ReasoningContent                                               |                            |
+| [Xiaomi MIMO (Singapore, Token Plan)](https://mimo.xiaomi.com/)                                        | <li>ThinkingParam <li>ReasoningContent                                               |                            |
+| [Xiaomi MIMO (Europe, Token Plan)](https://mimo.xiaomi.com/)                                           | <li>ThinkingParam <li>ReasoningContent                                               |                            |
+| [Ollama Local](https://ollama.com/)                                                                    |                                                                                      |                            |
+| [Ollama Cloud](https://ollama.com/)                                                                    |                                                                                      |                            |
+| [StepFun (China)](https://platform.stepfun.com/)                                                       | <li>ReasoningField                                                                   |                            |
+| [StepFun (International)](https://platform.stepfun.com/)                                               | <li>ReasoningField                                                                   |                            |
+| [ZhiPu AI](https://open.bigmodel.cn/)                                                                  | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [Details](#zhipu-ai--zai)  |
+| [ZhiPu AI (Coding Plan)](https://open.bigmodel.cn/)                                                    | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                            |
+| [Z.AI](https://z.ai/)                                                                                  | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [Details](#zhipu-ai--zai)  |
+| [Z.AI (Coding Plan)](https://z.ai/)                                                                    | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                            |
+| [MiniMax (China)](https://www.minimaxi.com/)                                                           | <li>ReasoningDetails                                                                 |                            |
+| [MiniMax (International)](https://www.minimax.io/)                                                     | <li>ReasoningDetails                                                                 |                            |
+| [LongCat](https://longcat.chat/)                                                                       |                                                                                      | [Details](#longcat)        |
+| [Moonshot AI (China)](https://www.moonshot.cn/)                                                        | <li>ReasoningContent                                                                 |                            |       ✅        |
+| [Moonshot AI (International)](https://www.moonshot.ai/)                                                | <li>ReasoningContent                                                                 |                            |       ✅        |
+| [Moonshot AI (Coding Plan)](https://www.kimi.com/coding)                                               | <li>ReasoningContent                                                                 |                            |       ✅        |
+| [StreamLake Vanchin (China)](https://streamlake.com/)                                                  |                                                                                      | [Details](#streamlake)     |
+| [StreamLake Vanchin (China, Coding Plan)](https://streamlake.com/)                                     |                                                                                      |                            |
+| [StreamLake Vanchin (International)](https://www.streamlake.ai/)                                       |                                                                                      | [Details](#streamlake)     |
+| [StreamLake Vanchin (International, Coding Plan)](https://www.streamlake.ai/)                          |                                                                                      |                            |
+| [SiliconFlow (China)](https://siliconflow.cn/)                                                         | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent                      | [Details](#siliconflow)    |       ✅        |
+| [SiliconFlow (International)](https://siliconflow.com/)                                                | <li>ThinkingParam3 <li>ThinkingBudgetParam <li>ReasoningContent                      | [Details](#siliconflow)    |       ✅        |
 
 Experimental Supported Providers:
 
