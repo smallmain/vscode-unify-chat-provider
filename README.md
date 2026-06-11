@@ -430,6 +430,17 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Codex Usage`: no extra config required; uses provider credential (API key or Codex auth token).
 - Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balance Information` to force refresh balances for all configured providers.
 
+## Usage Statistics
+
+Usage statistics record token usage from completed chat requests and keep the data locally in VS Code global storage.
+
+- Run `Unify Chat Provider: Show Usage Statistics` to open the visual usage page.
+- Run `Unify Chat Provider: Show Usage Details` to inspect provider, model, daily trend, and recent request details in a native picker.
+- The status bar shows today's token total, includes historical total usage in the tooltip, and opens the dashboard when clicked.
+- Run `Unify Chat Provider: Clear Usage Statistics` to remove all stored usage records.
+- Stored usage records are kept until you clear usage statistics.
+- The first version tracks requests, prompt/completion/total tokens, latency, outcomes, and cache-token data when providers return it. It does not calculate cost.
+
 ## Adjust Parameters
 
 ### Global Settings

@@ -219,5 +219,8 @@
   "configuration.endpoints.models.presetTemplates.presets.id.description": "唯一的预设项 ID。",
   "configuration.endpoints.models.presetTemplates.presets.name.description": "显示在 VS Code 模型配置 UI 中的预设标签。",
   "configuration.endpoints.models.presetTemplates.presets.description.description": "显示在 VS Code 模型配置 UI 中的可选预设说明。",
-  "configuration.endpoints.models.presetTemplates.presets.config.description": "选中该预设时应用的请求期模型覆盖配置。"
+  "configuration.endpoints.models.presetTemplates.presets.config.description": "选中该预设时应用的请求期模型覆盖配置。",
+  "command.showUsageDashboard.title": "Unify Chat Provider: 显示用量统计",
+  "command.showUsageDetails.title": "Unify Chat Provider: 显示用量明细",
+  "command.clearUsageStats.title": "Unify Chat Provider: 清空用量统计"
 }

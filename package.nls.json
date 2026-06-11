@@ -219,5 +219,8 @@
   "configuration.endpoints.models.presetTemplates.presets.id.description": "Unique preset option ID.",
   "configuration.endpoints.models.presetTemplates.presets.name.description": "Preset label shown in the VS Code model configuration UI.",
   "configuration.endpoints.models.presetTemplates.presets.description.description": "Optional preset description shown in the VS Code model configuration UI.",
-  "configuration.endpoints.models.presetTemplates.presets.config.description": "Request-time model overrides applied when this preset is selected."
+  "configuration.endpoints.models.presetTemplates.presets.config.description": "Request-time model overrides applied when this preset is selected.",
+  "command.showUsageDashboard.title": "Unify Chat Provider: Show Usage Statistics",
+  "command.showUsageDetails.title": "Unify Chat Provider: Show Usage Details",
+  "command.clearUsageStats.title": "Unify Chat Provider: Clear Usage Statistics"
 }
