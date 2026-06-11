@@ -1,9 +1,13 @@
 import type { AuthTokenInfo } from '../../auth/types';
-import type { ModelConfig } from '../../types';
+import type { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
 import {
   GEMINI_CLI_API_HEADERS,
   GEMINI_CLI_ENDPOINT_FALLBACKS,
 } from '../../auth/providers/google-gemini-oauth/constants';
+import * as vscode from 'vscode';
+import type { RequestLogger } from '../../logger';
+import { GoogleAIStudioProvider } from './ai-studio-client';
+import { getToken, getTokenType } from '../utils';
 import {
   type Gemini3ThinkingLevel,
   GoogleCodeAssistProvider,
@@ -11,6 +15,23 @@ import {
 
 const GEMINI_3_TIER_SUFFIX = /-(minimal|low|medium|high)$/i;
 const GEMINI_3_PREVIEW_SUFFIX = /-preview(?:-customtools)?$/i;
+const GEMINI_CLI_AI_STUDIO_BASE_URL =
+  'https://generativelanguage.googleapis.com';
+
+class GeminiCliAIStudioProvider extends GoogleAIStudioProvider {
+  protected override buildHeaders(
+    credential?: AuthTokenInfo,
+    modelConfig?: ModelConfig,
+  ): Record<string, string> {
+    const headers = super.buildHeaders(credential, modelConfig);
+    const token = getToken(credential);
+    if (token) {
+      const tokenType = getTokenType(credential) ?? 'Bearer';
+      headers['Authorization'] = `${tokenType} ${token}`;
+    }
+    return headers;
+  }
+}
 
 export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
   protected readonly codeAssistName = 'Gemini CLI';
@@ -18,6 +39,17 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
   protected readonly codeAssistHeaderStyle = 'gemini-cli';
   protected readonly codeAssistEndpointFallbacks =
     GEMINI_CLI_ENDPOINT_FALLBACKS;
+  private readonly aiStudioDelegate = new GeminiCliAIStudioProvider({
+    ...this.config,
+    type: 'google-ai-studio',
+    baseUrl: GEMINI_CLI_AI_STUDIO_BASE_URL,
+  } satisfies ProviderConfig);
+
+  private useAIStudioEndpoint(): boolean {
+    return this.config.auth?.method === 'google-gemini-oauth'
+      ? this.config.auth.oauthType === 'ai_studio'
+      : false;
+  }
 
   /**
    * Override to support google-gemini-oauth authentication method.
@@ -32,6 +64,9 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
   }
 
   protected override resolveProjectId(): string {
+    if (this.useAIStudioEndpoint()) {
+      return '';
+    }
     const auth = this.config.auth;
     if (auth?.method === 'google-gemini-oauth') {
       const managedProjectId = auth.managedProjectId?.trim();
@@ -100,10 +135,49 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
     };
   }
 
+  override async *streamChat(
+    encodedModelId: string,
+    model: ModelConfig,
+    messages: readonly vscode.LanguageModelChatRequestMessage[],
+    options: vscode.ProvideLanguageModelChatResponseOptions,
+    requestTrace: ChatRequestTrace,
+    token: vscode.CancellationToken,
+    logger: RequestLogger,
+    credential: AuthTokenInfo,
+  ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
+    if (this.useAIStudioEndpoint()) {
+      yield* this.aiStudioDelegate.streamChat(
+        encodedModelId,
+        model,
+        messages,
+        options,
+        requestTrace,
+        token,
+        logger,
+        credential,
+      );
+      return;
+    }
+
+    yield* super.streamChat(
+      encodedModelId,
+      model,
+      messages,
+      options,
+      requestTrace,
+      token,
+      logger,
+      credential,
+    );
+  }
+
   override async getAvailableModels(
-    _credential: AuthTokenInfo,
+    credential: AuthTokenInfo,
   ): Promise<ModelConfig[]> {
     this.validateAuth();
+    if (this.useAIStudioEndpoint()) {
+      return this.aiStudioDelegate.getAvailableModels(credential);
+    }
     // Sync rule: this list should match local canonical model IDs for Gemini CLI.
     // Do NOT import Antigravity-prefixed or proxy-specific resolver aliases.
     return [

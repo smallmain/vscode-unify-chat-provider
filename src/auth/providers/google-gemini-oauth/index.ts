@@ -36,6 +36,12 @@ import {
 import { performGeminiCliAuthorization } from './screens/authorize-screen';
 import { authLog } from '../../../logger';
 
+function shouldUseCodeAssistAccountInfo(
+  oauthType: GeminiCliOAuthConfig['oauthType'] | undefined,
+): boolean {
+  return oauthType !== 'ai_studio';
+}
+
 function toPersistableConfig(
   config: GeminiCliOAuthConfig | undefined,
 ): GeminiCliOAuthConfig {
@@ -234,6 +240,9 @@ export class GeminiCliOAuthProvider implements AuthProvider {
   private async refreshAccountInfoIfNeeded(accessToken: string): Promise<void> {
     const config = this.config;
     if (!config) {
+      return;
+    }
+    if (!shouldUseCodeAssistAccountInfo(config.oauthType)) {
       return;
     }
 
@@ -484,6 +493,8 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       )?.trim() ??
       '';
 
+    const oauthType = this.config?.oauthType ?? 'code_assist';
+
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
       'Initiating authorization',
@@ -493,7 +504,9 @@ export class GeminiCliOAuthProvider implements AuthProvider {
         const authorization = await import('./oauth-client').then((m) =>
           m.authorizeGeminiCli({
             redirectUri,
-            oauthType: this.config?.oauthType,
+            oauthType,
+            projectId: projectId || undefined,
+            tierId: this.config?.tierId,
           }),
         );
         return authorization.url;
@@ -552,14 +565,17 @@ export class GeminiCliOAuthProvider implements AuthProvider {
 
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
-      'Token exchange successful, fetching account info',
+      shouldUseCodeAssistAccountInfo(oauthType)
+        ? 'Token exchange successful, fetching account info'
+        : 'Token exchange successful',
     );
 
-    // Fetch account info to get tier and managed project
-    const accountInfo = await fetchGeminiCliAccountInfo(
-      exchanged.accessToken,
-      projectId || undefined,
-    );
+    const accountInfo = shouldUseCodeAssistAccountInfo(oauthType)
+      ? await fetchGeminiCliAccountInfo(
+          exchanged.accessToken,
+          projectId || undefined,
+        )
+      : undefined;
 
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
@@ -580,10 +596,10 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       identityId: randomUUID(),
       token: tokenRef,
       projectId: projectId || undefined,
-      oauthType: this.config?.oauthType ?? 'code_assist',
-      managedProjectId: accountInfo.managedProjectId,
-      tier: accountInfo.tier,
-      tierId: accountInfo.tierId,
+      oauthType,
+      managedProjectId: accountInfo?.managedProjectId,
+      tier: accountInfo?.tier ?? 'free',
+      tierId: accountInfo?.tierId,
       email: exchanged.email,
     };
 
@@ -593,7 +609,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
     vscode.window.showInformationMessage(t('Authorization successful!'));
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
-      `Configuration successful (email: ${exchanged.email}, tier: ${accountInfo.tier})`,
+      `Configuration successful (email: ${exchanged.email}, tier: ${nextConfig.tier ?? 'unknown'})`,
     );
     return { success: true, config: nextConfig };
   }
@@ -700,9 +716,10 @@ export class GeminiCliOAuthProvider implements AuthProvider {
 
     // Optionally refresh account info if we don't have tier info
     const shouldRefreshAccountInfo =
-      !this.config?.tier ||
-      !this.config?.tierId ||
-      !this.config?.managedProjectId?.trim();
+      shouldUseCodeAssistAccountInfo(this.config?.oauthType) &&
+      (!this.config?.tier ||
+        !this.config?.tierId ||
+        !this.config?.managedProjectId?.trim());
 
     if (shouldRefreshAccountInfo) {
       authLog.verbose(

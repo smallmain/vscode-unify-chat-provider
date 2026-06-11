@@ -30,20 +30,25 @@ export const GEMINI_CLI_AI_STUDIO_SCOPES = [
   'https://www.googleapis.com/auth/generative-language.retriever',
 ] as const;
 
-export type GeminiCliOAuthType = 'code_assist' | 'ai_studio';
+export type GeminiCliOAuthType = 'code_assist' | 'ai_studio' | 'google_one';
 
 export function normalizeGeminiCliOAuthType(
   oauthType: string | undefined,
 ): GeminiCliOAuthType {
-  return oauthType === 'ai_studio' ? 'ai_studio' : 'code_assist';
+  if (oauthType === 'ai_studio' || oauthType === 'google_one') {
+    return oauthType;
+  }
+  return 'code_assist';
 }
 
 export function getGeminiCliOAuthScopes(
   oauthType: string | undefined,
 ): readonly string[] {
-  return normalizeGeminiCliOAuthType(oauthType) === 'ai_studio'
-    ? GEMINI_CLI_AI_STUDIO_SCOPES
-    : GEMINI_CLI_SCOPES;
+  const normalized = normalizeGeminiCliOAuthType(oauthType);
+  if (normalized === 'ai_studio') {
+    return GEMINI_CLI_AI_STUDIO_SCOPES;
+  }
+  return GEMINI_CLI_SCOPES;
 }
 
 /**

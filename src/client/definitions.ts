@@ -258,6 +258,12 @@ export enum FeatureId {
    */
   OpenAIUsePreviousResponseId = 'openai_use-previous-response-id',
   /**
+   * Use Responses API remote context compaction.
+   *
+   * @see https://platform.openai.com/docs/guides/conversation-state#compaction-advanced
+   */
+  OpenAIUseResponsesContextManagement = 'openai_use-responses-context-management',
+  /**
    * Enable VolcEngine / BytePlus context caching on OpenAI Responses API.
    */
   OpenAIUseVolcContextCaching = 'openai_use-volc-context-caching',
@@ -592,6 +598,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUsePreviousResponseId]: {
+    supportedProviders: ['api.openai.com', 'chatgpt.com'],
+  },
+  [FeatureId.OpenAIUseResponsesContextManagement]: {
     supportedProviders: ['api.openai.com', 'chatgpt.com'],
   },
   [FeatureId.OpenAIUseVolcContextCaching]: {

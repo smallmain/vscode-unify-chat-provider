@@ -352,12 +352,25 @@ function pickStableAuthIdentifier(auth: AuthConfig | undefined): string | null {
   return null;
 }
 
+function deterministicUuidFromSeed(seed: string): string {
+  const bytes = createHash('sha256').update(seed, 'utf8').digest();
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+  const hex = bytes.toString('hex', 0, 16);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(
+    12,
+    16,
+  )}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
+}
+
 function generateFakeUserId(options?: { seed?: string | null }): string {
   const seed = options?.seed?.trim();
   const hexPart = seed
     ? createHash('sha256').update(seed, 'utf8').digest('hex')
     : randomBytes(32).toString('hex');
-  const uuid = randomUUID();
+  const uuid = seed
+    ? deterministicUuidFromSeed(`claude-code-session:${seed}`)
+    : randomUUID();
   return `user_${hexPart}_account__session_${uuid}`;
 }
 
@@ -365,6 +378,13 @@ function isValidUserId(userId: string): boolean {
   const pattern =
     /^user_[a-fA-F0-9]{64}_account__session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
   return pattern.test(userId);
+}
+
+function extractSessionIdFromUserId(userId: string): string | undefined {
+  if (!isValidUserId(userId)) {
+    return undefined;
+  }
+  return userId.slice(userId.lastIndexOf('_session_') + '_session_'.length);
 }
 
 function toTextBlocks(
@@ -381,6 +401,17 @@ function toTextBlocks(
 }
 
 export class AnthropicClaudeCodeProvider extends AnthropicProvider {
+  private readonly fallbackUserSeed = randomBytes(32).toString('hex');
+
+  private resolveStableUserId(historyUserId?: string): string {
+    if (historyUserId && isValidUserId(historyUserId)) {
+      return historyUserId;
+    }
+    return generateFakeUserId({
+      seed: pickStableAuthIdentifier(this.config.auth) ?? this.fallbackUserSeed,
+    });
+  }
+
   protected override toProviderToolName(name: string): string {
     if (NON_MCP_TOOL_NAMES.has(name)) {
       return name;
@@ -431,6 +462,12 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     headers['X-Stainless-Runtime-Version'] = 'v24.3.0';
     headers['X-Stainless-Retry-Count'] = '0';
     headers['X-Stainless-Timeout'] = '600';
+    headers['x-client-request-id'] = randomUUID();
+
+    const sessionId = extractSessionIdFromUserId(this.resolveStableUserId());
+    if (sessionId) {
+      headers['X-Claude-Code-Session-Id'] = sessionId;
+    }
 
     if (options?.stream) {
       headers['x-stainless-helper-method'] = 'stream';
@@ -493,12 +530,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     requestBase.system = mergedSystem;
 
-    const userId =
-      options.historyUserId && isValidUserId(options.historyUserId)
-        ? options.historyUserId
-        : generateFakeUserId({
-            seed: pickStableAuthIdentifier(this.config.auth),
-          });
+    const userId = this.resolveStableUserId(options.historyUserId);
     options.requestState.userId = userId;
     requestBase.metadata = { user_id: userId };
 

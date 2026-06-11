@@ -142,6 +142,7 @@ export async function authorizeAntigravity(options: {
   url.searchParams.set('state', state);
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
+  url.searchParams.set('include_granted_scopes', 'true');
 
   return {
     url: url.toString(),

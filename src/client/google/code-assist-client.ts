@@ -320,6 +320,88 @@ function hasMcpTools(tools: Tool[] | undefined): boolean {
   );
 }
 
+function hasWebSearchTool(tools: Tool[] | undefined): boolean {
+  if (!tools) {
+    return false;
+  }
+
+  const isWebSearchName = (value: unknown): boolean => {
+    if (typeof value !== 'string') {
+      return false;
+    }
+    const name = value.trim().toLowerCase();
+    return name === 'web_search' || name === 'google_search';
+  };
+
+  return tools.some((tool) => {
+    if ('googleSearch' in tool && tool.googleSearch !== undefined) {
+      return true;
+    }
+    if ('googleSearchRetrieval' in tool && tool.googleSearchRetrieval !== undefined) {
+      return true;
+    }
+    return tool.functionDeclarations?.some((decl) => {
+      if (isWebSearchName(decl.name)) {
+        return true;
+      }
+      const record = decl as unknown as Record<string, unknown>;
+      return isWebSearchName(record['type']);
+    }) === true;
+  });
+}
+
+function filterOpenCodePrompt(text: string): string {
+  if (!text.includes('You are an interactive CLI tool')) {
+    return text;
+  }
+  const instructionsIndex = text.indexOf('Instructions from:');
+  return instructionsIndex >= 0 ? text.slice(instructionsIndex) : '';
+}
+
+function buildAntigravityModelIdentityText(modelId: string): string {
+  const modelIdLower = modelId.trim().toLowerCase();
+  let best:
+    | {
+        prefix: string;
+        displayName: string;
+        canonicalId: string;
+      }
+    | undefined;
+
+  for (const info of ANTIGRAVITY_MODEL_INFO) {
+    if (
+      modelIdLower.startsWith(info.prefix) &&
+      (!best || info.prefix.length > best.prefix.length)
+    ) {
+      best = info;
+    }
+  }
+
+  if (!best) {
+    return '';
+  }
+  return `You are Model ${best.displayName}, ModelId is ${best.canonicalId}.`;
+}
+
+function applyDummyThoughtSignatureForGemini(contents: Content[]): void {
+  for (const content of contents) {
+    const parts = content.parts;
+    if (!parts || parts.length === 0) {
+      continue;
+    }
+
+    content.parts = parts.map((part) => {
+      if (part.thought && !part.thoughtSignature) {
+        return { ...part, thoughtSignature: DUMMY_THOUGHT_SIGNATURE };
+      }
+      if (part.functionCall && !part.thoughtSignature) {
+        return { ...part, thoughtSignature: DUMMY_THOUGHT_SIGNATURE };
+      }
+      return part;
+    });
+  }
+}
+
 function buildToolParameterSignature(schema: unknown): string {
   if (!isRecord(schema)) {
     return '';
@@ -838,10 +920,58 @@ function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
 // }
 
 const GEMINI_3_PRO_MAX_OUTPUT_TOKENS_ANTIGRAVITY = 65535;
+const ANTIGRAVITY_WEB_SEARCH_FALLBACK_MODEL = 'gemini-2.5-flash';
+const DUMMY_THOUGHT_SIGNATURE = 'skip_thought_signature_validator';
 const TOOL_ENABLED_INSTRUCTION =
   'When tools are provided, use tool calls instead of describing tool use. Never claim you lack tool access or permissions.';
 const TOOL_DISABLED_INSTRUCTION =
   'Do not mention tool availability or lack thereof. If tools are unavailable, respond directly without narrating tool steps.';
+const ANTIGRAVITY_MODEL_INFO: ReadonlyArray<{
+  prefix: string;
+  displayName: string;
+  canonicalId: string;
+}> = [
+  {
+    prefix: 'claude-fable-5',
+    displayName: 'Claude Fable 5',
+    canonicalId: 'claude-fable-5',
+  },
+  {
+    prefix: 'claude-opus-4-8',
+    displayName: 'Claude Opus 4.8',
+    canonicalId: 'claude-opus-4-8',
+  },
+  {
+    prefix: 'claude-opus-4-7',
+    displayName: 'Claude Opus 4.7',
+    canonicalId: 'claude-opus-4-7',
+  },
+  {
+    prefix: 'claude-opus-4-6',
+    displayName: 'Claude Opus 4.6',
+    canonicalId: 'claude-opus-4-6',
+  },
+  {
+    prefix: 'claude-opus-4-5',
+    displayName: 'Claude Opus 4.5',
+    canonicalId: 'claude-opus-4-5-20250929',
+  },
+  {
+    prefix: 'claude-sonnet-4-6',
+    displayName: 'Claude Sonnet 4.6',
+    canonicalId: 'claude-sonnet-4-6',
+  },
+  {
+    prefix: 'claude-sonnet-4-5',
+    displayName: 'Claude Sonnet 4.5',
+    canonicalId: 'claude-sonnet-4-5-20250929',
+  },
+  {
+    prefix: 'claude-haiku-4-5',
+    displayName: 'Claude Haiku 4.5',
+    canonicalId: 'claude-haiku-4-5-20251001',
+  },
+];
 
 /**
  * Retry configuration for CodeAssist providers when using multiple endpoints.
@@ -1383,13 +1513,13 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     tools: AntigravityTool[] | undefined,
     modelId: string,
   ): FunctionCallingConfig | undefined {
-    if (!tools || tools.length === 0) {
-      return undefined;
-    }
-
     const isClaudeModel = modelId.toLowerCase().includes('claude');
     if (isClaudeModel) {
       return { mode: FunctionCallingConfigMode.VALIDATED };
+    }
+
+    if (!tools || tools.length === 0) {
+      return undefined;
     }
 
     if (mode !== vscode.LanguageModelChatToolMode.Required) {
@@ -1421,8 +1551,9 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         return;
       }
       if (typeof value === 'string') {
-        if (value.trim()) {
-          output.push({ text: value });
+        const filtered = filterOpenCodePrompt(value);
+        if (filtered.trim()) {
+          output.push({ text: filtered });
         }
         return;
       }
@@ -1433,6 +1564,13 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         return;
       }
       if (isPart(value)) {
+        if (typeof value.text === 'string') {
+          const filtered = filterOpenCodePrompt(value.text);
+          if (filtered.trim()) {
+            output.push({ ...value, text: filtered });
+          }
+          return;
+        }
         output.push(value);
       }
     };
@@ -1457,6 +1595,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       toolsProvided: boolean;
       isClaudeModel: boolean;
       hasMcpTools: boolean;
+      modelId: string;
     },
   ): { role: 'user'; parts: Part[] } {
     const userSystemParts =
@@ -1470,9 +1609,14 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     const shouldInjectIdentity =
       options.injectAntigravitySystemInstruction && !userHasAntigravityIdentity;
     if (shouldInjectIdentity) {
+      const modelIdentity = buildAntigravityModelIdentityText(options.modelId);
       parts.push(
         { text: ANTIGRAVITY_SYSTEM_INSTRUCTION },
-        { text: ANTIGRAVITY_SILENT_BOUNDARY_INSTRUCTION },
+        {
+          text: modelIdentity
+            ? `${ANTIGRAVITY_SILENT_BOUNDARY_INSTRUCTION}\n${modelIdentity}`
+            : ANTIGRAVITY_SILENT_BOUNDARY_INSTRUCTION,
+        },
       );
     }
 
@@ -1717,13 +1861,6 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       thinkingEnabled,
     );
 
-    const modelIdLower = resolvedModel.requestModelId.toLowerCase();
-    const isImageModel = IMAGE_MODEL_PATTERN.test(resolvedModel.requestModelId);
-    const isClaudeModel = modelIdLower.includes('claude');
-    const isClaudeOpusModel = modelIdLower.includes('claude-opus');
-    const isAntigravityImageRequest =
-      this.codeAssistHeaderStyle === 'antigravity' && isImageModel;
-
     const expectedIdentity = createStatefulMarkerIdentity(this.config, model);
     const sanitizedMessages = sanitizeMessagesForModelSwitch(messages, {
       modelId: encodedModelId,
@@ -1742,10 +1879,29 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
 
     normalizeSnakeCaseInPlace(contents);
 
+    const sdkTools = this.convertTools(options.tools);
+    const hasWebSearch =
+      this.codeAssistHeaderStyle === 'antigravity' && hasWebSearchTool(sdkTools);
+    const requestModelId = hasWebSearch
+      ? ANTIGRAVITY_WEB_SEARCH_FALLBACK_MODEL
+      : resolvedModel.requestModelId;
+    const gemini3ThinkingLevel = hasWebSearch
+      ? undefined
+      : resolvedModel.gemini3ThinkingLevel;
+    const modelIdLower = requestModelId.toLowerCase();
+    const isImageModel = IMAGE_MODEL_PATTERN.test(requestModelId);
+    const isClaudeModel = modelIdLower.includes('claude');
+    const isClaudeOpusModel = modelIdLower.includes('claude-opus');
+    const isAntigravityImageRequest =
+      this.codeAssistHeaderStyle === 'antigravity' && isImageModel;
+
     if (isClaudeModel) {
       this.sanitizeClaudeContents(contents);
     } else {
       sanitizeContentsForRequest(contents);
+      if (this.codeAssistHeaderStyle === 'antigravity') {
+        applyDummyThoughtSignatureForGemini(contents);
+      }
     }
 
     if (isClaudeModel) {
@@ -1789,14 +1945,13 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     // const disableThinkingConfig = isClaudeModel
     //   ? !hasFinalPositionThinking
     //   : false;
-    const sdkTools = this.convertTools(options.tools);
     const tools = this.normalizeTools(sdkTools, {
       hardenClaudeTools: isClaudeModel,
     });
     const functionCallingConfig = this.buildAntigravityFunctionCallingConfig(
       options.toolMode,
       tools,
-      resolvedModel.requestModelId,
+      requestModelId,
     );
 
     const injectSystemInstruction =
@@ -1812,6 +1967,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         toolsProvided,
         isClaudeModel,
         hasMcpTools: hasMcpTools(sdkTools),
+        modelId: requestModelId,
       },
     );
 
@@ -1835,10 +1991,10 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       const thinkingDisabled =
         model.thinking.type === 'disabled' || model.thinking.effort === 'none';
 
-      if (resolvedModel.gemini3ThinkingLevel) {
+      if (gemini3ThinkingLevel) {
         generationConfig.thinkingConfig = {
           includeThoughts: !thinkingDisabled,
-          thinkingLevel: resolvedModel.gemini3ThinkingLevel,
+          thinkingLevel: gemini3ThinkingLevel,
         };
       } else {
         const thinkingConfig: Record<string, unknown> = {
@@ -1876,8 +2032,8 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
 
     if (
       typeof generationConfig.maxOutputTokens === 'number' &&
-      resolvedModel.requestModelId.toLowerCase().startsWith('gemini-3-pro') &&
-      !IMAGE_MODEL_PATTERN.test(resolvedModel.requestModelId) &&
+      requestModelId.toLowerCase().startsWith('gemini-3-pro') &&
+      !IMAGE_MODEL_PATTERN.test(requestModelId) &&
       generationConfig.maxOutputTokens >
         GEMINI_3_PRO_MAX_OUTPUT_TOKENS_ANTIGRAVITY
     ) {
@@ -1901,7 +2057,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       : this.codeAssistHeaderStyle === 'antigravity'
         ? buildStableAntigravitySessionId(contents)
         : buildSignatureSessionId({
-            modelId: resolvedModel.requestModelId,
+            modelId: requestModelId,
             projectId,
             systemInstruction: systemInstructionForRequest,
             contents,
@@ -1928,11 +2084,15 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
 
     body = {
       project: projectId,
-      model: resolvedModel.requestModelId,
+      model: requestModelId,
       request: requestPayload,
       ...(this.codeAssistHeaderStyle === 'antigravity'
         ? {
-            requestType: isAntigravityImageRequest ? 'image_gen' : 'agent',
+            requestType: hasWebSearch
+              ? 'web_search'
+              : isAntigravityImageRequest
+                ? 'image_gen'
+                : 'agent',
             userAgent: 'antigravity',
             requestId: `agent-${randomUUID()}`,
           }

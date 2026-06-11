@@ -1,4 +1,4 @@
-import { randomBytes } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import {
   OPENAI_CODEX_CLIENT_ID,
   OPENAI_CODEX_ISSUER,
@@ -7,10 +7,21 @@ import {
   OPENAI_CODEX_SCOPE,
 } from './constants';
 import { authLog } from '../../../logger';
-import { generatePKCE } from '../../../utils';
 
 function generateState(): string {
   return randomBytes(32).toString('base64url');
+}
+
+function generateCodexPKCE(): {
+  verifier: string;
+  challenge: string;
+  method: 'S256';
+} {
+  const verifier = randomBytes(64).toString('hex');
+  const challenge = createHash('sha256')
+    .update(verifier, 'utf8')
+    .digest('base64url');
+  return { verifier, challenge, method: 'S256' };
 }
 
 export interface OpenAICodexAuthorization {
@@ -21,7 +32,7 @@ export interface OpenAICodexAuthorization {
 }
 
 export function authorizeOpenAICodex(): OpenAICodexAuthorization {
-  const pkce = generatePKCE(43);
+  const pkce = generateCodexPKCE();
   const state = generateState();
   const redirectUri = OPENAI_CODEX_REDIRECT_URI;
 
@@ -254,6 +265,7 @@ export async function refreshOpenAICodexToken(options: {
       grant_type: 'refresh_token',
       refresh_token: options.refreshToken,
       client_id: OPENAI_CODEX_CLIENT_ID,
+      scope: 'openid profile email',
     }).toString(),
   });
 

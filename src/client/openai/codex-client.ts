@@ -13,6 +13,7 @@ import type { ModelConfig } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
 import { OpenAIResponsesProvider } from './responses-client';
 import { randomUUID } from 'crypto';
+import { codexBaseInstructionsForModel } from './codex-instructions';
 import type {
   ResponseCreateParamsBase,
   ResponsesClientEvent,
@@ -170,8 +171,13 @@ function normalizeCodexRequestRecord(
     delete record['previous_response_id'];
   }
 
-  if (record['instructions'] === undefined || record['instructions'] === null) {
-    record['instructions'] = '';
+  if (
+    record['instructions'] === undefined ||
+    record['instructions'] === null ||
+    (typeof record['instructions'] === 'string' &&
+      record['instructions'].trim() === '')
+  ) {
+    record['instructions'] = codexBaseInstructionsForModel(record['model']);
   }
   record['store'] = false;
   if (record['stream'] === undefined) {
@@ -245,6 +251,12 @@ function resolveCodexUserAgent(authMethod: string | undefined): string {
 }
 
 export class OpenAICodexProvider extends OpenAIResponsesProvider {
+  protected override shouldEnableResponsesContextManagement(
+    model: ModelConfig,
+  ): boolean {
+    return this.isResponsesContextManagementModelSupported(model);
+  }
+
   protected override getInputMessageRole(
     role: vscode.LanguageModelChatMessageRole,
   ) {
@@ -355,7 +367,6 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     Object.assign(baseBody, {
       store: false,
       prompt_cache_key: sessionId,
-      instructions: '',
     });
     delete baseBody.prompt_cache_retention;
     delete baseBody.safety_identifier;

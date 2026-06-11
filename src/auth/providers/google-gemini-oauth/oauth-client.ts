@@ -18,6 +18,7 @@ import {
   GOOGLE_USERINFO_URL,
   getGeminiCliOAuthScopes,
   getGeminiCliRandomizedHeaders,
+  normalizeGeminiCliOAuthType,
 } from './constants';
 import type {
   GeminiCliAccountInfo,
@@ -129,6 +130,18 @@ function decodeState(state: string): GeminiCliAuthState {
   return {
     verifier,
     redirectUri,
+    oauthType:
+      typeof record['oauthType'] === 'string'
+        ? normalizeGeminiCliOAuthType(record['oauthType'])
+        : undefined,
+    projectId:
+      typeof record['projectId'] === 'string'
+        ? record['projectId'].trim() || undefined
+        : undefined,
+    tierId:
+      typeof record['tierId'] === 'string'
+        ? record['tierId'].trim() || undefined
+        : undefined,
   };
 }
 
@@ -138,11 +151,22 @@ function decodeState(state: string): GeminiCliAuthState {
 export async function authorizeGeminiCli(options: {
   redirectUri: string;
   oauthType?: string;
+  projectId?: string;
+  tierId?: string;
 }): Promise<GeminiCliAuthorization> {
   const pkce = generatePKCE(43);
 
   const redirectUri = options.redirectUri.trim();
-  const state = encodeState({ verifier: pkce.verifier, redirectUri });
+  const oauthType = normalizeGeminiCliOAuthType(options.oauthType);
+  const projectId = options.projectId?.trim();
+  const tierId = options.tierId?.trim();
+  const state = encodeState({
+    verifier: pkce.verifier,
+    redirectUri,
+    oauthType,
+    projectId: projectId || undefined,
+    tierId: tierId || undefined,
+  });
 
   const url = new URL(GOOGLE_OAUTH_AUTH_URL);
   url.searchParams.set('client_id', GEMINI_CLI_CLIENT_ID);
@@ -157,6 +181,10 @@ export async function authorizeGeminiCli(options: {
   url.searchParams.set('state', state);
   url.searchParams.set('access_type', 'offline');
   url.searchParams.set('prompt', 'consent');
+  url.searchParams.set('include_granted_scopes', 'true');
+  if (projectId) {
+    url.searchParams.set('project_id', projectId);
+  }
 
   return {
     url: url.toString(),

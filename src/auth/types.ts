@@ -153,7 +153,7 @@ export interface GeminiCliOAuthConfig {
   /** Optional user-provided project id (duetProject). Used as fallback when managedProjectId is unavailable. */
   projectId?: string;
   /** Gemini OAuth account type. Defaults to Code Assist. */
-  oauthType?: 'code_assist' | 'ai_studio';
+  oauthType?: 'code_assist' | 'ai_studio' | 'google_one';
   /** Cloud Code Assist managed project id (cloudaicompanionProject) */
   managedProjectId?: string;
   tier?: 'free' | 'paid';

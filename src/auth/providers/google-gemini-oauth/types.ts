@@ -12,6 +12,12 @@ export interface GeminiCliAuthState {
   verifier: string;
   /** Redirect URI used for this authorization */
   redirectUri: string;
+  /** Gemini OAuth account type. */
+  oauthType?: 'code_assist' | 'ai_studio' | 'google_one';
+  /** Optional user-provided project id. */
+  projectId?: string;
+  /** Optional selected tier id. */
+  tierId?: string;
 }
 
 /**

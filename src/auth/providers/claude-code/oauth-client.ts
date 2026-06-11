@@ -127,8 +127,9 @@ export async function exchangeClaudeCodeCode(options: {
   const response = await fetch(CLAUDE_CODE_TOKEN_URL, {
     method: 'POST',
     headers: {
-      Accept: 'application/json',
+      Accept: 'application/json, text/plain, */*',
       'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.6',
     },
     body: JSON.stringify({
       code: parsed.code,
@@ -188,8 +189,9 @@ export async function refreshClaudeCodeToken(options: {
   const response = await fetch(CLAUDE_CODE_TOKEN_URL, {
     method: 'POST',
     headers: {
-      Accept: 'application/json',
+      Accept: 'application/json, text/plain, */*',
       'Content-Type': 'application/json',
+      'User-Agent': 'axios/1.13.6',
     },
     body: JSON.stringify({
       client_id: CLAUDE_CODE_CLIENT_ID,

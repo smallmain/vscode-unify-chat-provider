@@ -54,6 +54,7 @@ import {
   EasyInputMessage,
   FunctionTool,
   Response as OpenAIResponse,
+  ResponseCompactionItemParam,
   ResponseCreateParamsBase,
   ResponsesClientEvent,
   ResponseComputerToolCallOutputItem,
@@ -70,11 +71,7 @@ import {
 } from 'openai/resources/responses/responses';
 import { getBaseModelId } from '../../model-id-utils';
 import { createHash, randomUUID } from 'crypto';
-import {
-  ChatRequestTrace,
-  ProviderConfig,
-  ModelConfig,
-} from '../../types';
+import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
 import {
   WebSocketSessionError,
   WebSocketSessionRequest,
@@ -90,6 +87,15 @@ const PREVIOUS_RESPONSE_ID_ERROR_CODES = new Set<string>([
 ]);
 const WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE =
   'websocket_connection_limit_reached';
+const RESPONSES_CONTEXT_COMPACTION_FALLBACK_THRESHOLD = 50_000;
+const RESPONSES_CONTEXT_COMPACTION_THRESHOLD_RATIO = 0.9;
+const RESPONSES_CONTEXT_MANAGEMENT_EXCLUDED_BASE_MODELS = new Set([
+  'gpt-5',
+  'gpt-5.1',
+  'gpt-5.2',
+]);
+const RESPONSES_CONTEXT_COMPACTION_NOTICE =
+  '[Remote compaction has been triggered.]';
 
 type ResolvedTransportMode = 'sse' | 'auto' | 'websocket';
 
@@ -269,28 +275,34 @@ function normalizeComputerCallOutputStatus(
 function normalizeMarkerOutputItem(
   item: ResponseOutputItem,
 ): ResponseInputItem | undefined {
-  if (isResponseComputerCallOutputItem(item)) {
-    return {
-      ...item,
-      status: normalizeComputerCallOutputStatus(item.status),
-    };
-  }
-
-  if (isResponseAdditionalToolsItem(item)) {
-    if (item.role !== 'developer') {
-      return undefined;
+  switch (item.type) {
+    case 'compaction': {
+      const inputItem: ResponseCompactionItemParam = {
+        encrypted_content: item.encrypted_content,
+        id: item.id,
+        type: item.type,
+      };
+      return inputItem;
     }
-    return {
-      ...item,
-      role: 'developer',
-    };
-  }
 
-  if (isResponseOutputItemForInput(item)) {
-    return item;
-  }
+    case 'computer_call_output':
+      return {
+        ...item,
+        status: normalizeComputerCallOutputStatus(item.status),
+      };
 
-  return undefined;
+    case 'additional_tools':
+      if (item.role !== 'developer') {
+        return undefined;
+      }
+      return {
+        ...item,
+        role: 'developer',
+      };
+
+    default:
+      return isResponseOutputItemForInput(item) ? item : undefined;
+  }
 }
 
 function normalizeMarkerOutputItems(
@@ -854,10 +866,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
         const reasoning: NonNullable<ResponseCreateParamsBase['reasoning']> = {
           effort: this.normalizeReasoningEffortForOpenAi(thinking.effort),
         };
-        if (
-          thinking.summary !== undefined &&
-          thinking.summary !== 'none'
-        ) {
+        if (thinking.summary !== undefined && thinking.summary !== 'none') {
           reasoning.summary = thinking.summary;
         }
         return {
@@ -875,10 +884,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
         const reasoning: NonNullable<ResponseCreateParamsBase['reasoning']> = {
           effort: this.normalizeReasoningEffortForOpenAi(thinking.effort),
         };
-        if (
-          thinking.summary !== undefined &&
-          thinking.summary !== 'none'
-        ) {
+        if (thinking.summary !== undefined && thinking.summary !== 'none') {
           reasoning.summary = thinking.summary;
         }
         return {
@@ -925,6 +931,70 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
     const resolvedCache = resolveContextCacheConfig(this.config.contextCache);
     return resolvedCache.type === 'allow-paid';
+  }
+
+  protected shouldEnableResponsesContextManagement(
+    model: ModelConfig,
+  ): boolean {
+    if (!this.isResponsesContextManagementModelSupported(model)) {
+      return false;
+    }
+
+    return isFeatureSupported(
+      FeatureId.OpenAIUseResponsesContextManagement,
+      this.config,
+      model,
+    );
+  }
+
+  protected isResponsesContextManagementModelSupported(
+    model: ModelConfig,
+  ): boolean {
+    const baseModelId = getBaseModelId(model.id).toLowerCase();
+    return !RESPONSES_CONTEXT_MANAGEMENT_EXCLUDED_BASE_MODELS.has(baseModelId);
+  }
+
+  private resolveResponsesContextCompactionThreshold(
+    model: ModelConfig,
+  ): number | undefined {
+    if (!this.shouldEnableResponsesContextManagement(model)) {
+      return undefined;
+    }
+
+    if (
+      typeof model.maxInputTokens === 'number' &&
+      Number.isFinite(model.maxInputTokens) &&
+      model.maxInputTokens > 0
+    ) {
+      return Math.floor(
+        model.maxInputTokens * RESPONSES_CONTEXT_COMPACTION_THRESHOLD_RATIO,
+      );
+    }
+
+    return RESPONSES_CONTEXT_COMPACTION_FALLBACK_THRESHOLD;
+  }
+
+  private applyResponsesContextManagement(
+    model: ModelConfig,
+    baseBody: ResponseCreateParamsBase,
+  ): boolean {
+    if (baseBody.context_management !== undefined) {
+      return false;
+    }
+
+    const compactThreshold =
+      this.resolveResponsesContextCompactionThreshold(model);
+    if (compactThreshold === undefined) {
+      return false;
+    }
+
+    baseBody.context_management = [
+      {
+        type: 'compaction',
+        compact_threshold: compactThreshold,
+      },
+    ];
+    return true;
   }
 
   private applyVolcContextCaching(
@@ -1327,6 +1397,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
         : { include: ['reasoning.encrypted_content'] }),
     };
 
+    this.applyResponsesContextManagement(model, baseBody);
     this.handleRequest(sessionId, baseBody);
 
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
@@ -1378,8 +1449,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
       requestTrace,
       expectedIdentity,
       credential,
-      imageGenerationOutputMimeType:
-        this.resolveImageGenerationOutputMimeType(baseBody.tools),
+      imageGenerationOutputMimeType: this.resolveImageGenerationOutputMimeType(
+        baseBody.tools,
+      ),
     };
     const httpContext: OpenAIResponsesHttpRequestContext = {
       ...baseContext,
@@ -1387,8 +1459,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       includeResponseIdInMarker: httpIncludeResponseIdInMarker,
     };
 
-    requestTrace.performance.ttf =
-      Date.now() - requestTrace.performance.tts;
+    requestTrace.performance.ttf = Date.now() - requestTrace.performance.tts;
     logger.verbose(
       `OpenAI Responses transport selected | configured=${this.config.transport ?? 'default'} | effective=${transportMode} | stream=${streamEnabled ? 'true' : 'false'} | session=${sessionId} | previousResponseId=${previousResponseId ? 'present' : 'absent'} | store=${baseBody.store === false ? 'false' : 'default/true'} | websocketCapability=${this.websocketCapability}`,
     );
@@ -1778,6 +1849,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
           // hadnle it already.
           break;
 
+        case 'compaction':
+          yield new vscode.LanguageModelTextPart(
+            RESPONSES_CONTEXT_COMPACTION_NOTICE,
+          );
+          break;
+
         case 'message':
           for (const part of item.content) {
             switch (part.type) {
@@ -2158,6 +2235,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
               if (part) {
                 yield part;
               }
+              continue;
+            }
+
+            if (item.type === 'compaction') {
+              yield new vscode.LanguageModelTextPart(
+                RESPONSES_CONTEXT_COMPACTION_NOTICE,
+              );
               continue;
             }
 
