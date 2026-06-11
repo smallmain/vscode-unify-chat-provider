@@ -160,7 +160,10 @@ export class AnthropicProvider implements ApiProvider {
   protected buildHeaders(
     credential?: AuthTokenInfo,
     modelConfig?: ModelConfig,
-    options?: { stream?: boolean },
+    options?: {
+      stream?: boolean;
+      messages?: readonly vscode.LanguageModelChatRequestMessage[];
+    },
   ): Record<string, string | null> {
     const token = getToken(credential);
 
@@ -187,6 +190,14 @@ export class AnthropicProvider implements ApiProvider {
     fineGrainedToolStreamingEnabled: boolean;
     anthropicInterleavedThinkingEnabled: boolean;
   }): void {}
+
+  protected shouldEnableFineGrainedToolStreaming(_options: {
+    model: ModelConfig;
+    stream: boolean;
+    toolCount: number;
+  }): boolean {
+    return true;
+  }
 
   protected transformRequestBase(
     requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
@@ -887,6 +898,11 @@ export class AnthropicProvider implements ApiProvider {
     const fineGrainedToolStreamingEnabled =
       stream === true &&
       (tools?.length ?? 0) > 0 &&
+      this.shouldEnableFineGrainedToolStreaming({
+        model,
+        stream,
+        toolCount: tools?.length ?? 0,
+      }) &&
       isFeatureSupported(
         FeatureId.AnthropicFineGrainedToolStreaming,
         this.config,
@@ -927,7 +943,10 @@ export class AnthropicProvider implements ApiProvider {
       anthropicInterleavedThinkingEnabled,
     });
 
-    const headers = this.buildHeaders(credential, model, { stream });
+    const headers = this.buildHeaders(credential, model, {
+      stream,
+      messages: sanitizedMessages,
+    });
 
     // Pass thinkingEnabled to convertToolChoice to enforce tool_choice restrictions
     const toolChoice = this.applyParallelToolChoice(
