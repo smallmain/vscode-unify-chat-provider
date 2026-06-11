@@ -370,14 +370,6 @@ export async function activate(
     }),
   );
 
-  context.subscriptions.push(
-    usageStore.onDidChange(() => {
-      if (mainInstance.isLeader()) {
-        mainInstance.broadcast('usage.snapshot', usageStore.getRecords());
-      }
-    }),
-  );
-
   // Re-register provider when official models are updated
   context.subscriptions.push(
     officialModelsManager.onDidUpdate(() => {

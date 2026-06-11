@@ -52,7 +52,7 @@ export function normalizeUsage(usage: CopilotUsage): NormalizedUsage | null {
     const completionTokens = finiteNonNegative(usage.completion_tokens) ?? 0;
     const totalTokens = finiteNonNegative(usage.total_tokens);
     const cachedInputTokens = finiteNonNegative(
-      usage.prompt_tokens_details.cached_tokens,
+      usage.prompt_tokens_details?.cached_tokens,
     );
 
     return buildUsage({

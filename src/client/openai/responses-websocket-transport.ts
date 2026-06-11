@@ -95,14 +95,15 @@ export class OpenAIResponsesWebSocketTransport
     ResponsesClientEvent,
     ResponseStreamEvent
   >['readyState'] {
+    const { CONNECTING, OPEN, CLOSING, CLOSED } = globalThis.WebSocket;
     switch (this.ws.socket.readyState) {
-      case 0:
+      case CONNECTING:
         return 'connecting';
-      case 1:
+      case OPEN:
         return 'open';
-      case 2:
+      case CLOSING:
         return 'closing';
-      case 3:
+      case CLOSED:
       default:
         return 'closed';
     }

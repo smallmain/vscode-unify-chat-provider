@@ -1,4 +1,5 @@
 import * as vscode from 'vscode';
+import { randomBytes } from 'crypto';
 import { t } from '../i18n';
 import { createUsageSnapshot } from '../usage/usage-aggregates';
 import { formatDateTime, formatInteger } from '../usage/format';
@@ -130,12 +131,7 @@ function formatDateOnly(timestamp: number): string {
 }
 
 function createNonce(): string {
-  const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-  let text = '';
-  for (let index = 0; index < 32; index++) {
-    text += alphabet.charAt(Math.floor(Math.random() * alphabet.length));
-  }
-  return text;
+  return randomBytes(16).toString('base64');
 }
 
 function createRecordView(record: UsageRecord): UsageRecordView {
