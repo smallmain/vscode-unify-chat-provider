@@ -13,6 +13,7 @@ import {
 } from '../well-known/models';
 import {
   WELL_KNOWN_PROVIDERS,
+  WellKnownProviderConfig,
   resolveProviderModels,
 } from '../well-known/providers';
 import { t } from '../i18n';
@@ -75,10 +76,22 @@ function getDefaultModelsFromWellKnown(
   return resolveProviderModels({ ...wk, baseUrl });
 }
 
-function getWellKnownCodexProvider():
-  | (typeof WELL_KNOWN_PROVIDERS)[number]
-  | undefined {
-  return WELL_KNOWN_PROVIDERS.find((provider) => provider.type === 'openai-codex');
+function getWellKnownCodexProvider(): WellKnownProviderConfig | undefined {
+  return WELL_KNOWN_PROVIDERS.find(
+    (provider) => provider.baseUrl === OPENAI_CODEX_API_ENDPOINT,
+  );
+}
+
+function getWellKnownCodexAuthMethod(
+  provider: WellKnownProviderConfig,
+): 'openai-codex' {
+  const authMethod = provider.authTypes?.find(
+    (authType) => authType === provider.type,
+  );
+  if (authMethod !== 'openai-codex') {
+    throw new Error(t('Missing OpenAI Codex OAuth auth method.'));
+  }
+  return authMethod;
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -216,13 +229,17 @@ async function buildCodexOAuthProviderFromAuthJson(
     ...(expiresAt ? { expiresAt } : {}),
   };
   const wellKnownCodexProvider = getWellKnownCodexProvider();
+  if (!wellKnownCodexProvider) {
+    throw new Error(t('Missing well-known OpenAI Codex provider.'));
+  }
+  const codexAuthMethod = getWellKnownCodexAuthMethod(wellKnownCodexProvider);
 
   const provider: Partial<ProviderConfig> = {
-    type: 'openai-codex',
-    name: wellKnownCodexProvider?.name ?? 'OpenAI Codex (ChatGPT Plus/Pro)',
-    baseUrl: wellKnownCodexProvider?.baseUrl ?? OPENAI_CODEX_API_ENDPOINT,
+    type: wellKnownCodexProvider.type,
+    name: wellKnownCodexProvider.name,
+    baseUrl: wellKnownCodexProvider.baseUrl,
     auth: {
-      method: 'openai-codex',
+      method: codexAuthMethod,
       token: JSON.stringify(tokenData),
       ...(accountId ? { accountId } : {}),
       ...(email ? { email } : {}),
