@@ -1540,7 +1540,7 @@
       }
     },
     "menus": {
-      "scm/title": [
+      "scm/inputBox": [
         {
           "command": "unifyChatProvider.commitMessageGeneration.generate",
           "group": "navigation@-4",
