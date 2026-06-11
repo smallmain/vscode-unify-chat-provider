@@ -169,10 +169,6 @@
         "title": "%command.showUsageDashboard.title%"
       },
       {
-        "command": "unifyChatProvider.showUsageDetails",
-        "title": "%command.showUsageDetails.title%"
-      },
-      {
         "command": "unifyChatProvider.clearUsageStats",
         "title": "%command.clearUsageStats.title%"
       },

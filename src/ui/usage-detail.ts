@@ -266,7 +266,7 @@ function buildDetailsHtml(options: {
 </html>`;
 }
 
-export function showUsageDetails(context: vscode.ExtensionContext): void {
+export function showUsageDashboard(context: vscode.ExtensionContext): void {
   if (detailsPanel) {
     detailsPanel.reveal(vscode.ViewColumn.Active);
   } else {

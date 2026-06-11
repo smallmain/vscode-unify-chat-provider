@@ -17,7 +17,7 @@ import {
   manageBalances,
   manageProviders,
   removeProvider,
-  showUsageDetails,
+  showUsageDashboard,
   clearUsageStats,
 } from './ui';
 import { officialModelsManager } from './official-models-manager';
@@ -429,10 +429,7 @@ export function registerCommands(
       manageBalances(configStore, secretStore, uriHandler),
     ),
     vscode.commands.registerCommand('unifyChatProvider.showUsageDashboard', () =>
-      showUsageDetails(context),
-    ),
-    vscode.commands.registerCommand('unifyChatProvider.showUsageDetails', () =>
-      showUsageDetails(context),
+      showUsageDashboard(context),
     ),
     vscode.commands.registerCommand('unifyChatProvider.clearUsageStats', () =>
       clearUsageStats(),

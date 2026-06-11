@@ -435,7 +435,6 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 用量统计会从已完成的聊天请求中记录令牌用量，并将数据保存在 VS Code 本地全局存储中。
 
 - 运行 `Unify Chat Provider: 显示用量统计` 可打开可视化用量页面。
-- 运行 `Unify Chat Provider: 显示用量明细` 可在原生选择器中查看供应商、模型、每日趋势和最近请求明细。
 - 状态栏会显示今日令牌总量，并在 tooltip 中显示历史总用量；点击后打开仪表盘。
 - 运行 `Unify Chat Provider: 清空用量统计` 可删除所有已存储的用量记录。
 - 已存储的用量记录会一直保留，直到手动清空用量统计。
