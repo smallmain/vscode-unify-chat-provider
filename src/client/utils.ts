@@ -1,5 +1,6 @@
 import { getBaseModelId } from '../model-id-utils';
 import type { ProviderHttpLogger, RequestLogger } from '../logger';
+import { t } from '../i18n';
 import * as vscode from 'vscode';
 import { Agent } from 'undici';
 import type { Dispatcher } from 'undici';
@@ -456,6 +457,30 @@ export function createFirstTokenRecorder(
       recorded = true;
     }
   };
+}
+
+/**
+ * Error thrown when a provider terminates a response with an abnormal
+ * stop/finish reason (e.g. refusal, content filter, safety block, or token
+ * limit truncation). Surfacing it as an error lets the user see the real
+ * cause instead of a silently empty response.
+ */
+export class AbnormalStopReasonError extends Error {
+  constructor(
+    readonly stopReason: string,
+    readonly details?: string,
+  ) {
+    super(
+      details
+        ? t(
+            'The response ended abnormally (stop reason: "{0}"): {1}',
+            stopReason,
+            details,
+          )
+        : t('The response ended abnormally (stop reason: "{0}").', stopReason),
+    );
+    this.name = 'AbnormalStopReasonError';
+  }
 }
 
 /**

@@ -7,11 +7,7 @@ import * as vscode from 'vscode';
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
-import {
-  ChatRequestTrace,
-  ModelConfig,
-  ProviderConfig,
-} from '../../types';
+import { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
 import type { AuthTokenInfo } from '../../auth/types';
 import { Ollama } from 'ollama';
 import type {
@@ -44,6 +40,7 @@ import { getBaseModelId } from '../../model-id-utils';
 import { randomUUID } from 'crypto';
 import { ThinkingBlockMetadata } from '../types';
 import {
+  AbnormalStopReasonError,
   buildBaseUrl,
   createCustomFetch,
   createFirstTokenRecorder,
@@ -57,6 +54,17 @@ import {
 } from '../utils';
 
 const TOOL_CALL_ID_PREFIX = 'ollama-tool:';
+
+/**
+ * Done reasons that indicate the response did not complete normally
+ * ('length' = truncated by the output token limit; 'load'/'unload' = the
+ * model was (un)loaded without generating). Unknown values pass through.
+ */
+const OLLAMA_ABNORMAL_DONE_REASONS: ReadonlySet<string> = new Set([
+  'length',
+  'load',
+  'unload',
+]);
 
 export class OllamaProvider implements ApiProvider {
   private readonly baseUrl: string;
@@ -124,11 +132,7 @@ export class OllamaProvider implements ApiProvider {
     image: Uint8Array | string,
   ): vscode.LanguageModelDataPart {
     if (typeof image === 'string') {
-      return createImageDataPartFromBase64(
-        image,
-        'image/png',
-        'image/png',
-      );
+      return createImageDataPartFromBase64(image, 'image/png', 'image/png');
     }
 
     return createImageDataPartFromBytes(image, 'image/png', 'image/png');
@@ -415,8 +419,9 @@ export class OllamaProvider implements ApiProvider {
       function: {
         name: tool.name,
         description: tool.description,
-        parameters:
-          normalizeToolInputSchema(tool.inputSchema) as Tool['function']['parameters'],
+        parameters: normalizeToolInputSchema(
+          tool.inputSchema,
+        ) as Tool['function']['parameters'],
       },
     }));
   }
@@ -624,8 +629,6 @@ export class OllamaProvider implements ApiProvider {
       }
     }
 
-    yield encodeStatefulMarkerPart<Message>(expectedIdentity, raw);
-
     this.processUsage(
       {
         prompt_eval_count: message.prompt_eval_count,
@@ -634,6 +637,15 @@ export class OllamaProvider implements ApiProvider {
       requestTrace,
       logger,
     );
+
+    if (
+      message.done_reason &&
+      OLLAMA_ABNORMAL_DONE_REASONS.has(message.done_reason)
+    ) {
+      throw new AbnormalStopReasonError(message.done_reason);
+    }
+
+    yield encodeStatefulMarkerPart<Message>(expectedIdentity, raw);
   }
 
   private async *parseMessageStream(
@@ -680,6 +692,15 @@ export class OllamaProvider implements ApiProvider {
           prompt_eval_count: event.prompt_eval_count,
           eval_count: event.eval_count,
         };
+
+        if (
+          event.done_reason &&
+          OLLAMA_ABNORMAL_DONE_REASONS.has(event.done_reason)
+        ) {
+          // Record usage before surfacing the error so logs keep counts.
+          this.processUsage(usage, requestTrace, logger);
+          throw new AbnormalStopReasonError(event.done_reason);
+        }
       }
     }
 

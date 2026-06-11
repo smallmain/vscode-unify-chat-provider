@@ -8,6 +8,7 @@ import { pickQuickItem, showInput } from '../../ui/component';
 import type {
   BalanceMetric,
   BalanceConfig,
+  NewAPIBalanceConfig,
   BalanceRefreshInput,
   BalanceRefreshResult,
 } from '../types';
@@ -29,6 +30,14 @@ type NewApiModePickItem = vscode.QuickPickItem & {
 type ParsedBalance = {
   items: BalanceMetric[];
 };
+
+type NewAPIQuotaTransform = NonNullable<
+  NewAPIBalanceConfig['quotaTransform']
+>;
+
+const DEFAULT_QUOTA_FIELD = 'quota';
+const DEFAULT_QUOTA_DIVISOR = 500000;
+const DEFAULT_QUOTA_MULTIPLIER = 1;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -121,6 +130,57 @@ function parseEnvelope(value: unknown): {
 
   const success = isSuccessfulCode(value['code']);
   return { payload, message, success };
+}
+
+function normalizeQuotaTransform(
+  transform: NewAPIQuotaTransform | undefined,
+): Required<NewAPIQuotaTransform> {
+  const quotaField = transform?.quotaField?.trim() || DEFAULT_QUOTA_FIELD;
+  const extraQuotaFields =
+    transform?.extraQuotaFields
+      ?.map((field) => field.trim())
+      .filter((field) => field.length > 0) ?? [];
+  const divisor =
+    typeof transform?.divisor === 'number' &&
+    Number.isFinite(transform.divisor) &&
+    transform.divisor > 0
+      ? transform.divisor
+      : DEFAULT_QUOTA_DIVISOR;
+  const multiplier =
+    typeof transform?.multiplier === 'number' &&
+    Number.isFinite(transform.multiplier)
+      ? transform.multiplier
+      : DEFAULT_QUOTA_MULTIPLIER;
+
+  return {
+    quotaField,
+    extraQuotaFields,
+    divisor,
+    multiplier,
+  };
+}
+
+function calculateQuotaBalance(
+  payload: Record<string, unknown>,
+  transform: NewAPIQuotaTransform | undefined,
+): number | undefined {
+  const normalized = normalizeQuotaTransform(transform);
+  const fields = [normalized.quotaField, ...normalized.extraQuotaFields];
+  let hasQuota = false;
+  const rawQuota = fields.reduce((total, field) => {
+    const quota = pickNumberLike(payload, field);
+    if (quota === undefined) {
+      return total;
+    }
+    hasQuota = true;
+    return total + quota;
+  }, 0);
+
+  if (!hasQuota) {
+    return undefined;
+  }
+
+  return (rawQuota / normalized.divisor) * normalized.multiplier;
 }
 
 export class NewAPIBalanceProvider implements BalanceProvider {
@@ -592,10 +652,15 @@ export class NewAPIBalanceProvider implements BalanceProvider {
       throw new Error(t('Unexpected user balance response.'));
     }
 
-    // New API docs note: actual balance = quota / 500000
-    const quota = pickNumberLike(payload, 'quota');
-    if (quota !== undefined) {
-      const actualQuota = quota / 500000;
+    // New API docs note: actual balance = quota / 500000 by default.
+    const config = isNewAPIBalanceConfig(this.config)
+      ? this.config
+      : undefined;
+    const actualQuota = calculateQuotaBalance(
+      payload,
+      config?.quotaTransform,
+    );
+    if (actualQuota !== undefined) {
       return {
         items: [
           {

@@ -1837,6 +1837,40 @@ export class OpenAIResponsesProvider implements ApiProvider {
     performanceTrace.ttft =
       Date.now() - (performanceTrace.tts + performanceTrace.ttf);
 
+    // Mirror the streaming `response.failed` / `response.incomplete`
+    // handling so abnormal terminal states surface as errors instead of
+    // silently empty/truncated responses.
+    if (message.status === 'failed') {
+      if (message.error) {
+        const responseError = this.extractResponseError(message.error);
+        throw new OpenAIResponsesRequestError(
+          `OpenAI Response Failed: ${responseError.message}${
+            responseError.code ? ` (${responseError.code})` : ''
+          }`,
+          {
+            source: 'generic',
+            code: responseError.code,
+            type: responseError.type,
+            param: responseError.param,
+            status: responseError.status,
+          },
+        );
+      }
+      throw new OpenAIResponsesRequestError(
+        'OpenAI Response Failed: unknown error',
+        { source: 'generic' },
+      );
+    }
+
+    if (message.status === 'incomplete') {
+      throw new OpenAIResponsesRequestError(
+        `OpenAI Response Incomplete: ${
+          message.incomplete_details?.reason || 'unknown reason'
+        }`,
+        { source: 'generic' },
+      );
+    }
+
     const reasonings = message.output.filter(
       (v): v is ResponseReasoningItem => v.type === 'reasoning',
     );

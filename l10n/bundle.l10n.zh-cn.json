@@ -1024,5 +1024,7 @@
   "proxy: VS Code": "代理：VS Code",
   "proxy: custom": "代理：自定义",
   "proxy: direct": "代理：直连",
-  "{0} entries": "{0} 项"
+  "{0} entries": "{0} 项",
+  "The response ended abnormally (stop reason: \"{0}\").": "响应异常终止(停止原因:“{0}”)。",
+  "The response ended abnormally (stop reason: \"{0}\"): {1}": "响应异常终止(停止原因:“{0}”):{1}"
 }

@@ -41,11 +41,7 @@ import {
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
-import {
-  ChatRequestTrace,
-  ModelConfig,
-  ProviderConfig,
-} from '../../types';
+import { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import {
   ENCRYPTED_THINKING_PLACEHOLDER,
@@ -53,6 +49,7 @@ import {
 } from '../types';
 import { FeatureId } from '../definitions';
 import {
+  AbnormalStopReasonError,
   buildBaseUrl,
   createCustomFetch,
   createFirstTokenRecorder,
@@ -89,6 +86,17 @@ type AnthropicOutputEffort = NonNullable<
 type AnthropicThinkingOutputState = {
   lastType?: AnthropicThinkingContentType;
 };
+
+/**
+ * Stop reasons that indicate the response did not complete normally and
+ * should surface as an error. Unknown values from third-party providers
+ * are intentionally not listed so they pass through.
+ */
+const ANTHROPIC_ABNORMAL_STOP_REASONS: ReadonlySet<string> = new Set([
+  'refusal',
+  'max_tokens',
+  'model_context_window_exceeded',
+]);
 
 export class AnthropicProvider implements ApiProvider {
   private readonly baseUrl: string;
@@ -1134,8 +1142,7 @@ export class AnthropicProvider implements ApiProvider {
     const prefix =
       state.lastType !== undefined && state.lastType !== type ? '\n' : '';
     const output =
-      prefix +
-      (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
+      prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
       yield new vscode.LanguageModelThinkingPart(output);
@@ -1239,6 +1246,12 @@ export class AnthropicProvider implements ApiProvider {
       }
     }
 
+    if (message.usage) {
+      this.processUsage(message.usage, requestTrace, logger);
+    }
+
+    this.throwIfAbnormalStop(message);
+
     // Suppress purely empty responses (no content blocks) so callers see
     // no parts at all instead of an empty message. The outer service
     // treats Anthropic 0-part responses as valid and does not retry.
@@ -1250,10 +1263,6 @@ export class AnthropicProvider implements ApiProvider {
           userId: state.userId,
         },
       );
-    }
-
-    if (message.usage) {
-      this.processUsage(message.usage, requestTrace, logger);
     }
   }
 
@@ -1419,6 +1428,12 @@ export class AnthropicProvider implements ApiProvider {
             }
           }
 
+          if (raw?.usage) {
+            this.processUsage(raw.usage, requestTrace, logger);
+          }
+
+          this.throwIfAbnormalStop(raw);
+
           // Suppress purely empty responses (no content blocks). This
           // specifically handles Anthropic Messages streams where the
           // provider emits only `message_start` + `message_delta` (usage
@@ -1437,10 +1452,6 @@ export class AnthropicProvider implements ApiProvider {
               raw,
               userId: state.userId,
             });
-          }
-
-          if (raw?.usage) {
-            this.processUsage(raw.usage, requestTrace, logger);
           }
           break;
         }
@@ -1481,6 +1492,38 @@ export class AnthropicProvider implements ApiProvider {
     if (token.isCancellationRequested) {
       return;
     }
+
+    // Streams that end without a `message_stop` event still carry the
+    // terminal stop reason from `message_delta`; surface abnormal ones.
+    this.throwIfAbnormalStop(raw);
+  }
+
+  /**
+   * Throw when the accumulated message ended with an abnormal stop reason
+   * (policy refusal or output truncation), so the user sees the actual
+   * cause instead of a silently empty/incomplete response. Unknown stop
+   * reasons from third-party providers are intentionally allowed through.
+   */
+  private throwIfAbnormalStop(raw: BetaMessage | undefined): void {
+    const stopReason = raw?.stop_reason;
+    if (!stopReason || !ANTHROPIC_ABNORMAL_STOP_REASONS.has(stopReason)) {
+      return;
+    }
+
+    const details: string[] = [];
+    if (raw?.stop_details) {
+      if (raw.stop_details.category) {
+        details.push(`category: ${raw.stop_details.category}`);
+      }
+      if (raw.stop_details.explanation) {
+        details.push(raw.stop_details.explanation);
+      }
+    }
+
+    throw new AbnormalStopReasonError(
+      stopReason,
+      details.length > 0 ? details.join(' - ') : undefined,
+    );
   }
 
   private accumulateMessage(
@@ -1623,6 +1666,9 @@ export class AnthropicProvider implements ApiProvider {
         snapshot.container = event.delta.container;
         snapshot.stop_reason = event.delta.stop_reason;
         snapshot.stop_sequence = event.delta.stop_sequence;
+        if (event.delta.stop_details != null) {
+          snapshot.stop_details = event.delta.stop_details;
+        }
         snapshot.usage.output_tokens = event.usage.output_tokens;
         snapshot.context_management = event.context_management;
 

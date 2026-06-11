@@ -679,6 +679,36 @@
                       "systemToken": {
                         "type": "string",
                         "description": "%configuration.endpoints.balanceProvider.newapi.systemToken.description%"
+                      },
+                      "quotaTransform": {
+                        "type": "object",
+                        "description": "%configuration.endpoints.balanceProvider.newapi.quotaTransform.description%",
+                        "properties": {
+                          "quotaField": {
+                            "type": "string",
+                            "description": "%configuration.endpoints.balanceProvider.newapi.quotaTransform.quotaField.description%",
+                            "default": "quota"
+                          },
+                          "extraQuotaFields": {
+                            "type": "array",
+                            "description": "%configuration.endpoints.balanceProvider.newapi.quotaTransform.extraQuotaFields.description%",
+                            "items": {
+                              "type": "string"
+                            },
+                            "default": []
+                          },
+                          "divisor": {
+                            "type": "number",
+                            "description": "%configuration.endpoints.balanceProvider.newapi.quotaTransform.divisor.description%",
+                            "default": 500000
+                          },
+                          "multiplier": {
+                            "type": "number",
+                            "description": "%configuration.endpoints.balanceProvider.newapi.quotaTransform.multiplier.description%",
+                            "default": 1
+                          }
+                        },
+                        "additionalProperties": false
                       }
                     },
                     "required": [

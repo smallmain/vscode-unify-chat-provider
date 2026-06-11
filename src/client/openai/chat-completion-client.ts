@@ -6,11 +6,7 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
-import {
-  ChatRequestTrace,
-  ProviderConfig,
-  ModelConfig,
-} from '../../types';
+import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
 import type { AuthTokenInfo } from '../../auth/types';
 import OpenAI from 'openai';
 import {
@@ -35,6 +31,7 @@ import {
   withIdleTimeout,
 } from '../../utils';
 import {
+  AbnormalStopReasonError,
   buildBaseUrl,
   createCustomFetch,
   createFirstTokenRecorder,
@@ -106,6 +103,27 @@ type OpenRouterThinkingContentType = 'summary' | 'encrypted' | 'content';
 type OpenRouterThinkingOutputState = {
   lastType?: OpenRouterThinkingContentType;
 };
+
+/**
+ * Finish reasons that indicate the response did not complete normally and
+ * should surface as an error. Kept as an explicit blocklist so unknown
+ * values from third-party OpenAI-compatible providers pass through.
+ */
+const OPENAI_ABNORMAL_FINISH_REASONS: ReadonlySet<string> = new Set([
+  'content_filter',
+  'error',
+  'length',
+]);
+
+function throwIfAbnormalFinish(
+  finishReason: string | null | undefined,
+  refusal: string | null | undefined,
+): void {
+  if (!finishReason || !OPENAI_ABNORMAL_FINISH_REASONS.has(finishReason)) {
+    return;
+  }
+  throw new AbnormalStopReasonError(finishReason, refusal ?? undefined);
+}
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
@@ -1144,12 +1162,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             signal: abortController.signal,
           },
         );
-        yield* this.parseMessage(
-          data,
-          requestTrace,
-          logger,
-          expectedIdentity,
-        );
+        yield* this.parseMessage(data, requestTrace, logger, expectedIdentity);
       }
     } finally {
       cancellationListener.dispose();
@@ -1211,6 +1224,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         }
       }
     }
+
+    throwIfAbnormalFinish(choice.finish_reason, raw.refusal);
 
     if (tool_calls) {
       for (const call of tool_calls) {
@@ -1499,6 +1514,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           }
         }
 
+        throwIfAbnormalFinish(choice.finish_reason, refusal);
+
         yield* this.extractThinkingParts(message, 'metadata-only');
 
         if (tool_calls && tool_calls.length > 0) {
@@ -1521,9 +1538,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             ...(refusal ? { refusal } : {}),
             ...(tool_calls && tool_calls.length > 0 ? { tool_calls } : {}),
             ...(reasoning ? { reasoning } : {}),
-            ...(reasoning_content !== undefined
-              ? { reasoning_content }
-              : {}),
+            ...(reasoning_content !== undefined ? { reasoning_content } : {}),
             ...(reasoning_details ? { reasoning_details } : {}),
           },
         );

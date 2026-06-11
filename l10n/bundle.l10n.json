@@ -1024,5 +1024,7 @@
   "proxy: VS Code": "proxy: VS Code",
   "proxy: custom": "proxy: custom",
   "proxy: direct": "proxy: direct",
-  "{0} entries": "{0} entries"
+  "{0} entries": "{0} entries",
+  "The response ended abnormally (stop reason: \"{0}\").": "The response ended abnormally (stop reason: \"{0}\").",
+  "The response ended abnormally (stop reason: \"{0}\"): {1}": "The response ended abnormally (stop reason: \"{0}\"): {1}"
 }
