@@ -20,9 +20,10 @@ import type { ModelConfig, ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
 import { CodexOAuthDetectedError } from './errors';
 import type { OAuth2TokenData } from '../auth/types';
-
-const CODEX_API_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
-const CODEX_OAUTH_SCOPE = 'openid profile email offline_access';
+import {
+  OPENAI_CODEX_API_ENDPOINT,
+  OPENAI_CODEX_SCOPE,
+} from '../auth/providers/openai-codex/constants';
 
 type CodexAuthJson = {
   OPENAI_API_KEY?: unknown;
@@ -72,6 +73,12 @@ function getDefaultModelsFromWellKnown(
   if (!wk) return [];
   if (wk.models.length === 0) return [];
   return resolveProviderModels({ ...wk, baseUrl });
+}
+
+function getWellKnownCodexProvider():
+  | (typeof WELL_KNOWN_PROVIDERS)[number]
+  | undefined {
+  return WELL_KNOWN_PROVIDERS.find((provider) => provider.type === 'openai-codex');
 }
 
 function isObjectRecord(value: unknown): value is Record<string, unknown> {
@@ -205,14 +212,15 @@ async function buildCodexOAuthProviderFromAuthJson(
     accessToken,
     refreshToken,
     tokenType: 'Bearer',
-    scope: CODEX_OAUTH_SCOPE,
+    scope: OPENAI_CODEX_SCOPE,
     ...(expiresAt ? { expiresAt } : {}),
   };
+  const wellKnownCodexProvider = getWellKnownCodexProvider();
 
   const provider: Partial<ProviderConfig> = {
     type: 'openai-codex',
-    name: 'OpenAI Codex (ChatGPT Plus/Pro)',
-    baseUrl: CODEX_API_ENDPOINT,
+    name: wellKnownCodexProvider?.name ?? 'OpenAI Codex (ChatGPT Plus/Pro)',
+    baseUrl: wellKnownCodexProvider?.baseUrl ?? OPENAI_CODEX_API_ENDPOINT,
     auth: {
       method: 'openai-codex',
       token: JSON.stringify(tokenData),
