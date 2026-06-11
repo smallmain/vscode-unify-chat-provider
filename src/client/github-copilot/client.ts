@@ -153,10 +153,7 @@ function resolveCopilotOpenAiBaseUrl(config: ProviderConfig): string {
   if (isRawBaseUrlEnabled(config)) {
     return normalizeRawBaseUrlInput(config.baseUrl);
   }
-  return buildBaseUrl(resolveCopilotApiBaseUrl(config), {
-    ensureSuffix: '/v1',
-    skipSuffixIfMatch: /\/v\d+$/,
-  });
+  return resolveCopilotApiBaseUrl(config);
 }
 
 function resolveCopilotMessagesBaseUrl(config: ProviderConfig): string {
