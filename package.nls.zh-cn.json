@@ -14,6 +14,7 @@
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: 刷新所有供应商的余额信息",
   "command.syncBuiltInParamsToAllConfigs.title": "Unify Chat Provider: 同步内置参数到所有配置",
   "command.commitMessageGeneration.generate.title": "Unify Chat Provider: 生成提交消息",
+  "command.commitMessageGeneration.generateAll.title": "Unify Chat Provider: 生成提交消息(全部更改)",
   "command.commitMessageGeneration.generateStaged.title": "Unify Chat Provider: 生成提交消息(暂存更改)",
   "command.commitMessageGeneration.generateWorkingTree.title": "Unify Chat Provider: 生成提交消息(未暂存更改)",
   "command.commitMessageGeneration.changeModel.title": "Unify Chat Provider: 更改提交消息生成模型",

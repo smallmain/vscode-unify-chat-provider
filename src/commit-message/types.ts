@@ -2,6 +2,10 @@ import * as vscode from 'vscode';
 
 export type CommitMessageGenerationScope = 'all' | 'staged' | 'workingTree';
 
+export type CommitMessageGenerationRequestScope =
+  | CommitMessageGenerationScope
+  | 'auto';
+
 export type CommitMessageGenerationFormat =
   | 'auto'
   | 'conventional'
@@ -76,7 +80,9 @@ export class NoChangesDetectedError extends Error {
 
 export class PromptTooLargeError extends Error {
   constructor() {
-    super('Unable to fit the commit prompt into the selected model context window.');
+    super(
+      'Unable to fit the commit prompt into the selected model context window.',
+    );
     this.name = 'PromptTooLargeError';
   }
 }

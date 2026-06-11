@@ -18,6 +18,7 @@ import { buildPromptMessages, normalizeGeneratedCommitMessage } from './prompt';
 import type {
   CommitMessageCompressionResult,
   CommitMessageGenerationConfiguration,
+  CommitMessageGenerationRequestScope,
   CommitMessageGenerationScope,
   CommitMessagePromptState,
   CommitMessageRepositoryContext,
@@ -498,7 +499,7 @@ async function buildCompressedPromptMessages(
 
 async function generateCommitMessage(
   explicitRepository: unknown,
-  scope: CommitMessageGenerationScope,
+  scope: CommitMessageGenerationRequestScope,
   resourceGroup: vscode.SourceControlResourceGroup | undefined,
 ): Promise<void> {
   const logger = createCommitMessageLogger();
@@ -520,6 +521,7 @@ async function generateCommitMessage(
 
   const trace = createCommitMessageGenerationTrace();
   let repositoryLabel = '';
+  let effectiveScope: CommitMessageGenerationScope | undefined;
   let selectedModel: vscode.LanguageModelChat | undefined;
   let promptPayload: CommitMessageCompressionResult | undefined;
   let promptState: CommitMessagePromptState | undefined;
@@ -583,6 +585,18 @@ async function generateCommitMessage(
                   repositoryPath: repositoryLabel,
                 });
 
+                const resolvedScope: CommitMessageGenerationScope =
+                  scope === 'auto'
+                    ? (await repository.diff(true)).trim().length > 0
+                      ? 'staged'
+                      : 'all'
+                    : scope;
+                effectiveScope = resolvedScope;
+                throwIfCancelled(token, generationLease);
+                if (scope === 'auto') {
+                  logger.info(`Auto scope resolved to: ${resolvedScope}`);
+                }
+
                 reportCommitMessageProgress(
                   progress,
                   token,
@@ -596,7 +610,7 @@ async function generateCommitMessage(
                     async () =>
                       collectCommitMessageRepositoryContext(
                         repository,
-                        scope,
+                        resolvedScope,
                         configuration,
                         token,
                       ),
@@ -802,7 +816,7 @@ async function generateCommitMessage(
       buildCommitMessageGenerationDurationBreakdown(generationTimings);
     logger.verbose('Generation timings', generationTimings);
     logger.info(
-      `✓ Generation completed | Scope: ${scope} | Repository: ${
+      `✓ Generation completed | Scope: ${effectiveScope ?? scope} | Repository: ${
         repositoryLabel || 'unknown'
       } | Pre-send: ${durationBreakdown.preSendMs}ms | Post-send: ${
         durationBreakdown.postSendMs
@@ -909,6 +923,12 @@ export function registerCommitMessageGeneration(
   context.subscriptions.push(
     vscode.commands.registerCommand(
       'unifyChatProvider.commitMessageGeneration.generate',
+      async (repository?: unknown) => {
+        await generateCommitMessage(repository, 'auto', undefined);
+      },
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.commitMessageGeneration.generateAll',
       async (repository?: unknown) => {
         await generateCommitMessage(repository, 'all', undefined);
       },
