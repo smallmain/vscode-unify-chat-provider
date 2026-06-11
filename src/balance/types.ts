@@ -35,6 +35,17 @@ export interface NewAPIBalanceConfig {
   userId?: string;
   /** Optional system token (plain text or secret ref). */
   systemToken?: string;
+  /** Optional transform for converting New API quota fields into balance amount. */
+  quotaTransform?: {
+    /** Primary quota field name. Defaults to quota. */
+    quotaField?: string;
+    /** Additional quota-like field names to add to the primary quota. */
+    extraQuotaFields?: string[];
+    /** Divisor used to convert raw quota to amount. Defaults to 500000. */
+    divisor?: number;
+    /** Multiplier applied after division. Defaults to 1. */
+    multiplier?: number;
+  };
 }
 
 export interface DeepSeekBalanceConfig {
