@@ -33,13 +33,14 @@ import {
   ensureMainInstanceCompatibility,
   showMainInstanceCompatibilityWarning,
 } from './main-instance/compatibility';
+import { MainInstanceError } from './main-instance/errors';
 import { registerMainInstanceHandlers } from './main-instance/register-handlers';
 import { authLog } from './logger';
 import { webSocketSessionManager } from './client/websocket-session-manager';
 import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
 import { registerCommitMessageGeneration } from './commit-message';
-import { isUsageRecord } from './usage/guards';
-import type { UsageRecord } from './usage/types';
+import { isUsageRecord, isUsageStoreState } from './usage/guards';
+import type { UsageRecord, UsageStoreState } from './usage/types';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
@@ -47,6 +48,10 @@ const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
 
 function filterUsageRecords(value: unknown): UsageRecord[] {
   return Array.isArray(value) ? value.filter(isUsageRecord) : [];
+}
+
+function isNotImplementedError(error: unknown): boolean {
+  return error instanceof MainInstanceError && error.code === 'NOT_IMPLEMENTED';
 }
 
 /**
@@ -79,13 +84,36 @@ export async function activate(
       return;
     }
     void mainInstance
-      .runInLeaderWhenAvailable('usage.getSnapshot', {}, { timeoutMs: 2_000 })
-      .then((records) => {
-        usageStore.replaceRecords(filterUsageRecords(records));
+      .runInLeaderWhenAvailable<UsageStoreState>(
+        'usage.getState',
+        {},
+        { timeoutMs: 2_000 },
+      )
+      .then((state) => {
+        if (isUsageStoreState(state)) {
+          usageStore.replaceState(state);
+        }
         usageStore.flushPendingRemoteRecords();
       })
       .catch((error) => {
-        authLog.error('main-instance', 'Failed to sync usage snapshot', error);
+        if (isNotImplementedError(error)) {
+          void mainInstance
+            .runInLeaderWhenAvailable('usage.getSnapshot', {}, { timeoutMs: 2_000 })
+            .then((records) => {
+              usageStore.replaceRecords(filterUsageRecords(records));
+              usageStore.flushPendingRemoteRecords();
+            })
+            .catch((snapshotError) => {
+              authLog.error(
+                'main-instance',
+                'Failed to sync usage snapshot',
+                snapshotError,
+              );
+              usageStore.flushPendingRemoteRecords();
+            });
+          return;
+        }
+        authLog.error('main-instance', 'Failed to sync usage state', error);
         usageStore.flushPendingRemoteRecords();
       });
   };
@@ -246,6 +274,7 @@ export async function activate(
   usageStore.initialize({
     context,
     canPersist: () => mainInstance.isLeader(),
+    detailRetentionDays: configStore.usageDetailRetentionDays,
     syncAdapter: {
       async forwardRecord(record) {
         await mainInstance.runInLeaderWhenAvailable('usage.record', record, {
@@ -332,6 +361,7 @@ export async function activate(
   context.subscriptions.push(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
+      usageStore.setDetailRetentionDays(configStore.usageDetailRetentionDays);
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });

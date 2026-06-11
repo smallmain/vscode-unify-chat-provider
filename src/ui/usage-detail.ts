@@ -195,7 +195,6 @@ function createPayload(): UsageDetailPayload {
   const ranges = buildPresetRanges();
   const range = createCustomRange() ?? ranges[0];
   const snapshot = createUsageSnapshot(usageStore.getRecords(), range, RECENT_LIMIT);
-  const historicalSnapshot = createUsageSnapshot(usageStore.getRecords(), { id: 'all', label: t('Historical Total Usage') }, 0);
   return {
     activeRangeId: range.id,
     ranges: ranges.map((item) => ({
@@ -205,7 +204,7 @@ function createPayload(): UsageDetailPayload {
       until: item.until,
     })),
     customRange: detailsCustomRange ?? null,
-    historicalTotals: historicalSnapshot.totals,
+    historicalTotals: usageStore.getHistoricalTotals(),
     totals: snapshot.totals,
     byProvider: snapshot.byProvider,
     byModel: snapshot.byModel,

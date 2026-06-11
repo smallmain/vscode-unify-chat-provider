@@ -437,7 +437,7 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 - 运行 `Unify Chat Provider: 显示用量统计` 可打开可视化用量页面。
 - 状态栏会显示今日令牌总量，并在 tooltip 中显示历史总用量；点击后打开仪表盘。
 - 运行 `Unify Chat Provider: 清空用量统计` 可删除所有已存储的用量记录。
-- 已存储的用量记录会一直保留，直到手动清空用量统计。
+- 用量明细默认按 `usageDetailRetentionDays` 保留 100 天。更早的明细会折叠进历史总量，因此总用量仍保持准确。
 - 第一版会统计请求数、输入/输出/总令牌、延迟、结果状态，以及供应商返回的缓存令牌数据；暂不计算费用。
 
 ## 调整参数
@@ -456,6 +456,7 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 | 余额刷新间隔           | `balanceRefreshIntervalMs`                   | 供应商余额的定时刷新间隔（毫秒）。                               |
 | 余额节流窗口           | `balanceThrottleWindowMs`                    | 请求后余额刷新的节流窗口（毫秒）。                               |
 | 在配置中显示余额       | `displayBalanceInConfiguration`              | 在模型配置按钮区域显示已刷新的余额信息。默认关闭。               |
+| 用量明细保留天数       | `usageDetailRetentionDays`                   | 保留用量明细记录的天数。默认值：`100`。                          |
 | 在设置中存储 Api Key   | `storeApiKeyInSettings`                      | 请查看 [云同步兼容](#云同步兼容) 了解详情。                      |
 | 启用详细日志           | `verbose`                                    | 启用更详细的日志以排查错误。                                     |
 | 提交消息生成按钮       | `commitMessageGeneration.enableButtons`      | 控制是否在源代码管理面板显示提交消息生成按钮。                   |

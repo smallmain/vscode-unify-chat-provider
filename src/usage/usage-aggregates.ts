@@ -27,11 +27,11 @@ const EMPTY_TOTALS: UsageTotals = {
   latencyRecords: 0,
 };
 
-function createTotals(): UsageTotals {
+export function createUsageTotals(): UsageTotals {
   return { ...EMPTY_TOTALS };
 }
 
-function addRecordToTotals(totals: UsageTotals, record: UsageRecord): void {
+export function addUsageRecordToTotals(totals: UsageTotals, record: UsageRecord): void {
   totals.requests++;
 
   switch (record.outcome) {
@@ -141,7 +141,7 @@ function createHourlyTrend(filtered: readonly UsageRecord[], since?: number): Us
     const timestamp = startHour + hour * 60 * 60 * 1000;
     const key = toHourKey(timestamp);
     trendMap.set(key, {
-      ...createTotals(),
+      ...createUsageTotals(),
       key,
       label: formatHourLabel(timestamp),
       timestamp,
@@ -152,7 +152,7 @@ function createHourlyTrend(filtered: readonly UsageRecord[], since?: number): Us
     const key = toHourKey(record.timestamp);
     const bucket = trendMap.get(key);
     if (bucket) {
-      addRecordToTotals(bucket, record);
+      addUsageRecordToTotals(bucket, record);
     }
   }
 
@@ -186,50 +186,50 @@ export function createUsageSnapshot(
   recentLimit: number,
 ): UsageSnapshot {
   const filtered = filterRecordsByRange(records, range);
-  const totals = createTotals();
+  const totals = createUsageTotals();
   const providerMap = new Map<string, UsageSummaryItem>();
   const modelMap = new Map<string, UsageSummaryItem>();
   const dayMap = new Map<string, UsageDayItem>();
 
   for (const record of filtered) {
-    addRecordToTotals(totals, record);
+    addUsageRecordToTotals(totals, record);
 
     let provider = providerMap.get(record.providerName);
     if (!provider) {
       provider = {
-        ...createTotals(),
+        ...createUsageTotals(),
         key: record.providerName,
         label: record.providerName,
         detail: record.providerType,
       };
       providerMap.set(record.providerName, provider);
     }
-    addRecordToTotals(provider, record);
+    addUsageRecordToTotals(provider, record);
 
     const modelKey = `${record.providerName}/${record.modelId}`;
     let model = modelMap.get(modelKey);
     if (!model) {
       model = {
-        ...createTotals(),
+        ...createUsageTotals(),
         key: modelKey,
         label: record.modelName ?? record.modelId,
         detail: record.providerName,
       };
       modelMap.set(modelKey, model);
     }
-    addRecordToTotals(model, record);
+    addUsageRecordToTotals(model, record);
 
     const dateKey = toDateKey(record.timestamp);
     let day = dayMap.get(dateKey);
     if (!day) {
       day = {
-        ...createTotals(),
+        ...createUsageTotals(),
         dateKey,
         timestamp: startOfLocalDay(record.timestamp),
       };
       dayMap.set(dateKey, day);
     }
-    addRecordToTotals(day, record);
+    addUsageRecordToTotals(day, record);
   }
 
   const byDay = [...dayMap.values()].sort((a, b) => a.timestamp - b.timestamp);
@@ -245,6 +245,30 @@ export function createUsageSnapshot(
     byDay,
     trend,
     recent: filtered.slice(0, recentLimit),
+  };
+}
+
+export function mergeUsageTotals(
+  left: UsageTotals,
+  right: UsageTotals,
+): UsageTotals {
+  return {
+    requests: left.requests + right.requests,
+    successes: left.successes + right.successes,
+    errors: left.errors + right.errors,
+    cancelled: left.cancelled + right.cancelled,
+    promptTokens: left.promptTokens + right.promptTokens,
+    completionTokens: left.completionTokens + right.completionTokens,
+    totalTokens: left.totalTokens + right.totalTokens,
+    cachedInputTokens: left.cachedInputTokens + right.cachedInputTokens,
+    cacheCreationInputTokens:
+      left.cacheCreationInputTokens + right.cacheCreationInputTokens,
+    cacheReadInputTokens: left.cacheReadInputTokens + right.cacheReadInputTokens,
+    uncachedInputTokens: left.uncachedInputTokens + right.uncachedInputTokens,
+    usageRecords: left.usageRecords + right.usageRecords,
+    missingUsageRecords: left.missingUsageRecords + right.missingUsageRecords,
+    totalLatencyMs: left.totalLatencyMs + right.totalLatencyMs,
+    latencyRecords: left.latencyRecords + right.latencyRecords,
   };
 }
 

@@ -437,7 +437,7 @@ Usage statistics record token usage from completed chat requests and keep the da
 - Run `Unify Chat Provider: Show Usage Statistics` to open the visual usage page.
 - The status bar shows today's token total, includes historical total usage in the tooltip, and opens the dashboard when clicked.
 - Run `Unify Chat Provider: Clear Usage Statistics` to remove all stored usage records.
-- Stored usage records are kept until you clear usage statistics.
+- Detailed usage records are kept for `usageDetailRetentionDays` days by default (100 days). Older details are folded into historical totals, so total usage remains accurate.
 - The first version tracks requests, prompt/completion/total tokens, latency, outcomes, and cache-token data when providers return it. It does not calculate cost.
 
 ## Adjust Parameters
@@ -456,6 +456,7 @@ Usage statistics record token usage from completed chat requests and keep the da
 | Balance Refresh Interval           | `balanceRefreshIntervalMs`                   | Periodic refresh interval for provider balances (milliseconds).                                       |
 | Balance Throttle Window            | `balanceThrottleWindowMs`                    | Throttle window for post-request balance refresh (milliseconds).                                      |
 | Display Balance in Configuration   | `displayBalanceInConfiguration`              | Shows refreshed balance information in the model configuration button area. Default: disabled.        |
+| Usage Detail Retention Days        | `usageDetailRetentionDays`                   | Number of days to keep detailed usage records. Default: `100`.                                        |
 | Store API Key in Settings          | `storeApiKeyInSettings`                      | Please see [Cloud Sync Compatibility](#cloud-sync-compatibility) for details.                         |
 | Enable Detailed Logging            | `verbose`                                    | Enables more detailed logging for troubleshooting errors.                                             |
 | Commit Message Buttons             | `commitMessageGeneration.enableButtons`      | Controls whether commit message generation buttons are shown in the Source Control view.              |

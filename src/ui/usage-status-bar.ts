@@ -4,7 +4,7 @@ import { t } from '../i18n';
 import { createUsageSnapshot } from '../usage/usage-aggregates';
 import { formatCacheHitRate, formatInteger, formatTokens } from '../usage/format';
 import { usageStore } from '../usage/usage-store';
-import type { UsageSnapshot } from '../usage/types';
+import type { UsageSnapshot, UsageTotals } from '../usage/types';
 
 function escapeHtml(value: string): string {
   const normalized = value.replace(/[\r\n]+/g, ' ').trim();
@@ -30,15 +30,10 @@ function createTodaySnapshot(): UsageSnapshot {
   );
 }
 
-function createHistoricalSnapshot(): UsageSnapshot {
-  return createUsageSnapshot(
-    usageStore.getRecords(),
-    { id: 'all', label: t('Historical Total Usage') },
-    0,
-  );
-}
-
-function buildTooltip(todaySnapshot: UsageSnapshot, historicalSnapshot: UsageSnapshot): vscode.MarkdownString {
+function buildTooltip(
+  todaySnapshot: UsageSnapshot,
+  historicalTotals: UsageTotals,
+): vscode.MarkdownString {
   const markdown = new vscode.MarkdownString();
   markdown.supportHtml = true;
   markdown.isTrusted = false;
@@ -50,7 +45,7 @@ function buildTooltip(todaySnapshot: UsageSnapshot, historicalSnapshot: UsageSna
 <tr><td>${escapeHtml(t('Requests'))}</td><td align="right">${escapeHtml(formatInteger(todaySnapshot.totals.requests))}</td></tr>
 <tr><td>${escapeHtml(t('Total Tokens'))}</td><td align="right">${escapeHtml(formatTokens(todaySnapshot.totals.totalTokens))}</td></tr>
 <tr><td>${escapeHtml(t('Cache Hit'))}</td><td align="right">${escapeHtml(formatCacheHitRate(todaySnapshot.totals))}</td></tr>
-<tr><td>${escapeHtml(t('Historical Total Usage'))}</td><td align="right">${escapeHtml(formatTokens(historicalSnapshot.totals.totalTokens))}</td></tr>
+<tr><td>${escapeHtml(t('Historical Total Usage'))}</td><td align="right">${escapeHtml(formatTokens(historicalTotals.totalTokens))}</td></tr>
 </tbody>
 </table>\n\n`,
   );
@@ -81,10 +76,10 @@ export function registerUsageStatusBar(options: {
 
   const refresh = (): void => {
     const todaySnapshot = createTodaySnapshot();
-    const historicalSnapshot = createHistoricalSnapshot();
+    const historicalTotals = usageStore.getHistoricalTotals();
 
     item.text = `$(graph) ${formatTokens(todaySnapshot.totals.totalTokens)}`;
-    item.tooltip = buildTooltip(todaySnapshot, historicalSnapshot);
+    item.tooltip = buildTooltip(todaySnapshot, historicalTotals);
     item.show();
   };
 

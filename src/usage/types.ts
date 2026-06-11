@@ -27,6 +27,12 @@ export interface UsageRecord {
 
 export interface PersistedUsageState {
   version: number;
+  archivedTotals?: UsageTotals;
+  records: UsageRecord[];
+}
+
+export interface UsageStoreState {
+  archivedTotals: UsageTotals;
   records: UsageRecord[];
 }
 

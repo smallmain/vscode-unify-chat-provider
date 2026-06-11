@@ -252,6 +252,13 @@
           "description": "%configuration.displayBalanceInConfiguration.description%",
           "default": false
         },
+        "unifyChatProvider.usageDetailRetentionDays": {
+          "type": "integer",
+          "scope": "application",
+          "description": "%configuration.usageDetailRetentionDays.description%",
+          "default": 100,
+          "minimum": 1
+        },
         "unifyChatProvider.balanceWarning.enabled": {
           "type": "boolean",
           "scope": "application",

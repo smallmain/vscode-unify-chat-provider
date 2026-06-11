@@ -1,12 +1,27 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
 import type { ProviderType } from '../client/definitions';
-import { isUsageRecord } from './guards';
-import type { NormalizedUsage, PersistedUsageState, UsageRecord, UsageRequestOutcome } from './types';
+import { isUsageRecord, isUsageStoreState, isUsageTotals } from './guards';
+import {
+  addUsageRecordToTotals,
+  createUsageTotals,
+  mergeUsageTotals,
+} from './usage-aggregates';
+import type {
+  NormalizedUsage,
+  PersistedUsageState,
+  UsageRecord,
+  UsageRequestOutcome,
+  UsageStoreState,
+  UsageTotals,
+} from './types';
 
 const STATE_KEY = 'usage.state';
 const STATE_VERSION = 1;
 const PERSIST_DEBOUNCE_MS = 1_000;
+const DEFAULT_DETAIL_RETENTION_DAYS = 100;
+const MIN_DETAIL_RETENTION_DAYS = 1;
+const DAY_MS = 24 * 60 * 60 * 1_000;
 
 export interface UsageRecordInput {
   timestamp?: number;
@@ -30,7 +45,10 @@ export class UsageStore implements vscode.Disposable {
   readonly onDidChange = this.onDidChangeEmitter.event;
 
   private context: vscode.ExtensionContext | undefined;
+  private archivedTotals: UsageTotals = createUsageTotals();
+  private readonly archivedRecordIds = new Set<string>();
   private records: UsageRecord[] = [];
+  private detailRetentionDays = DEFAULT_DETAIL_RETENTION_DAYS;
   private persistChain = Promise.resolve();
   private persistTimer: ReturnType<typeof setTimeout> | undefined;
   private canPersist = true;
@@ -42,14 +60,22 @@ export class UsageStore implements vscode.Disposable {
     context: vscode.ExtensionContext;
     canPersist?: () => boolean;
     syncAdapter?: UsageStoreSyncAdapter;
+    detailRetentionDays: number;
   }): void {
     this.disposeRuntime();
     this.context = options.context;
     this.canPersist = options.canPersist?.() ?? true;
     this.syncAdapter = options.syncAdapter;
-    this.records = this.normalizePersistedState(
+    this.detailRetentionDays = normalizeRetentionDays(options.detailRetentionDays);
+    const state = this.normalizePersistedState(
       options.context.globalState.get<PersistedUsageState>(STATE_KEY),
     );
+    this.archivedTotals = state.archivedTotals;
+    this.archivedRecordIds.clear();
+    this.records = state.records;
+    if (this.applyRetention() && this.canPersist) {
+      this.queuePersistState();
+    }
   }
 
   setCanPersist(value: boolean): void {
@@ -66,6 +92,32 @@ export class UsageStore implements vscode.Disposable {
 
   getRecords(): readonly UsageRecord[] {
     return this.records;
+  }
+
+  getState(): UsageStoreState {
+    return this.createStateSnapshot();
+  }
+
+  getHistoricalTotals(): UsageTotals {
+    const activeTotals = createUsageTotals();
+    for (const record of this.records) {
+      addUsageRecordToTotals(activeTotals, record);
+    }
+    return mergeUsageTotals(this.archivedTotals, activeTotals);
+  }
+
+  setDetailRetentionDays(days: number): void {
+    const nextDays = normalizeRetentionDays(days);
+    if (nextDays === this.detailRetentionDays) {
+      return;
+    }
+
+    this.detailRetentionDays = nextDays;
+    const changed = this.applyRetention();
+    if (changed) {
+      this.queuePersistState();
+      this.onDidChangeEmitter.fire();
+    }
   }
 
   record(input: UsageRecordInput): void {
@@ -98,6 +150,8 @@ export class UsageStore implements vscode.Disposable {
   }
 
   replaceRecords(records: readonly UsageRecord[]): void {
+    this.archivedTotals = createUsageTotals();
+    this.archivedRecordIds.clear();
     const nextRecords: UsageRecord[] = [];
     const seenIds = new Set<string>();
     for (const record of [...records, ...this.records]) {
@@ -116,6 +170,36 @@ export class UsageStore implements vscode.Disposable {
       nextRecords.push(record);
     }
     this.records = nextRecords;
+    this.applyRetention();
+    this.onDidChangeEmitter.fire();
+  }
+
+  replaceState(state: UsageStoreState): void {
+    if (!isUsageStoreState(state)) {
+      return;
+    }
+
+    this.archivedTotals = { ...state.archivedTotals };
+    this.archivedRecordIds.clear();
+    const nextRecords: UsageRecord[] = [];
+    const seenIds = new Set<string>();
+    for (const record of state.records) {
+      if (seenIds.has(record.id)) {
+        continue;
+      }
+      seenIds.add(record.id);
+      this.pendingRemoteRecords.delete(record.id);
+      nextRecords.push(record);
+    }
+    for (const record of this.pendingRemoteRecords.values()) {
+      if (seenIds.has(record.id)) {
+        continue;
+      }
+      seenIds.add(record.id);
+      nextRecords.push(record);
+    }
+    this.records = nextRecords;
+    this.applyRetention();
     this.onDidChangeEmitter.fire();
   }
 
@@ -136,12 +220,14 @@ export class UsageStore implements vscode.Disposable {
   }
 
   async clear(): Promise<void> {
+    this.archivedTotals = createUsageTotals();
+    this.archivedRecordIds.clear();
     this.records = [];
     this.pendingRemoteRecords.clear();
     this.cancelPersistTimer();
     this.cancelPendingRemoteFlush();
     if (this.context && this.canPersist) {
-      await this.queuePersistSnapshot(this.context, []);
+      await this.queuePersistSnapshot(this.context, this.createStateSnapshot());
     } else if (this.context) {
       await this.syncAdapter?.forwardClear();
     }
@@ -149,30 +235,50 @@ export class UsageStore implements vscode.Disposable {
   }
 
   async clearFromRemote(): Promise<void> {
+    this.archivedTotals = createUsageTotals();
+    this.archivedRecordIds.clear();
     this.records = [];
     this.pendingRemoteRecords.clear();
     this.cancelPersistTimer();
     this.cancelPendingRemoteFlush();
     if (this.context && this.canPersist) {
-      await this.queuePersistSnapshot(this.context, []);
+      await this.queuePersistSnapshot(this.context, this.createStateSnapshot());
     }
     this.onDidChangeEmitter.fire();
   }
 
-  private normalizePersistedState(value: PersistedUsageState | undefined): UsageRecord[] {
-    if (!value || value.version !== STATE_VERSION || !Array.isArray(value.records)) {
-      return [];
+  private normalizePersistedState(value: unknown): UsageStoreState {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) {
+      return createEmptyState();
     }
 
-    return value.records.filter(isUsageRecord);
+    const persisted = value as Partial<PersistedUsageState>;
+    if (persisted.version !== STATE_VERSION || !Array.isArray(persisted.records)) {
+      return createEmptyState();
+    }
+
+    return {
+      archivedTotals: isUsageTotals(persisted.archivedTotals)
+        ? { ...persisted.archivedTotals }
+        : createUsageTotals(),
+      records: persisted.records.filter(isUsageRecord),
+    };
   }
 
   private addRecord(record: UsageRecord, options: { persist: boolean }): void {
     if (this.records.some((existing) => existing.id === record.id)) {
       return;
     }
+    if (this.archivedRecordIds.has(record.id)) {
+      return;
+    }
 
-    this.records.push(record);
+    if (record.timestamp < this.getRetentionCutoff()) {
+      addUsageRecordToTotals(this.archivedTotals, record);
+      this.archivedRecordIds.add(record.id);
+    } else {
+      this.records.push(record);
+    }
     if (options.persist) {
       this.queuePersistState();
     }
@@ -245,14 +351,17 @@ export class UsageStore implements vscode.Disposable {
       return;
     }
 
-    void this.queuePersistSnapshot(context, this.records);
+    void this.queuePersistSnapshot(context, this.createStateSnapshot());
   }
 
   private queuePersistSnapshot(
     context: vscode.ExtensionContext,
-    records: readonly UsageRecord[],
+    state: UsageStoreState,
   ): Promise<void> {
-    const snapshot = [...records];
+    const snapshot = {
+      archivedTotals: { ...state.archivedTotals },
+      records: [...state.records],
+    };
     this.persistChain = this.persistChain
       .catch(() => undefined)
       .then(() => this.saveState(context, snapshot))
@@ -264,12 +373,45 @@ export class UsageStore implements vscode.Disposable {
 
   private async saveState(
     context: vscode.ExtensionContext,
-    records: readonly UsageRecord[],
+    state: UsageStoreState,
   ): Promise<void> {
     await context.globalState.update(STATE_KEY, {
       version: STATE_VERSION,
-      records: [...records],
+      archivedTotals: { ...state.archivedTotals },
+      records: [...state.records],
     } satisfies PersistedUsageState);
+  }
+
+  private createStateSnapshot(): UsageStoreState {
+    return {
+      archivedTotals: { ...this.archivedTotals },
+      records: [...this.records],
+    };
+  }
+
+  private applyRetention(): boolean {
+    const cutoff = this.getRetentionCutoff();
+    const retained: UsageRecord[] = [];
+    let changed = false;
+
+    for (const record of this.records) {
+      if (record.timestamp < cutoff) {
+        addUsageRecordToTotals(this.archivedTotals, record);
+        this.archivedRecordIds.add(record.id);
+        changed = true;
+      } else {
+        retained.push(record);
+      }
+    }
+
+    if (changed) {
+      this.records = retained;
+    }
+    return changed;
+  }
+
+  private getRetentionCutoff(): number {
+    return Date.now() - this.detailRetentionDays * DAY_MS;
   }
 
   private disposeRuntime(): void {
@@ -279,6 +421,8 @@ export class UsageStore implements vscode.Disposable {
     }
     this.cancelPersistTimer();
     this.context = undefined;
+    this.archivedTotals = createUsageTotals();
+    this.archivedRecordIds.clear();
     this.records = [];
     this.persistChain = Promise.resolve();
     this.syncAdapter = undefined;
@@ -298,6 +442,21 @@ export class UsageStore implements vscode.Disposable {
     this.disposeRuntime();
     this.onDidChangeEmitter.dispose();
   }
+}
+
+function createEmptyState(): UsageStoreState {
+  return {
+    archivedTotals: createUsageTotals(),
+    records: [],
+  };
+}
+
+function normalizeRetentionDays(value: number): number {
+  return Number.isInteger(value) &&
+    Number.isFinite(value) &&
+    value >= MIN_DETAIL_RETENTION_DAYS
+    ? value
+    : DEFAULT_DETAIL_RETENTION_DAYS;
 }
 
 export const usageStore = new UsageStore();

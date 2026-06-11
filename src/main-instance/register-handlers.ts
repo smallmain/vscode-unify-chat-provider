@@ -1463,6 +1463,10 @@ export function registerMainInstanceHandlers(options: {
     return options.usageStore.getRecords();
   });
 
+  mainInstance.registerHandler('usage.getState', async () => {
+    return options.usageStore.getState();
+  });
+
   mainInstance.registerHandler(
     'officialModels.getOfficialModels',
     async (params) => {

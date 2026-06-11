@@ -26,6 +26,7 @@
   "configuration.balanceThrottleWindowMs.description": "Throttle window for post-request balance refresh in milliseconds. Default: 10000 (10 seconds).",
   "configuration.balanceStatusBarIcon.description": "Status bar icon for provider balances. Set to empty to hide.",
   "configuration.displayBalanceInConfiguration.description": "Display refreshed provider balance information in the model configuration button area. This is display-only and does not affect requests.",
+  "configuration.usageDetailRetentionDays.description": "Number of days to keep detailed usage records. Older records are folded into historical totals so overall usage remains accurate. Default: 100.",
   "configuration.balanceWarning.enabled.description": "Show a warning icon next to model names when nearing configured balance thresholds.",
   "configuration.balanceWarning.timeThresholdDays.description": "Time threshold in days for expiration warnings (supports decimals). Default: 1.",
   "configuration.balanceWarning.amountThreshold.description": "Balance amount threshold for warnings (unitless; currency ignored). Default: 1.",
