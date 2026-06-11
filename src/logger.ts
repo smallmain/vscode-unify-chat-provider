@@ -196,6 +196,7 @@ export class RequestLogger implements ProviderHttpLogger {
     modelId: string;
     modelName?: string;
   }): void {
+    this.lastUsage = undefined;
     const modelLabel = details.modelName
       ? `${details.modelName} (${details.modelId})`
       : details.modelId;

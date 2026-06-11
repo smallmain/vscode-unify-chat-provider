@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import * as vscode from 'vscode';
-import { PROVIDER_TYPES, type ProviderType } from '../client/definitions';
+import type { ProviderType } from '../client/definitions';
+import { isUsageRecord } from './guards';
 import type { NormalizedUsage, PersistedUsageState, UsageRecord, UsageRequestOutcome } from './types';
 
 const STATE_KEY = 'usage.state';
@@ -100,7 +101,7 @@ export class UsageStore implements vscode.Disposable {
     const nextRecords: UsageRecord[] = [];
     const seenIds = new Set<string>();
     for (const record of [...records, ...this.records]) {
-      if (!this.isUsageRecord(record) || seenIds.has(record.id)) {
+      if (!isUsageRecord(record) || seenIds.has(record.id)) {
         continue;
       }
       seenIds.add(record.id);
@@ -163,7 +164,7 @@ export class UsageStore implements vscode.Disposable {
       return [];
     }
 
-    return value.records.filter((record): record is UsageRecord => this.isUsageRecord(record));
+    return value.records.filter(isUsageRecord);
   }
 
   private addRecord(record: UsageRecord, options: { persist: boolean }): void {
@@ -221,27 +222,6 @@ export class UsageStore implements vscode.Disposable {
     }
     clearTimeout(this.pendingRemoteFlushTimer);
     this.pendingRemoteFlushTimer = undefined;
-  }
-
-  private isUsageRecord(record: unknown): record is UsageRecord {
-    if (!record || typeof record !== 'object') {
-      return false;
-    }
-
-    const candidate = record as Partial<UsageRecord>;
-    return (
-      typeof candidate.id === 'string' &&
-      typeof candidate.timestamp === 'number' &&
-      Number.isFinite(candidate.timestamp) &&
-      typeof candidate.providerName === 'string' &&
-      typeof candidate.providerType === 'string' &&
-      Object.prototype.hasOwnProperty.call(PROVIDER_TYPES, candidate.providerType) &&
-      typeof candidate.vscodeModelId === 'string' &&
-      typeof candidate.modelId === 'string' &&
-      (candidate.outcome === 'success' ||
-        candidate.outcome === 'error' ||
-        candidate.outcome === 'cancelled')
-    );
   }
 
   private queuePersistState(): void {

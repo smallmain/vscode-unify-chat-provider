@@ -38,7 +38,7 @@ import { authLog } from './logger';
 import { webSocketSessionManager } from './client/websocket-session-manager';
 import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
 import { registerCommitMessageGeneration } from './commit-message';
-import { PROVIDER_TYPES } from './client/definitions';
+import { isUsageRecord } from './usage/guards';
 import type { UsageRecord } from './usage/types';
 
 const VENDOR_ID = 'unify-chat-provider';
@@ -47,26 +47,6 @@ const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
 
 function filterUsageRecords(value: unknown): UsageRecord[] {
   return Array.isArray(value) ? value.filter(isUsageRecord) : [];
-}
-
-function isUsageRecord(value: unknown): value is UsageRecord {
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return false;
-  }
-  const record = value as Partial<UsageRecord>;
-  return (
-    typeof record.id === 'string' &&
-    typeof record.timestamp === 'number' &&
-    Number.isFinite(record.timestamp) &&
-    typeof record.providerName === 'string' &&
-    typeof record.providerType === 'string' &&
-    Object.prototype.hasOwnProperty.call(PROVIDER_TYPES, record.providerType) &&
-    typeof record.vscodeModelId === 'string' &&
-    typeof record.modelId === 'string' &&
-    (record.outcome === 'success' ||
-      record.outcome === 'error' ||
-      record.outcome === 'cancelled')
-  );
 }
 
 /**
