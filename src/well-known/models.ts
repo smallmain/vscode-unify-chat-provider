@@ -4244,10 +4244,6 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
-    thinking: {
-      type: 'enabled',
-      effort: 'high',
-    },
   },
   {
     id: 'grok-build-0.1',
@@ -4259,16 +4255,6 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
-    thinking: {
-      type: 'enabled',
-      effort: 'high',
-    },
-    presetTemplates: [
-      reasoningEffort({
-        supported: GROK_4_3_REASONING_EFFORTS,
-        default: 'high',
-      }),
-    ],
   },
   {
     id: 'grok-4.3',
