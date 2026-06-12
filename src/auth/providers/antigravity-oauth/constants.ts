@@ -1,4 +1,7 @@
-import { ANTIGRAVITY_VERSION_FALLBACK } from './version';
+import {
+  ANTIGRAVITY_VERSION_FALLBACK,
+  getAntigravityVersion,
+} from './version';
 
 export const ANTIGRAVITY_CLIENT_ID =
   '1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com';
@@ -98,8 +101,9 @@ export async function getRandomizedHeaders(
     };
   }
 
+  const version = await getAntigravityVersion();
   return {
-    'User-Agent': CODE_ASSIST_HEADERS['User-Agent'],
+    'User-Agent': buildAntigravityContentUserAgent(version, 'windows/amd64'),
     'X-Goog-Api-Client': CODE_ASSIST_HEADERS['X-Goog-Api-Client'],
     'Client-Metadata': CODE_ASSIST_HEADERS['Client-Metadata'],
   };

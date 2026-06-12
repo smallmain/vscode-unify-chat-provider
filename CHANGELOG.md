@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.2.2 - 2026-06-12
+
+### Fixes
+- update Claude Code client to support JSON metadata format and fix Antigravity/Gemini CLI user agent/scopes (f16b387, SmallMain)
+
 ## v7.2.1 - 2026-06-11
 
 ### Features

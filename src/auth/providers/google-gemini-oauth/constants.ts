@@ -42,12 +42,11 @@ export function normalizeGeminiCliOAuthType(
 }
 
 export function getGeminiCliOAuthScopes(
-  oauthType: string | undefined,
+  _oauthType: string | undefined,
 ): readonly string[] {
-  const normalized = normalizeGeminiCliOAuthType(oauthType);
-  if (normalized === 'ai_studio') {
-    return GEMINI_CLI_AI_STUDIO_SCOPES;
-  }
+  // The embedded Gemini CLI OAuth client rejects restricted generative-language
+  // scopes. Mirror Gemini CLI's built-in-client behavior and authenticate with
+  // Code Assist scopes for every supported account type.
   return GEMINI_CLI_SCOPES;
 }
 
