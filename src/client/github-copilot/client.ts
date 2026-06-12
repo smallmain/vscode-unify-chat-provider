@@ -559,6 +559,7 @@ function applyCopilotHeaders(options: {
   headers: Record<string, string | null>;
   credential?: AuthTokenInfo;
   messages?: readonly LanguageModelChatRequestMessage[];
+  sessionId?: string;
 }): void {
   const headers = options.headers;
 
@@ -582,6 +583,11 @@ function applyCopilotHeaders(options: {
   headers['User-Agent'] = buildOpencodeUserAgent();
   headers['Openai-Intent'] = 'conversation-edits';
   headers['X-GitHub-Api-Version'] = COPILOT_API_VERSION;
+  headers['Copilot-Integration-Id'] = 'vscode-chat';
+
+  if (options.sessionId) {
+    headers['vscode-sessionid'] = options.sessionId;
+  }
 
   if (options.messages) {
     headers['x-initiator'] = inferInitiator(options.messages);
@@ -635,7 +641,7 @@ class GitHubCopilotResponsesProvider extends OpenAIResponsesProvider {
       modelConfig,
       messages,
     );
-    applyCopilotHeaders({ headers, credential, messages });
+    applyCopilotHeaders({ headers, credential, messages, sessionId });
     return headers;
   }
 }
@@ -682,8 +688,15 @@ export class GitHubCopilotProvider implements ApiProvider {
     const extraBody = config.extraBody ?? {};
     const hasStore = Object.prototype.hasOwnProperty.call(extraBody, 'store');
     const configWithDefaults: ProviderConfig = hasStore
-      ? config
-      : { ...config, extraBody: { ...extraBody, store: false } };
+      ? {
+          ...config,
+          contextCache: config.contextCache ?? { type: 'allow-paid' },
+        }
+      : {
+          ...config,
+          contextCache: config.contextCache ?? { type: 'allow-paid' },
+          extraBody: { ...extraBody, store: false },
+        };
     this.providerConfig = configWithDefaults;
 
     this.chatProvider = new GitHubCopilotChatCompletionProvider(
