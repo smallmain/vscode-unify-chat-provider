@@ -1,5 +1,31 @@
 # Changelog
 
+## v7.4.2 - 2026-06-12
+
+### Fixes
+- remove max tokens config from Grok Composer 2.5 Fast (d4db31f, SmallMain)
+
+## v7.4.1 - 2026-06-12
+
+### Fixes
+- remove thinking effort from Grok Build 0.1 and Composer 2.5 models (1d3b127, SmallMain)
+- settings.json add xAI Grok Build provider support (09eb8cd, SmallMain)
+
+## v7.4.0 - 2026-06-12
+
+### Features
+- add Grok 4.3, Grok Build 0.1, and Composer 2.5 models (bfdf459, SmallMain)
+
+## v7.3.0 - 2026-06-12
+
+### Features
+- add Kimi K2.7 Code model (2a18e04, SmallMain)
+- rename xAI Grok OAuth to xAI Grok Build and update related definitions and documentation (9655e29, SmallMain)
+- add xAI Grok OAuth (SuperGrok / X Premium+) support (d6a86d9, m1n)
+
+### Fixes
+- xai-grok-oauth: document required 127.0.0.1 redirect and improve bare code / fragment parsing (07df60a, m1n)
+
 ## v7.2.2 - 2026-06-12
 
 ### Fixes

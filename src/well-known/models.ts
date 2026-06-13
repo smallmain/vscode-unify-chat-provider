@@ -89,6 +89,7 @@ const GEMINI_2_5_FLASH_REASONING_BUDGETS = {
   medium: 8192,
   low: 1024,
 } as const;
+const GROK_4_3_REASONING_EFFORTS = ['high', 'medium', 'low', 'none'] as const;
 
 function doubaoReasoningEffort(
   defaultEffort: (typeof DOUBAO_REASONING_EFFORTS)[number] | 'auto',
@@ -2346,6 +2347,20 @@ const _WELL_KNOWN_MODELS = [
     temperature: 1.0,
   },
   {
+    id: 'kimi-k2.7-code',
+    name: 'Kimi K2.7 Code',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'kimi-k2.6',
     overrides: [
       {
@@ -2371,7 +2386,7 @@ const _WELL_KNOWN_MODELS = [
       },
     ],
     name: 'Kimi K2.6',
-    maxInputTokens: 262144,
+    maxInputTokens: 256000,
     maxOutputTokens: 128000,
     stream: true,
     thinking: {
@@ -2412,7 +2427,7 @@ const _WELL_KNOWN_MODELS = [
       },
     ],
     name: 'Kimi K2.5',
-    maxInputTokens: 262144,
+    maxInputTokens: 256000,
     maxOutputTokens: 128000,
     stream: true,
     thinking: {
@@ -4208,6 +4223,57 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: false,
     },
+  },
+  {
+    id: 'composer-2.5',
+    overrides: [
+      {
+        matchers: ['api.x.ai'],
+        config: {
+          id: 'grok-composer-2.5-fast',
+        },
+      },
+    ],
+    name: 'Composer 2.5',
+    maxInputTokens: 200000,
+    maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'grok-build-0.1',
+    name: 'Grok Build 0.1',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
+    id: 'grok-4.3',
+    name: 'Grok 4.3',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 65536,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    presetTemplates: [
+      reasoningEffort({
+        supported: GROK_4_3_REASONING_EFFORTS,
+        default: 'high',
+      }),
+    ],
   },
   {
     id: 'grok-4.20-0309-reasoning',

@@ -1026,5 +1026,9 @@
   "proxy: direct": "proxy: direct",
   "{0} entries": "{0} entries",
   "The response ended abnormally (stop reason: \"{0}\").": "The response ended abnormally (stop reason: \"{0}\").",
-  "The response ended abnormally (stop reason: \"{0}\"): {1}": "The response ended abnormally (stop reason: \"{0}\"): {1}"
+  "The response ended abnormally (stop reason: \"{0}\"): {1}": "The response ended abnormally (stop reason: \"{0}\"): {1}",
+  "Authenticate using xAI Grok OAuth (SuperGrok / X Premium+)": "Authenticate using xAI Grok OAuth (SuperGrok / X Premium+)",
+  "xAI Grok": "xAI Grok",
+  "xAI Grok Build": "xAI Grok Build",
+  "xAI Grok Build (SuperGrok / X Premium+)": "xAI Grok Build (SuperGrok / X Premium+)"
 }

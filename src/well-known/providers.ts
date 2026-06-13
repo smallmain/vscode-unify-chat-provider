@@ -100,6 +100,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.x.ai',
     authTypes: ['api-key'],
     models: [
+      'grok-4.3',
       'grok-4.20-0309-reasoning',
       'grok-4.20-0309-non-reasoning',
       'grok-4',
@@ -599,7 +600,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.cn',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k2.6', 'kimi-k2.5'],
+    models: ['kimi-k2.7-code', 'kimi-k2.6'],
   },
   {
     name: 'Moonshot AI (International)',
@@ -608,7 +609,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.ai',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k2.6', 'kimi-k2.5'],
+    models: ['kimi-k2.7-code', 'kimi-k2.6'],
   },
   {
     name: 'Moonshot AI (Coding Plan)',
@@ -688,6 +689,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://chatgpt.com/backend-api/codex/responses',
     balanceProvider: { method: 'codex' },
     authTypes: ['api-key', 'openai-codex'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
+    name: 'xAI Grok Build (SuperGrok / X Premium+)',
+    category: 'Experimental',
+    type: 'xai-grok-build',
+    baseUrl: 'https://api.x.ai',
+    authTypes: ['xai-grok-oauth'],
     models: [],
     autoFetchOfficialModels: true,
   },

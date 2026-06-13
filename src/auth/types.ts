@@ -8,6 +8,7 @@ export type AuthMethod =
   | 'google-vertex-ai-auth'
   | 'claude-code'
   | 'openai-codex'
+  | 'xai-grok-oauth'
   | 'github-copilot';
 
 export type AuthTokenInfo =
@@ -182,6 +183,15 @@ export interface ClaudeCodeAuthConfig {
   email?: string;
 }
 
+export interface XaiGrokOAuthConfig {
+  method: 'xai-grok-oauth';
+  label?: string;
+  description?: string;
+  identityId?: string;
+  token?: string;
+  email?: string;
+}
+
 export interface GitHubCopilotAuthConfig {
   method: 'github-copilot';
   label?: string;
@@ -225,8 +235,7 @@ export interface GoogleVertexAIAdcConfig extends GoogleVertexAIAuthBaseConfig {
 /**
  * Service Account JSON key file configuration
  */
-export interface GoogleVertexAIServiceAccountConfig
-  extends GoogleVertexAIAuthBaseConfig {
+export interface GoogleVertexAIServiceAccountConfig extends GoogleVertexAIAuthBaseConfig {
   subType: 'service-account';
   /** Path to service account JSON key file */
   keyFilePath: string;
@@ -239,8 +248,7 @@ export interface GoogleVertexAIServiceAccountConfig
 /**
  * API Key configuration (for Vertex AI Express Mode)
  */
-export interface GoogleVertexAIApiKeyConfig
-  extends GoogleVertexAIAuthBaseConfig {
+export interface GoogleVertexAIApiKeyConfig extends GoogleVertexAIAuthBaseConfig {
   subType: 'api-key';
   /** API key value or secret reference */
   apiKey?: string;
@@ -262,6 +270,7 @@ export type AuthConfig =
   | GeminiCliOAuthConfig
   | OpenAICodexAuthConfig
   | ClaudeCodeAuthConfig
+  | XaiGrokOAuthConfig
   | GitHubCopilotAuthConfig
   | GoogleVertexAIAuthConfig;
 

@@ -1026,5 +1026,9 @@
   "proxy: direct": "代理：直连",
   "{0} entries": "{0} 项",
   "The response ended abnormally (stop reason: \"{0}\").": "响应异常终止(停止原因:“{0}”)。",
-  "The response ended abnormally (stop reason: \"{0}\"): {1}": "响应异常终止(停止原因:“{0}”):{1}"
+  "The response ended abnormally (stop reason: \"{0}\"): {1}": "响应异常终止(停止原因:“{0}”):{1}",
+  "Authenticate using xAI Grok OAuth (SuperGrok / X Premium+)": "使用 xAI Grok OAuth (SuperGrok / X Premium+) 进行身份验证",
+  "xAI Grok": "xAI Grok",
+  "xAI Grok Build": "xAI Grok Build",
+  "xAI Grok Build (SuperGrok / X Premium+)": "xAI Grok Build (SuperGrok / X Premium+)"
 }
