@@ -998,7 +998,7 @@ The applications listed below support [One-Click Migration](#one-click-migration
 | Application                                           | Notes                                                                                                                                    |
 | :---------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
 | [Claude Code](https://claude.com/product/claude-code) | Migration is supported only when using a custom Base URL and API Key.                                                                    |
-| [Codex](https://openai.com/codex/)                    | Migration is supported only when using a custom Base URL and API Key.                                                                    |
+| [Codex](https://openai.com/codex/)                    | Supports Base URL, API Key, and OAuth.                                                                                                   |
 | [Gemini CLI](https://geminicli.com/)                  | Migration is supported only when using the following auth methods: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`. |
 
 </details>

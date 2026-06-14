@@ -469,6 +469,8 @@
   "Missing APIURL for Codex import: set [model_providers.{0}].base_url in ~/.codex/config.toml.": "Missing APIURL for Codex import: set [model_providers.{0}].base_url in ~/.codex/config.toml.",
   "Missing APIKEY for Codex import: environment variable {0} is not set (referenced by [model_providers.{1}].env_key).": "Missing APIKEY for Codex import: environment variable {0} is not set (referenced by [model_providers.{1}].env_key).",
   "Missing APIKEY for Codex import: set [model_providers.{0}].env_key in ~/.codex/config.toml and export that environment variable.": "Missing APIKEY for Codex import: set [model_providers.{0}].env_key in ~/.codex/config.toml and export that environment variable.",
+  "Missing OpenAI Codex OAuth auth method.": "Missing OpenAI Codex OAuth auth method.",
+  "Missing well-known OpenAI Codex provider.": "Missing well-known OpenAI Codex provider.",
   "Failed to parse Codex config.toml: {0}": "Failed to parse Codex config.toml: {0}",
   "Codex config.toml must be a TOML table/object.": "Codex config.toml must be a TOML table/object.",
   "Gemini CLI config has multiple authentication variables set ({0}). Keep only one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.": "Gemini CLI config has multiple authentication variables set ({0}). Keep only one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.",
