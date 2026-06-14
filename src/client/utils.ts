@@ -24,6 +24,7 @@ import {
   runWhenResponseBodySettles,
   type RetryConfig,
 } from '../utils';
+import { normalizeUsage } from '../usage/usage-normalizer';
 import { FeatureId, FEATURES, PROVIDER_TYPES } from './definitions';
 import { ApiProvider } from './interface';
 import { ProviderPattern } from './types';
@@ -439,6 +440,7 @@ export function processUsage(
   }
   requestTrace.usage = usage;
   logger.usage(usage);
+  logger.setNormalizedUsage(normalizeUsage(usage));
 }
 
 /**

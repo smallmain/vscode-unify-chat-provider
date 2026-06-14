@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { CopilotUsage, PerformanceTrace } from './types';
 import { CONFIG_NAMESPACE } from './config-store';
+import type { NormalizedUsage } from './usage/types';
 
 const CHANNEL_NAME = 'Unify Chat Provider';
 
@@ -172,6 +173,7 @@ export type ProviderUsage = CopilotUsage;
  */
 export class RequestLogger implements ProviderHttpLogger {
   private readonly ch = getChannel();
+  private lastUsage: NormalizedUsage | undefined;
   private providerContext: {
     label: string;
     method: string;
@@ -194,6 +196,7 @@ export class RequestLogger implements ProviderHttpLogger {
     modelId: string;
     modelName?: string;
   }): void {
+    this.lastUsage = undefined;
     const modelLabel = details.modelName
       ? `${details.modelName} (${details.modelId})`
       : details.modelId;
@@ -353,6 +356,14 @@ export class RequestLogger implements ProviderHttpLogger {
         }`,
       );
     }
+  }
+
+  setNormalizedUsage(usage: NormalizedUsage | null): void {
+    this.lastUsage = usage ?? undefined;
+  }
+
+  getNormalizedUsage(): NormalizedUsage | undefined {
+    return this.lastUsage;
   }
 
   /**

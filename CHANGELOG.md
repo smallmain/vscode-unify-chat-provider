@@ -293,6 +293,7 @@
 - make all configuration application-scoped and shared across profiles (7c44529, SmallMain)
 
 ### Features
+- add local usage statistics dashboard, details picker, and status bar summary
 - adjust maxInputTokens calculation to account for maxOutputTokens (8a90537, WangJerome)
 - add context window hook for usage reporting (09494eb, WangJerome)
 

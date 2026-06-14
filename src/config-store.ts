@@ -30,8 +30,10 @@ const DEFAULT_BALANCE_THROTTLE_WINDOW_MS = 10_000;
 const DEFAULT_BALANCE_STATUS_BAR_ICON = '$(credit-card)';
 const DEFAULT_DISPLAY_BALANCE_IN_CONFIGURATION = false;
 const DEFAULT_MODEL_DISPLAY_NAME_TEMPLATE = '{modelName}{{ ({providerName})}}';
+const DEFAULT_USAGE_DETAIL_RETENTION_DAYS = 100;
 const MIN_BALANCE_REFRESH_INTERVAL_MS = 1_000;
 const MIN_BALANCE_THROTTLE_WINDOW_MS = 0;
+const MIN_USAGE_DETAIL_RETENTION_DAYS = 1;
 const DEFAULT_BALANCE_WARNING_ENABLED = true;
 const DEFAULT_BALANCE_WARNING_TIME_THRESHOLD_DAYS = 1;
 const DEFAULT_BALANCE_WARNING_AMOUNT_THRESHOLD = 1;
@@ -52,6 +54,7 @@ const OBSERVED_CONFIG_KEYS = [
   'balanceWarning.timeThresholdDays',
   'balanceWarning.amountThreshold',
   'balanceWarning.tokenThresholdMillions',
+  'usageDetailRetentionDays',
   'networkSettings',
 ] as const;
 
@@ -63,6 +66,7 @@ export interface ExtensionConfiguration {
   balanceRefreshIntervalMs: number;
   balanceThrottleWindowMs: number;
   displayBalanceInConfiguration: boolean;
+  usageDetailRetentionDays: number;
   balanceWarning: BalanceWarningConfiguration;
   verbose: boolean;
 }
@@ -182,6 +186,15 @@ export class ConfigStore {
       : DEFAULT_DISPLAY_BALANCE_IN_CONFIGURATION;
   }
 
+  get usageDetailRetentionDays(): number {
+    const raw = this.readConfiguredUnknown('usageDetailRetentionDays');
+    return this.readIntegerAtLeast(
+      raw,
+      DEFAULT_USAGE_DETAIL_RETENTION_DAYS,
+      MIN_USAGE_DETAIL_RETENTION_DAYS,
+    );
+  }
+
   get balanceWarningEnabled(): boolean {
     const raw = this.readConfiguredUnknown('balanceWarning.enabled');
     return typeof raw === 'boolean' ? raw : DEFAULT_BALANCE_WARNING_ENABLED;
@@ -243,6 +256,7 @@ export class ConfigStore {
       balanceRefreshIntervalMs: this.balanceRefreshIntervalMs,
       balanceThrottleWindowMs: this.balanceThrottleWindowMs,
       displayBalanceInConfiguration: this.displayBalanceInConfiguration,
+      usageDetailRetentionDays: this.usageDetailRetentionDays,
       balanceWarning: this.balanceWarning,
       verbose: this.verbose,
     };

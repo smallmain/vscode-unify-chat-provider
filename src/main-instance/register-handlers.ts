@@ -19,6 +19,8 @@ import type {
   OfficialModelsManager,
 } from '../official-models-manager';
 import type { ConfigStore } from '../config-store';
+import type { UsageStore } from '../usage/usage-store';
+import type { NormalizedUsage, UsageRecord, UsageRequestOutcome } from '../usage/types';
 import type { ContextCacheConfig, ProviderConfig } from '../types';
 import { mainInstance } from './index';
 import { PROVIDER_TYPES, type ProviderType } from '../client/definitions';
@@ -53,6 +55,17 @@ function parseBalanceRefreshReason(
 type ChatOutcome = 'success' | 'error' | 'cancelled';
 
 function parseChatOutcome(value: unknown): ChatOutcome | undefined {
+  switch (value) {
+    case 'success':
+    case 'error':
+    case 'cancelled':
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function parseUsageOutcome(value: unknown): UsageRequestOutcome | undefined {
   switch (value) {
     case 'success':
     case 'error':
@@ -120,6 +133,28 @@ function requireNumber(value: unknown, method: string, field: string): number {
   return value;
 }
 
+function optionalNumber(
+  value: unknown,
+  method: string,
+  field: string,
+): number | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireNumber(value, method, field);
+}
+
+function optionalString(
+  value: unknown,
+  method: string,
+  field: string,
+): string | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+  return requireString(value, method, field);
+}
+
 function requireStringArray(
   value: unknown,
   method: string,
@@ -154,6 +189,74 @@ function isProviderType(value: unknown): value is ProviderType {
     typeof value === 'string' &&
     Object.prototype.hasOwnProperty.call(PROVIDER_TYPES, value)
   );
+}
+
+function parseUsage(value: unknown, method: string): NormalizedUsage | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  const p = requireRecord(value, method);
+  return {
+    promptTokens: requireNumber(p['promptTokens'], method, 'usage.promptTokens'),
+    completionTokens: requireNumber(
+      p['completionTokens'],
+      method,
+      'usage.completionTokens',
+    ),
+    totalTokens: requireNumber(p['totalTokens'], method, 'usage.totalTokens'),
+    cachedInputTokens: optionalNumber(
+      p['cachedInputTokens'],
+      method,
+      'usage.cachedInputTokens',
+    ),
+    cacheCreationInputTokens: optionalNumber(
+      p['cacheCreationInputTokens'],
+      method,
+      'usage.cacheCreationInputTokens',
+    ),
+    cacheReadInputTokens: optionalNumber(
+      p['cacheReadInputTokens'],
+      method,
+      'usage.cacheReadInputTokens',
+    ),
+    uncachedInputTokens: optionalNumber(
+      p['uncachedInputTokens'],
+      method,
+      'usage.uncachedInputTokens',
+    ),
+  };
+}
+
+function parseUsageRecord(value: unknown, method: string): UsageRecord {
+  const p = requireRecord(value, method);
+  const providerType = p['providerType'];
+  if (!isProviderType(providerType)) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: "providerType" is invalid`,
+    );
+  }
+  const outcome = parseUsageOutcome(p['outcome']);
+  if (!outcome) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: "outcome" is invalid`,
+    );
+  }
+
+  return {
+    id: requireString(p['id'], method, 'id'),
+    timestamp: requireNumber(p['timestamp'], method, 'timestamp'),
+    providerName: requireString(p['providerName'], method, 'providerName'),
+    providerType,
+    vscodeModelId: requireString(p['vscodeModelId'], method, 'vscodeModelId'),
+    modelId: requireString(p['modelId'], method, 'modelId'),
+    modelName: optionalString(p['modelName'], method, 'modelName'),
+    outcome,
+    latencyMs: optionalNumber(p['latencyMs'], method, 'latencyMs'),
+    usage: parseUsage(p['usage'], method),
+  };
 }
 
 function parseTimeoutConfig(value: unknown): TimeoutConfig | undefined {
@@ -1095,6 +1198,7 @@ export function registerMainInstanceHandlers(options: {
   authManager: AuthManager;
   balanceManager: BalanceManager;
   officialModelsManager: OfficialModelsManager;
+  usageStore: UsageStore;
 }): void {
   const uriRegistry = new OAuthUriWaitRegistry();
   const httpRegistry = new OAuthHttpSessionRegistry();
@@ -1340,6 +1444,27 @@ export function registerMainInstanceHandlers(options: {
 
   mainInstance.registerHandler('balance.getSnapshot', async () => {
     return options.balanceManager.getSnapshotForFollowers();
+  });
+
+  mainInstance.registerHandler('usage.record', async (params) => {
+    const record = parseUsageRecord(params, 'usage.record');
+    options.usageStore.acceptRemoteRecord(record);
+    mainInstance.broadcast('usage.record', record);
+    return { ok: true };
+  });
+
+  mainInstance.registerHandler('usage.clear', async () => {
+    await options.usageStore.clearFromRemote();
+    mainInstance.broadcast('usage.clear', {});
+    return { ok: true };
+  });
+
+  mainInstance.registerHandler('usage.getSnapshot', async () => {
+    return options.usageStore.getRecords();
+  });
+
+  mainInstance.registerHandler('usage.getState', async () => {
+    return options.usageStore.getState();
   });
 
   mainInstance.registerHandler(

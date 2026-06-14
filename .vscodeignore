@@ -1,6 +1,8 @@
 .vscode/**
 .claude/**
 src/**
+webviews/**
+media/usage-detail/webviews/**
 test/**
 out-tests/**
 .gitignore

@@ -53,6 +53,7 @@ import {
   type BalanceManager,
   type BalanceProviderState,
 } from './balance';
+import type { UsageStore } from './usage/usage-store';
 import { evaluateBalanceWarning } from './balance/warning-utils';
 import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
 
@@ -174,6 +175,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
     private readonly balanceManager?: BalanceManager,
+    private readonly usageStore?: UsageStore,
   ) {}
 
   /**
@@ -777,6 +779,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     };
 
     let providerForBalance: ProviderConfig | undefined;
+    let providerForUsage: ProviderConfig | undefined;
+    let requestModelForUsage: ModelConfig | undefined;
     let outcome: 'success' | 'error' | 'cancelled' = 'success';
 
     try {
@@ -799,6 +803,8 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         options.modelConfiguration,
       );
       providerForBalance = resolvedProvider;
+      providerForUsage = resolvedProvider;
+      requestModelForUsage = resolvedRequestModel;
       this.balanceManager?.notifyChatRequestStarted(resolvedProvider.name);
 
       logger.start({
@@ -959,6 +965,18 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           providerForBalance.name,
           outcome,
         );
+      }
+      if (providerForUsage && requestModelForUsage) {
+        this.usageStore?.record({
+          providerName: providerForUsage.name,
+          providerType: providerForUsage.type,
+          vscodeModelId: model.id,
+          modelId: requestModelForUsage.id,
+          modelName: requestModelForUsage.name,
+          outcome,
+          latencyMs: performanceTrace.tl > 0 ? performanceTrace.tl : undefined,
+          usage: logger.getNormalizedUsage(),
+        });
       }
     }
   }

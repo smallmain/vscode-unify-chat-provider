@@ -6,7 +6,8 @@
     "configurations": [
         {
             "args": [
-                "--extensionDevelopmentPath=${workspaceFolder}"
+                "--extensionDevelopmentPath=${workspaceFolder}",
+                "--enable-proposed-api=SmallMain.vscode-unify-chat-provider"
             ],
             "name": "Debug",
             "outFiles": [
