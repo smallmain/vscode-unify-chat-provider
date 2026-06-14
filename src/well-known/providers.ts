@@ -503,6 +503,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
     authTypes: ['api-key'],
     models: [
+      'glm-5.2',
       'glm-5.1',
       'glm-5v-turbo',
       'glm-5-turbo',
@@ -520,6 +521,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
     authTypes: ['api-key'],
     models: [
+      'glm-5.2',
       'glm-5.1',
       'glm-5v-turbo',
       'glm-5-turbo',
@@ -536,6 +538,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.z.ai/api/paas/v4',
     authTypes: ['api-key'],
     models: [
+      'glm-5.2',
       'glm-5.1',
       'glm-5v-turbo',
       'glm-5-turbo',
@@ -553,6 +556,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
     authTypes: ['api-key'],
     models: [
+      'glm-5.2',
       'glm-5.1',
       'glm-5v-turbo',
       'glm-5-turbo',

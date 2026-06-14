@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.5.0 - 2026-06-13
+
+### Features
+- add GLM-5.2 model with thinking support to providers (35922f0, SmallMain)
+
 ## v7.4.2 - 2026-06-12
 
 ### Fixes
