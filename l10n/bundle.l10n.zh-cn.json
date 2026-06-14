@@ -471,6 +471,8 @@
   "Missing APIURL for Codex import: set [model_providers.{0}].base_url in ~/.codex/config.toml.": "Codex 导入缺少 APIURL：请在 ~/.codex/config.toml 中设置 [model_providers.{0}].base_url。",
   "Missing APIKEY for Codex import: environment variable {0} is not set (referenced by [model_providers.{1}].env_key).": "Codex 导入缺少 APIKEY：环境变量 {0} 未设置（由 [model_providers.{1}].env_key 引用）。",
   "Missing APIKEY for Codex import: set [model_providers.{0}].env_key in ~/.codex/config.toml and export that environment variable.": "Codex 导入缺少 APIKEY：请在 ~/.codex/config.toml 中设置 [model_providers.{0}].env_key，并导出对应的环境变量。",
+  "Missing OpenAI Codex OAuth auth method.": "缺少 OpenAI Codex OAuth 身份验证方式。",
+  "Missing well-known OpenAI Codex provider.": "缺少内置 OpenAI Codex 供应商。",
   "Failed to parse Codex config.toml: {0}": "解析 Codex config.toml 失败：{0}",
   "Codex config.toml must be a TOML table/object.": "Codex config.toml 必须是 TOML 表（对象）。",
   "Gemini CLI config has multiple authentication variables set ({0}). Keep only one of GEMINI_API_KEY, GOOGLE_API_KEY, or GOOGLE_APPLICATION_CREDENTIALS.": "Gemini CLI 配置同时设置了多个身份验证变量（{0}）。请仅保留 GEMINI_API_KEY、GOOGLE_API_KEY 或 GOOGLE_APPLICATION_CREDENTIALS 中的一个。",
