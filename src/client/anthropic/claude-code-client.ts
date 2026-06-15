@@ -11,6 +11,7 @@ import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { AnthropicProvider } from './client';
 
 const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.161';
+const CLAUDE_CODE_NEW_METADATA_FORMAT_MIN_VERSION = '2.1.78';
 const DEFAULT_CLAUDE_SDK_VERSION = '0.94.0';
 const CCH_SEED = 0x6e52736ac806831en;
 const FINGERPRINT_SALT = '59cf53e54c78';
@@ -83,6 +84,13 @@ const NON_MCP_TOOL_NAMES: ReadonlySet<string> = new Set([
 const SYSTEM_PROMPT_SANITIZERS: ReadonlyArray<[pattern: RegExp, to: string]> = [
   [/GitHub Copilot/gi, 'Claude Code'],
 ];
+
+type ParsedClaudeCodeUserId = {
+  deviceId: string;
+  accountUuid: string;
+  sessionId: string;
+  isNewFormat: boolean;
+};
 
 function escapeRegExp(value: string): string {
   return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -363,28 +371,118 @@ function deterministicUuidFromSeed(seed: string): string {
   )}-${hex.slice(16, 20)}-${hex.slice(20, 32)}`;
 }
 
+function compareSemverLike(left: string, right: string): number {
+  const leftParts = left.split('.').map((part) => Number.parseInt(part, 10));
+  const rightParts = right.split('.').map((part) => Number.parseInt(part, 10));
+  const length = Math.max(leftParts.length, rightParts.length);
+
+  for (let i = 0; i < length; i++) {
+    const a = Number.isFinite(leftParts[i]) ? leftParts[i] : 0;
+    const b = Number.isFinite(rightParts[i]) ? rightParts[i] : 0;
+    if (a !== b) {
+      return a > b ? 1 : -1;
+    }
+  }
+
+  return 0;
+}
+
+function usesClaudeCodeJsonMetadata(version: string): boolean {
+  return (
+    compareSemverLike(
+      version,
+      CLAUDE_CODE_NEW_METADATA_FORMAT_MIN_VERSION,
+    ) >= 0
+  );
+}
+
+function formatClaudeCodeUserId(options: {
+  deviceId: string;
+  accountUuid: string;
+  sessionId: string;
+  version: string;
+}): string {
+  if (usesClaudeCodeJsonMetadata(options.version)) {
+    return JSON.stringify({
+      device_id: options.deviceId,
+      account_uuid: options.accountUuid,
+      session_id: options.sessionId,
+    });
+  }
+
+  return `user_${options.deviceId}_account_${options.accountUuid}_session_${options.sessionId}`;
+}
+
 function generateFakeUserId(options?: { seed?: string | null }): string {
   const seed = options?.seed?.trim();
-  const hexPart = seed
+  const deviceId = seed
     ? createHash('sha256').update(seed, 'utf8').digest('hex')
     : randomBytes(32).toString('hex');
-  const uuid = seed
+  const sessionId = seed
     ? deterministicUuidFromSeed(`claude-code-session:${seed}`)
     : randomUUID();
-  return `user_${hexPart}_account__session_${uuid}`;
+  return formatClaudeCodeUserId({
+    deviceId,
+    accountUuid: '',
+    sessionId,
+    version: DEFAULT_CLAUDE_CODE_CLI_VERSION,
+  });
+}
+
+function parseClaudeCodeUserId(userId: string): ParsedClaudeCodeUserId | undefined {
+  const trimmed = userId.trim();
+  if (!trimmed) {
+    return undefined;
+  }
+
+  if (trimmed.startsWith('{')) {
+    try {
+      const parsed: unknown = JSON.parse(trimmed);
+      if (!isRecord(parsed)) {
+        return undefined;
+      }
+      const deviceId = parsed['device_id'];
+      const accountUuid = parsed['account_uuid'];
+      const sessionId = parsed['session_id'];
+      if (
+        typeof deviceId !== 'string' ||
+        deviceId.trim() === '' ||
+        typeof sessionId !== 'string' ||
+        sessionId.trim() === ''
+      ) {
+        return undefined;
+      }
+      return {
+        deviceId: deviceId.trim(),
+        accountUuid: typeof accountUuid === 'string' ? accountUuid.trim() : '',
+        sessionId: sessionId.trim(),
+        isNewFormat: true,
+      };
+    } catch {
+      return undefined;
+    }
+  }
+
+  const pattern =
+    /^user_([a-fA-F0-9]{64})_account_([a-fA-F0-9-]*)_session_([a-fA-F0-9-]{36})$/i;
+  const match = trimmed.match(pattern);
+  if (!match) {
+    return undefined;
+  }
+  return {
+    deviceId: match[1],
+    accountUuid: match[2] ?? '',
+    sessionId: match[3],
+    isNewFormat: false,
+  };
 }
 
 function isValidUserId(userId: string): boolean {
-  const pattern =
-    /^user_[a-fA-F0-9]{64}_account__session_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-  return pattern.test(userId);
+  return parseClaudeCodeUserId(userId) !== undefined;
 }
 
 function extractSessionIdFromUserId(userId: string): string | undefined {
-  if (!isValidUserId(userId)) {
-    return undefined;
-  }
-  return userId.slice(userId.lastIndexOf('_session_') + '_session_'.length);
+  return parseClaudeCodeUserId(userId)?.sessionId;
 }
 
 function toTextBlocks(
@@ -430,7 +528,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
   protected override buildHeaders(
     credential?: AuthTokenInfo,
     modelConfig?: ModelConfig,
-    options?: { stream?: boolean },
+    options?: { stream?: boolean; requestState?: { userId?: string } },
   ): Record<string, string | null> {
     const headers = super.buildHeaders(credential, modelConfig, options);
 
@@ -464,7 +562,9 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     headers['X-Stainless-Timeout'] = '600';
     headers['x-client-request-id'] = randomUUID();
 
-    const sessionId = extractSessionIdFromUserId(this.resolveStableUserId());
+    const sessionId = extractSessionIdFromUserId(
+      options?.requestState?.userId ?? this.resolveStableUserId(),
+    );
     if (sessionId) {
       headers['X-Claude-Code-Session-Id'] = sessionId;
     }
@@ -545,7 +645,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
 
   protected override finalizeRequestBase(
     requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
-    _options: {
+    options: {
       model: ModelConfig;
       stream: boolean;
       credential?: AuthTokenInfo;
@@ -553,6 +653,16 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
       requestState: { userId?: string };
     },
   ): Omit<MessageCreateParamsStreaming, 'stream'> {
+    const metadata = requestBase.metadata;
+    if (isRecord(metadata)) {
+      const metadataUserId = metadata['user_id'];
+      if (
+        typeof metadataUserId === 'string' &&
+        isValidUserId(metadataUserId)
+      ) {
+        options.requestState.userId = metadataUserId;
+      }
+    }
     signClaudeCodeBillingHeader(requestBase);
     return requestBase;
   }

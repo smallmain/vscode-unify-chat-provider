@@ -77,6 +77,7 @@
   "configuration.endpoints.type.enumDescriptions.8": "Google Gemini CLI",
   "configuration.endpoints.type.enumDescriptions.9": "Anthropic Claude Code",
   "configuration.endpoints.type.enumDescriptions.10": "GitHub Copilot",
+  "configuration.endpoints.type.enumDescriptions.11": "xAI Grok Build",
   "configuration.endpoints.name.description": "此供应商的显示名称。",
   "configuration.endpoints.baseUrl.description": "API 基础 URL（例如：https://api.anthropic.com）。",
   "configuration.endpoints.useRawBaseUrl.description": "是否禁用自动规范化 URL，将禁用追加 /v1 或移除后缀等供应商特定 URL 处理。",

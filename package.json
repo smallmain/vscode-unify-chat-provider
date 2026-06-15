@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.2.1",
+  "version": "7.5.0",
   "categories": [
     "AI",
     "Chat"
@@ -471,6 +471,7 @@
                   "openai-chat-completion",
                   "openai-responses",
                   "openai-codex",
+                  "xai-grok-build",
                   "ollama",
                   "claude-code"
                 ],
@@ -484,6 +485,7 @@
                   "%configuration.endpoints.type.enumDescriptions.3%",
                   "%configuration.endpoints.type.enumDescriptions.4%",
                   "%configuration.endpoints.type.enumDescriptions.7%",
+                  "%configuration.endpoints.type.enumDescriptions.11%",
                   "%configuration.endpoints.type.enumDescriptions.5%",
                   "%configuration.endpoints.type.enumDescriptions.9%"
                 ]

@@ -171,6 +171,7 @@ export class AnthropicProvider implements ApiProvider {
     options?: {
       stream?: boolean;
       messages?: readonly vscode.LanguageModelChatRequestMessage[];
+      requestState?: { userId?: string };
     },
   ): Record<string, string | null> {
     const token = getToken(credential);
@@ -951,11 +952,6 @@ export class AnthropicProvider implements ApiProvider {
       anthropicInterleavedThinkingEnabled,
     });
 
-    const headers = this.buildHeaders(credential, model, {
-      stream,
-      messages: sanitizedMessages,
-    });
-
     // Pass thinkingEnabled to convertToolChoice to enforce tool_choice restrictions
     const toolChoice = this.applyParallelToolChoice(
       this.convertToolChoice(options.toolMode, tools, thinkingEnabled),
@@ -1060,6 +1056,12 @@ export class AnthropicProvider implements ApiProvider {
         stream,
         credential,
         historyUserId,
+        requestState,
+      });
+
+      const headers = this.buildHeaders(credential, model, {
+        stream,
+        messages: sanitizedMessages,
         requestState,
       });
 
