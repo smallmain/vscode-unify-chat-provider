@@ -202,11 +202,15 @@ async function buildCodexOAuthProviderFromAuthJson(
     throw new Error(t('Missing well-known OpenAI Codex provider.'));
   }
   const codexAuthMethod = getWellKnownCodexAuthMethod(wellKnownCodexProvider);
+  const {
+    authTypes: _authTypes,
+    models: _modelIds,
+    category: _category,
+    ...wellKnownProviderConfig
+  } = wellKnownCodexProvider;
 
   const provider: Partial<ProviderConfig> = {
-    type: wellKnownCodexProvider.type,
-    name: wellKnownCodexProvider.name,
-    baseUrl: wellKnownCodexProvider.baseUrl,
+    ...wellKnownProviderConfig,
     auth: {
       method: codexAuthMethod,
       token: JSON.stringify(tokenData),
