@@ -11,7 +11,9 @@ import type {
   BetaTextBlockParam,
   BetaThinkingBlockParam,
   BetaToolChoice,
+  BetaToolResultBlockParam,
   BetaToolUnion,
+  BetaToolUseBlock,
   BetaUsage,
   MessageCreateParamsStreaming,
   BetaTool,
@@ -405,12 +407,94 @@ export class AnthropicProvider implements ApiProvider {
 
     // add a cache breakpoint at the end.
     this.applyCacheControl(system, outMessages);
+    // Workaround: Anthropic requires every assistant tool_use to be followed by
+    // a user tool_result. VSCode drops explicit ToolCallPart/ToolResultPart
+    // during the tool invocation round and only keeps the stateful marker, so
+    // sanitizeMessagesForModelSwitch can discard the user tool_result while
+    // still restoring the assistant tool_use from the marker raw data. Backfill
+    // any missing tool_result with an empty block to keep the API valid.
+    const backfilledMessages = this.backfillMissingToolResults(outMessages);
 
     return {
-      messages: this.ensureAlternatingRoles(outMessages),
+      messages: this.ensureAlternatingRoles(backfilledMessages),
       system: system.length > 0 ? system : undefined,
       historyUserId: firstHistoryUserId,
     };
+  }
+
+  /**
+   * Ensure every assistant tool_use has a corresponding user tool_result.
+   *
+   * Returns a new message array where missing tool_result blocks are either
+   * prepended to the next user message (if one immediately follows) or inserted
+   * as a new user message. The input array is not mutated.
+   */
+  private backfillMissingToolResults(
+    messages: BetaMessageParam[],
+  ): BetaMessageParam[] {
+    const resultIds = new Set<string>();
+    for (const msg of messages) {
+      if (msg.role === 'user' && Array.isArray(msg.content)) {
+        for (const block of msg.content) {
+          if (
+            block.type === 'tool_result' &&
+            (block as BetaToolResultBlockParam).tool_use_id
+          ) {
+            resultIds.add((block as BetaToolResultBlockParam).tool_use_id);
+          }
+        }
+      }
+    }
+
+    const patched: BetaMessageParam[] = [];
+    for (let i = 0; i < messages.length; i++) {
+      const msg = messages[i];
+
+      if (msg.role !== 'assistant' || !Array.isArray(msg.content)) {
+        patched.push(msg);
+        continue;
+      }
+
+      const missingToolResults: BetaToolResultBlockParam[] = [];
+      for (const block of msg.content) {
+        if (block.type === 'tool_use') {
+          const toolUse = block as BetaToolUseBlock;
+          if (toolUse.id && !resultIds.has(toolUse.id)) {
+            missingToolResults.push({
+              type: 'tool_result',
+              tool_use_id: toolUse.id,
+              content: [],
+            } satisfies BetaToolResultBlockParam);
+          }
+        }
+      }
+
+      patched.push(msg);
+
+      if (missingToolResults.length === 0) {
+        continue;
+      }
+
+      const nextMsg = messages[i + 1];
+      if (
+        nextMsg &&
+        nextMsg.role === 'user' &&
+        Array.isArray(nextMsg.content)
+      ) {
+        patched.push({
+          role: 'user',
+          content: [...missingToolResults, ...nextMsg.content],
+        });
+        i++;
+      } else {
+        patched.push({
+          role: 'user',
+          content: missingToolResults,
+        });
+      }
+    }
+
+    return patched;
   }
 
   private applyCacheControl(
