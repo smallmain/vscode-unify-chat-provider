@@ -711,6 +711,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.z.ai',
       'api.moonshot.cn',
       'api.moonshot.ai',
+      'opencode.ai',
       'api.kimi.com',
       'dashscope-intl.aliyuncs.com',
       'dashscope-intl.aliyuncs.com',
