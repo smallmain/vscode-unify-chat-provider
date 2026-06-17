@@ -45,6 +45,7 @@ const OPENAI_CODEX_REASONING_EFFORTS = [
 const OPENAI_OSS_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const TENCENT_HY3_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const DEEPSEEK_V4_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
+const GLM_5_2_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
 const NVIDIA_MINIMAX_REASONING_EFFORTS = [
   'high',
   'medium',
@@ -3818,12 +3819,15 @@ const _WELL_KNOWN_MODELS = [
     stream: true,
     thinking: {
       type: 'enabled',
+      effort: 'max',
     },
     capabilities: {
       toolCalling: true,
       imageInput: false,
     },
-    presetTemplates: [thinkingMode()],
+    presetTemplates: [
+      openAiReasoningEffort(GLM_5_2_REASONING_EFFORTS, 'max'),
+    ],
   },
   {
     id: 'glm-5.1',

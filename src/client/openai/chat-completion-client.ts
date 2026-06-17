@@ -80,7 +80,7 @@ import { FeatureId } from '../definitions';
  * - `reasoning`                    — OpenRouter unified `reasoning` object
  * - `openrouter_claude_adaptive_verbosity` — OpenRouter Claude adaptive thinking + top-level `verbosity`
  * - `thinking`                     — DeepSeek / MiMo / GLM `thinking: { type }` param
- * - `thinking_with_deepseek_reasoning_effort` — DeepSeek V4 `thinking` + `reasoning_effort`
+ * - `thinking_with_high_max_reasoning_effort` — GLM / DeepSeek V4 `thinking` + `reasoning_effort` (`high` / `max`)
  * - `thinking_with_reasoning_effort` — VolcEngine `thinking` + `reasoning_effort`
  * - `disable_reasoning`            — Cerebras GLM `disable_reasoning` boolean
  * - `enable_thinking`              — Qwen / SiliconFlow `enable_thinking` boolean
@@ -91,7 +91,7 @@ type ReasoningParamType =
   | 'reasoning'
   | 'openrouter_claude_adaptive_verbosity'
   | 'thinking'
-  | 'thinking_with_deepseek_reasoning_effort'
+  | 'thinking_with_high_max_reasoning_effort'
   | 'thinking_with_reasoning_effort'
   | 'official'
   | 'disable_reasoning'
@@ -668,9 +668,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         return { thinking: { type: thinking.type } };
       }
 
-      // DeepSeek V4 — `thinking: { type }` + `reasoning_effort: high|max`
+      // GLM / DeepSeek V4 — `thinking: { type }` + `reasoning_effort: high|max`
       // @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
-      case 'thinking_with_deepseek_reasoning_effort': {
+      // @see https://docs.bigmodel.cn/cn/guide/start/migrate-to-glm-new
+      case 'thinking_with_high_max_reasoning_effort': {
         if (!thinking) {
           return {};
         }
@@ -788,7 +789,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       };
     }
 
-    if (type !== 'thinking_with_deepseek_reasoning_effort') {
+    if (type !== 'thinking_with_high_max_reasoning_effort') {
       return {};
     }
     if (this.isThinkingDisabled(thinking) || thinking.effort == null) {
@@ -1017,7 +1018,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       thinkingParamType = 'reasoning';
     } else if (useThinkingParam) {
       thinkingParamType = useDeepSeekReasoningEffortParam
-        ? 'thinking_with_deepseek_reasoning_effort'
+        ? 'thinking_with_high_max_reasoning_effort'
         : useReasoningEffortParam
           ? 'thinking_with_reasoning_effort'
           : 'thinking';
