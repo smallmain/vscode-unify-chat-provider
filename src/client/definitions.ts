@@ -238,9 +238,10 @@ export enum FeatureId {
    */
   OpenAIUseReasoningEffortParam = 'openai_use-reasoning-effort-param',
   /**
-   * Use DeepSeek V4 style `reasoning_effort` values (`high` / `max`) together
+   * Use GLM / DeepSeek V4 style `reasoning_effort` values (`high` / `max`) together
    * with the `thinking` parameter in OpenAI-compatible Chat Completion APIs.
    *
+   * @see https://docs.bigmodel.cn/cn/guide/start/migrate-to-glm-new
    * @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
    * @see https://api-docs.deepseek.com/zh-cn/
    */
@@ -598,7 +599,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUseDeepSeekReasoningEffortParam]: {
-    customCheckers: [(model) => modelFamilyIncludes(model, 'deepseek-v4')],
+    customCheckers: [
+      (model) => modelFamilyIncludes(model, 'glm-5.2'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+    ],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
     supportedProviders: [
