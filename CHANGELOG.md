@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.6.0 - 2026-06-17
+
+### Features
+- add reasoning_effort support for GLM-5.2 models (248600d, SmallMain)
+
 ## v7.5.0 - 2026-06-13
 
 ### Features

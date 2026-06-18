@@ -785,10 +785,10 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Ollama Cloud](https://ollama.com/)                                                           |                                                                                      |                       |
 | [阶跃星辰 (中国站)](https://platform.stepfun.com/)                                            | <li>ReasoningField                                                                   |                       |
 | [阶跃星辰 (国际站)](https://platform.stepfun.com/)                                            | <li>ReasoningField                                                                   |                       |
-| [智谱 AI](https://open.bigmodel.cn/)                                                          | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [详情](#智谱-ai--zai) |
-| [智谱 AI (Coding Plan)](https://open.bigmodel.cn/)                                            | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                       |
-| [Z.AI](https://z.ai/)                                                                         | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             | [详情](#智谱-ai--zai) |
-| [Z.AI (Coding Plan)](https://z.ai/)                                                           | <li>ThinkingParam <li>ReasoningContent <li>ClearThinking                             |                       |
+| [智谱 AI](https://open.bigmodel.cn/)                                                          | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    | [详情](#智谱-ai--zai) |
+| [智谱 AI (Coding Plan)](https://open.bigmodel.cn/)                                            | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    |                       |
+| [Z.AI](https://z.ai/)                                                                         | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    | [详情](#智谱-ai--zai) |
+| [Z.AI (Coding Plan)](https://z.ai/)                                                           | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    |                       |
 | [MiniMax (中国站)](https://www.minimaxi.com/)                                                 | <li>ReasoningDetails                                                                 |                       |
 | [MiniMax (国际站)](https://www.minimax.io/)                                                   | <li>ReasoningDetails                                                                 |                       |
 | [LongCat](https://longcat.chat/)                                                              |                                                                                      | [详情](#longcat)      |

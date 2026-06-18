@@ -213,13 +213,19 @@ function createAutoReasoningEffortPreset(): PresetTemplate['presets'][number] {
 
 function createReasoningEffortPreset(
   effort: ThinkingEffort,
-  thinking: NonNullable<ModelConfig['thinking']>,
+  type: NonNullable<ModelConfig['thinking']>['type'],
 ): PresetTemplate['presets'][number] {
   return {
     ...REASONING_EFFORT_PRESET_METADATA[effort],
     id: effort,
     config: {
-      thinking,
+      thinking:
+        effort === 'none'
+          ? { type: 'disabled' }
+          : {
+              type,
+              effort,
+            },
     },
   };
 }
@@ -290,10 +296,7 @@ export function reasoningEffort(
     ...(resolvedOptions?.includeAuto ? [createAutoReasoningEffortPreset()] : []),
     ...supportedEfforts.map(
       (effort): PresetTemplate['presets'][number] =>
-        createReasoningEffortPreset(effort, {
-          type: 'enabled',
-          effort,
-        }),
+        createReasoningEffortPreset(effort, 'enabled'),
     ),
   ];
   const defaultPreset =
@@ -329,10 +332,7 @@ export function adaptiveReasoningEffort(
   );
   const presets: PresetTemplate['presets'] = supportedEfforts.map(
     (effort): PresetTemplate['presets'][number] =>
-      createReasoningEffortPreset(effort, {
-        type: 'auto',
-        effort,
-      }),
+      createReasoningEffortPreset(effort, 'auto'),
   );
   const defaultPreset =
     resolvedOptions?.default &&
@@ -363,7 +363,7 @@ export function budgetReasoningEffort(
   const presets: PresetTemplate['presets'] = [
     ...(opts?.includeAuto ? [createAutoReasoningEffortPreset()] : []),
     ...(opts?.includeNone
-      ? [createReasoningEffortPreset('none', { type: 'disabled' })]
+      ? [createReasoningEffortPreset('none', 'disabled')]
       : []),
     ...supportedEfforts.map((effort): PresetTemplate['presets'][number] => ({
       ...REASONING_EFFORT_PRESET_METADATA[effort],
