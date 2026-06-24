@@ -127,6 +127,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
+    name: 'Prism API',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://sub2api.558686.xyz/v1',
+    authTypes: ['api-key'],
+    models: ['gpt-5.5'],
+  },
+  {
     name: 'Synthetic',
     category: 'General',
     type: 'openai-chat-completion',
