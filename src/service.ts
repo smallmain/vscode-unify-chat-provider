@@ -12,7 +12,11 @@ import {
   PerformanceTrace,
   ProviderConfig,
 } from './types';
-import { getBaseModelId } from './model-id-utils';
+import {
+  createVsCodeModelId,
+  getBaseModelId,
+  parseVsCodeModelId,
+} from './model-id-utils';
 import { createProvider } from './client/utils';
 import {
   formatProviderBadgeSuffixForModelSelection,
@@ -538,38 +542,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
    * Create a unique model ID combining provider and model names
    */
   private createModelId(providerName: string, modelId: string): string {
-    return `${this.encodeProviderName(providerName)}/${modelId}`;
-  }
-
-  /**
-   * Parse model ID to extract provider and model names
-   */
-  private parseModelId(
-    modelId: string,
-  ): { providerName: string; modelName: string } | null {
-    const slashIndex = modelId.indexOf('/');
-    if (slashIndex === -1) {
-      return null;
-    }
-    return {
-      providerName: modelId.slice(0, slashIndex),
-      modelName: modelId.slice(slashIndex + 1),
-    };
-  }
-
-  /**
-   * Encode provider name for use in model ID (reversible via decodeURIComponent)
-   */
-  private encodeProviderName(name: string): string {
-    return encodeURIComponent(name);
-  }
-
-  private decodeProviderName(encodedName: string): string | null {
-    try {
-      return decodeURIComponent(encodedName);
-    } catch {
-      return null;
-    }
+    return createVsCodeModelId(providerName, modelId);
   }
 
   /**
@@ -587,18 +560,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       );
     }
 
-    const parsed = this.parseModelId(modelId);
+    const parsed = parseVsCodeModelId(modelId);
     if (!parsed) {
       return null;
     }
 
-    const decodedProviderName = this.decodeProviderName(parsed.providerName);
-    if (!decodedProviderName) {
-      return null;
-    }
-
     const provider = this.configStore.endpoints.find(
-      (p) => p.name === decodedProviderName,
+      (p) => p.name === parsed.providerName,
     );
     if (!provider) {
       return null;

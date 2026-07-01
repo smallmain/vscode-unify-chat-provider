@@ -38,6 +38,7 @@ import {
   changeVSCodeDefaultModel,
   handleVSCodeDefaultModelError,
 } from './vscode-default-model';
+import { migrateLegacyVSCodeModelIds } from './vscode-model-id-migration';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
@@ -235,6 +236,9 @@ export async function activate(
     uriHandler,
   );
   context.subscriptions.push(officialModelsManager);
+  if (mainInstance.isLeader()) {
+    await migrateLegacyVSCodeModelIds(configStore);
+  }
 
   registerMainInstanceHandlers({
     configStore,

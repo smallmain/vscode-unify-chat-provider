@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { t } from './i18n';
 import { NoLanguageModelsAvailableError } from './commit-message/types';
+import { decodeVsCodeProviderSegment } from './model-id-utils';
 
 const EXTENSION_VENDOR_ID = 'unify-chat-provider';
 const MODEL_NAME_COLLATOR = new Intl.Collator(undefined, {
@@ -40,11 +41,7 @@ function getExtensionProviderName(model: vscode.LanguageModelChat): string {
   }
 
   const encodedProviderName = model.id.slice(0, slashIndex);
-  try {
-    return decodeURIComponent(encodedProviderName);
-  } catch {
-    return encodedProviderName;
-  }
+  return decodeVsCodeProviderSegment(encodedProviderName) ?? encodedProviderName;
 }
 
 export async function getAvailableLanguageModels(): Promise<

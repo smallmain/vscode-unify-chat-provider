@@ -5,6 +5,12 @@ import { ModelConfig } from './types';
  * Example: "claude-sonnet-4-5#thinking" -> base="claude-sonnet-4-5", version="thinking"
  */
 export const MODEL_VERSION_DELIMITER = '#';
+export const VSCODE_MODEL_ID_SEPARATOR = '/';
+
+export interface VSCodeModelIdParts {
+  providerName: string;
+  modelName: string;
+}
 
 /**
  * Parse a model ID into base ID and optional version.
@@ -124,4 +130,70 @@ export function isBaseModelIdUsed(
     if (m.id === excludeId) return false;
     return getBaseModelId(m.id) === baseModelId;
   });
+}
+
+export function encodeVsCodeProviderSegment(providerName: string): string {
+  return providerName.replace(/%/g, '%25').replace(/\//g, '%2F');
+}
+
+export function decodeVsCodeProviderSegment(segment: string): string | null {
+  let decoded = '';
+
+  for (let index = 0; index < segment.length; index++) {
+    const char = segment[index];
+    if (char !== '%') {
+      decoded += char;
+      continue;
+    }
+
+    const escape = segment.slice(index, index + 3).toUpperCase();
+    if (escape === '%25') {
+      decoded += '%';
+      index += 2;
+      continue;
+    }
+    if (escape === '%2F') {
+      decoded += '/';
+      index += 2;
+      continue;
+    }
+
+    return null;
+  }
+
+  return decoded;
+}
+
+export function createVsCodeModelId(
+  providerName: string,
+  modelId: string,
+): string {
+  return `${encodeVsCodeProviderSegment(providerName)}${VSCODE_MODEL_ID_SEPARATOR}${modelId}`;
+}
+
+export function parseVsCodeModelId(
+  modelId: string,
+): VSCodeModelIdParts | null {
+  const separatorIndex = modelId.indexOf(VSCODE_MODEL_ID_SEPARATOR);
+  if (separatorIndex === -1) {
+    return null;
+  }
+
+  const providerSegment = modelId.slice(0, separatorIndex);
+  const providerName = decodeVsCodeProviderSegment(providerSegment);
+  if (providerName === null) {
+    return null;
+  }
+
+  return {
+    providerName,
+    modelName: modelId.slice(separatorIndex + 1),
+  };
+}
+
+export function createLegacyVsCodeModelId(
+  providerName: string,
+  modelId: string,
+): string {
+  return `${encodeURIComponent(providerName)}${VSCODE_MODEL_ID_SEPARATOR}${modelId}`;
 }
