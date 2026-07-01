@@ -85,6 +85,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [
       'claude-fable-5',
       'claude-mythos-5',
+      'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4-7',
       'claude-opus-4-6',
@@ -372,11 +373,19 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://ark.cn-beijing.volces.com/api/v3',
     authTypes: ['api-key'],
     models: [
-      'doubao-seed-2-0-pro-260215',
-      'doubao-seed-2-0-lite-260215',
-      'doubao-seed-2-0-mini-260215',
-      'doubao-seed-2-0-code-preview-260215',
+      'doubao-seed-evolving',
+      'doubao-seed-2-1-pro-260628',
+      'doubao-seed-2-1-turbo-260628',
     ],
+  },
+  {
+    name: 'Volcano Engine (Agent Plan)',
+    category: 'General',
+    type: 'openai-responses',
+    baseUrl: 'https://ark.cn-beijing.volces.com/api/plan/v3',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
   },
   {
     name: 'Volcano Engine (Coding Plan)',
@@ -384,15 +393,8 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'openai-chat-completion',
     baseUrl: 'https://ark.cn-beijing.volces.com/api/coding/v3',
     authTypes: ['api-key'],
-    models: [
-      'ark-code-latest',
-      'doubao-seed-2.0-code',
-      'doubao-seed-code',
-      'glm-4.7',
-      'deepseek-v3.2',
-      'kimi-k2-thinking',
-      'kimi-k2.5',
-    ],
+    models: [],
+    autoFetchOfficialModels: true,
   },
   {
     name: 'Byte Plus',
@@ -406,6 +408,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
       'doubao-seed-2-0-mini-260215',
       'doubao-seed-2-0-code-preview-260215',
     ],
+  },
+  {
+    name: 'Byte Plus (Coding Plan)',
+    category: 'General',
+    type: 'openai-responses',
+    baseUrl: 'https://ark.ap-southeast.bytepluses.com/api/coding/v3',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
   },
   {
     name: 'DeepSeek',
@@ -584,10 +595,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.longcat.chat/openai',
     authTypes: ['api-key'],
     models: [
-      'LongCat-Flash-Chat',
-      'LongCat-Flash-Thinking',
-      'LongCat-Flash-Thinking-2601',
-      'LongCat-Flash-Lite',
+      'LongCat-2.0',
     ],
   },
   {
@@ -736,6 +744,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [
       'claude-fable-5',
       'claude-mythos-5',
+      'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4-7',
       'claude-opus-4-6',

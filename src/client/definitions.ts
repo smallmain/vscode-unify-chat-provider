@@ -362,6 +362,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicInterleavedThinking]: {
     supportedFamilys: [
+      'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4.8',
       'claude-opus-4-7',
@@ -381,10 +382,15 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.AnthropicAlwaysOnAdaptiveThinking]: {
-    supportedFamilys: ['claude-fable-5', 'claude-mythos-5'],
+    supportedFamilys: [
+      'claude-fable-5',
+      'claude-mythos-5',
+      'claude-sonnet-5',
+    ],
   },
   [FeatureId.AnthropicXHighEffort]: {
     supportedFamilys: [
+      'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4.8',
       'claude-opus-4-7',
@@ -425,6 +431,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicContext1M]: {
     supportedFamilys: [
+      'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4.8',
       'claude-opus-4-7',
