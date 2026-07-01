@@ -65,6 +65,12 @@ const ANTHROPIC_FABLE_5_REASONING_EFFORTS = [
   'medium',
   'low',
 ] as const;
+const ANTHROPIC_SONNET_5_REASONING_EFFORTS = [
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
 const ANTHROPIC_OPUS_4_6_REASONING_EFFORTS = [
   'xhigh',
   'high',
@@ -205,6 +211,57 @@ function mergeModelConfig(
  * Well-known models configuration
  */
 const _WELL_KNOWN_MODELS = [
+  {
+    id: 'doubao-seed-evolving',
+    overrides: ['doubao-seed-evolving'],
+    name: 'Doubao Seed Evolving',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [doubaoReasoningEffort('high')],
+  },
+  {
+    id: 'doubao-seed-2-1-pro-260628',
+    overrides: ['doubao-Seed-2.1-pro'],
+    name: 'Doubao Seed 2.1 Pro',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [doubaoReasoningEffort('high')],
+  },
+  {
+    id: 'doubao-seed-2-1-turbo-260628',
+    overrides: ['doubao-Seed-2.1-turbo'],
+    name: 'Doubao Seed 2.1 Turbo',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [doubaoReasoningEffort('high')],
+  },
   {
     id: 'doubao-seed-2-0-pro-260215',
     overrides: ['doubao-seed-2-0-pro', 'doubao-seed-2.0-pro'],
@@ -512,6 +569,31 @@ const _WELL_KNOWN_MODELS = [
         anthropicAdaptiveReasoningEffort(
           ANTHROPIC_FABLE_5_REASONING_EFFORTS,
           'high',
+        ),
+      ),
+    ],
+  },
+  {
+    id: 'claude-sonnet-5',
+    name: 'Claude Sonnet 5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'xhigh',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_SONNET_5_REASONING_EFFORTS,
+          'xhigh',
         ),
       ),
     ],
@@ -4769,6 +4851,20 @@ const _WELL_KNOWN_MODELS = [
     capabilities: {
       toolCalling: false,
       imageInput: true,
+    },
+  },
+  {
+    id: 'LongCat-2.0',
+    name: 'LongCat 2.0',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
     },
   },
   {

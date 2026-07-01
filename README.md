@@ -25,13 +25,13 @@ Integrate multiple LLM API providers into VS Code's GitHub Copilot Chat using th
 
 ## Features
 
-- 🐑 **Free Tier Access**: Aggregates the latest free mainstream models, configurable in just a few steps!
+- 🐑 **Free Tier Access**: Aggregates the latest free mainstream model channel configurations!
+- 📦 **Out of the Box**: One-click configuration, automatic syncing of official model lists, and migration from other tools.
 - 🔌 **Perfect Compatibility**: Supports all major LLM API formats (OpenAI Chat Completions, OpenAI Responses, Anthropic Messages, Ollama Chat, Gemini).
 - 🎯 **Deep Adaptation**: Adapts to special API features and best practices of 45+ mainstream providers.
 - 🚀 **Best Performance**: Built-in recommended parameters for 200+ mainstream models, allowing you to maximize model potential without tuning.
-- 📦 **Out of the Box**: One-click configuration, or one-click migration from mainstream applications and extensions, with automatic syncing of official model lists, no tedious operations required.
-- 💾 **Import and Export**: Complete import/export support; import existing configs via Base64, JSON, URL, or URI.
-- 💎 **Great UX**: Visual interface configuration, fully open model parameters, supports unlimited provider and model configurations, and supports coexistence of multiple configuration variants for the same provider and model.
+- 💾 **Import and Export**: Complete import/export support; import configs via Base64, JSON, URL, or URI.
+- 💎 **Great UX**: Visual interface configuration, fully customizable model parameters, supports unlimited provider and model configurations, and supports coexistence of multiple configuration variants for the same provider and model.
 - ✨ **One More Thing**: One-click use of your Claude Code, Gemini CLI, Antigravity, Github Copilot, OpenAI Codex (ChatGPT Plus/Pro), xAI Grok (SuperGrok / X Premium+) account quotas.
 
 ## Installation
@@ -41,131 +41,21 @@ Integrate multiple LLM API providers into VS Code's GitHub Copilot Chat using th
 
 ## Quick Start
 
-Check out the [Cookbook](#-cookbook), you can start using it in minutes:
+If the provider you want to add is in the [Provider Support Table](#provider-support-table), use [One-Click Configuration](#one-click-configuration).
 
-- **Free Claude 4.5 & Gemini 3 / 3.1 Series Models**:
-  - [Add Gemini CLI / Antigravity Account](#add-gemini-cli--antigravity-account)
-- **Partially Free Claude, GPT, Gemini, Grok Series Models**:
-  - [Add GitHub Copilot Account](#add-github-copilot-account)
-- **Free Kimi K2.5, GLM 4.7, MiniMax M2.1 Series Models**:
-  - [Add Nvidia Account](#add-nvidia-account)
-- **Kimi, GLM, MiniMax, Qwen, DeepSeek, Llama Series Models**:
-  - [Add Synthetic Account](#add-synthetic-account)
-- More Recipes:
-  - [Impersonate Claude Code Client](#impersonate-claude-code-client)
+Otherwise, you can also [manually configure](#manual-configuration) any provider and model.
 
-You can also check the [Provider Support Table](#provider-support-table):
-
-- Browse all providers with **long-term free quotas**.
-- [One-Click Configuration](#one-click-configuration) to start.
-
-When you have added multiple providers or models:
-
-- Use the [Manage Providers](#manage-providers) interface for unified management.
-- Use [Import and Export](#import-and-export) to backup or share configurations with others.
-
-Currently, you might also be looking for:
+You might also be looking for:
 
 - [One-Click Migration](#one-click-migration): Migrate from other apps or extensions.
-- [Manual Configuration](#manual-configuration): Add any provider and model completely from scratch.
+- [Manage Providers](#manage-providers): Unified management for all providers and models.
+- [Import and Export](#import-and-export): Back up or export configurations to share with others.
 
-If the above content still doesn't help you, please continue reading the rest of this document, or create an Issue for help.
-
-## 🍱 Cookbook
-
-#### Add Gemini CLI / Antigravity Account
-
-<details>
-
-> ⚠️ Warning: This may violate Google's Terms of Service, please be aware of the risk of account banning!
-
-0. You need to prepare a Google account.
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Google Antigravity` in the list, leave `Project ID` blank and press Enter.
-3. Allow the extension to open the browser for authorized login, and log in to your account in the browser.
-4. After logging in, return to VS Code and click the `Save` button at the bottom of the configuration interface to complete.
-5. Optional: Repeat the above steps to add the `Google Gemini CLI` provider.
-
-The quotas for Antigravity and Gemini CLI for the same account are independent, so it is recommended to add both to get more free quotas.
-
-**Gemini CLI Permission Error Solution:**
-
-When using Gemini CLI models, you may see:
-
-- Permission 'cloudaicompanion.companions.generateChat' denied on resource '//cloudaicompanion.googleapis.com/projects/...'
-- 'No project ID found for Gemini CLI.'
-
-That means you need to have your own `Project ID`.
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Create or select a project
-3. Enable the **Gemini for Google Cloud API** (`cloudaicompanion.googleapis.com`)
-4. When authorizing, explicitly fill in the `Project ID` instead of leaving it blank.
-
-</details>
-
-#### Add GitHub Copilot Account
-
-<details>
-
-VS Code's Copilot Chat itself supports logging into a GitHub Copilot account, so this is generally used to quickly switch between multiple accounts.
-
-0. You need to prepare a Github account.
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Github Copilot` in the list, and choose `Github.com` or `Github Enterprise` depending on whether your account is an enterprise subscription.
-3. Allow the extension to open the browser for authorized login, and log in to your account in the browser.
-4. After logging in, return to VS Code and click the `Save` button at the bottom of the configuration interface to complete.
-
-</details>
-
-#### Add Nvidia Account
-
-<details>
-
-0. You need to prepare an Nvidia account.
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Nvidia` in the list, fill in the API Key generated in the user panel and press Enter.
-3. Click the `Save` button at the bottom of the configuration interface to complete.
-
-> If you need to use the Kimi K2.5 model, please add it from the built-in model list, as the official API may not have returned this model information yet.
-
-</details>
-
-#### Add Synthetic Account
-
-<details>
-
-0. You need to prepare a Synthetic account.
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Synthetic` in the list, fill in the API Key generated in the user panel and press Enter.
-3. Click the `Save` button at the bottom of the configuration interface to complete.
-
-</details>
-
-#### Impersonate Claude Code Client
-
-<details>
-
-> ⚠️ Warning: This may violate the provider's Terms of Service, please be aware of the risk of account banning!
-
-When do you need to use this?
-
-- Some Coding Plan subscriptions or relay sites require you to strictly use their API Key in Claude Code.
-- You need to use Claude Code's account quota in Github Copilot.
-
-Steps:
-
-0. You need to prepare a Claude Code account or API Key (whether official Key or not).
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Add Provider From Well-Known Provider List`.
-2. Select `Claude Code` in the list, and choose from two verification methods:
-   - `API Key`: Fill in the API Key used in Claude Code.
-   - `Claude Code`: Allow the extension to open the browser for authorized login, and log in to your account in the browser.
-3. If your `Base URL` is not the official `https://api.anthropic.com`:
-   - In the pop-up configuration interface, click `Provider Settings...` -> `API Base URL` and fill in the URL you want to use.
-   - Return to the previous interface.
-4. Click the `Save` button at the bottom of the configuration interface to complete.
-
-</details>
+> ⚠️ **Avoid VS Code background tasks consuming Copilot quota**
+>
+> VS Code currently uses utility models for some background tasks by default. If you use a free Copilot account, this may consume your Copilot quota.
+>
+> You need to set these to other models in `settings.json` yourself to avoid consuming Copilot quota, or use the quick settings interface provided by this extension. See [Quick Set VS Code Default Model](#quick-set-vs-code-default-model) for details.
 
 ## Basic Operations
 
@@ -182,34 +72,6 @@ The UI is integrated into the VS Code Command Palette for a more native experien
 <div align="center">
   <img src="assets/screenshot-20.png" width="600" />
 </div>
-
-## One-Click Migration
-
-See the [Application Migration Support Table](#application-migration-support-table) to learn which apps and extensions are supported.
-
-> If your app/extension is not in the list, you can configure it via [One-Click Configuration](#one-click-configuration) or [Manual Configuration](#manual-configuration).
-
-**Steps:**
-
-1. Open the VS Code Command Palette and search for `Unify Chat Provider: Import Config From Other Applications`.
-
-   <div align="center">
-   <img src="assets/screenshot-2.png" width="600" />
-   </div>
-   - The UI lists all supported apps/extensions and the detected config file paths.
-   - Use the button group on the far right of each item for additional actions:
-     1. `Custom Path`: Import from a custom config file path.
-     2. `Import From Config Content`: Paste the config content directly.
-
-2. Choose the app/extension you want to import, then you’ll be taken to the config import screen.
-   - This screen lets you review and edit the config that will be imported.
-   - For details, see the [Provider Settings](#provider-settings) section.
-
-3. Click `Save` to complete the import and start using the imported models in Copilot Chat.
-
-   <div align="center">
-   <img src="assets/screenshot-23.png" width="600" />
-   </div>
 
 ## One-Click Configuration
 
@@ -284,6 +146,35 @@ This section uses DeepSeek as an example, adding the provider and two models.
    <div align="center">
    <img src="assets/screenshot-22.png" width="600" />
    </div>
+
+## One-Click Migration
+
+See the [Application Migration Support Table](#application-migration-support-table) to learn which apps and extensions are supported.
+
+> If your app/extension is not in the list, you can configure it via [One-Click Configuration](#one-click-configuration) or [Manual Configuration](#manual-configuration).
+
+**Steps:**
+
+1. Open the VS Code Command Palette and search for `Unify Chat Provider: Import Config From Other Applications`.
+
+  <div align="center">
+  <img src="assets/screenshot-2.png" width="600" />
+  </div>
+
+  - The UI lists all supported apps/extensions and the detected config file paths.
+  - Use the button group on the far right of each item for additional actions:
+    1. `Custom Path`: Import from a custom config file path.
+    2. `Import From Config Content`: Paste the config content directly.
+
+2. Choose the app/extension you want to import, then you’ll be taken to the config import screen.
+  - This screen lets you review and edit the config that will be imported.
+  - For details, see the [Provider Settings](#provider-settings) section.
+
+3. Click `Save` to complete the import and start using the imported models in Copilot Chat.
+
+  <div align="center">
+  <img src="assets/screenshot-23.png" width="600" />
+  </div>
 
 ## Manage Providers
 
@@ -719,6 +610,28 @@ OAuth credentials are always kept in Secret Storage to avoid multi-device token 
 
 This can increase the risk of user data leakage, so evaluate the risk before enabling.
 
+## Quick Set VS Code Default Model
+
+You can open the quick settings interface with the VS Code command `Unify Chat Provider: Change VS Code Default Model`.
+
+The following settings can be changed quickly:
+
+- ★ `chat.utilityModel`
+- ★ `chat.utilitySmallModel`
+- ★ `chat.exploreAgent.defaultModel`
+- ★ `github.copilot.chat.exploreAgent.model`
+- `inlineChat.defaultModel`
+- `chat.planAgent.defaultModel`
+- `github.copilot.chat.askAgent.model`
+- `github.copilot.chat.implementAgent.model`
+
+Items marked with `★` mean:
+
+- By default, VS Code uses Copilot built-in models for these settings. These models do not consume premium quota on paid plans, but may consume free quota on free plans.
+- It is recommended to set them to fast, inexpensive models.
+
+You can select the `Change All Built-in Utility Models` button to update all `★` items at once.
+
 ## API Format Support Table
 
 <details>
@@ -947,7 +860,7 @@ The models listed below support [One-Click Add Models](#one-click-add-models), a
 |                  | Gemini 2.5 Series     | gemini-2.5-pro, gemini-2.5-flash, gemini-2.5-flash-lite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 |                  | Gemini 2.0 Series     | gemini-2.0-flash, gemini-2.0-flash-lite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |
 |                  | Gemma 4 Series        | Gemma 4 31B, Gemma 4 26B A4B, Gemma 4 E4B, Gemma 4 E2B                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                               |
-| **Anthropic**    | Claude 5 Series       | Claude Fable 5, Claude Mythos 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| **Anthropic**    | Claude 5 Series       | Claude Fable 5, Claude Mythos 5, Claude Sonnet 5                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 |                  | Claude 4 Series       | Claude Opus 4.8, Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, Claude Sonnet 4.5, Claude Haiku 4.5, Claude Opus 4.5, Claude Sonnet 4, Claude Opus 4.1, Claude Opus 4                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 |                  | Claude 3 Series       | Claude Sonnet 3.7, Claude Sonnet 3.5, Claude Haiku 3.5, Claude Haiku 3, Claude Opus 3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 | **xAI**          | Grok 4.20 Series      | Grok 4.20 0309 (Reasoning), Grok 4.20 0309 (Non-Reasoning)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -968,14 +881,16 @@ The models listed below support [One-Click Add Models](#one-click-add-models), a
 |                  | DeepSeek VL Series    | DeepSeek VL, DeepSeek VL2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 |                  | DeepSeek Coder Series | DeepSeek Coder, DeepSeek Coder V2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                    |
 |                  | DeepSeek Math Series  | DeepSeek Math V2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                     |
-| **ByteDance**    | Doubao 2.0 Series     | Doubao Seed 2.0 Pro, Doubao Seed 2.0 Lite, Doubao Seed 2.0 Mini, Doubao Seed 2.0 Code Preview                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+| **ByteDance**    | Doubao 2.1 Series     | Doubao Seed 2.1 Pro, Doubao Seed 2.1 Turbo                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
+|    | Doubao 2.0 Series     | Doubao Seed 2.0 Pro, Doubao Seed 2.0 Lite, Doubao Seed 2.0 Mini, Doubao Seed 2.0 Code Preview                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                        |
 |                  | Doubao 1.8 Series     | Doubao Seed 1.8, Doubao Seed Code Preview                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 |                  | Doubao 1.6 Series     | Doubao Seed 1.6, Doubao Seed 1.6 Lite, Doubao Seed 1.6 Flash, Doubao Seed 1.6 Vision                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                 |
 |                  | Doubao 1.5 Series     | Doubao 1.5 Pro 32k, Doubao 1.5 Pro 32k Character, Doubao 1.5 Lite 32k                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
 |                  | Other Models          | Doubao Lite 32k Character                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
 | **MiniMax**      | MiniMax M3 Series     | MiniMax-M3                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                           |
 |                  | MiniMax M2 Series     | MiniMax-M2.7, MiniMax-M2.7-Highspeed, MiniMax-M2.5, MiniMax-M2.5-Highspeed, MiniMax-M2.1, MiniMax-M2.1-Highspeed, MiniMax-M2                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
-| **LongCat**      | LongCat Flash Series  | LongCat Flash Chat, LongCat Flash Thinking, LongCat Flash Thinking 2601, LongCat Flash Lite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+| **LongCat**      | LongCat 2 Series  | LongCat 2.0                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
+|     | LongCat Flash Series  | LongCat Flash Chat, LongCat Flash Thinking, LongCat Flash Thinking 2601, LongCat Flash Lite                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                          |
 | **StreamLake**   | KAT-Coder Series      | KAT-Coder-Pro V2, KAT-Coder-Pro V1, KAT-Coder-Exp-72B-1010, KAT-Coder-Air V1                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
 | **Moonshot AI**  | Kimi K2.7 Series      | Kimi K2.7 Code                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |
 |                  | Kimi K2.6 Series      | Kimi K2.6                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                            |
@@ -1013,7 +928,7 @@ The applications listed below support [One-Click Migration](#one-click-migration
 | Application                                           | Notes                                                                                                                                    |
 | :---------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------- |
 | [Claude Code](https://claude.com/product/claude-code) | Migration is supported only when using a custom Base URL and API Key.                                                                    |
-| [Codex](https://openai.com/codex/)                    | Migration is supported only when using a custom Base URL and API Key.                                                                    |
+| [Codex](https://openai.com/codex/)                    | Supports Base URL, API Key, and OAuth.                                                                                                   |
 | [Gemini CLI](https://geminicli.com/)                  | Migration is supported only when using the following auth methods: `GEMINI_API_KEY`, `GOOGLE_API_KEY`, `GOOGLE_APPLICATION_CREDENTIALS`. |
 
 </details>

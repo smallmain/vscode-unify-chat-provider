@@ -13,6 +13,7 @@
   "command.refreshAllProvidersOfficialModels.title": "Unify Chat Provider: Refresh All Provider's Official Models",
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: Refresh All Providers' Balance Information",
   "command.syncBuiltInParamsToAllConfigs.title": "Unify Chat Provider: Sync Built-in Parameters to All Configs",
+  "command.changeVSCodeDefaultModel.title": "Unify Chat Provider: Change VS Code Default Model",
   "command.commitMessageGeneration.generate.title": "Unify Chat Provider: Generate Commit Message",
   "command.commitMessageGeneration.generateAll.title": "Unify Chat Provider: Generate Commit Message(All Changes)",
   "command.commitMessageGeneration.generateStaged.title": "Unify Chat Provider: Generate Commit Message(Staged Changes)",

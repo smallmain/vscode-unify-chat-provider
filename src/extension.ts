@@ -41,6 +41,11 @@ import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
 import { registerCommitMessageGeneration } from './commit-message';
 import { isUsageRecord, isUsageStoreState } from './usage/guards';
 import type { UsageRecord, UsageStoreState } from './usage/types';
+import {
+  changeVSCodeDefaultModel,
+  handleVSCodeDefaultModelError,
+} from './vscode-default-model';
+import { migrateLegacyVSCodeModelIds } from './vscode-model-id-migration';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
@@ -309,6 +314,9 @@ export async function activate(
     uriHandler,
   );
   context.subscriptions.push(officialModelsManager);
+  if (mainInstance.isLeader()) {
+    await migrateLegacyVSCodeModelIds(configStore);
+  }
 
   registerMainInstanceHandlers({
     configStore,
@@ -522,6 +530,16 @@ export function registerCommands(
     vscode.commands.registerCommand(
       'unifyChatProvider.syncBuiltInParamsToAllConfigs',
       () => syncBuiltInParamsToAllConfigs(configStore),
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.changeVSCodeDefaultModel',
+      async () => {
+        try {
+          await changeVSCodeDefaultModel();
+        } catch (error) {
+          await handleVSCodeDefaultModelError(error);
+        }
+      },
     ),
   );
 }

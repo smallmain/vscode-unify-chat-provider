@@ -850,7 +850,7 @@ export class AnthropicProvider implements ApiProvider {
       modelId: encodedModelId,
       expectedIdentity,
       imageRetention:
-        model.capabilities?.imageInput === true ? 'all' : 'discard',
+        model.capabilities?.imageInput === true ? 'user-only' : 'discard',
     });
 
     const alwaysOnAdaptiveThinking = isFeatureSupported(

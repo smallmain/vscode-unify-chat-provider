@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.6.0",
+  "version": "7.8.0",
   "categories": [
     "AI",
     "Chat"
@@ -183,6 +183,10 @@
       {
         "command": "unifyChatProvider.syncBuiltInParamsToAllConfigs",
         "title": "%command.syncBuiltInParamsToAllConfigs.title%"
+      },
+      {
+        "command": "unifyChatProvider.changeVSCodeDefaultModel",
+        "title": "%command.changeVSCodeDefaultModel.title%"
       },
       {
         "command": "unifyChatProvider.commitMessageGeneration.generate",

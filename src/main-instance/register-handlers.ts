@@ -27,6 +27,7 @@ import { PROVIDER_TYPES, type ProviderType } from '../client/definitions';
 import type { ModelConfig, TimeoutConfig } from '../types';
 import { normalizePresetTemplates } from '../preset-templates';
 import { normalizeUseRawBaseUrl, type RetryConfig } from '../utils';
+import { migrateLegacyVSCodeModelIds } from '../vscode-model-id-migration';
 
 type OAuthWaitResult = { type: 'success'; url: string } | { type: 'cancel' };
 
@@ -1361,6 +1362,7 @@ export function registerMainInstanceHandlers(options: {
         await options.configStore.removeProvider(originalNameValue);
       }
       await options.configStore.upsertProvider(provider);
+      await migrateLegacyVSCodeModelIds(options.configStore);
       return { ok: true };
     },
   );

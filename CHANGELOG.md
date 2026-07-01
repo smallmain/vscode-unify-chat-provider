@@ -1,5 +1,36 @@
 # Changelog
 
+## v7.8.0 - 2026-07-01
+
+### Features
+- add Codex OAuth migration (d34ffef, Henri Questiaux)
+- add Claude Sonnet 5, Doubao 2.1, LongCat 2.0 models and update providers (24235c3, SmallMain)
+
+### Refactors
+- spread Codex provider metadata in migration (839514a, Henri Questiaux)
+- reuse Codex OAuth claim helpers (416d767, Henri Questiaux)
+- source Codex provider metadata (d02bc82, Henri Questiaux)
+- reuse Codex migration constants (0891b7f, Henri Questiaux)
+
+### Docs
+- update Codex migration support notes (d79e282, Henri Questiaux)
+
+## v7.7.0 - 2026-07-01
+
+### Features
+- enable automatic model fetching for OpenCode providers (3e4a386, SmallMain)
+- rewrite README with simplified quick start and add VS Code default model section (a3c994f, SmallMain)
+- add new VS Code default model configurations and improve model picker (a758104, SmallMain)
+- add useRawBaseUrl to Kilo provider (3741db3, SmallMain)
+- add model ID migration for VS Code model identifiers (acaf7df, SmallMain)
+- add command to change VS Code default model settings (4657fee, SmallMain)
+
+### Fixes
+- openai: handle null or empty choices in chat completion and chunk responses (d535c17, SmallMain)
+- fix problems in history sanitization logic (f25a646, SmallMain)
+- reorder auth field before transport and update base URL description (b732f28, SmallMain)
+- opencode: add opencode.ai to OpenAIUseReasoningContent supportedProviders (e773ed8, liyilong)
+
 ## v7.6.0 - 2026-06-17
 
 ### Features

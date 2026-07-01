@@ -2606,7 +2606,7 @@ export interface SanitizedMessagesForModelSwitchResult {
 
 export type SanitizedImagePartRetention = 'discard' | 'user-only' | 'all';
 
-function collectToolCallIds(
+function collectExplicitToolCallIds(
   message: vscode.LanguageModelChatRequestMessage,
 ): string[] {
   if (message.role !== vscode.LanguageModelChatMessageRole.Assistant) {
@@ -2618,7 +2618,7 @@ function collectToolCallIds(
   );
 }
 
-function collectToolResultIds(
+function collectExplicitToolResultIds(
   message: vscode.LanguageModelChatRequestMessage,
 ): string[] {
   if (message.role !== vscode.LanguageModelChatMessageRole.User) {
@@ -2637,19 +2637,15 @@ function sanitizeMessageForModelSwitch(
   message: vscode.LanguageModelChatRequestMessage,
   imageRetention: SanitizedImagePartRetention,
 ): vscode.LanguageModelChatRequestMessage | undefined {
-  if (
-    message.role !== vscode.LanguageModelChatMessageRole.User &&
-    message.role !== vscode.LanguageModelChatMessageRole.Assistant
-  ) {
-    return message;
-  }
-
+  // Cross-model history must be provider-neutral. Keep only text and images
+  // that the target model can safely consume; drop markers, tools, thinking,
+  // usage/cache metadata, and any unknown future part types.
   const portableParts = message.content.filter(
     (
       part,
     ): part is vscode.LanguageModelTextPart | vscode.LanguageModelDataPart => {
       if (part instanceof vscode.LanguageModelTextPart) {
-        return true;
+        return part.value.length > 0;
       }
 
       if (
@@ -2686,11 +2682,11 @@ function propagateSanitizedToolNeighbors(
   const toolResultMessageIndexesByCallId = new Map<string, number[]>();
 
   for (const [index, message] of messages.entries()) {
-    for (const callId of collectToolCallIds(message)) {
+    for (const callId of collectExplicitToolCallIds(message)) {
       toolCallMessageIndexByCallId.set(callId, index);
     }
 
-    for (const callId of collectToolResultIds(message)) {
+    for (const callId of collectExplicitToolResultIds(message)) {
       const indexes = toolResultMessageIndexesByCallId.get(callId);
       if (indexes) {
         indexes.push(index);

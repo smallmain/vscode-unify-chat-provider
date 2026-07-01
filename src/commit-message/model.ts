@@ -1,25 +1,15 @@
 import * as vscode from 'vscode';
+import { pickLanguageModel } from '../language-model-picker';
 import {
   inspectCommitMessageModelConfiguration,
   readCommitMessageGenerationConfiguration,
   updateCommitMessageModelConfiguration,
 } from './config';
 import type { CommitMessageGenerationModelConfiguration } from './types';
-import { NoLanguageModelsAvailableError } from './types';
 import { t } from '../i18n';
-
-const EXTENSION_VENDOR_ID = 'unify-chat-provider';
-const MODEL_NAME_COLLATOR = new Intl.Collator(undefined, {
-  numeric: true,
-  sensitivity: 'base',
-});
 
 interface ConfigurationTargetQuickPickItem extends vscode.QuickPickItem {
   target: vscode.ConfigurationTarget;
-}
-
-interface ModelQuickPickItem extends vscode.QuickPickItem {
-  model: vscode.LanguageModelChat;
 }
 
 function formatConfiguredModel(
@@ -30,58 +20,6 @@ function formatConfiguredModel(
   }
 
   return `${model.vendor}/${model.id}`;
-}
-
-function getExtensionProviderName(model: vscode.LanguageModelChat): string {
-  if (model.vendor !== EXTENSION_VENDOR_ID) {
-    return '';
-  }
-
-  const slashIndex = model.id.indexOf('/');
-  if (slashIndex === -1) {
-    return '';
-  }
-
-  const encodedProviderName = model.id.slice(0, slashIndex);
-  try {
-    return decodeURIComponent(encodedProviderName);
-  } catch {
-    return encodedProviderName;
-  }
-}
-
-async function getAvailableLanguageModels(): Promise<vscode.LanguageModelChat[]> {
-  const models = await vscode.lm.selectChatModels();
-  const dedupedModels = new Map<string, vscode.LanguageModelChat>();
-
-  for (const model of models) {
-    dedupedModels.set(`${model.vendor}/${model.id}`, model);
-  }
-
-  return [...dedupedModels.values()].sort((left, right) => {
-    const vendorComparison = MODEL_NAME_COLLATOR.compare(
-      left.vendor,
-      right.vendor,
-    );
-    if (vendorComparison !== 0) {
-      return vendorComparison;
-    }
-
-    const providerComparison = MODEL_NAME_COLLATOR.compare(
-      getExtensionProviderName(left),
-      getExtensionProviderName(right),
-    );
-    if (providerComparison !== 0) {
-      return providerComparison;
-    }
-
-    const nameComparison = MODEL_NAME_COLLATOR.compare(left.name, right.name);
-    if (nameComparison !== 0) {
-      return nameComparison;
-    }
-
-    return MODEL_NAME_COLLATOR.compare(left.id, right.id);
-  });
 }
 
 function createConfigurationTargetItems(): ConfigurationTargetQuickPickItem[] {
@@ -124,28 +62,6 @@ async function pickConfigurationTarget(): Promise<vscode.ConfigurationTarget | u
   return selected?.target;
 }
 
-async function pickModel(): Promise<vscode.LanguageModelChat | undefined> {
-  const models = await getAvailableLanguageModels();
-  if (models.length === 0) {
-    throw new NoLanguageModelsAvailableError();
-  }
-
-  const items: ModelQuickPickItem[] = models.map((model) => ({
-    label: model.name,
-    description: model.vendor,
-    detail: model.id,
-    model,
-  }));
-
-  const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: t('Choose a language model for commit message generation'),
-    matchOnDescription: true,
-    matchOnDetail: true,
-  });
-
-  return selected?.model;
-}
-
 export async function changeCommitMessageModelConfiguration(): Promise<
   vscode.LanguageModelChat | undefined
 > {
@@ -154,9 +70,18 @@ export async function changeCommitMessageModelConfiguration(): Promise<
     return undefined;
   }
 
-  const model = await pickModel();
-  if (!model) {
+  const selectedModel = await pickLanguageModel({
+    placeHolder: t('Choose a language model for commit message generation'),
+  });
+  if (!selectedModel) {
     return undefined;
+  }
+  if (selectedModel.kind === 'default') {
+    return undefined;
+  }
+  const model = selectedModel.resolvedModel;
+  if (!model) {
+    throw new vscode.CancellationError();
   }
 
   const configuration = {

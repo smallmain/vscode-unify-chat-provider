@@ -30,6 +30,7 @@ import {
   isLeaderUnavailableError,
   isVersionIncompatibleError,
 } from '../main-instance/errors';
+import { migrateLegacyVSCodeModelIds } from '../vscode-model-id-migration';
 
 async function applyAuthStoragePolicy(options: {
   store: ConfigStore;
@@ -220,6 +221,10 @@ export async function saveProviderDraft(options: {
     } else {
       officialModelsManager.clearDraftSession(draftSessionId);
     }
+  }
+
+  if (mainInstance.isLeader()) {
+    await migrateLegacyVSCodeModelIds(options.store);
   }
 
   vscode.window.showInformationMessage(
