@@ -757,6 +757,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.kilo.ai/api/gateway',
+    useRawBaseUrl: true,
     authTypes: ['api-key'],
     models: [],
   },
