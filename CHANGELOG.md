@@ -1,5 +1,20 @@
 # Changelog
 
+## v7.8.0 - 2026-07-01
+
+### Features
+- add Codex OAuth migration (d34ffef, Henri Questiaux)
+- add Claude Sonnet 5, Doubao 2.1, LongCat 2.0 models and update providers (24235c3, SmallMain)
+
+### Refactors
+- spread Codex provider metadata in migration (839514a, Henri Questiaux)
+- reuse Codex OAuth claim helpers (416d767, Henri Questiaux)
+- source Codex provider metadata (d02bc82, Henri Questiaux)
+- reuse Codex migration constants (0891b7f, Henri Questiaux)
+
+### Docs
+- update Codex migration support notes (d79e282, Henri Questiaux)
+
 ## v7.7.0 - 2026-07-01
 
 ### Features
