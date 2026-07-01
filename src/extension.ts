@@ -34,6 +34,10 @@ import { authLog } from './logger';
 import { webSocketSessionManager } from './client/websocket-session-manager';
 import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
 import { registerCommitMessageGeneration } from './commit-message';
+import {
+  changeVSCodeDefaultModel,
+  handleVSCodeDefaultModelError,
+} from './vscode-default-model';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
@@ -419,6 +423,16 @@ export function registerCommands(
     vscode.commands.registerCommand(
       'unifyChatProvider.syncBuiltInParamsToAllConfigs',
       () => syncBuiltInParamsToAllConfigs(configStore),
+    ),
+    vscode.commands.registerCommand(
+      'unifyChatProvider.changeVSCodeDefaultModel',
+      async () => {
+        try {
+          await changeVSCodeDefaultModel();
+        } catch (error) {
+          await handleVSCodeDefaultModelError(error);
+        }
+      },
     ),
   );
 }

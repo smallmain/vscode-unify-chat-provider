@@ -177,6 +177,10 @@
         "title": "%command.syncBuiltInParamsToAllConfigs.title%"
       },
       {
+        "command": "unifyChatProvider.changeVSCodeDefaultModel",
+        "title": "%command.changeVSCodeDefaultModel.title%"
+      },
+      {
         "command": "unifyChatProvider.commitMessageGeneration.generate",
         "title": "%command.commitMessageGeneration.generate.title%",
         "icon": "$(sparkle)"
