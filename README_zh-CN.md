@@ -25,13 +25,13 @@ Unify Chat Provider
 
 ## 特性
 
-- 🐑 **免费聚合**：汇聚最新免费的主流模型，仅需几步即可配置！
+- 🐑 **免费聚合**：汇聚最新免费的主流模型渠道配置！
+- 📦 **开箱即用**：一键配置、自动同步官方模型列表、支持从其它工具迁移模型配置。
 - 🔌 **完整兼容**：支持所有主流的 LLM API 格式（OpenAI Chat Completion、OpenAI Responses、Anthropic Messages、Ollama Chat、Gemini）。
 - 🎯 **深度适配**：适配 45+ 个主流供应商的特殊接口特性与最佳实践。
 - 🚀 **最佳性能**：内置 200+ 种主流大模型的推荐参数，无需调参即可发挥模型最大潜力。
-- 📦 **开箱即用**：一键配置，或从主流应用和扩展一键迁移，支持自动同步官方模型列表，无需繁琐操作。
-- 💾 **导入导出**：拥有完善的导入和导出功能，支持多种方式（Base64、JSON、URL、URI）导入已有配置。
-- 💎 **极致体验**：可视化界面配置，模型参数完全开放，支持无限供应商及模型配置，支持同供应商及模型多个配置变体共存。
+- 💾 **导入导出**：拥有完善的导入和导出功能，支持多种方式（Base64、JSON、URL、URI）导入配置。
+- 💎 **极致体验**：可视化界面配置，模型参数完全开放自定义，支持无限供应商及模型配置，支持同供应商及模型多个配置变体共存。
 - ✨ **One More Thing**：一键使用你的 Claude Code、Gemini CLI、Antigravity、Github Copilot、OpenAI Codex (ChatGPT Plus/Pro)、xAI Grok (SuperGrok / X Premium+) 账号配额。
 
 ## 安装
@@ -41,131 +41,21 @@ Unify Chat Provider
 
 ## 快速开始
 
-翻看 [食谱](#-食谱)，你可以在几分钟之内开始使用：
+如果你要添加的供应商在 [供应商支持表](#供应商支持表) 中，则使用 [一键配置](#一键配置)。
 
-- **免费的 Claude 4.5、Gemini 3 和 3.1 系列模型**：
-  - [添加 Gemini CLI / Antigravity 账号](#添加-gemini-cli--antigravity-账号)
-- **部分免费的 Claude、GPT、Gemini、Grok 等系列模型**：
-  - [添加 GitHub Copilot 账号](#添加-github-copilot-账号)
-- **免费的 Kimi K2.5、GLM 4.7、MiniMax M2.1 等系列模型**：
-  - [添加 Nvidia 账号](#添加-nvidia-账号)
-- **Kimi、GLM、MiniMax、Qwen、DeepSeek、Llama 等系列模型**：
-  - [添加 Synthetic 账号](#添加-synthetic-账号)
-- 更多食谱：
-  - [伪装 Claude Code 客户端](#伪装-claude-code-客户端)
+否则，也可以 [手动配置](#手动配置) 任何供应商和模型。
 
-你也可以查看 [供应商支持表](#供应商支持表)：
-
-- 浏览所有含**长期免费额度**的供应商。
-- [一键配置](#一键配置) 开始使用。
-
-当你添加了多个供应商或者模型后：
-
-- 使用 [管理供应商](#管理供应商) 界面进行统一管理。
-- 通过 [导入与导出](#导入与导出) 进行备份或导出配置分享给其他人。
-
-当前，你可能也在找：
+你可能也在找：
 
 - [一键迁移](#一键迁移)：从其它应用或扩展迁移。
-- [手动配置](#手动配置)：完全从零开始添加任何供应商与模型。
+- [管理供应商](#管理供应商)：统一管理所有供应商和模型。
+- [导入与导出](#导入与导出)：备份或导出配置分享给其他人。
 
-如果以上内容对你依然没有帮助，请继续阅读本文档剩下的内容，或者创建一个 Issue 寻求帮助。
-
-## 🍱 食谱
-
-#### 添加 Gemini CLI / Antigravity 账号
-
-<details>
-
-> ⚠️ 警告：这可能会违反谷歌的服务条款，请知悉可能存在封号风险！
-
-0. 你需要准备一个 Google 账号。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Google Antigravity`，`Project ID` 可不填写直接回车。
-3. 允许扩展打开浏览器进行授权登录，在浏览器中登录你的账号。
-4. 登录完成后返回 VS Code，点击配置界面最下方的 `保存` 按钮完成。
-5. 可选：重复以上步骤，添加 `Google Gemini CLI` 供应商。
-
-同一个账号 Antigravity 和 Gemini CLI 的配额是独立的，所以建议都添加以获得更多免费额度。
-
-**Gemini CLI 权限错误解决方案：**
-
-在使用 Gemini CLI 模型时，您可能会看到以下错误：
-
-- Permission 'cloudaicompanion.companions.generateChat' denied on resource '//cloudaicompanion.googleapis.com/projects/...'
-- 'No project ID found for Gemini CLI.'
-
-这意味着你需要创建自己的 `Project ID`。
-
-1. 访问 [Google Cloud Console](https://console.cloud.google.com/)
-2. 创建或选择一个项目。
-3. 启用 Google Cloud 的 Gemini API (`cloudaicompanion.googleapis.com`)
-4. 授权时，请明确填写 `Project ID`，而不是留空。
-
-</details>
-
-#### 添加 GitHub Copilot 账号
-
-<details>
-
-VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一般用于快速切换多个账号。
-
-0. 你需要准备一个 Github 账号。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Github Copilot`，视你的账号是否为企业订阅选择 `Github.com` 或者 `Github Enterprise`。
-3. 允许扩展打开浏览器进行授权登录，在浏览器中登录你的账号。
-4. 登录完成后返回 VS Code，点击配置界面最下方的 `保存` 按钮完成。
-
-</details>
-
-#### 添加 Nvidia 账号
-
-<details>
-
-0. 你需要准备一个 Nvidia 账号。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Nvidia`，填写在用户面板生成的 API Key 并回车。
-3. 点击配置界面最下方的 `保存` 按钮完成。
-
-> 如果你需要用 Kimi K2.5 模型，请从内置模型列表中添加，官方 API 可能暂未返回该模型信息。
-
-</details>
-
-#### 添加 Synthetic 账号
-
-<details>
-
-0. 你需要准备一个 Synthetic 账号。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Synthetic`，并填入在用户面板生成的 API Key 直接回车。
-3. 点击配置界面最下方的 `保存` 按钮完成。
-
-</details>
-
-#### 伪装 Claude Code 客户端
-
-<details>
-
-> ⚠️ 警告：这可能会违反供应商的服务条款，请知悉可能存在封号风险！
-
-何时需要使用？
-
-- 一些 Coding Plan 订阅、中转站点要求你必须只在 Claude Code 中使用他们的 API Key。
-- 你需要在 Github Copilot 中使用 Claude Code 的账号配额。
-
-步骤：
-
-0. 你需要准备一个 Claude Code 账号或者 API Key（无论是否为官方 Key）。
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从内置供应商列表添加供应商`。
-2. 在列表中选择 `Claude Code`，可以选择两种验证方式：
-   - `API Key`：填写在 Claude Code 中使用的 API Key。
-   - `Claude Code`：允许扩展打开浏览器进行授权登录，在浏览器中登录你的账号。
-3. 如果你的 `Base URL` 不是官网的 `https://api.anthropic.com`：
-   - 在弹出的配置界面中点击 `供应商配置...` -> `API 基础 URL`，填写为你要使用的 URL。
-   - 返回上一层界面。
-4. 点击配置界面最下方的 `保存` 按钮完成。
-
-</details>
+> ⚠️ **避免 VS Code 后台消耗 Copilot 额度**
+>
+> 当前 VS Code 默认会在后台使用实用模型执行某些任务，如果你使用的是免费 Copilot 账号，这会消耗你的 Copilot 额度。
+> 
+> 你需要自行在 `settings.json` 中设置为其它模型以避免消耗 Copilot 额度，也可以使用本扩展提供的快捷设置界面进行配置，详情请查看 [快捷设置 VS Code 默认模型](#快捷设置-vs-code-默认模型)。
 
 ## 基本操作
 
@@ -182,34 +72,6 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 <div align="center">
   <img src="assets/screenshot-13.png" width="600" />
 </div>
-
-## 一键迁移
-
-查看 [应用迁移支持表](#应用迁移支持表) 以了解支持一键迁移的应用和扩展。
-
-> 如果使用的应用或扩展不在上述列表中，则可通过 [一键配置](#一键配置) 或 [手动配置](#手动配置) 来完成配置。
-
-**操作步骤：**
-
-1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从其他应用导入配置`。
-
-   <div align="center">
-   <img src="assets/screenshot-14.png" width="600" />
-   </div>
-   - 界面会列出所有支持的应用或扩展，及其检测到的配置文件路径。
-   - 通过列表项最右侧的按钮组可执行其他操作：
-     1. `自定义路径`：选择自定义的配置文件路径导入。
-     2. `从配置内容导入`：直接输入配置内容进行导入。
-
-2. 在列表中选择要导入的应用或扩展，跳转到配置导入界面。
-   - 该界面用于检查和修改即将导入的配置。
-   - 详细介绍可查看 [供应商配置](#供应商配置) 文档。
-
-3. 点击 `保存` 按钮即可完成整个导入，立即在 Copilot Chat 中使用导入的模型。
-
-   <div align="center">
-   <img src="assets/screenshot-3.png" width="600" />
-   </div>
 
 ## 一键配置
 
@@ -283,6 +145,35 @@ VS Code 的 Copilot Chat 本身就支持登录 GitHub Copilot 账号，所以一
 
    <div align="center">
    <img src="assets/screenshot-5.png" width="600" />
+   </div>
+
+## 一键迁移
+
+查看 [应用迁移支持表](#应用迁移支持表) 以了解支持一键迁移的应用和扩展。
+
+> 如果使用的应用或扩展不在上述列表中，则可通过 [一键配置](#一键配置) 或 [手动配置](#手动配置) 来完成配置。
+
+**操作步骤：**
+
+1. 打开 VS Code 命令面板，搜索 `Unify Chat Provider: 从其他应用导入配置`。
+
+   <div align="center">
+   <img src="assets/screenshot-14.png" width="600" />
+   </div>
+   
+   - 界面会列出所有支持的应用或扩展，及其检测到的配置文件路径。
+   - 通过列表项最右侧的按钮组可执行其他操作：
+     1. `自定义路径`：选择自定义的配置文件路径导入。
+     2. `从配置内容导入`：直接输入配置内容进行导入。
+
+2. 在列表中选择要导入的应用或扩展，跳转到配置导入界面。
+   - 该界面用于检查和修改即将导入的配置。
+   - 详细介绍可查看 [供应商配置](#供应商配置) 文档。
+
+3. 点击 `保存` 按钮即可完成整个导入，立即在 Copilot Chat 中使用导入的模型。
+
+   <div align="center">
+   <img src="assets/screenshot-3.png" width="600" />
    </div>
 
 ## 管理供应商
@@ -707,6 +598,28 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 为避免多设备同步导致 token 刷新冲突，OAuth 凭证将始终保存在 Secret Storage 中。
 
 这会有用户数据泄露风险，你需要自行评估并决定是否启用该选项。
+
+## 快捷设置 VS Code 默认模型
+
+你可以通过 VS Code 命令 `Unify Chat Provider: 更改 VS Code 默认模型` 打开快速设置界面。
+
+支持快速设置以下配置项：
+
+- ★ `chat.utilityModel`
+- ★ `chat.utilitySmallModel`
+- ★ `chat.exploreAgent.defaultModel`
+- ★ `github.copilot.chat.exploreAgent.model`
+- `inlineChat.defaultModel`
+- `chat.planAgent.defaultModel`
+- `github.copilot.chat.askAgent.model`
+- `github.copilot.chat.implementAgent.model`
+
+使用 `★` 标记的配置项代表：
+
+- 默认会使用 Copilot 内置模型，这些模型在付费计划中不消耗高级额度，但在免费计划中会消耗免费额度。
+- 建议设置为快速、廉价的模型。
+
+你可以选中 `更改所有内置实用模型` 按钮一键修改所有 `★` 标记的配置项。
 
 ## API 格式支持表
 
