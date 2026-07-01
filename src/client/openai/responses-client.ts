@@ -57,6 +57,7 @@ import {
   ResponseCompactionItemParam,
   ResponseCreateParamsBase,
   ResponsesClientEvent,
+  ResponseComputerToolCallOutputItem,
   ResponseFunctionCallOutputItem,
   ResponseFunctionToolCall,
   ResponseInput,
@@ -158,10 +159,7 @@ type ResponseImageGenerationTool = Extract<
   { type: 'image_generation' }
 >;
 
-type ResponseAdditionalToolsInputItem = Extract<
-  ResponseInputItem,
-  { type: 'additional_tools' }
->;
+type ResponseOutputItemForInput = Extract<ResponseOutputItem, ResponseInputItem>;
 
 type OpenAIResponsesHttpRequestContext = OpenAIResponsesRequestContext & {
   continuation: ResponseContinuation | undefined;
@@ -250,9 +248,33 @@ function isResponseImageGenerationTool(
   return tool.type === 'image_generation';
 }
 
+function isResponseComputerCallOutputItem(
+  item: ResponseOutputItem,
+): item is ResponseComputerToolCallOutputItem {
+  return item.type === 'computer_call_output';
+}
+
+function isResponseAdditionalToolsItem(
+  item: ResponseOutputItem,
+): item is Extract<ResponseOutputItem, { type: 'additional_tools' }> {
+  return item.type === 'additional_tools';
+}
+
+function isResponseOutputItemForInput(
+  item: ResponseOutputItem,
+): item is ResponseOutputItemForInput {
+  return !isResponseComputerCallOutputItem(item) && !isResponseAdditionalToolsItem(item);
+}
+
+function normalizeComputerCallOutputStatus(
+  status: ResponseComputerToolCallOutputItem['status'],
+): NonNullable<ResponseInputItem.ComputerCallOutput['status']> {
+  return status === 'failed' ? 'incomplete' : status;
+}
+
 function normalizeMarkerOutputItem(
   item: ResponseOutputItem,
-): ResponseInputItem {
+): ResponseInputItem | undefined {
   switch (item.type) {
     case 'compaction': {
       const inputItem: ResponseCompactionItemParam = {
@@ -266,35 +288,30 @@ function normalizeMarkerOutputItem(
     case 'computer_call_output':
       return {
         ...item,
-        status: item.status === 'failed' ? 'incomplete' : item.status,
+        status: normalizeComputerCallOutputStatus(item.status),
       };
 
     case 'additional_tools':
-      if (item.role === 'developer') {
-        const inputItem: ResponseAdditionalToolsInputItem = {
-          id: item.id,
-          role: item.role,
-          tools: item.tools,
-          type: item.type,
-        };
-        return inputItem;
+      if (item.role !== 'developer') {
+        return undefined;
       }
-
       return {
+        ...item,
         role: 'developer',
-        tools: item.tools,
-        type: item.type,
       };
 
     default:
-      return item;
+      return isResponseOutputItemForInput(item) ? item : undefined;
   }
 }
 
 function normalizeMarkerOutputItems(
   items: readonly ResponseOutputItem[],
 ): ResponseInputItem[] {
-  return items.map((item) => normalizeMarkerOutputItem(item));
+  return items.flatMap((item) => {
+    const normalizedItem = normalizeMarkerOutputItem(item);
+    return normalizedItem === undefined ? [] : [normalizedItem];
+  });
 }
 
 function readStringField(

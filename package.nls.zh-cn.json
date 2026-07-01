@@ -28,6 +28,7 @@
   "configuration.balanceThrottleWindowMs.description": "请求后余额刷新节流窗口（毫秒）。默认值：10000（10 秒）。",
   "configuration.balanceStatusBarIcon.description": "供应商余额状态栏图标。设为空字符串可隐藏。",
   "configuration.displayBalanceInConfiguration.description": "在模型配置按钮区域显示已刷新的供应商余额信息。该信息仅用于展示，不影响请求。",
+  "configuration.usageDetailRetentionDays.description": "保留用量明细记录的天数。更早的记录会折叠进历史总量，因此总用量仍保持准确。默认值：100。",
   "configuration.balanceWarning.enabled.description": "在接近配置的余额阈值时，在模型名称旁显示警告图标。",
   "configuration.balanceWarning.timeThresholdDays.description": "时间阈值（天），用于到期提醒（支持小数）。默认值：1。",
   "configuration.balanceWarning.amountThreshold.description": "余额阈值（无单位，忽略货币）。默认值：1。",
@@ -227,5 +228,7 @@
   "configuration.endpoints.models.presetTemplates.presets.id.description": "唯一的预设项 ID。",
   "configuration.endpoints.models.presetTemplates.presets.name.description": "显示在 VS Code 模型配置 UI 中的预设标签。",
   "configuration.endpoints.models.presetTemplates.presets.description.description": "显示在 VS Code 模型配置 UI 中的可选预设说明。",
-  "configuration.endpoints.models.presetTemplates.presets.config.description": "选中该预设时应用的请求期模型覆盖配置。"
+  "configuration.endpoints.models.presetTemplates.presets.config.description": "选中该预设时应用的请求期模型覆盖配置。",
+  "command.showUsageDashboard.title": "Unify Chat Provider: 显示用量统计",
+  "command.clearUsageStats.title": "Unify Chat Provider: 清空用量统计"
 }

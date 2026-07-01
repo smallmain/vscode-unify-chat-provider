@@ -1,0 +1,8 @@
+{
+  "chat.tools.terminal.autoApprove": {
+    "/^npx --yes @vscode/vsce package --allow-proposed-apis --out vscode-unify-chat-provider-7\\.8\\.0\\.vsix$/": {
+      "approve": true,
+      "matchCommandLine": true
+    }
+  }
+}
