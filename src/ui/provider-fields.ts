@@ -307,11 +307,29 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       edit: async (draft) => {
         await editBaseUrl(draft);
       },
-      getDescription: (draft) => draft.baseUrl || t('(required)'),
-      getDetail: (draft) =>
-        isRawBaseUrlEnabled(draft)
-          ? t('Automatic URL normalization disabled')
-          : t('Automatic URL handling'),
+      getDescription: (draft) => {
+        if (!draft.baseUrl) {
+          return t('(required)');
+        }
+        return isRawBaseUrlEnabled(draft)
+          ? `${draft.baseUrl} (Raw)`
+          : draft.baseUrl;
+      },
+    },
+    // Authentication field (new unified auth system)
+    {
+      key: 'auth',
+      type: 'custom',
+      label: t('Authentication'),
+      icon: 'shield',
+      section: 'primary',
+      edit: async (draft, context) => {
+        const ctx = context as ProviderFieldContext;
+        await editAuthField(draft, ctx);
+      },
+      getDescription: (draft, context) => {
+        return getAuthDescription(draft, context as ProviderFieldContext);
+      },
     },
     {
       key: 'transport',
@@ -420,21 +438,6 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
         const isDefault =
           resolved.type === DEFAULT_CONTEXT_CACHE_TYPE && !hasCustomTtl;
         return isDefault ? t('default') : summary;
-      },
-    },
-    // Authentication field (new unified auth system)
-    {
-      key: 'auth',
-      type: 'custom',
-      label: t('Authentication'),
-      icon: 'shield',
-      section: 'primary',
-      edit: async (draft, context) => {
-        const ctx = context as ProviderFieldContext;
-        await editAuthField(draft, ctx);
-      },
-      getDescription: (draft, context) => {
-        return getAuthDescription(draft, context as ProviderFieldContext);
       },
     },
     {
