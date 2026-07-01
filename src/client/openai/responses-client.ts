@@ -1311,7 +1311,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       modelId: encodedModelId,
       expectedIdentity,
       imageRetention:
-        model.capabilities?.imageInput === true ? 'all' : 'discard',
+        model.capabilities?.imageInput === true ? 'user-only' : 'discard',
     });
     const sanitizedMessages = sanitization.messages;
 

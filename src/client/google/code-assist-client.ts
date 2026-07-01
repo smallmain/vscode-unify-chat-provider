@@ -1866,7 +1866,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       modelId: encodedModelId,
       expectedIdentity,
       imageRetention:
-        model.capabilities?.imageInput === true ? 'all' : 'discard',
+        model.capabilities?.imageInput === true ? 'user-only' : 'discard',
     });
 
     const convertedMessages = this.convertMessages(
