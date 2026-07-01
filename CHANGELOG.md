@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.8.0 - 2026-07-01
+
+### Features
+- add Claude Sonnet 5, Doubao 2.1, LongCat 2.0 models and update providers (24235c3, SmallMain)
+
 ## v7.7.0 - 2026-07-01
 
 ### Features
