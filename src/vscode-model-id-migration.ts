@@ -122,6 +122,10 @@ async function migrateDefaultModelSettings(
   let count = 0;
 
   for (const configuration of VSCODE_DEFAULT_MODEL_CONFIGURATIONS) {
+    if (configuration.valueType !== 'vendor/id') {
+      continue;
+    }
+
     const result = await migrateDefaultModelSetting(
       configuration.configurationKey,
       legacyIdMap,

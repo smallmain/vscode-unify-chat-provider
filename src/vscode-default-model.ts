@@ -1,13 +1,20 @@
 import * as vscode from 'vscode';
 import { t } from './i18n';
 import { pickLanguageModel } from './language-model-picker';
+import type { LanguageModelReference } from './language-model-picker';
 import { NoLanguageModelsAvailableError } from './commit-message/types';
+
+export type VSCodeDefaultModelValueType =
+  | 'vendor/id'
+  | 'name-vendor'
+  | 'only-copilot-id';
 
 export interface VSCodeDefaultModelConfiguration {
   name: string;
   configurationKey: string;
   detail: string;
   functional: boolean;
+  valueType: VSCodeDefaultModelValueType;
 }
 
 interface ConfigurationQuickPickItem extends vscode.QuickPickItem {
@@ -21,6 +28,11 @@ interface FunctionalModelsQuickPickItem extends vscode.QuickPickItem {
 
 type VSCodeDefaultModelQuickPickItem =
   | ConfigurationQuickPickItem
+  | FunctionalModelsQuickPickItem
+  | vscode.QuickPickItem;
+
+type VSCodeDefaultModelActionItem =
+  | ConfigurationQuickPickItem
   | FunctionalModelsQuickPickItem;
 
 export const VSCODE_DEFAULT_MODEL_CONFIGURATIONS = [
@@ -30,13 +42,63 @@ export const VSCODE_DEFAULT_MODEL_CONFIGURATIONS = [
     detail:
       'Override the language model used by built-in utility flows. Leave empty to use the default model.',
     functional: true,
+    valueType: 'vendor/id',
   },
   {
     name: 'Chat: Utility Small Model',
     configurationKey: 'chat.utilitySmallModel',
     detail:
-      'Override the smaller language model used by built-in utility flows. Leave empty to use the default model.',
+      'Override the language model used by built-in small/fast utility flows. A fast and inexpensive model is recommended. Leave empty to use the default model.',
     functional: true,
+    valueType: 'vendor/id',
+  },
+  {
+    name: 'Chat: Explore Agent Default Model',
+    configurationKey: 'chat.exploreAgent.defaultModel',
+    detail:
+      'Select the default language model to use for the Explore subagent from the available providers.',
+    functional: true,
+    valueType: 'name-vendor',
+  },
+  {
+    name: 'GitHub Copilot Chat: Explore Agent Model',
+    configurationKey: 'github.copilot.chat.exploreAgent.model',
+    detail:
+      'Override the language model used by the Explore subagent. Defaults to a fast, small model. Leave empty to use the built-in fallback list.',
+    functional: true,
+    valueType: 'name-vendor',
+  },
+  {
+    name: 'Inline Chat: Default Model',
+    configurationKey: 'inlineChat.defaultModel',
+    detail:
+      "Select the default language model to use for inline chat from the available providers. Model names may include the provider in parentheses, for example 'Claude Haiku 4.5 (copilot)'.",
+    functional: false,
+    valueType: 'name-vendor',
+  },
+  {
+    name: 'Chat: Plan Agent Default Model',
+    configurationKey: 'chat.planAgent.defaultModel',
+    detail:
+      'Select the default language model to use for the Plan agent from the available providers.',
+    functional: false,
+    valueType: 'name-vendor',
+  },
+  {
+    name: 'GitHub Copilot Chat: Ask Agent Model',
+    configurationKey: 'github.copilot.chat.askAgent.model',
+    detail:
+      'Override the language model used by the Ask agent. Leave empty to use the default model.',
+    functional: false,
+    valueType: 'name-vendor',
+  },
+  {
+    name: 'GitHub Copilot Chat: Implement Agent Model',
+    configurationKey: 'github.copilot.chat.implementAgent.model',
+    detail:
+      "Override the language model used when starting implementation from the Plan agent's handoff. Use the format `Model Name (vendor)` (e.g., `GPT-5 (copilot)`). Leave empty to use the default model.",
+    functional: false,
+    valueType: 'name-vendor',
   },
 ] as const satisfies readonly VSCodeDefaultModelConfiguration[];
 
@@ -52,7 +114,9 @@ function createConfigurationItem(
   configuration: VSCodeDefaultModelConfiguration,
 ): ConfigurationQuickPickItem {
   return {
-    label: configuration.name,
+    label: configuration.functional
+      ? `★ ${configuration.name}`
+      : configuration.name,
     description: readGlobalConfigurationValue(configuration.configurationKey),
     detail: t(configuration.detail),
     itemType: 'configuration',
@@ -62,8 +126,7 @@ function createConfigurationItem(
 
 function createFunctionalModelsItem(): FunctionalModelsQuickPickItem {
   return {
-    label: t('Change Built-in functional model'),
-    detail: t('Update every built-in functional model setting.'),
+    label: `$(sparkle) ${t('Change All Built-in Utility Models')}`,
     itemType: 'functionalModels',
   };
 }
@@ -71,8 +134,18 @@ function createFunctionalModelsItem(): FunctionalModelsQuickPickItem {
 function createConfigurationItems(): VSCodeDefaultModelQuickPickItem[] {
   return [
     ...VSCODE_DEFAULT_MODEL_CONFIGURATIONS.map(createConfigurationItem),
+    {
+      label: '',
+      kind: vscode.QuickPickItemKind.Separator,
+    },
     createFunctionalModelsItem(),
   ];
+}
+
+function isVSCodeDefaultModelActionItem(
+  item: VSCodeDefaultModelQuickPickItem,
+): item is VSCodeDefaultModelActionItem {
+  return 'itemType' in item;
 }
 
 async function pickVSCodeDefaultModelConfigurations(): Promise<
@@ -84,7 +157,7 @@ async function pickVSCodeDefaultModelConfigurations(): Promise<
     matchOnDetail: true,
   });
 
-  if (!selected) {
+  if (!selected || !isVSCodeDefaultModelActionItem(selected)) {
     return undefined;
   }
 
@@ -110,18 +183,29 @@ async function updateVSCodeDefaultModelConfiguration(
 }
 
 function formatLanguageModelSettingValue(
-  model: vscode.LanguageModelChat,
+  configuration: VSCodeDefaultModelConfiguration,
+  model: LanguageModelReference,
 ): string {
-  return `${model.vendor}/${model.id}`;
+  switch (configuration.valueType) {
+    case 'vendor/id':
+      return `${model.vendor}/${model.id}`;
+    case 'name-vendor':
+      return `${model.name} (${model.vendor})`;
+    case 'only-copilot-id':
+      return model.id;
+  }
 }
 
 async function updateVSCodeDefaultModelConfigurations(
   configurations: readonly VSCodeDefaultModelConfiguration[],
-  value: string | undefined,
+  model: LanguageModelReference | undefined,
 ): Promise<void> {
   await Promise.all(
     configurations.map((configuration) =>
-      updateVSCodeDefaultModelConfiguration(configuration.configurationKey, value),
+      updateVSCodeDefaultModelConfiguration(
+        configuration.configurationKey,
+        model ? formatLanguageModelSettingValue(configuration, model) : undefined,
+      ),
     ),
   );
 }
@@ -146,6 +230,19 @@ function showVSCodeDefaultModelUpdateMessage(
   );
 }
 
+function shouldIncludeCopilotUtilityModels(
+  configurations: readonly VSCodeDefaultModelConfiguration[],
+): boolean {
+  if (configurations.length !== 1) {
+    return false;
+  }
+
+  return ![
+    'chat.utilityModel',
+    'chat.utilitySmallModel',
+  ].includes(configurations[0].configurationKey);
+}
+
 export async function changeVSCodeDefaultModel(): Promise<void> {
   const configurations = await pickVSCodeDefaultModelConfigurations();
   if (!configurations || configurations.length === 0) {
@@ -155,6 +252,8 @@ export async function changeVSCodeDefaultModel(): Promise<void> {
   const selectedModel = await pickLanguageModel({
     placeHolder: t('Choose a language model for VS Code default model settings'),
     includeDefault: true,
+    includeCopilotUtilityModels:
+      shouldIncludeCopilotUtilityModels(configurations),
   });
   if (!selectedModel) {
     return;
@@ -166,10 +265,7 @@ export async function changeVSCodeDefaultModel(): Promise<void> {
     return;
   }
 
-  await updateVSCodeDefaultModelConfigurations(
-    configurations,
-    formatLanguageModelSettingValue(selectedModel.model),
-  );
+  await updateVSCodeDefaultModelConfigurations(configurations, selectedModel.model);
   showVSCodeDefaultModelUpdateMessage(
     configurations,
     selectedModel.model.name,

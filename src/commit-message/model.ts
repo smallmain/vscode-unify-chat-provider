@@ -79,7 +79,10 @@ export async function changeCommitMessageModelConfiguration(): Promise<
   if (selectedModel.kind === 'default') {
     return undefined;
   }
-  const model = selectedModel.model;
+  const model = selectedModel.resolvedModel;
+  if (!model) {
+    throw new vscode.CancellationError();
+  }
 
   const configuration = {
     vendor: model.vendor,
