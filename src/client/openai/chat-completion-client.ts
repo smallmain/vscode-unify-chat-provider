@@ -104,6 +104,12 @@ type OpenRouterThinkingOutputState = {
   lastType?: OpenRouterThinkingContentType;
 };
 
+type NullableChoices<T extends { choices: unknown }> = Omit<T, 'choices'> & {
+  choices: T['choices'] | null;
+};
+type ChatCompletionResponse = NullableChoices<ChatCompletion>;
+type ChatCompletionChunkResponse = NullableChoices<ChatCompletionChunk>;
+
 /**
  * Finish reasons that indicate the response did not complete normally and
  * should surface as an error. Kept as an explicit blocklist so unknown
@@ -129,15 +135,18 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
 }
 
-function hasChoices(value: unknown): boolean {
-  return isRecord(value) && Array.isArray(value['choices']);
+function hasChoicesArrayOrNull(value: unknown): boolean {
+  return (
+    isRecord(value) &&
+    (Array.isArray(value['choices']) || value['choices'] === null)
+  );
 }
 
 function unwrapProviderDataEnvelope<T>(
   value: T,
   isExpected: (candidate: unknown) => candidate is T,
 ): T {
-  if (!isRecord(value) || hasChoices(value)) {
+  if (!isRecord(value) || isExpected(value)) {
     return value;
   }
 
@@ -145,12 +154,14 @@ function unwrapProviderDataEnvelope<T>(
   return isExpected(data) ? data : value;
 }
 
-function isChatCompletion(value: unknown): value is ChatCompletion {
-  return hasChoices(value);
+function isChatCompletion(value: unknown): value is ChatCompletionResponse {
+  return hasChoicesArrayOrNull(value);
 }
 
-function isChatCompletionChunk(value: unknown): value is ChatCompletionChunk {
-  return hasChoices(value);
+function isChatCompletionChunk(
+  value: unknown,
+): value is ChatCompletionChunkResponse {
+  return hasChoicesArrayOrNull(value);
 }
 
 export class OpenAIChatCompletionProvider implements ApiProvider {
@@ -1194,7 +1205,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     // Some providers wrap the response in a `data` field
     const response = unwrapProviderDataEnvelope(message, isChatCompletion);
-    const choice = response.choices[0];
+    const choices = response.choices ?? [];
+    const choice = choices[0];
     if (!choice) {
       throw new Error('OpenAI response did not include any choices');
     }
@@ -1429,10 +1441,18 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       logger.providerResponseChunk(JSON.stringify(event));
       // Some providers may wrap chunks in a `data` field
       const chunk = unwrapProviderDataEnvelope(event, isChatCompletionChunk);
+      const choices = chunk.choices ?? [];
+      if (choices.length === 0) {
+        if (chunk.usage) usage = chunk.usage;
+        continue;
+      }
 
-      snapshot = this.accumulateChatCompletion(snapshot, chunk);
+      snapshot = this.accumulateChatCompletion(snapshot, {
+        ...chunk,
+        choices,
+      });
       if (chunk.usage) usage = chunk.usage;
-      const choice = chunk.choices[0];
+      const choice = choices[0];
       if (!choice) {
         continue;
       }
