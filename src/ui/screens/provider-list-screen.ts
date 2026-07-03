@@ -44,21 +44,32 @@ export async function runProviderListScreen(
     placeholder: t('Select a provider to edit, or add a new one'),
     ignoreFocusOut: false,
     items: buildProviderListItems(ctx.store),
-    onExternalRefresh: (refreshItems) => {
+    buttons: [buildSortButton(ctx.store)],
+    onExternalRefresh: (refreshItems, qp) => {
       const refresh = () => {
         refreshItems(buildProviderListItems(ctx.store));
+        qp.buttons = [buildSortButton(ctx.store)];
       };
 
       const officialModelsDisposable =
         officialModelsManager.onDidUpdate(refresh);
       const balanceDisposable = balanceManager.onDidUpdate(refresh);
+      const configDisposable = ctx.store.onDidChange(refresh);
 
       refresh();
 
       return new vscode.Disposable(() => {
         officialModelsDisposable.dispose();
         balanceDisposable.dispose();
+        configDisposable.dispose();
       });
+    },
+    onDidTriggerButton: async (_button, qp) => {
+      await ctx.store.setProviderListNewestFirst(
+        !ctx.store.providerListNewestFirst,
+      );
+      qp.items = buildProviderListItems(ctx.store);
+      qp.buttons = [buildSortButton(ctx.store)];
     },
     onDidTriggerItemButton: async (event, qp) => {
       const item = event.item;
@@ -211,6 +222,16 @@ export async function runProviderListScreen(
   return { kind: 'stay' };
 }
 
+function buildSortButton(store: UiContext['store']): vscode.QuickInputButton {
+  const newestFirst = store.providerListNewestFirst;
+  return {
+    iconPath: new vscode.ThemeIcon(newestFirst ? 'arrow-down' : 'arrow-up'),
+    tooltip: newestFirst
+      ? t('Sort: Time descending')
+      : t('Sort: Time ascending'),
+  };
+}
+
 function buildProviderListItems(store: UiContext['store']): ProviderListItem[] {
   const items: ProviderListItem[] = [
     {
@@ -235,7 +256,11 @@ function buildProviderListItems(store: UiContext['store']): ProviderListItem[] {
     },
   ];
 
-  for (const provider of store.endpoints) {
+  const providers = store.providerListNewestFirst
+    ? [...store.endpoints].reverse()
+    : store.endpoints;
+
+  for (const provider of providers) {
     items.push({ label: '', kind: vscode.QuickPickItemKind.Separator });
     const allModels = getAllModelsForProviderSync(provider);
     const visibleModels = allModels.filter(

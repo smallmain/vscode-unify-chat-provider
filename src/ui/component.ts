@@ -20,6 +20,15 @@ export interface QuickPickConfig<T extends vscode.QuickPickItem> {
     quickPick: vscode.QuickPick<T>,
   ) => void | T | Promise<void | T>;
   /**
+   * Title-bar buttons shown in the top-right of the QuickPick.
+   * Clicks do not close the picker; update `quickPick.buttons` to reflect state.
+   */
+  buttons?: readonly vscode.QuickInputButton[];
+  onDidTriggerButton?: (
+    button: vscode.QuickInputButton,
+    quickPick: vscode.QuickPick<T>,
+  ) => void | Promise<void>;
+  /**
    * Handle inline actions that should not close the picker.
    * Return true to keep the picker open (action was handled inline).
    * Return false or undefined to close the picker normally.
@@ -30,11 +39,13 @@ export interface QuickPickConfig<T extends vscode.QuickPickItem> {
   ) => Promise<boolean | void> | boolean | void;
   /**
    * Subscribe to external events that should trigger an items refresh.
-   * The callback receives a function to rebuild items when external state changes.
+   * The callback receives a function to rebuild items when external state changes,
+   * plus the QuickPick instance (e.g. to update `buttons` alongside items).
    * Returns a disposable to unsubscribe.
    */
   onExternalRefresh?: (
     refreshItems: (newItems: readonly T[]) => void,
+    quickPick: vscode.QuickPick<T>,
   ) => vscode.Disposable;
 }
 
@@ -48,6 +59,9 @@ export async function pickQuickItem<T extends vscode.QuickPickItem>(
   qp.matchOnDetail = config.matchOnDetail ?? true;
   qp.ignoreFocusOut = config.ignoreFocusOut ?? false;
   qp.items = [...config.items];
+  if (config.buttons) {
+    qp.buttons = [...config.buttons];
+  }
 
   let resolved = false;
   let accepting = false;
@@ -111,8 +125,21 @@ export async function pickQuickItem<T extends vscode.QuickPickItem>(
     // Subscribe to external refresh events
     let externalRefreshDisposable: vscode.Disposable | undefined;
     if (config.onExternalRefresh) {
-      externalRefreshDisposable = config.onExternalRefresh((newItems) => {
-        qp.items = [...newItems];
+      externalRefreshDisposable = config.onExternalRefresh(
+        (newItems) => {
+          qp.items = [...newItems];
+        },
+        qp,
+      );
+    }
+
+    if (config.onDidTriggerButton) {
+      qp.onDidTriggerButton(async (button) => {
+        try {
+          await config.onDidTriggerButton?.(button, qp);
+        } catch {
+          // ignore and allow further interaction
+        }
       });
     }
 

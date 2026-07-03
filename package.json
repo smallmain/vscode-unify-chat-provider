@@ -226,6 +226,12 @@
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
         },
+        "unifyChatProvider.providerList.newestFirst": {
+          "type": "boolean",
+          "scope": "application",
+          "description": "%configuration.providerList.newestFirst.description%",
+          "default": true
+        },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
           "scope": "application",
