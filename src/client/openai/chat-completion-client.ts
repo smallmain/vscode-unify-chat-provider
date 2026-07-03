@@ -25,7 +25,7 @@ import {
   parseThinkingTags,
   resolveContextCacheConfig,
   resolveChatNetwork,
-  resolveOpenAISdkTimeoutMs,
+  resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
   withIdleTimeout,
@@ -218,7 +218,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
-    const sdkTimeoutMs = resolveOpenAISdkTimeoutMs(effectiveTimeout, stream);
+    const sdkTimeoutMs = resolveSdkTotalTimeoutMs(effectiveTimeout, stream);
 
     const token = getToken(credential);
 

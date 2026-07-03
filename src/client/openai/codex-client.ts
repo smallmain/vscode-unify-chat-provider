@@ -7,7 +7,7 @@ import {
   FetchMode,
   isRawBaseUrlEnabled,
   resolveChatNetwork,
-  resolveOpenAISdkTimeoutMs,
+  resolveSdkTotalTimeoutMs,
 } from '../../utils';
 import type { ModelConfig } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
@@ -388,7 +388,7 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
-    const sdkTimeoutMs = resolveOpenAISdkTimeoutMs(effectiveTimeout, stream);
+    const sdkTimeoutMs = resolveSdkTotalTimeoutMs(effectiveTimeout, stream);
 
     const token = getToken(credential);
 

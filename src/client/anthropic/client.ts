@@ -35,6 +35,7 @@ import {
   parseThinkingTags,
   resolveContextCacheConfig,
   resolveChatNetwork,
+  resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
   withIdleTimeout,
@@ -133,6 +134,8 @@ export class AnthropicProvider implements ApiProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
+    const sdkTimeoutMs = resolveSdkTotalTimeoutMs(effectiveTimeout, stream);
+
     const token = getToken(credential);
 
     return new Anthropic({
@@ -150,6 +153,7 @@ export class AnthropicProvider implements ApiProvider {
           : { authToken: token }),
       baseURL: this.baseUrl,
       maxRetries: 0,
+      timeout: sdkTimeoutMs,
       fetch: createCustomFetch({
         connectionTimeoutMs: effectiveTimeout.connection,
         responseTimeoutMs: effectiveTimeout.response,
