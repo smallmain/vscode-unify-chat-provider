@@ -2116,6 +2116,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v4-flash',
+    overrides: [
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'deepseek-ai/deepseek-v4-flash',
+          maxOutputTokens: 262144,
+        },
+      },
+    ],
     name: 'DeepSeek V4 Flash',
     maxInputTokens: 1000000,
     maxOutputTokens: 384000,
@@ -2135,6 +2144,15 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'deepseek-v4-pro',
+    overrides: [
+      {
+        matchers: ['integrate.api.nvidia.com'],
+        config: {
+          id: 'deepseek-ai/deepseek-v4-pro',
+          maxOutputTokens: 262144,
+        },
+      },
+    ],
     name: 'DeepSeek V4 Pro',
     maxInputTokens: 1000000,
     maxOutputTokens: 384000,
