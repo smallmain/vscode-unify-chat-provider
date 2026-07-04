@@ -24,7 +24,7 @@
   "configuration.verbose.description": "Enable verbose logging of requests and responses.",
   "configuration.modelDisplayNameTemplate.description": "Template for chat model names. \nSupported variables: \n- {modelId}\n- {modelName}\n- {modelFamily}\n- {providerName}\n- {remainingBalance}\nUse {{...}} to show content only when another returned model has the same {modelName}. Example: {modelName}{{ ({providerName})}}",
   "configuration.storeApiKeyInSettings.description": "Store sync-safe sensitive data (e.g., API keys) in settings.json instead of VS Code Secret Storage.\n\nOAuth credentials are always kept in Secret Storage to avoid multi-device token refresh conflicts.\n\nDANGER: Changing this setting will migrate existing data between storage locations (may expose secrets in plain text).",
-  "configuration.providerList.newestFirst.description": "Show recently added providers first in the Manage Providers panel. When off, providers are listed in their original add order.",
+  "configuration.providerList.newestFirst.description": "Sort providers in the Manage Providers panel by last modified, descending (newest first). When off, ascending (oldest first).",
   "configuration.balanceRefreshIntervalMs.description": "Periodic refresh interval for provider balances in milliseconds. Default: 60000 (60 seconds).",
   "configuration.balanceThrottleWindowMs.description": "Throttle window for post-request balance refresh in milliseconds. Default: 10000 (10 seconds).",
   "configuration.balanceStatusBarIcon.description": "Status bar icon for provider balances. Set to empty to hide.",
