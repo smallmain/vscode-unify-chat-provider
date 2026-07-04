@@ -28,7 +28,7 @@ import {
   normalizeImageMimeType,
   resolveContextCacheConfig,
   resolveChatNetwork,
-  resolveOpenAISdkTimeoutMs,
+  resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitchDetailed,
   withIdleTimeout,
 } from '../../utils';
@@ -442,7 +442,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const effectiveTimeout =
       chatNetwork?.timeout ?? DEFAULT_NORMAL_TIMEOUT_CONFIG;
 
-    const sdkTimeoutMs = resolveOpenAISdkTimeoutMs(effectiveTimeout, stream);
+    const sdkTimeoutMs = resolveSdkTotalTimeoutMs(effectiveTimeout, stream);
 
     const token = getToken(credential);
 

@@ -398,19 +398,20 @@ export function resolveChatNetwork(
 }
 
 /**
- * Resolve the total request timeout passed to the OpenAI SDK.
+ * Resolve the total request timeout passed to SDK clients that wrap fetch with
+ * their own overall request timeout.
  *
- * The OpenAI SDK applies its own overall request timeout (10 minutes by default).
- * For streaming requests, this conflicts with our own timeout model:
+ * Some SDKs apply an overall request timeout (10 minutes by default). For
+ * streaming requests, this conflicts with our own timeout model:
  * - connection timeout is enforced in `createCustomFetch`
  * - response idle timeout is enforced by `withIdleTimeout`
  *
- * To avoid the SDK aborting healthy long-running streams before our own idle
- * timeout logic fires, use the largest safe timer duration for streaming
- * requests and keep non-streaming requests aligned with the configured
- * response timeout.
+ * To avoid the SDK aborting healthy long-running streams or retry chains before
+ * our own timeout logic fires, use the largest safe timer duration for
+ * streaming requests and keep non-streaming requests aligned with the
+ * configured response timeout.
  */
-export function resolveOpenAISdkTimeoutMs(
+export function resolveSdkTotalTimeoutMs(
   timeout: Pick<ResolvedChatTimeoutConfig, 'connection' | 'response'>,
   stream: boolean,
 ): number {
