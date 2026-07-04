@@ -64,12 +64,12 @@ export async function runProviderListScreen(
         configDisposable.dispose();
       });
     },
-    onDidTriggerButton: async (_button, qp) => {
+    onDidTriggerButton: async () => {
+      // Items and buttons are refreshed via the store.onDidChange
+      // subscription registered in onExternalRefresh.
       await ctx.store.setProviderListNewestFirst(
         !ctx.store.providerListNewestFirst,
       );
-      qp.items = buildProviderListItems(ctx.store);
-      qp.buttons = [buildSortButton(ctx.store)];
     },
     onDidTriggerItemButton: async (event, qp) => {
       const item = event.item;
@@ -227,8 +227,8 @@ function buildSortButton(store: UiContext['store']): vscode.QuickInputButton {
   return {
     iconPath: new vscode.ThemeIcon(newestFirst ? 'arrow-down' : 'arrow-up'),
     tooltip: newestFirst
-      ? t('Sort: Time descending')
-      : t('Sort: Time ascending'),
+      ? t('Sort by last modified, descending')
+      : t('Sort by last modified, ascending'),
   };
 }
 

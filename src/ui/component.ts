@@ -134,11 +134,16 @@ export async function pickQuickItem<T extends vscode.QuickPickItem>(
     }
 
     if (config.onDidTriggerButton) {
+      let handlingButton = false;
       qp.onDidTriggerButton(async (button) => {
+        if (handlingButton) return;
+        handlingButton = true;
         try {
           await config.onDidTriggerButton?.(button, qp);
         } catch {
           // ignore and allow further interaction
+        } finally {
+          handlingButton = false;
         }
       });
     }

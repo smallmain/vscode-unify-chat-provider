@@ -23,7 +23,6 @@ import {
   ProxyType,
   ServiceTier,
 } from './types';
-import { DEFAULT_PROVIDER_LIST_NEWEST_FIRST } from './defaults';
 
 export const CONFIG_NAMESPACE = 'unifyChatProvider';
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
@@ -31,6 +30,7 @@ const DEFAULT_BALANCE_THROTTLE_WINDOW_MS = 10_000;
 const DEFAULT_BALANCE_STATUS_BAR_ICON = '$(credit-card)';
 const DEFAULT_DISPLAY_BALANCE_IN_CONFIGURATION = false;
 const DEFAULT_MODEL_DISPLAY_NAME_TEMPLATE = '{modelName}{{ ({providerName})}}';
+const DEFAULT_PROVIDER_LIST_NEWEST_FIRST = true;
 const MIN_BALANCE_REFRESH_INTERVAL_MS = 1_000;
 const MIN_BALANCE_THROTTLE_WINDOW_MS = 0;
 const DEFAULT_BALANCE_WARNING_ENABLED = true;
@@ -148,7 +148,8 @@ export class ConfigStore {
   }
 
   /**
-   * Whether the Manage Providers panel lists recently-added providers first.
+   * Whether the Manage Providers panel lists recently added or modified
+   * providers first.
    */
   get providerListNewestFirst(): boolean {
     const raw = this.readConfiguredUnknown('providerList.newestFirst');
@@ -587,7 +588,8 @@ export class ConfigStore {
   }
 
   /**
-   * Set whether the Manage Providers panel lists recently-added providers first.
+   * Set whether the Manage Providers panel lists recently added or modified
+   * providers first.
    * Always writes to application-scoped user settings.
    */
   async setProviderListNewestFirst(value: boolean): Promise<void> {
