@@ -582,7 +582,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
-      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+        (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+        (model) => modelFamilyIncludes(model, 'glm-5.2'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
