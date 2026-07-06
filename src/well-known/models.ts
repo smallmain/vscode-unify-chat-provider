@@ -3913,6 +3913,7 @@ const _WELL_KNOWN_MODELS = [
   },
   {
     id: 'glm-5.2',
+    overrides:["z-ai/glm-5.2"],
     name: 'GLM-5.2',
     maxInputTokens: 1000000,
     maxOutputTokens: 128000,
