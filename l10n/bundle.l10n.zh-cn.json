@@ -368,6 +368,8 @@
   "Manage Providers": "管理供应商",
   "Select a provider to edit, or add a new one": "选择要编辑的供应商，或添加新的供应商",
   "Provider \"{0}\" not found.": "未找到供应商 \"{0}\"。",
+  "Sort by last modified, descending": "按最近修改倒序",
+  "Sort by last modified, ascending": "按最近修改正序",
   "Add Provider...": "添加供应商...",
   "Add From Well-Known Provider List...": "从内置供应商列表添加...",
   "Import From Config...": "从配置导入...",

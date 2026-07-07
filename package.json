@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.9.0",
+  "version": "7.9.1",
   "categories": [
     "AI",
     "Chat"
@@ -233,6 +233,12 @@
           "scope": "application",
           "description": "%configuration.storeApiKeyInSettings.description%",
           "default": false
+        },
+        "unifyChatProvider.providerList.newestFirst": {
+          "type": "boolean",
+          "scope": "application",
+          "description": "%configuration.providerList.newestFirst.description%",
+          "default": true
         },
         "unifyChatProvider.balanceRefreshIntervalMs": {
           "type": "integer",
