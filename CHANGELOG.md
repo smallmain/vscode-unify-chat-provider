@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.9.2 - 2026-07-07
+
+### Fixes
+- remove FeatureId-based gating for 1M context beta on Anthropic models (d9d2ba1, SmallMain)
+
 ## v7.9.1 - 2026-07-06
 
 ### Features
