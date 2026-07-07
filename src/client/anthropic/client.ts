@@ -470,7 +470,7 @@ export class AnthropicProvider implements ApiProvider {
   }
 
   /**
-   * Ensure messages alternate between user and assistant roles
+   * Normalize messages to alternate roles and end with a user message.
    */
   private ensureAlternatingRoles(
     messages: BetaMessageParam[],
@@ -528,6 +528,13 @@ export class AnthropicProvider implements ApiProvider {
       throw new Error(
         'The first message must be from the user role for Anthropic API',
       );
+    }
+
+    if (result.at(-1)?.role === 'assistant') {
+      result.push({
+        role: 'user',
+        content: [{ type: 'text', text: 'Continue.' }],
+      });
     }
 
     return result;
