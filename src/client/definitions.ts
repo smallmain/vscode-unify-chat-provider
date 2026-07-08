@@ -198,12 +198,6 @@ export enum FeatureId {
    */
   AnthropicFineGrainedToolStreaming = 'anthropic_fine-grained-tool-streaming',
   /**
-   * Enable 1M output token context beta for supported Claude models.
-   *
-   * @see https://docs.anthropic.com/en/docs/about-claude/models
-   */
-  AnthropicContext1M = 'anthropic_context-1m',
-  /**
    * @see https://community.openai.com/t/developer-role-not-accepted-for-o1-o1-mini-o3-mini/1110750/7
    */
   OpenAIOnlyMaxCompletionTokens = 'openai_only-max-completion-tokens',
@@ -428,22 +422,6 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicFineGrainedToolStreaming]: {
     supportedFamilys: ['claude-'],
-  },
-  [FeatureId.AnthropicContext1M]: {
-    supportedFamilys: [
-      'claude-sonnet-5',
-      'claude-opus-4-8',
-      'claude-opus-4.8',
-      'claude-opus-4-7',
-      'claude-opus-4.7',
-      'claude-opus-4-6',
-      'claude-opus-4.6',
-      'claude-sonnet-4-6',
-      'claude-sonnet-4.6',
-      'claude-sonnet-4-5',
-      'claude-sonnet-4.5',
-      'claude-sonnet-4',
-    ],
   },
   [FeatureId.OpenAIOnlyMaxCompletionTokens]: {
     supportedProviders: [
