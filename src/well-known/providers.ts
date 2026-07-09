@@ -534,16 +534,6 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     autoFetchOfficialModels: true,
   },
   {
-    name: 'LiteLLM (Anthropic Messages)',
-    category: 'General',
-    type: 'anthropic',
-    baseUrl: 'http://localhost:4000',
-    balanceProvider: { method: 'litellm' },
-    authTypes: ['api-key'],
-    models: [],
-    autoFetchOfficialModels: true,
-  },
-  {
     name: 'Ollama Local',
     category: 'General',
     type: 'ollama',
