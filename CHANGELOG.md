@@ -1,5 +1,11 @@
 # Changelog
 
+## v7.10.0 - 2026-07-09
+
+### Features
+- add Grok 4.5 model, Hy3 model, and OpenAI Responses API standalone compaction (deee9a6, SmallMain)
+- well-known: rename Hy3 Preview to Hy3 (b312d65, SmallMain)
+
 ## v7.9.2 - 2026-07-07
 
 ### Fixes
