@@ -129,6 +129,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
+    name: 'Atlas Cloud',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.atlascloud.ai/v1',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'Synthetic',
     category: 'General',
     type: 'openai-chat-completion',
