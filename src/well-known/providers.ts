@@ -524,6 +524,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: ['step-3.5-flash', 'step-2-mini', 'step-1o-turbo-vision'],
   },
   {
+    name: 'LiteLLM',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'http://localhost:4000',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'Ollama Local',
     category: 'General',
     type: 'ollama',
