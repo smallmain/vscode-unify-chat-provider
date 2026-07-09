@@ -268,6 +268,22 @@ export enum FeatureId {
    */
   OpenAIUseResponsesContextManagement = 'openai_use-responses-context-management',
   /**
+   * Use `prompt_cache_key` on Responses API requests for prompt cache routing.
+   *
+   * @see https://platform.openai.com/docs/guides/prompt-caching
+   * @see https://docs.x.ai/developers/advanced-api-usage/prompt-caching/maximizing-cache-hits
+   */
+  OpenAIUsePromptCacheKey = 'openai_use-prompt-cache-key',
+  /**
+   * Use the standalone Responses `/responses/compact` endpoint before a large
+   * follow-up request.
+   *
+   * @see https://developers.openai.com/api/docs/guides/compaction#standalone-compact-endpoint
+   * @see https://developers.openai.com/api/reference/resources/responses/methods/compact/
+   * @see https://docs.x.ai/developers/advanced-api-usage/context-compaction
+   */
+  OpenAIUseStandaloneResponsesCompaction = 'openai_use-standalone-responses-compaction',
+  /**
    * Enable VolcEngine / BytePlus context caching on OpenAI Responses API.
    */
   OpenAIUseVolcContextCaching = 'openai_use-volc-context-caching',
@@ -601,6 +617,12 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseResponsesContextManagement]: {
     supportedProviders: ['api.openai.com', 'chatgpt.com'],
+  },
+  [FeatureId.OpenAIUsePromptCacheKey]: {
+    supportedProviders: ['api.openai.com', 'api.x.ai'],
+  },
+  [FeatureId.OpenAIUseStandaloneResponsesCompaction]: {
+    supportedProviders: ['api.openai.com', 'api.x.ai'],
   },
   [FeatureId.OpenAIUseVolcContextCaching]: {
     supportedProviders: [

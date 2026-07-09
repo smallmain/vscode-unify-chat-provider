@@ -2498,6 +2498,44 @@ export function normalizeCopilotUsage(usage: CopilotUsage): CopilotUsage {
   };
 }
 
+export function tryNormalizeCopilotUsage(
+  usage: unknown,
+): CopilotUsage | undefined {
+  if (!isRecord(usage)) {
+    return undefined;
+  }
+
+  const promptTokens = usage['prompt_tokens'];
+  const completionTokens = usage['completion_tokens'];
+  if (
+    typeof promptTokens !== 'number' ||
+    !Number.isFinite(promptTokens) ||
+    typeof completionTokens !== 'number' ||
+    !Number.isFinite(completionTokens)
+  ) {
+    return undefined;
+  }
+
+  const details = usage['prompt_tokens_details'];
+  const cachedTokens = isRecord(details) ? details['cached_tokens'] : undefined;
+
+  return normalizeCopilotUsage({
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens:
+      typeof usage['total_tokens'] === 'number' &&
+      Number.isFinite(usage['total_tokens'])
+        ? usage['total_tokens']
+        : promptTokens + completionTokens,
+    prompt_tokens_details: {
+      cached_tokens:
+        typeof cachedTokens === 'number' && Number.isFinite(cachedTokens)
+          ? cachedTokens
+          : 0,
+    },
+  });
+}
+
 export function createUsageDataPart(
   usage: CopilotUsage,
 ): vscode.LanguageModelDataPart {

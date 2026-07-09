@@ -7,7 +7,12 @@ import * as vscode from 'vscode';
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
-import { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ModelConfig,
+  ProviderConfig,
+} from '../../types';
 import type { AuthTokenInfo } from '../../auth/types';
 import { Ollama } from 'ollama';
 import type {
@@ -34,6 +39,7 @@ import {
   normalizeImageMimeType,
   resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
+  tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
@@ -54,6 +60,32 @@ import {
 } from '../utils';
 
 const TOOL_CALL_ID_PREFIX = 'ollama-tool:';
+
+type OllamaMarkerData = {
+  data: Message;
+  usage?: CopilotUsage;
+};
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function normalizeOllamaMarkerData(
+  decoded: OllamaMarkerData | Message,
+): OllamaMarkerData {
+  if (isRecord(decoded)) {
+    const data = decoded['data'];
+    if (isRecord(data) && typeof data['role'] === 'string') {
+      return {
+        data: data as Message,
+        usage: tryNormalizeCopilotUsage(decoded['usage']),
+      };
+    }
+  }
+
+  // TODO: Remove legacy bare marker payload compatibility in the next major version.
+  return { data: decoded as Message };
+}
 
 /**
  * Done reasons that indicate the response did not complete normally
@@ -169,10 +201,12 @@ export class OllamaProvider implements ApiProvider {
           );
           if (markerParts.length === 1) {
             try {
-              const raw = decodeStatefulMarkerPart<Message>(
-                expectedIdentity,
-                encodedModelId,
-                markerParts[0],
+              const { data: raw } = normalizeOllamaMarkerData(
+                decodeStatefulMarkerPart<OllamaMarkerData | Message>(
+                  expectedIdentity,
+                  encodedModelId,
+                  markerParts[0],
+                ),
               );
               const placeholder: Message = {
                 role: 'assistant',
@@ -629,7 +663,7 @@ export class OllamaProvider implements ApiProvider {
       }
     }
 
-    this.processUsage(
+    const normalizedUsage = this.processUsage(
       {
         prompt_eval_count: message.prompt_eval_count,
         eval_count: message.eval_count,
@@ -645,7 +679,10 @@ export class OllamaProvider implements ApiProvider {
       throw new AbnormalStopReasonError(message.done_reason);
     }
 
-    yield encodeStatefulMarkerPart<Message>(expectedIdentity, raw);
+    yield encodeStatefulMarkerPart<OllamaMarkerData>(expectedIdentity, {
+      data: raw,
+      usage: normalizedUsage,
+    });
   }
 
   private async *parseMessageStream(
@@ -709,6 +746,10 @@ export class OllamaProvider implements ApiProvider {
       return;
     }
 
+    const normalizedUsage = usage
+      ? this.processUsage(usage, requestTrace, logger)
+      : undefined;
+
     if (snapshot) {
       if (snapshot.tool_calls) {
         for (const [index, call] of snapshot.tool_calls.entries()) {
@@ -730,11 +771,14 @@ export class OllamaProvider implements ApiProvider {
       }
 
       yield* this.extractThinkingParts(snapshot.thinking, 'metadata-only');
-      yield encodeStatefulMarkerPart<Message>(expectedIdentity, snapshot);
-    }
-
-    if (usage) {
-      this.processUsage(usage, requestTrace, logger);
+      const markerData: OllamaMarkerData = { data: snapshot };
+      if (normalizedUsage) {
+        markerData.usage = normalizedUsage;
+      }
+      yield encodeStatefulMarkerPart<OllamaMarkerData>(
+        expectedIdentity,
+        markerData,
+      );
     }
   }
 
@@ -838,12 +882,13 @@ export class OllamaProvider implements ApiProvider {
     usage: { prompt_eval_count: number; eval_count: number },
     requestTrace: ChatRequestTrace,
     logger: RequestLogger,
-  ) {
+  ): CopilotUsage {
     const normalizedUsage = createCopilotUsage(
       usage.prompt_eval_count,
       usage.eval_count,
     );
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+    return normalizedUsage;
   }
 
   estimateTokenCount(text: string): number {

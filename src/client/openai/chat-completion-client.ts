@@ -6,7 +6,12 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
-import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ProviderConfig,
+  ModelConfig,
+} from '../../types';
 import type { AuthTokenInfo } from '../../auth/types';
 import OpenAI from 'openai';
 import {
@@ -28,6 +33,7 @@ import {
   resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
+  tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
 import {
@@ -104,6 +110,11 @@ type OpenRouterThinkingOutputState = {
   lastType?: OpenRouterThinkingContentType;
 };
 
+type OpenAIChatCompletionMarkerData = {
+  data: ChatCompletionMessageParam;
+  usage?: CopilotUsage;
+};
+
 type NullableChoices<T extends { choices: unknown }> = Omit<T, 'choices'> & {
   choices: T['choices'] | null;
 };
@@ -133,6 +144,23 @@ function throwIfAbnormalFinish(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function normalizeChatCompletionMarkerData(
+  decoded: OpenAIChatCompletionMarkerData | ChatCompletionMessageParam,
+): OpenAIChatCompletionMarkerData {
+  if (isRecord(decoded)) {
+    const data = decoded['data'];
+    if (isRecord(data) && typeof data['role'] === 'string') {
+      return {
+        data: data as ChatCompletionMessageParam,
+        usage: tryNormalizeCopilotUsage(decoded['usage']),
+      };
+    }
+  }
+
+  // TODO: Remove legacy bare marker payload compatibility in the next major version.
+  return { data: decoded as ChatCompletionMessageParam };
 }
 
 function hasChoicesArrayOrNull(value: unknown): boolean {
@@ -283,12 +311,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
             if (markerParts.length === 1) {
               try {
-                const raw =
-                  decodeStatefulMarkerPart<ChatCompletionMessageParam>(
-                    expectedIdentity,
-                    encodedModelId,
-                    markerParts[0],
-                  );
+                const { data: raw } = normalizeChatCompletionMarkerData(
+                  decodeStatefulMarkerPart<
+                    OpenAIChatCompletionMarkerData | ChatCompletionMessageParam
+                  >(expectedIdentity, encodedModelId, markerParts[0]),
+                );
                 const message: ChatCompletionAssistantMessageParam = {
                   role: 'assistant',
                   content: undefined,
@@ -1254,14 +1281,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       }
     }
 
-    yield encodeStatefulMarkerPart<ChatCompletionMessageParam>(
-      expectedIdentity,
-      raw,
-    );
-
+    const markerData: OpenAIChatCompletionMarkerData = { data: raw };
     if (message.usage) {
-      this.processUsage(message.usage, requestTrace, logger);
+      markerData.usage = this.processUsage(message.usage, requestTrace, logger);
     }
+    yield encodeStatefulMarkerPart<OpenAIChatCompletionMarkerData>(
+      expectedIdentity,
+      markerData,
+    );
   }
 
   private stringifyArguments(input: unknown): string {
@@ -1427,6 +1454,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const performanceTrace = requestTrace.performance;
     let snapshot: ChatCompletionSnapshot | undefined;
     let usage: CompletionUsage | null | undefined;
+    const pendingMarkerData: OpenAIChatCompletionMarkerData[] = [];
     const finalizedChoiceIndexes = new Set();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
@@ -1551,9 +1579,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           }
         }
 
-        yield encodeStatefulMarkerPart<ChatCompletionMessageParam>(
-          expectedIdentity,
-          {
+        pendingMarkerData.push({
+          data: {
             role: 'assistant',
             ...(content ? { content } : {}),
             ...(refusal ? { refusal } : {}),
@@ -1562,7 +1589,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             ...(reasoning_content !== undefined ? { reasoning_content } : {}),
             ...(reasoning_details ? { reasoning_details } : {}),
           },
-        );
+        });
       }
     }
 
@@ -1585,8 +1612,17 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       return;
     }
 
-    if (usage) {
-      this.processUsage(usage, requestTrace, logger);
+    const normalizedUsage = usage
+      ? this.processUsage(usage, requestTrace, logger)
+      : undefined;
+    for (const markerData of pendingMarkerData) {
+      if (normalizedUsage) {
+        markerData.usage = normalizedUsage;
+      }
+      yield encodeStatefulMarkerPart<OpenAIChatCompletionMarkerData>(
+        expectedIdentity,
+        markerData,
+      );
     }
   }
 
@@ -1744,17 +1780,22 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return snapshot;
   }
 
-  private processUsage(
-    usage: CompletionUsage,
-    requestTrace: ChatRequestTrace,
-    logger: RequestLogger,
-  ) {
-    const normalizedUsage = createCopilotUsage(
+  private normalizeUsage(usage: CompletionUsage): CopilotUsage {
+    return createCopilotUsage(
       usage.prompt_tokens,
       usage.completion_tokens,
       usage.prompt_tokens_details?.cached_tokens,
     );
+  }
+
+  private processUsage(
+    usage: CompletionUsage,
+    requestTrace: ChatRequestTrace,
+    logger: RequestLogger,
+  ): CopilotUsage {
+    const normalizedUsage = this.normalizeUsage(usage);
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+    return normalizedUsage;
   }
 
   estimateTokenCount(text: string): number {

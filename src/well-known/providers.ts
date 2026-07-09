@@ -101,6 +101,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.x.ai',
     authTypes: ['api-key'],
     models: [
+      'grok-4.5',
       'grok-4.3',
       'grok-4.20-0309-reasoning',
       'grok-4.20-0309-non-reasoning',
@@ -284,7 +285,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'openai-chat-completion',
     baseUrl: 'https://tokenhub.tencentmaas.com',
     authTypes: ['api-key'],
-    models: ['hy3-preview'],
+    models: ['hy3'],
   },
   {
     name: 'Tencent Cloud TokenHub (International)',
@@ -292,7 +293,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'openai-chat-completion',
     baseUrl: 'https://tokenhub-intl.tencentmaas.com',
     authTypes: ['api-key'],
-    models: ['hy3-preview'],
+    models: ['hy3'],
   },
   {
     name: 'Tencent Cloud TokenHub (Personal Token Plan)',
@@ -301,7 +302,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.lkeap.cloud.tencent.com/plan/v3',
     useRawBaseUrl: true,
     authTypes: ['api-key'],
-    models: ['hy3-preview'],
+    models: ['hy3'],
   },
   {
     name: 'Tencent Cloud Token Plan (Enterprise)',
@@ -310,7 +311,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://tokenhub.tencentmaas.com/plan/v3',
     useRawBaseUrl: true,
     authTypes: ['api-key'],
-    models: ['hy3-preview'],
+    models: ['hy3'],
   },
   {
     name: 'Model Scope (API-Inference)',
