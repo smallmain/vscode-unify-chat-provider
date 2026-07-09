@@ -30,6 +30,7 @@ import {
   resolveChatNetwork,
   resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitchDetailed,
+  tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
 import {
@@ -71,7 +72,12 @@ import {
 } from 'openai/resources/responses/responses';
 import { getBaseModelId } from '../../model-id-utils';
 import { createHash, randomUUID } from 'crypto';
-import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ProviderConfig,
+  ModelConfig,
+} from '../../types';
 import {
   WebSocketSessionError,
   WebSocketSessionRequest,
@@ -105,18 +111,12 @@ type ConvertedMessagesResult = {
   inputAfterPreviousResponse?: ResponseInputItem[];
   previousResponseBoundaryIndex?: number;
   previousResponseInputBoundaryIndex?: number;
-  previousResponseUsage?: OpenAIResponsesMarkerUsage;
+  previousResponseUsage?: CopilotUsage;
 };
 
 type ResponseContinuation = {
   previousResponseId: string;
   inputAfterPreviousResponse: ResponseInputItem[];
-};
-
-type OpenAIResponsesMarkerUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
 };
 
 type OpenAIResponsesRequestBody = ResponseCreateParamsBase & {
@@ -186,50 +186,6 @@ type OpenAIResponsesWebSocketRequestContext = OpenAIResponsesRequestContext & {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function isNonNegativeFiniteNumber(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value >= 0
-  );
-}
-
-function toOpenAIResponsesMarkerUsage(
-  usage: ResponseUsage,
-): OpenAIResponsesMarkerUsage {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    totalTokens: usage.total_tokens,
-  };
-}
-
-function normalizeOpenAIResponsesMarkerUsage(
-  usage: unknown,
-): OpenAIResponsesMarkerUsage | undefined {
-  if (!isRecord(usage)) {
-    return undefined;
-  }
-
-  const inputTokens = usage['inputTokens'];
-  const outputTokens = usage['outputTokens'];
-  const totalTokens = usage['totalTokens'];
-  if (
-    !isNonNegativeFiniteNumber(inputTokens) ||
-    !isNonNegativeFiniteNumber(outputTokens) ||
-    !isNonNegativeFiniteNumber(totalTokens)
-  ) {
-    return undefined;
-  }
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens,
-  };
 }
 
 function readResponseInputItemType(
@@ -556,7 +512,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     let latestResponseBoundaryIndex: number | undefined;
     let latestResponseBoundaryItem: EasyInputMessage | undefined;
     let latestResponseInputBoundaryIndex: number | undefined;
-    let latestResponseUsage: OpenAIResponsesMarkerUsage | undefined;
+    let latestResponseUsage: CopilotUsage | undefined;
     let outItemsAfterLatestResponse: ResponseInputItem[] = [];
     const outItems: ResponseInputItem[] = [];
     const rawMap = new Map<
@@ -623,8 +579,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
                   latestResponseBoundaryIndex =
                     messageOriginIndexes?.[messageIndex] ?? messageIndex;
                   latestResponseBoundaryItem = item;
-                  latestResponseUsage =
-                    normalizeOpenAIResponsesMarkerUsage(usage);
+                  latestResponseUsage = tryNormalizeCopilotUsage(usage);
                   outItemsAfterLatestResponse = [];
                 } else {
                   latestResponseId = undefined;
@@ -1143,14 +1098,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
   private estimateStandaloneCompactionInputTokens(
     input: ResponseInputItem[],
     previousResponseInputBoundaryIndex: number,
-    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+    previousResponseUsage: CopilotUsage | undefined,
   ): number | undefined {
     if (previousResponseUsage !== undefined) {
       const suffixTokens = this.estimateResponsesInputTokens(
         input.slice(previousResponseInputBoundaryIndex),
       );
       if (suffixTokens !== undefined) {
-        return previousResponseUsage.totalTokens + suffixTokens;
+        return previousResponseUsage.total_tokens + suffixTokens;
       }
     }
 
@@ -1206,7 +1161,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     model: ModelConfig,
     baseBody: OpenAIResponsesRequestBody,
     previousResponseInputBoundaryIndex: number | undefined,
-    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+    previousResponseUsage: CopilotUsage | undefined,
     headers: Record<string, string>,
     logger: RequestLogger,
     abortSignal: AbortSignal,
@@ -2262,7 +2217,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
       markerData.responseId = message.id;
     }
     if (message.usage) {
-      markerData.usage = toOpenAIResponsesMarkerUsage(message.usage);
+      markerData.usage = createCopilotUsage(
+        message.usage.input_tokens,
+        message.usage.output_tokens,
+        message.usage.input_tokens_details.cached_tokens,
+      );
     }
     yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
       expectedIdentity,
@@ -2630,7 +2589,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
             markerData.responseId = response.id;
           }
           if (response.usage) {
-            markerData.usage = toOpenAIResponsesMarkerUsage(response.usage);
+            markerData.usage = createCopilotUsage(
+              response.usage.input_tokens,
+              response.usage.output_tokens,
+              response.usage.input_tokens_details.cached_tokens,
+            );
           }
           yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
             expectedIdentity,
@@ -2756,5 +2719,5 @@ export type OpenAIResponsesMarkerData = {
   data: ResponseOutputItem[];
   sessionId?: string;
   responseId?: string;
-  usage?: OpenAIResponsesMarkerUsage;
+  usage?: CopilotUsage;
 };

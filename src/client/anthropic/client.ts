@@ -42,7 +42,12 @@ import {
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
-import { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ModelConfig,
+  ProviderConfig,
+} from '../../types';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import {
   ENCRYPTED_THINKING_PLACEHOLDER,
@@ -67,6 +72,12 @@ import {
   setUserAgentHeader,
 } from '../utils';
 import type { AuthTokenInfo } from '../../auth/types';
+
+type AnthropicMarkerData = {
+  raw: BetaMessage;
+  userId?: string;
+  usage?: CopilotUsage;
+};
 
 /**
  * Client for Anthropic-compatible APIs
@@ -366,10 +377,11 @@ export class AnthropicProvider implements ApiProvider {
 
             if (markerParts.length === 1) {
               try {
-                const decoded = decodeStatefulMarkerPart<{
-                  raw: BetaMessage;
-                  userId?: string;
-                }>(expectedIdentity, encodedModelId, markerParts[0]);
+                const decoded = decodeStatefulMarkerPart<AnthropicMarkerData>(
+                  expectedIdentity,
+                  encodedModelId,
+                  markerParts[0],
+                );
                 const raw = decoded.raw;
                 if (firstHistoryUserId == null && decoded.userId) {
                   firstHistoryUserId = decoded.userId;
@@ -1251,9 +1263,9 @@ export class AnthropicProvider implements ApiProvider {
       }
     }
 
-    if (message.usage) {
-      this.processUsage(message.usage, requestTrace, logger);
-    }
+    const normalizedUsage = message.usage
+      ? this.processUsage(message.usage, requestTrace, logger)
+      : undefined;
 
     this.throwIfAbnormalStop(message);
 
@@ -1261,12 +1273,16 @@ export class AnthropicProvider implements ApiProvider {
     // no parts at all instead of an empty message. The outer service
     // treats Anthropic 0-part responses as valid and does not retry.
     if (message.content.length > 0) {
-      yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
+      const markerData: AnthropicMarkerData = {
+        raw,
+        userId: state.userId,
+      };
+      if (normalizedUsage) {
+        markerData.usage = normalizedUsage;
+      }
+      yield encodeStatefulMarkerPart<AnthropicMarkerData>(
         expectedIdentity,
-        {
-          raw,
-          userId: state.userId,
-        },
+        markerData,
       );
     }
   }
@@ -1433,9 +1449,9 @@ export class AnthropicProvider implements ApiProvider {
             }
           }
 
-          if (raw?.usage) {
-            this.processUsage(raw.usage, requestTrace, logger);
-          }
+          const normalizedUsage = raw?.usage
+            ? this.processUsage(raw.usage, requestTrace, logger)
+            : undefined;
 
           this.throwIfAbnormalStop(raw);
 
@@ -1450,13 +1466,17 @@ export class AnthropicProvider implements ApiProvider {
           // `raw.content` is empty, the outer service sees a 0-part
           // response and accepts it as a valid no-op completion.
           if (raw && raw.content.length > 0) {
-            yield encodeStatefulMarkerPart<{
-              raw: BetaMessage;
-              userId?: string;
-            }>(expectedIdentity, {
+            const markerData: AnthropicMarkerData = {
               raw,
               userId: state.userId,
-            });
+            };
+            if (normalizedUsage) {
+              markerData.usage = normalizedUsage;
+            }
+            yield encodeStatefulMarkerPart<AnthropicMarkerData>(
+              expectedIdentity,
+              markerData,
+            );
           }
           break;
         }
@@ -1705,7 +1725,7 @@ export class AnthropicProvider implements ApiProvider {
     usage: BetaUsage,
     requestTrace: ChatRequestTrace,
     logger: RequestLogger,
-  ) {
+  ): CopilotUsage {
     const normalizedUsage = createCopilotUsage(
       (usage.input_tokens ?? 0) +
         (usage.cache_creation_input_tokens ?? 0) +
@@ -1714,6 +1734,7 @@ export class AnthropicProvider implements ApiProvider {
       usage.cache_read_input_tokens,
     );
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+    return normalizedUsage;
   }
 
   estimateTokenCount(text: string): number {
