@@ -15,7 +15,8 @@ export type BalanceMethod =
   | 'gemini-cli'
   | 'codex'
   | 'synthetic'
-  | 'minimax';
+  | 'minimax'
+  | 'litellm';
 
 export interface NoBalanceConfig {
   method: 'none';
@@ -90,6 +91,10 @@ export interface MiniMaxBalanceConfig {
   method: 'minimax';
 }
 
+export interface LiteLLMBalanceConfig {
+  method: 'litellm';
+}
+
 export type BalanceConfig =
   | NoBalanceConfig
   | MoonshotAIBalanceConfig
@@ -104,7 +109,8 @@ export type BalanceConfig =
   | GeminiCliBalanceConfig
   | CodexBalanceConfig
   | SyntheticBalanceConfig
-  | MiniMaxBalanceConfig;
+  | MiniMaxBalanceConfig
+  | LiteLLMBalanceConfig;
 
 export type BalanceMetricType =
   | 'amount'
@@ -281,4 +287,10 @@ export function isMiniMaxBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is MiniMaxBalanceConfig {
   return config?.method === 'minimax';
+}
+
+export function isLiteLLMBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is LiteLLMBalanceConfig {
+  return config?.method === 'litellm';
 }
