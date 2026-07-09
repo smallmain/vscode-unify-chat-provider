@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.11.0 - 2026-07-09
+
+### Features
+- provider: propagate normalized token usage through stateful markers for cross-provider support (5c4f50f, SmallMain)
+
 ## v7.10.0 - 2026-07-09
 
 ### Features
