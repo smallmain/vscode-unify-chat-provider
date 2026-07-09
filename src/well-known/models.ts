@@ -4820,8 +4820,8 @@ const _WELL_KNOWN_MODELS = [
     presetTemplates: [thinkingMode()],
   },
   {
-    id: 'hy3-preview',
-    name: 'Hy3 Preview',
+    id: 'hy3',
+    name: 'Hy3',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
     stream: true,
