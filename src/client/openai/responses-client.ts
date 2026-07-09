@@ -55,6 +55,7 @@ import {
   FunctionTool,
   Response as OpenAIResponse,
   ResponseCompactionItemParam,
+  ResponseCompactParams,
   ResponseCreateParamsBase,
   ResponsesClientEvent,
   ResponseFunctionCallOutputItem,
@@ -87,14 +88,13 @@ const PREVIOUS_RESPONSE_ID_ERROR_CODES = new Set<string>([
 const WEBSOCKET_CONNECTION_LIMIT_ERROR_CODE =
   'websocket_connection_limit_reached';
 const RESPONSES_CONTEXT_COMPACTION_FALLBACK_THRESHOLD = 50_000;
-const RESPONSES_CONTEXT_COMPACTION_THRESHOLD_RATIO = 0.9;
+const RESPONSES_COMPACTION_THRESHOLD_RATIO = 0.9;
 const RESPONSES_CONTEXT_MANAGEMENT_EXCLUDED_BASE_MODELS = new Set([
   'gpt-5',
   'gpt-5.1',
   'gpt-5.2',
 ]);
-const RESPONSES_CONTEXT_COMPACTION_NOTICE =
-  '[Remote compaction has been triggered.]';
+const RESPONSES_COMPACTION_NOTICE = '[Remote compaction has been triggered.]';
 
 type ResolvedTransportMode = 'sse' | 'auto' | 'websocket';
 
@@ -104,11 +104,19 @@ type ConvertedMessagesResult = {
   previousResponseId?: string;
   inputAfterPreviousResponse?: ResponseInputItem[];
   previousResponseBoundaryIndex?: number;
+  previousResponseInputBoundaryIndex?: number;
+  previousResponseUsage?: OpenAIResponsesMarkerUsage;
 };
 
 type ResponseContinuation = {
   previousResponseId: string;
   inputAfterPreviousResponse: ResponseInputItem[];
+};
+
+type OpenAIResponsesMarkerUsage = {
+  inputTokens: number;
+  outputTokens: number;
+  totalTokens: number;
 };
 
 type OpenAIResponsesRequestBody = ResponseCreateParamsBase & {
@@ -178,6 +186,50 @@ type OpenAIResponsesWebSocketRequestContext = OpenAIResponsesRequestContext & {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isNonNegativeFiniteNumber(value: unknown): value is number {
+  return (
+    typeof value === 'number' &&
+    Number.isFinite(value) &&
+    Number.isInteger(value) &&
+    value >= 0
+  );
+}
+
+function toOpenAIResponsesMarkerUsage(
+  usage: ResponseUsage,
+): OpenAIResponsesMarkerUsage {
+  return {
+    inputTokens: usage.input_tokens,
+    outputTokens: usage.output_tokens,
+    totalTokens: usage.total_tokens,
+  };
+}
+
+function normalizeOpenAIResponsesMarkerUsage(
+  usage: unknown,
+): OpenAIResponsesMarkerUsage | undefined {
+  if (!isRecord(usage)) {
+    return undefined;
+  }
+
+  const inputTokens = usage['inputTokens'];
+  const outputTokens = usage['outputTokens'];
+  const totalTokens = usage['totalTokens'];
+  if (
+    !isNonNegativeFiniteNumber(inputTokens) ||
+    !isNonNegativeFiniteNumber(outputTokens) ||
+    !isNonNegativeFiniteNumber(totalTokens)
+  ) {
+    return undefined;
+  }
+
+  return {
+    inputTokens,
+    outputTokens,
+    totalTokens,
+  };
 }
 
 function readResponseInputItemType(
@@ -502,6 +554,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
     let firstSessionId: string | null = null;
     let latestResponseId: string | undefined;
     let latestResponseBoundaryIndex: number | undefined;
+    let latestResponseBoundaryItem: EasyInputMessage | undefined;
+    let latestResponseInputBoundaryIndex: number | undefined;
+    let latestResponseUsage: OpenAIResponsesMarkerUsage | undefined;
     let outItemsAfterLatestResponse: ResponseInputItem[] = [];
     const outItems: ResponseInputItem[] = [];
     const rawMap = new Map<
@@ -550,6 +605,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
                   data: raw,
                   sessionId,
                   responseId,
+                  usage,
                 } = decodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
                   expectedIdentity,
                   encodedModelId,
@@ -558,20 +614,26 @@ export class OpenAIResponsesProvider implements ApiProvider {
                 if (firstSessionId == null && sessionId) {
                   firstSessionId = sessionId;
                 }
-                if (typeof responseId === 'string' && responseId.trim()) {
-                  latestResponseId = responseId;
-                  latestResponseBoundaryIndex =
-                    messageOriginIndexes?.[messageIndex] ?? messageIndex;
-                  outItemsAfterLatestResponse = [];
-                } else {
-                  latestResponseId = undefined;
-                  latestResponseBoundaryIndex = undefined;
-                  outItemsAfterLatestResponse = [];
-                }
                 const item: EasyInputMessage = {
                   role: 'assistant',
                   content: '',
                 };
+                if (typeof responseId === 'string' && responseId.trim()) {
+                  latestResponseId = responseId;
+                  latestResponseBoundaryIndex =
+                    messageOriginIndexes?.[messageIndex] ?? messageIndex;
+                  latestResponseBoundaryItem = item;
+                  latestResponseUsage =
+                    normalizeOpenAIResponsesMarkerUsage(usage);
+                  outItemsAfterLatestResponse = [];
+                } else {
+                  latestResponseId = undefined;
+                  latestResponseBoundaryIndex = undefined;
+                  latestResponseBoundaryItem = undefined;
+                  latestResponseInputBoundaryIndex = undefined;
+                  latestResponseUsage = undefined;
+                  outItemsAfterLatestResponse = [];
+                }
                 rawMap.set(item, raw);
                 outItems.push(item);
                 break;
@@ -601,7 +663,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
     for (const [param, raw] of rawMap) {
       const index = outItems.indexOf(param);
       if (index === -1) continue;
-      outItems.splice(index, 1, ...normalizeMarkerOutputItems(raw));
+      const normalizedRaw = normalizeMarkerOutputItems(raw);
+      outItems.splice(index, 1, ...normalizedRaw);
+      if (param === latestResponseBoundaryItem) {
+        latestResponseInputBoundaryIndex = index + normalizedRaw.length;
+      }
     }
 
     const result: ConvertedMessagesResult = {
@@ -612,6 +678,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
       result.previousResponseId = latestResponseId;
       result.inputAfterPreviousResponse = outItemsAfterLatestResponse;
       result.previousResponseBoundaryIndex = latestResponseBoundaryIndex;
+      result.previousResponseInputBoundaryIndex =
+        latestResponseInputBoundaryIndex;
+      result.previousResponseUsage = latestResponseUsage;
     }
     return result;
   }
@@ -950,7 +1019,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       model.maxInputTokens > 0
     ) {
       return Math.floor(
-        model.maxInputTokens * RESPONSES_CONTEXT_COMPACTION_THRESHOLD_RATIO,
+        model.maxInputTokens * RESPONSES_COMPACTION_THRESHOLD_RATIO,
       );
     }
 
@@ -977,6 +1046,241 @@ export class OpenAIResponsesProvider implements ApiProvider {
         compact_threshold: compactThreshold,
       },
     ];
+    return true;
+  }
+
+  private isContextManagementExplicitlyConfigured(model: ModelConfig): boolean {
+    return (
+      Object.prototype.hasOwnProperty.call(
+        this.config.extraBody ?? {},
+        'context_management',
+      ) ||
+      Object.prototype.hasOwnProperty.call(
+        model.extraBody ?? {},
+        'context_management',
+      )
+    );
+  }
+
+  private shouldEnablePromptCacheKey(model: ModelConfig): boolean {
+    return isFeatureSupported(
+      FeatureId.OpenAIUsePromptCacheKey,
+      this.config,
+      model,
+    );
+  }
+
+  private resolvePromptCacheKey(sessionId: string): string {
+    return `ucp-${sessionId}`;
+  }
+
+  private applyPromptCacheKey(
+    model: ModelConfig,
+    sessionId: string,
+    baseBody: ResponseCreateParamsBase,
+  ): boolean {
+    if (!this.shouldEnablePromptCacheKey(model)) {
+      return false;
+    }
+    if (
+      baseBody.prompt_cache_key !== undefined &&
+      baseBody.prompt_cache_key !== null
+    ) {
+      return false;
+    }
+
+    baseBody.prompt_cache_key = this.resolvePromptCacheKey(sessionId);
+    return true;
+  }
+
+  private shouldEnableStandaloneResponsesCompaction(
+    model: ModelConfig,
+  ): boolean {
+    return isFeatureSupported(
+      FeatureId.OpenAIUseStandaloneResponsesCompaction,
+      this.config,
+      model,
+    );
+  }
+
+  private resolveStandaloneResponsesCompactionThreshold(
+    model: ModelConfig,
+  ): number | undefined {
+    if (!this.shouldEnableStandaloneResponsesCompaction(model)) {
+      return undefined;
+    }
+
+    if (
+      typeof model.maxInputTokens === 'number' &&
+      Number.isFinite(model.maxInputTokens) &&
+      model.maxInputTokens > 0
+    ) {
+      return Math.floor(
+        model.maxInputTokens * RESPONSES_COMPACTION_THRESHOLD_RATIO,
+      );
+    }
+
+    return RESPONSES_CONTEXT_COMPACTION_FALLBACK_THRESHOLD;
+  }
+
+  private estimateResponsesInputTokens(
+    input: OpenAIResponsesRequestBody['input'],
+  ): number | undefined {
+    if (input === undefined || input === null) {
+      return undefined;
+    }
+
+    if (typeof input === 'string') {
+      return sharedEstimateTokenCount(input);
+    }
+
+    const serialized = JSON.stringify(input);
+    return serialized === undefined
+      ? undefined
+      : sharedEstimateTokenCount(serialized);
+  }
+
+  private estimateStandaloneCompactionInputTokens(
+    input: ResponseInputItem[],
+    previousResponseInputBoundaryIndex: number,
+    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+  ): number | undefined {
+    if (previousResponseUsage !== undefined) {
+      const suffixTokens = this.estimateResponsesInputTokens(
+        input.slice(previousResponseInputBoundaryIndex),
+      );
+      if (suffixTokens !== undefined) {
+        return previousResponseUsage.totalTokens + suffixTokens;
+      }
+    }
+
+    return this.estimateResponsesInputTokens(input);
+  }
+
+  private resolveCompactionServiceTier(
+    serviceTier: ResponseCreateParamsBase['service_tier'],
+  ): ResponseCompactParams['service_tier'] | undefined {
+    switch (serviceTier) {
+      case 'auto':
+      case 'default':
+      case 'flex':
+      case 'priority':
+        return serviceTier;
+      default:
+        return undefined;
+    }
+  }
+
+  private buildStandaloneResponsesCompactionBody(
+    model: ModelConfig,
+    baseBody: OpenAIResponsesRequestBody,
+    input: ResponseInputItem[],
+  ): ResponseCompactParams {
+    const compactBody: ResponseCompactParams = {
+      model: getBaseModelId(model.id),
+      input,
+    };
+
+    if (baseBody.instructions !== undefined) {
+      compactBody.instructions = baseBody.instructions;
+    }
+    if (baseBody.prompt_cache_key !== undefined) {
+      compactBody.prompt_cache_key = baseBody.prompt_cache_key;
+    }
+    if (baseBody.prompt_cache_retention !== undefined) {
+      compactBody.prompt_cache_retention = baseBody.prompt_cache_retention;
+    }
+
+    const serviceTier = this.resolveCompactionServiceTier(
+      baseBody.service_tier,
+    );
+    if (serviceTier !== undefined) {
+      compactBody.service_tier = serviceTier;
+    }
+
+    return compactBody;
+  }
+
+  private async applyStandaloneResponsesCompaction(
+    client: OpenAI,
+    model: ModelConfig,
+    baseBody: OpenAIResponsesRequestBody,
+    previousResponseInputBoundaryIndex: number | undefined,
+    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+    headers: Record<string, string>,
+    logger: RequestLogger,
+    abortSignal: AbortSignal,
+  ): Promise<boolean> {
+    const compactThreshold =
+      this.resolveStandaloneResponsesCompactionThreshold(model);
+    if (compactThreshold === undefined) {
+      return false;
+    }
+    if (baseBody.conversation !== undefined && baseBody.conversation !== null) {
+      return false;
+    }
+    if (
+      baseBody.previous_response_id !== undefined &&
+      baseBody.previous_response_id !== null
+    ) {
+      return false;
+    }
+
+    const input = baseBody.input;
+    if (!Array.isArray(input)) {
+      return false;
+    }
+    if (
+      previousResponseInputBoundaryIndex === undefined ||
+      previousResponseInputBoundaryIndex <= 0 ||
+      previousResponseInputBoundaryIndex >= input.length
+    ) {
+      return false;
+    }
+
+    const estimatedTokens = this.estimateStandaloneCompactionInputTokens(
+      input,
+      previousResponseInputBoundaryIndex,
+      previousResponseUsage,
+    );
+    if (
+      estimatedTokens === undefined ||
+      estimatedTokens < compactThreshold
+    ) {
+      return false;
+    }
+
+    const compactInput = input.slice(0, previousResponseInputBoundaryIndex);
+    const suffixInput = input.slice(previousResponseInputBoundaryIndex);
+    const compactBody = this.buildStandaloneResponsesCompactionBody(
+      model,
+      baseBody,
+      compactInput,
+    );
+
+    logger.verbose(
+      `OpenAI Responses standalone compaction starting | model=${getBaseModelId(model.id)} | estimatedInputTokens=${estimatedTokens} | threshold=${compactThreshold} | compactItems=${compactInput.length} | suffixItems=${suffixInput.length}`,
+    );
+
+    const compacted = await client.responses.compact(compactBody, {
+      headers,
+      signal: abortSignal,
+    });
+    if (compacted.output.length === 0) {
+      logger.verbose(
+        `OpenAI Responses standalone compaction returned no output | id=${compacted.id}`,
+      );
+      return false;
+    }
+
+    const nextInput = [
+      ...normalizeMarkerOutputItems(compacted.output),
+      ...suffixInput,
+    ];
+    baseBody.input = nextInput;
+    logger.verbose(
+      `OpenAI Responses standalone compaction completed | id=${compacted.id} | compactedItems=${compacted.output.length} | nextInputItems=${nextInput.length}`,
+    );
     return true;
   }
 
@@ -1321,6 +1625,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
       previousResponseId,
       inputAfterPreviousResponse,
       previousResponseBoundaryIndex,
+      previousResponseInputBoundaryIndex,
+      previousResponseUsage,
     } = this.convertMessages(
       encodedModelId,
       sanitizedMessages,
@@ -1349,7 +1655,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     );
     const serviceTier = resolveOpenAIServiceTier(this.config, model);
     const transportMode = this.resolveTransportMode(streamEnabled);
-    const canUsePreviousResponseId =
+    let canUsePreviousResponseId =
       previousResponseId !== undefined &&
       !this.hasSanitizedMessagesAfterBoundary(
         sanitization.sanitizedMessageIndexes,
@@ -1380,11 +1686,46 @@ export class OpenAIResponsesProvider implements ApiProvider {
         : { include: ['reasoning.encrypted_content'] }),
     };
 
-    this.applyResponsesContextManagement(model, baseBody);
+    const appliedResponsesContextManagement =
+      this.applyResponsesContextManagement(model, baseBody);
+    this.applyPromptCacheKey(model, sessionId, baseBody);
     this.handleRequest(sessionId, baseBody);
 
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
     this.applyVolcContextCaching(model, baseBody);
+
+    const headers = this.buildHeaders(
+      sessionId,
+      credential,
+      model,
+      sanitizedMessages,
+    );
+    const standaloneCompactionClient = this.createClient(
+      logger,
+      false,
+      credential,
+      abortController.signal,
+    );
+    const usedStandaloneResponsesCompaction =
+      await this.applyStandaloneResponsesCompaction(
+        standaloneCompactionClient,
+        model,
+        baseBody,
+        previousResponseInputBoundaryIndex,
+        previousResponseUsage,
+        headers,
+        logger,
+        abortController.signal,
+    );
+    if (usedStandaloneResponsesCompaction) {
+      canUsePreviousResponseId = false;
+      if (
+        appliedResponsesContextManagement &&
+        !this.isContextManagementExplicitlyConfigured(model)
+      ) {
+        delete baseBody.context_management;
+      }
+    }
 
     const httpIncludeResponseIdInMarker =
       this.shouldIncludeResponseIdInMarker(baseBody);
@@ -1407,12 +1748,6 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
     const fullInput = baseBody.input;
 
-    const headers = this.buildHeaders(
-      sessionId,
-      credential,
-      model,
-      sanitizedMessages,
-    );
     const webSocketHeaders = this.buildWebSocketHeaders(
       sessionId,
       credential,
@@ -1448,6 +1783,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
     );
 
     try {
+      if (usedStandaloneResponsesCompaction) {
+        yield new vscode.LanguageModelTextPart(
+          RESPONSES_COMPACTION_NOTICE,
+        );
+      }
+
       if (transportMode === 'sse') {
         yield* this.streamChatOverHttp(httpContext);
         return;
@@ -1868,7 +2209,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'compaction':
           yield new vscode.LanguageModelTextPart(
-            RESPONSES_CONTEXT_COMPACTION_NOTICE,
+            RESPONSES_COMPACTION_NOTICE,
           );
           break;
 
@@ -1919,6 +2260,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
     };
     if (includeResponseIdInMarker) {
       markerData.responseId = message.id;
+    }
+    if (message.usage) {
+      markerData.usage = toOpenAIResponsesMarkerUsage(message.usage);
     }
     yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
       expectedIdentity,
@@ -2257,7 +2601,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
             if (item.type === 'compaction') {
               yield new vscode.LanguageModelTextPart(
-                RESPONSES_CONTEXT_COMPACTION_NOTICE,
+                RESPONSES_COMPACTION_NOTICE,
               );
               continue;
             }
@@ -2284,6 +2628,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
           };
           if (includeResponseIdInMarker) {
             markerData.responseId = response.id;
+          }
+          if (response.usage) {
+            markerData.usage = toOpenAIResponsesMarkerUsage(response.usage);
           }
           yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
             expectedIdentity,
@@ -2409,4 +2756,5 @@ export type OpenAIResponsesMarkerData = {
   data: ResponseOutputItem[];
   sessionId?: string;
   responseId?: string;
+  usage?: OpenAIResponsesMarkerUsage;
 };

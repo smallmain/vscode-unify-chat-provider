@@ -96,6 +96,7 @@ const GEMINI_2_5_FLASH_REASONING_BUDGETS = {
   medium: 8192,
   low: 1024,
 } as const;
+const GROK_4_5_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const GROK_4_3_REASONING_EFFORTS = ['high', 'medium', 'low', 'none'] as const;
 
 function doubaoReasoningEffort(
@@ -4373,6 +4374,28 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
+  },
+  {
+    id: 'grok-4.5',
+    overrides: ['grok-4.5-latest', 'grok-build-latest'],
+    name: 'Grok 4.5',
+    maxInputTokens: 500000,
+    maxOutputTokens: 65536,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    presetTemplates: [
+      reasoningEffort({
+        supported: GROK_4_5_REASONING_EFFORTS,
+        default: 'high',
+      }),
+    ],
   },
   {
     id: 'grok-4.3',
