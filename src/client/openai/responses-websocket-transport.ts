@@ -6,12 +6,25 @@ import type {
   ResponseStreamEvent,
 } from 'openai/resources/responses/responses';
 import { ResponsesWS } from 'openai/resources/responses/ws';
+import type {
+  BetaResponsesClientEvent,
+  BetaResponsesServerEvent,
+  BetaResponseStreamEvent,
+} from 'openai/resources/beta/responses/responses';
+import { ResponsesWS as BetaResponsesWS } from 'openai/resources/beta/responses/ws';
 import {
   WebSocketSessionCloseEvent,
   WebSocketSessionError,
   WebSocketSessionTransport,
   WebSocketSessionUnexpectedResponseEvent,
 } from '../websocket-session-manager';
+
+type OpenAIResponsesClientEvent =
+  | ResponsesClientEvent
+  | BetaResponsesClientEvent;
+type OpenAIResponsesStreamEvent =
+  | ResponseStreamEvent
+  | BetaResponseStreamEvent;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -67,12 +80,23 @@ function normalizeSDKError(error: Error): WebSocketSessionError {
 
 export class OpenAIResponsesWebSocketTransport
   implements
-    WebSocketSessionTransport<ResponsesClientEvent, ResponseStreamEvent>
+    WebSocketSessionTransport<
+      OpenAIResponsesClientEvent,
+      OpenAIResponsesStreamEvent
+    >
 {
-  private readonly ws: ResponsesWS;
+  private readonly sendPayload: (payload: OpenAIResponsesClientEvent) => void;
+  private readonly closeSocket: (props: {
+    code: number;
+    reason: string;
+  }) => void;
+  private readonly resolveReadyState: () => WebSocketSessionTransport<
+    OpenAIResponsesClientEvent,
+    OpenAIResponsesStreamEvent
+  >['readyState'];
   private readonly openListeners = new Set<() => void>();
   private readonly eventListeners = new Set<
-    (event: ResponseStreamEvent) => void
+    (event: OpenAIResponsesStreamEvent) => void
   >();
   private readonly errorListeners = new Set<(error: Error) => void>();
   private readonly closeListeners = new Set<
@@ -82,22 +106,70 @@ export class OpenAIResponsesWebSocketTransport
     (event: WebSocketSessionUnexpectedResponseEvent) => void
   >();
 
-  constructor(client: OpenAI, headers?: Record<string, string>) {
-    this.ws = new ResponsesWS(client, { headers });
-    this.ws.socket.on('open', this.handleOpen);
-    this.ws.on('event', this.handleEvent);
-    this.ws.on('error', this.handleError);
-    this.ws.socket.on('close', this.handleClose);
-    this.ws.socket.on('unexpected-response', this.handleUnexpectedResponse);
+  constructor(
+    client: OpenAI,
+    headers: Record<string, string> | undefined,
+    beta: boolean,
+  ) {
+    if (beta) {
+      const ws = new BetaResponsesWS(client, { headers });
+      this.sendPayload = (payload) => {
+        ws.sendRaw(JSON.stringify(payload));
+      };
+      this.closeSocket = (props) => ws.close(props);
+      this.resolveReadyState = () =>
+        this.normalizeReadyState(
+          ws.socket.readyState,
+          ws.socket.platformSocket,
+        );
+      ws.socket.on('open', this.handleOpen);
+      ws.on('event', this.handleBetaEvent);
+      ws.on('error', this.handleError);
+      ws.socket.on('close', this.handleClose);
+      ws.socket.on(
+        'unexpected-response',
+        this.handleUnexpectedResponse,
+      );
+      return;
+    }
+
+    const ws = new ResponsesWS(client, { headers });
+    this.sendPayload = (payload) => {
+      ws.sendRaw(JSON.stringify(payload));
+    };
+    this.closeSocket = (props) => ws.close(props);
+    this.resolveReadyState = () =>
+      this.normalizeReadyState(
+        ws.socket.readyState,
+        ws.socket.platformSocket,
+      );
+    ws.socket.on('open', this.handleOpen);
+    ws.on('event', this.handleEvent);
+    ws.on('error', this.handleError);
+    ws.socket.on('close', this.handleClose);
+    ws.socket.on('unexpected-response', this.handleUnexpectedResponse);
   }
 
   get readyState(): WebSocketSessionTransport<
-    ResponsesClientEvent,
-    ResponseStreamEvent
+    OpenAIResponsesClientEvent,
+    OpenAIResponsesStreamEvent
   >['readyState'] {
-    const platformSocket = this.ws.socket.platformSocket;
+    return this.resolveReadyState();
+  }
 
-    switch (this.ws.socket.readyState) {
+  private normalizeReadyState(
+    readyState: number,
+    platformSocket: {
+      CONNECTING: number;
+      OPEN: number;
+      CLOSING: number;
+      CLOSED: number;
+    },
+  ): WebSocketSessionTransport<
+    OpenAIResponsesClientEvent,
+    OpenAIResponsesStreamEvent
+  >['readyState'] {
+    switch (readyState) {
       case platformSocket.CONNECTING:
         return 'connecting';
       case platformSocket.OPEN:
@@ -110,12 +182,12 @@ export class OpenAIResponsesWebSocketTransport
     }
   }
 
-  send(payload: ResponsesClientEvent): void {
-    this.ws.send(payload);
+  send(payload: OpenAIResponsesClientEvent): void {
+    this.sendPayload(payload);
   }
 
   close(props?: { code?: number; reason?: string }): void {
-    this.ws.close({
+    this.closeSocket({
       code: props?.code ?? 1000,
       reason: props?.reason ?? 'OK',
     });
@@ -129,11 +201,11 @@ export class OpenAIResponsesWebSocketTransport
     this.openListeners.delete(listener);
   }
 
-  onEvent(listener: (event: ResponseStreamEvent) => void): void {
+  onEvent(listener: (event: OpenAIResponsesStreamEvent) => void): void {
     this.eventListeners.add(listener);
   }
 
-  offEvent(listener: (event: ResponseStreamEvent) => void): void {
+  offEvent(listener: (event: OpenAIResponsesStreamEvent) => void): void {
     this.eventListeners.delete(listener);
   }
 
@@ -172,6 +244,20 @@ export class OpenAIResponsesWebSocketTransport
   };
 
   private readonly handleEvent = (event: ResponsesServerEvent): void => {
+    for (const listener of this.eventListeners) {
+      listener(event);
+    }
+  };
+
+  private readonly handleBetaEvent = (
+    event: BetaResponsesServerEvent,
+  ): void => {
+    if (
+      event.type === 'response.inject.created' ||
+      event.type === 'response.inject.failed'
+    ) {
+      return;
+    }
     for (const listener of this.eventListeners) {
       listener(event);
     }

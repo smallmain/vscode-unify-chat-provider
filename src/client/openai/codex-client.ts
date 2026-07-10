@@ -11,20 +11,20 @@ import {
 } from '../../utils';
 import type { ModelConfig } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
-import { OpenAIResponsesProvider } from './responses-client';
+import {
+  OpenAIResponsesProvider,
+  type OpenAIResponsesClientEvent,
+  type OpenAIResponsesRequestBody,
+} from './responses-client';
 import { randomUUID } from 'crypto';
 import { codexBaseInstructionsForModel } from './codex-instructions';
-import type {
-  ResponseCreateParamsBase,
-  ResponsesClientEvent,
-} from 'openai/resources/responses/responses';
 
 const CODEX_API_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
-const CODEX_CLIENT_VERSION = '0.125.0';
+const CODEX_CLIENT_VERSION = '0.144.0';
 const CODEX_CLI_USER_AGENT =
-  'codex_cli_rs/0.125.0 (Ubuntu 22.4.0; x86_64) xterm-256color';
+  'codex_cli_rs/0.144.0 (Ubuntu 22.4.0; x86_64) xterm-256color';
 const CODEX_TUI_USER_AGENT =
-  'codex-tui/0.125.0 (Ubuntu 22.4.0; x86_64) xterm-256color (codex-tui; 0.125.0)';
+  'codex-tui/0.144.0 (Ubuntu 22.4.0; x86_64) xterm-256color (codex-tui; 0.144.0)';
 const CODEX_ORIGINATOR = 'codex_cli_rs';
 const CODEX_RESPONSES_HTTP_BETA = 'responses=experimental';
 const CODEX_RESPONSES_WEBSOCKET_BETA = 'responses_websockets=2026-02-06';
@@ -53,8 +53,14 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isResponsesClientEvent(value: unknown): value is ResponsesClientEvent {
-  return isRecord(value) && typeof value['type'] === 'string';
+function isResponsesClientEvent(
+  value: unknown,
+): value is OpenAIResponsesClientEvent {
+  return (
+    isRecord(value) &&
+    (value['type'] === 'response.create' ||
+      value['type'] === 'response.inject')
+  );
 }
 
 function deleteHeaderVariants(
@@ -189,8 +195,8 @@ function normalizeCodexRequestRecord(
 }
 
 function normalizeCodexWebSocketPayload(
-  payload: ResponsesClientEvent,
-): ResponsesClientEvent {
+  payload: OpenAIResponsesClientEvent,
+): OpenAIResponsesClientEvent {
   if (payload.type !== 'response.create') {
     return payload;
   }
@@ -352,14 +358,14 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
   }
 
   protected override transformWebSocketRequestPayload(
-    payload: ResponsesClientEvent,
-  ): ResponsesClientEvent {
+    payload: OpenAIResponsesClientEvent,
+  ): OpenAIResponsesClientEvent {
     return normalizeCodexWebSocketPayload(payload);
   }
 
   protected override handleRequest(
     sessionId: string,
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
   ): void {
     normalizeCodexRequestRecord(baseBody as unknown as Record<string, unknown>, {
       deletePreviousResponseId: false,
@@ -433,6 +439,21 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     _credential: AuthTokenInfo,
   ): Promise<ModelConfig[]> {
     return [
+      {
+        id: 'gpt-5.6-sol',
+        maxInputTokens: 372000,
+        ...CODEX_REASONING_SUMMARY_DEFAULTS,
+      },
+      {
+        id: 'gpt-5.6-terra',
+        maxInputTokens: 372000,
+        ...CODEX_REASONING_SUMMARY_DEFAULTS,
+      },
+      {
+        id: 'gpt-5.6-luna',
+        maxInputTokens: 372000,
+        ...CODEX_REASONING_SUMMARY_DEFAULTS,
+      },
       {
         id: 'gpt-5.5',
         maxInputTokens: 272000,

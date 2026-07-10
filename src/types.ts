@@ -41,6 +41,8 @@ export type ThinkingEffort =
   | 'medium'
   | 'high'
   | 'xhigh';
+export type ThinkingMode = 'standard' | 'pro';
+export type ReasoningContext = 'auto' | 'current_turn' | 'all_turns';
 export type ModelEditTool =
   | 'find-replace'
   | 'multi-find-replace'
@@ -176,6 +178,16 @@ export interface ModelConfig {
      * Leave undefined to let the provider decide.
      */
     summary?: 'none' | 'auto' | 'concise' | 'detailed';
+    /** Reasoning mode. Leave undefined to let the provider decide. */
+    mode?: ThinkingMode;
+    /** Amount of prior reasoning context retained by the provider. */
+    context?: ReasoningContext;
+  };
+  /** Native multi-agent execution configuration. */
+  'multi-agent'?: {
+    enabled: boolean;
+    /** Maximum number of subagents that may run concurrently. */
+    maxConcurrentSubagents?: number;
   };
   /**
    * Use native web search tool.
@@ -210,7 +222,7 @@ export interface ModelConfig {
   presetTemplates?: PresetTemplate[];
 }
 
-export type PresetTemplateOverrideConfig = Pick<
+type PresetTemplateReplaceConfig = Pick<
   ModelConfig,
   | 'maxOutputTokens'
   | 'stream'
@@ -222,12 +234,16 @@ export type PresetTemplateOverrideConfig = Pick<
   | 'parallelToolCalling'
   | 'serviceTier'
   | 'verbosity'
-  | 'thinking'
   | 'webSearch'
   | 'memoryTool'
   | 'extraHeaders'
   | 'extraBody'
 >;
+
+export type PresetTemplateOverrideConfig = PresetTemplateReplaceConfig & {
+  /** Thinking children are merged so independent thinking presets compose. */
+  thinking?: Partial<NonNullable<ModelConfig['thinking']>>;
+};
 
 export type PresetTemplateOverrideKey = keyof PresetTemplateOverrideConfig;
 

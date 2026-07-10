@@ -93,6 +93,20 @@ export interface ModelViewRoute {
   models: ModelConfig[];
 }
 
+export interface ThinkingFormRoute {
+  kind: 'thinkingForm';
+  model: ModelConfig;
+  draft: Partial<NonNullable<ModelConfig['thinking']>>;
+  readOnly: boolean;
+}
+
+export interface MultiAgentFormRoute {
+  kind: 'multiAgentForm';
+  model: ModelConfig;
+  draft: Partial<NonNullable<ModelConfig['multi-agent']>>;
+  readOnly: boolean;
+}
+
 export interface ModelSelectionRoute {
   kind: 'modelSelection';
   title: string;
@@ -148,6 +162,8 @@ export type UiRoute =
   | ModelListRoute
   | ModelFormRoute
   | ModelViewRoute
+  | ThinkingFormRoute
+  | MultiAgentFormRoute
   | ModelSelectionRoute
   | TimeoutFormRoute
   | ImportProvidersRoute
