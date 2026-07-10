@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.12.1 - 2026-07-10
+
+### Fixes
+- pass 'max' effort through directly instead of mapping to 'xhigh' (3e6b574, SmallMain)
+
 ## v7.12.0 - 2026-07-10
 
 ### Features
