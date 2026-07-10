@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.12.0 - 2026-07-10
+
+### Features
+- add GPT-5.6 models, multi-agent support, and thinking mode/context config (6d1afd6, SmallMain)
+
 ## v7.11.0 - 2026-07-09
 
 ### Features
