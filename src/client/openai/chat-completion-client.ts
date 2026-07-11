@@ -884,8 +884,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
   private normalizeReasoningEffortForOpenAi(
     effort: NonNullable<NonNullable<ModelConfig['thinking']>['effort']>,
-  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
-    return effort === 'max' ? 'xhigh' : effort;
+  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
+    return effort;
   }
 
   private buildThinkingStrategyParam(

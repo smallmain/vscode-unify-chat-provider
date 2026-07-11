@@ -142,6 +142,28 @@ export async function runModelFormScreen(
 
   const field = selection.field;
   if (field) {
+    if (field === 'thinking') {
+      return {
+        kind: 'push',
+        route: {
+          kind: 'thinkingForm',
+          model: draft,
+          draft: { ...draft.thinking },
+          readOnly: false,
+        },
+      };
+    }
+    if (field === 'multi-agent') {
+      return {
+        kind: 'push',
+        route: {
+          kind: 'multiAgentForm',
+          model: draft,
+          draft: { ...draft['multi-agent'] },
+          readOnly: false,
+        },
+      };
+    }
     await editModelFieldByFormItem(draft, field, selection.label, context);
   }
 
@@ -208,6 +230,30 @@ export async function runModelViewScreen(
       t('Model duplicated as "{0}".', duplicated.id),
     );
     return { kind: 'stay' };
+  }
+
+  if (selection.field === 'thinking') {
+    return {
+      kind: 'push',
+      route: {
+        kind: 'thinkingForm',
+        model,
+        draft: { ...model.thinking },
+        readOnly: true,
+      },
+    };
+  }
+
+  if (selection.field === 'multi-agent') {
+    return {
+      kind: 'push',
+      route: {
+        kind: 'multiAgentForm',
+        model,
+        draft: { ...model['multi-agent'] },
+        readOnly: true,
+      },
+    };
   }
 
   // For any field selection, just stay (read-only, no editing)

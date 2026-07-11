@@ -60,21 +60,6 @@ function getThinkingEffortLabel(
   }
 }
 
-function getThinkingSummaryLabel(
-  summary: NonNullable<NonNullable<ModelConfig['thinking']>['summary']>,
-): string {
-  switch (summary) {
-    case 'none':
-      return t('None');
-    case 'auto':
-      return t('Auto');
-    case 'concise':
-      return t('Concise');
-    case 'detailed':
-      return t('Detailed');
-  }
-}
-
 async function pickModelEditTool(
   currentEditTool: ModelEditTool | undefined,
 ): Promise<EditToolQuickPickItem | undefined> {
@@ -435,180 +420,30 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       }),
       getDescription: (draft) => formatBoolean(draft.stream),
     },
-    // Thinking (custom due to complex nested structure)
+    // Thinking settings are edited on a routed second-level screen.
     {
       key: 'thinking',
       type: 'custom',
       label: t('Thinking'),
       icon: 'lightbulb',
       section: 'capabilities',
-      edit: async (draft) => {
-        const picked = await pickQuickItem<
-          vscode.QuickPickItem & {
-            value: 'enabled' | 'disabled' | 'auto' | undefined;
-          }
-        >({
-          title: t('Thinking Capability'),
-          placeholder: t('Select thinking setting'),
-          items: [
-            {
-              label: t('Default'),
-              description: t('Use provider default'),
-              value: undefined,
-            },
-            {
-              label: t('Enabled'),
-              description: t('Enable thinking'),
-              value: 'enabled',
-            },
-            {
-              label: t('Auto'),
-              description: t('Auto thinking'),
-              value: 'auto',
-            },
-            {
-              label: t('Disabled'),
-              description: t('Disable thinking'),
-              value: 'disabled',
-            },
-          ],
-        });
-
-        if (!picked) return;
-
-        if (picked.value === undefined) {
-          draft.thinking = undefined;
-        } else if (picked.value === 'disabled') {
-          draft.thinking = { type: 'disabled' };
-        } else {
-          const budgetStr = await showInput({
-            prompt: t('Enter budget tokens for thinking'),
-            placeHolder: t('Leave blank for default'),
-            value: draft.thinking?.budgetTokens?.toString(),
-            validateInput: validatePositiveIntegerOrEmpty,
-          });
-
-          const effort = await pickQuickItem<
-            vscode.QuickPickItem & {
-              value:
-                | NonNullable<NonNullable<ModelConfig['thinking']>['effort']>
-                | undefined;
-            }
-          >({
-            title: t('Reasoning Effort'),
-            placeholder: t('Select reasoning effort (optional)'),
-            items: [
-              {
-                label: t('Default'),
-                description: t('Let the provider decide'),
-                value: undefined,
-                picked: draft.thinking?.effort === undefined,
-              },
-              {
-                label: t('None'),
-                value: 'none',
-                picked: draft.thinking?.effort === 'none',
-              },
-              {
-                label: t('Minimal'),
-                value: 'minimal',
-                picked: draft.thinking?.effort === 'minimal',
-              },
-              {
-                label: t('Low'),
-                value: 'low',
-                picked: draft.thinking?.effort === 'low',
-              },
-              {
-                label: t('Medium'),
-                value: 'medium',
-                picked: draft.thinking?.effort === 'medium',
-              },
-              {
-                label: t('High'),
-                value: 'high',
-                picked: draft.thinking?.effort === 'high',
-              },
-              {
-                label: t('Extra High'),
-                value: 'xhigh',
-                picked: draft.thinking?.effort === 'xhigh',
-              },
-              {
-                label: t('Max'),
-                value: 'max',
-                picked: draft.thinking?.effort === 'max',
-              },
-            ],
-          });
-
-          const summary = await pickQuickItem<
-            vscode.QuickPickItem & {
-              value: 'none' | 'auto' | 'concise' | 'detailed' | undefined;
-            }
-          >({
-            title: t('Reasoning Summary'),
-            placeholder: t('Select reasoning summary level (optional)'),
-            items: [
-              {
-                label: t('Default'),
-                description: t('Let the provider decide'),
-                value: undefined,
-                picked: draft.thinking?.summary === undefined,
-              },
-              {
-                label: t('None'),
-                value: 'none',
-                picked: draft.thinking?.summary === 'none',
-              },
-              {
-                label: t('Auto'),
-                value: 'auto',
-                picked: draft.thinking?.summary === 'auto',
-              },
-              {
-                label: t('Concise'),
-                value: 'concise',
-                picked: draft.thinking?.summary === 'concise',
-              },
-              {
-                label: t('Detailed'),
-                value: 'detailed',
-                picked: draft.thinking?.summary === 'detailed',
-              },
-            ],
-          });
-
-          draft.thinking = {
-            type: picked.value,
-            budgetTokens: budgetStr ? Number(budgetStr) : undefined,
-            effort: effort ? effort.value : undefined,
-            summary: summary ? summary.value : undefined,
-          };
-        }
-      },
+      edit: async () => {},
       getDescription: (draft) => {
         if (!draft.thinking) return t('default');
-        if (draft.thinking.type === 'disabled') return t('disabled');
         const typeLabel =
-          draft.thinking.type === 'auto' ? t('auto') : t('enabled');
-        const details: string[] = [];
-        if (draft.thinking.budgetTokens !== undefined) {
-          details.push(t('{0} tokens', draft.thinking.budgetTokens));
-        }
-        if (draft.thinking.effort) {
-          details.push(
-            t('{0} effort', getThinkingEffortLabel(draft.thinking.effort)),
-          );
-        }
-        if (draft.thinking.summary) {
-          details.push(
-            t('{0} summary', getThinkingSummaryLabel(draft.thinking.summary)),
-          );
-        }
-        return `${typeLabel}${
-          details.length > 0 ? ` (${details.join(', ')})` : ''
-        }`;
+          draft.thinking.type === 'disabled'
+            ? t('Disabled')
+            : draft.thinking.type === 'auto'
+              ? t('Auto')
+              : t('Enabled');
+        const detail = draft.thinking.mode
+          ? draft.thinking.mode === 'pro'
+            ? t('Pro')
+            : t('Standard')
+          : draft.thinking.effort
+            ? getThinkingEffortLabel(draft.thinking.effort)
+            : undefined;
+        return detail ? `${typeLabel} (${detail})` : typeLabel;
       },
     },
     // Verbosity
@@ -682,6 +517,22 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       ],
       getDescription: (draft) =>
         draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
+    {
+      key: 'multi-agent',
+      type: 'custom',
+      label: t('Native Multi-agent'),
+      icon: 'organization',
+      section: 'capabilities',
+      edit: async () => {},
+      getDescription: (draft) => {
+        const multiAgent = draft['multi-agent'];
+        if (multiAgent === undefined) return t('Provider Default');
+        if (!multiAgent.enabled) return t('Disabled');
+        return multiAgent.maxConcurrentSubagents === undefined
+          ? t('Enabled')
+          : t('Enabled (max {0})', multiAgent.maxConcurrentSubagents);
+      },
     },
     // Temperature
     {

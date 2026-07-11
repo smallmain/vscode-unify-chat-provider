@@ -31,6 +31,9 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.openai.com',
     authTypes: ['api-key'],
     models: [
+      'gpt-5.6-sol',
+      'gpt-5.6-terra',
+      'gpt-5.6-luna',
       'gpt-5.4',
       'gpt-5.4-mini',
       'gpt-5.4-nano',

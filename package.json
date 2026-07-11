@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.11.0",
+  "version": "7.12.1",
   "categories": [
     "AI",
     "Chat"
@@ -1097,7 +1097,8 @@
                                     "low",
                                     "medium",
                                     "high",
-                                    "xhigh"
+                                    "xhigh",
+                                    "max"
                                   ],
                                   "enumDescriptions": [
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.0%",
@@ -1105,7 +1106,8 @@
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.2%",
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.3%",
                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.4%",
-                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.5%"
+                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.5%",
+                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.6%"
                                   ]
                                 },
                                 "summary": {
@@ -1114,12 +1116,40 @@
                                   "enum": [
                                     "auto",
                                     "concise",
-                                    "detailed"
+                                    "detailed",
+                                    "none"
                                   ],
                                   "enumDescriptions": [
                                     "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.0%",
                                     "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.1%",
-                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.2%"
+                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.2%",
+                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.3%"
+                                  ]
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.mode.description%",
+                                  "enum": [
+                                    "standard",
+                                    "pro"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.1%"
+                                  ]
+                                },
+                                "context": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.context.description%",
+                                  "enum": [
+                                    "auto",
+                                    "current_turn",
+                                    "all_turns"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.1%",
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.2%"
                                   ]
                                 }
                               },
@@ -1146,7 +1176,8 @@
                                     "low",
                                     "medium",
                                     "high",
-                                    "xhigh"
+                                    "xhigh",
+                                    "max"
                                   ],
                                   "enumDescriptions": [
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.0%",
@@ -1154,7 +1185,8 @@
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.2%",
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.3%",
                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.4%",
-                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.5%"
+                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.5%",
+                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.6%"
                                   ]
                                 },
                                 "summary": {
@@ -1163,12 +1195,40 @@
                                   "enum": [
                                     "auto",
                                     "concise",
-                                    "detailed"
+                                    "detailed",
+                                    "none"
                                   ],
                                   "enumDescriptions": [
                                     "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.0%",
                                     "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.1%",
-                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.2%"
+                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.2%",
+                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.3%"
+                                  ]
+                                },
+                                "mode": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.mode.description%",
+                                  "enum": [
+                                    "standard",
+                                    "pro"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.1%"
+                                  ]
+                                },
+                                "context": {
+                                  "type": "string",
+                                  "description": "%configuration.endpoints.models.thinking.context.description%",
+                                  "enum": [
+                                    "auto",
+                                    "current_turn",
+                                    "all_turns"
+                                  ],
+                                  "enumDescriptions": [
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.0%",
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.1%",
+                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.2%"
                                   ]
                                 }
                               },
@@ -1187,6 +1247,24 @@
                                 "type"
                               ]
                             }
+                          ]
+                        },
+                        "multi-agent": {
+                          "type": "object",
+                          "description": "%configuration.endpoints.models.multiAgent.description%",
+                          "properties": {
+                            "enabled": {
+                              "type": "boolean",
+                              "description": "%configuration.endpoints.models.multiAgent.enabled.description%"
+                            },
+                            "maxConcurrentSubagents": {
+                              "type": "integer",
+                              "minimum": 1,
+                              "description": "%configuration.endpoints.models.multiAgent.maxConcurrentSubagents.description%"
+                            }
+                          },
+                          "required": [
+                            "enabled"
                           ]
                         },
                         "webSearch": {
@@ -1392,7 +1470,7 @@
                                         "thinking": {
                                           "type": "object",
                                           "description": "%configuration.endpoints.models.thinking.description%",
-                                          "oneOf": [
+                                          "anyOf": [
                                             {
                                               "properties": {
                                                 "type": {
@@ -1412,7 +1490,8 @@
                                                     "low",
                                                     "medium",
                                                     "high",
-                                                    "xhigh"
+                                                    "xhigh",
+                                                    "max"
                                                   ],
                                                   "enumDescriptions": [
                                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.0%",
@@ -1420,7 +1499,8 @@
                                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.2%",
                                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.3%",
                                                     "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.4%",
-                                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.5%"
+                                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.5%",
+                                                    "%configuration.endpoints.models.thinking.enabled.effort.enumDescriptions.6%"
                                                   ]
                                                 },
                                                 "summary": {
@@ -1429,18 +1509,43 @@
                                                   "enum": [
                                                     "auto",
                                                     "concise",
-                                                    "detailed"
+                                                    "detailed",
+                                                    "none"
                                                   ],
                                                   "enumDescriptions": [
                                                     "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.0%",
                                                     "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.1%",
-                                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.2%"
+                                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.2%",
+                                                    "%configuration.endpoints.models.thinking.enabled.summary.enumDescriptions.3%"
+                                                  ]
+                                                },
+                                                "mode": {
+                                                  "type": "string",
+                                                  "description": "%configuration.endpoints.models.thinking.mode.description%",
+                                                  "enum": [
+                                                    "standard",
+                                                    "pro"
+                                                  ],
+                                                  "enumDescriptions": [
+                                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.0%",
+                                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.1%"
+                                                  ]
+                                                },
+                                                "context": {
+                                                  "type": "string",
+                                                  "description": "%configuration.endpoints.models.thinking.context.description%",
+                                                  "enum": [
+                                                    "auto",
+                                                    "current_turn",
+                                                    "all_turns"
+                                                  ],
+                                                  "enumDescriptions": [
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.0%",
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.1%",
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.2%"
                                                   ]
                                                 }
-                                              },
-                                              "required": [
-                                                "type"
-                                              ]
+                                              }
                                             },
                                             {
                                               "properties": {
@@ -1461,7 +1566,8 @@
                                                     "low",
                                                     "medium",
                                                     "high",
-                                                    "xhigh"
+                                                    "xhigh",
+                                                    "max"
                                                   ],
                                                   "enumDescriptions": [
                                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.0%",
@@ -1469,7 +1575,8 @@
                                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.2%",
                                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.3%",
                                                     "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.4%",
-                                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.5%"
+                                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.5%",
+                                                    "%configuration.endpoints.models.thinking.auto.effort.enumDescriptions.6%"
                                                   ]
                                                 },
                                                 "summary": {
@@ -1478,18 +1585,43 @@
                                                   "enum": [
                                                     "auto",
                                                     "concise",
-                                                    "detailed"
+                                                    "detailed",
+                                                    "none"
                                                   ],
                                                   "enumDescriptions": [
                                                     "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.0%",
                                                     "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.1%",
-                                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.2%"
+                                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.2%",
+                                                    "%configuration.endpoints.models.thinking.auto.summary.enumDescriptions.3%"
+                                                  ]
+                                                },
+                                                "mode": {
+                                                  "type": "string",
+                                                  "description": "%configuration.endpoints.models.thinking.mode.description%",
+                                                  "enum": [
+                                                    "standard",
+                                                    "pro"
+                                                  ],
+                                                  "enumDescriptions": [
+                                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.0%",
+                                                    "%configuration.endpoints.models.thinking.mode.enumDescriptions.1%"
+                                                  ]
+                                                },
+                                                "context": {
+                                                  "type": "string",
+                                                  "description": "%configuration.endpoints.models.thinking.context.description%",
+                                                  "enum": [
+                                                    "auto",
+                                                    "current_turn",
+                                                    "all_turns"
+                                                  ],
+                                                  "enumDescriptions": [
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.0%",
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.1%",
+                                                    "%configuration.endpoints.models.thinking.context.enumDescriptions.2%"
                                                   ]
                                                 }
-                                              },
-                                              "required": [
-                                                "type"
-                                              ]
+                                              }
                                             },
                                             {
                                               "properties": {
@@ -1497,10 +1629,7 @@
                                                   "const": "disabled",
                                                   "description": "%configuration.endpoints.models.thinking.disabled.type.description%"
                                                 }
-                                              },
-                                              "required": [
-                                                "type"
-                                              ]
+                                              }
                                             }
                                           ]
                                         },
@@ -1641,7 +1770,7 @@
     "minimatch": "^10.2.5",
     "naive-ui": "^2.44.1",
     "ollama": "^0.6.3",
-    "openai": "^6.42.0",
+    "openai": "^6.46.0",
     "socks": "^2.8.9",
     "tiktoken": "^1.0.22",
     "undici": "^7.22.0",

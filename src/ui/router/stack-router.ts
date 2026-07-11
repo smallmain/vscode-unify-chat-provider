@@ -16,6 +16,10 @@ import { runImportProvidersScreen } from '../screens/import-providers-screen';
 import { runProviderDraftFormScreen } from '../screens/provider-draft-form-screen';
 import { runImportProviderConfigArrayScreen } from '../screens/import-provider-config-array-screen';
 import { runImportModelConfigArrayScreen } from '../screens/import-model-config-array-screen';
+import {
+  runMultiAgentFormScreen,
+  runThinkingFormScreen,
+} from '../screens/model-settings-screen';
 
 export async function runUiStack(
   ctx: UiContext,
@@ -83,6 +87,10 @@ async function dispatchRoute(
       return runModelFormScreen(ctx, route, resume);
     case 'modelView':
       return runModelViewScreen(ctx, route, resume);
+    case 'thinkingForm':
+      return runThinkingFormScreen(ctx, route, resume);
+    case 'multiAgentForm':
+      return runMultiAgentFormScreen(ctx, route, resume);
     case 'modelSelection':
       return runModelSelectionScreen(ctx, route, resume);
     case 'timeoutForm':

@@ -97,6 +97,14 @@ export function applyPresetTemplateSelections(
     }
 
     for (const key of PRESET_TEMPLATE_OVERRIDE_KEYS) {
+      if (key === 'thinking') {
+        const thinkingOverride = selectedPreset.config.thinking;
+        if (thinkingOverride !== undefined) {
+          applyThinkingPresetOverride(resolved, thinkingOverride);
+        }
+        continue;
+      }
+
       const value = selectedPreset.config[key];
       if (value !== undefined) {
         assignPresetOverrideValue(resolved, key, value);
@@ -249,7 +257,15 @@ function presetOverrideConfigMatchesModel(
 ): boolean {
   for (const key of PRESET_TEMPLATE_OVERRIDE_KEYS) {
     const value = config[key];
-    if (value !== undefined && !deepEqualPresetValue(model[key], value)) {
+    if (value === undefined) {
+      continue;
+    }
+
+    const matches =
+      key === 'thinking'
+        ? presetValueIsSubset(model.thinking, value)
+        : deepEqualPresetValue(model[key], value);
+    if (!matches) {
       return false;
     }
   }
@@ -291,7 +307,49 @@ function deepEqualPresetValue(a: unknown, b: unknown): boolean {
   return false;
 }
 
-function assignPresetOverrideValue<K extends PresetTemplateOverrideKey>(
+function presetValueIsSubset(actual: unknown, expected: unknown): boolean {
+  if (!isRecord(expected)) {
+    return deepEqualPresetValue(actual, expected);
+  }
+  if (!isRecord(actual)) {
+    return false;
+  }
+
+  return Object.keys(expected)
+    .filter((key) => expected[key] !== undefined)
+    .every(
+      (key) =>
+        Object.prototype.hasOwnProperty.call(actual, key) &&
+        presetValueIsSubset(actual[key], expected[key]),
+    );
+}
+
+function applyThinkingPresetOverride(
+  model: ModelConfig,
+  override: NonNullable<PresetTemplateOverrideConfig['thinking']>,
+): void {
+  const cloned = structuredClone(override);
+  if (cloned.type !== undefined) {
+    model.thinking = {
+      ...model.thinking,
+      ...cloned,
+      type: cloned.type,
+    };
+    return;
+  }
+
+  if (model.thinking !== undefined) {
+    model.thinking = {
+      ...model.thinking,
+      ...cloned,
+      type: model.thinking.type,
+    };
+  }
+}
+
+function assignPresetOverrideValue<
+  K extends Exclude<PresetTemplateOverrideKey, 'thinking'>,
+>(
   model: ModelConfig,
   key: K,
   value: PresetTemplateOverrideConfig[K],

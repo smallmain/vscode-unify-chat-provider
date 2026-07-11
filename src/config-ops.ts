@@ -29,6 +29,7 @@ export const MODEL_CONFIG_KEYS = [
   'serviceTier',
   'verbosity',
   'thinking',
+  'multi-agent',
   'webSearch',
   'memoryTool',
   'extraHeaders',

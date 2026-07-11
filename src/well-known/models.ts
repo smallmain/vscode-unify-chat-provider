@@ -9,13 +9,23 @@ import { matchProvider } from '../client/utils';
 import {
   adaptiveReasoningEffort,
   budgetReasoningEffort,
+  reasoningContext,
   reasoningEffort,
+  reasoningMode,
   thinkingMode,
 } from './preset-templates';
 import { mergeModelCapabilities } from '../model-capabilities';
 
 const DOUBAO_REASONING_EFFORTS = ['high', 'medium', 'low', 'minimal'] as const;
 const OPENAI_FULL_REASONING_EFFORTS = [
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+  'none',
+] as const;
+const OPENAI_GPT_5_6_REASONING_EFFORTS = [
+  'max',
   'xhigh',
   'high',
   'medium',
@@ -883,6 +893,79 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
+  },
+  {
+    id: 'gpt-5.6-sol',
+    overrides: ['gpt-5.6'],
+    name: 'GPT-5.6 Sol',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_5_6_REASONING_EFFORTS, 'xhigh'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
+  },
+  {
+    id: 'gpt-5.6-terra',
+    name: 'GPT-5.6 Terra',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_5_6_REASONING_EFFORTS, 'xhigh'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
+  },
+  {
+    id: 'gpt-5.6-luna',
+    name: 'GPT-5.6 Luna',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_5_6_REASONING_EFFORTS, 'xhigh'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
   },
   {
     id: 'gpt-5.5',
