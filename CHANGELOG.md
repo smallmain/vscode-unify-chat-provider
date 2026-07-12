@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.12.3 - 2026-07-12
+
+### Features
+- codex: align OAuth and chat request construction with CLIProxyAPI (4f3a75c, SmallMain)
+
 ## v7.12.2 - 2026-07-12
 
 ### Features
