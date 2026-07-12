@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.12.2 - 2026-07-12
+
+### Features
+- xai: route OAuth HTTP requests through cli-chat-proxy and align headers with CLI (3ac6b77, SmallMain)
+
 ## v7.12.1 - 2026-07-10
 
 ### Fixes
