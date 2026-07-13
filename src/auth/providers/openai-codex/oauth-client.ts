@@ -2,22 +2,31 @@ import { createHash, randomBytes } from 'node:crypto';
 import {
   OPENAI_CODEX_CLIENT_ID,
   OPENAI_CODEX_ISSUER,
-  OPENAI_CODEX_ORIGINATOR,
   OPENAI_CODEX_REDIRECT_URI,
+  OPENAI_CODEX_REFRESH_SCOPE,
   OPENAI_CODEX_SCOPE,
 } from './constants';
 import { authLog } from '../../../logger';
+
+const OPENAI_CODEX_TOKEN_HEADERS = {
+  'Content-Type': 'application/x-www-form-urlencoded',
+  Accept: 'application/json',
+} as const;
 
 function generateState(): string {
   return randomBytes(32).toString('base64url');
 }
 
+/**
+ * Align PKCE generation with CLIProxyAPI internal/auth/codex/pkce.go:
+ * 96 random bytes, base64url without padding (≈128 chars).
+ */
 function generateCodexPKCE(): {
   verifier: string;
   challenge: string;
   method: 'S256';
 } {
-  const verifier = randomBytes(64).toString('hex');
+  const verifier = randomBytes(96).toString('base64url');
   const challenge = createHash('sha256')
     .update(verifier, 'utf8')
     .digest('base64url');
@@ -31,6 +40,18 @@ export interface OpenAICodexAuthorization {
   redirectUri: string;
 }
 
+/**
+ * Build the Codex OAuth authorization URL.
+ *
+ * Aligned with CLIProxyAPI CodexAuth.GenerateAuthURL:
+ * - response_type=code
+ * - scope=openid email profile offline_access
+ * - prompt=login
+ * - id_token_add_organizations=true
+ * - codex_cli_simplified_flow=true
+ * - PKCE S256
+ * - no originator query param
+ */
 export function authorizeOpenAICodex(): OpenAICodexAuthorization {
   const pkce = generateCodexPKCE();
   const state = generateState();
@@ -43,10 +64,10 @@ export function authorizeOpenAICodex(): OpenAICodexAuthorization {
   url.searchParams.set('scope', OPENAI_CODEX_SCOPE);
   url.searchParams.set('code_challenge', pkce.challenge);
   url.searchParams.set('code_challenge_method', pkce.method);
+  url.searchParams.set('prompt', 'login');
   url.searchParams.set('id_token_add_organizations', 'true');
   url.searchParams.set('codex_cli_simplified_flow', 'true');
   url.searchParams.set('state', state);
-  url.searchParams.set('originator', OPENAI_CODEX_ORIGINATOR);
 
   return {
     url: url.toString(),
@@ -171,14 +192,15 @@ export async function exchangeOpenAICodexCode(options: {
   verifier: string;
 }): Promise<OpenAICodexTokenExchangeResult> {
   authLog.verbose('openai-codex-client', 'Exchanging authorization code for tokens');
+  // Align with CLIProxyAPI CodexAuth.ExchangeCodeForTokensWithRedirect.
   const response = await fetch(`${OPENAI_CODEX_ISSUER}/oauth/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { ...OPENAI_CODEX_TOKEN_HEADERS },
     body: new URLSearchParams({
       grant_type: 'authorization_code',
+      client_id: OPENAI_CODEX_CLIENT_ID,
       code: options.code,
       redirect_uri: options.redirectUri,
-      client_id: OPENAI_CODEX_CLIENT_ID,
       code_verifier: options.verifier,
     }).toString(),
   });
@@ -258,14 +280,15 @@ export async function refreshOpenAICodexToken(options: {
   refreshToken: string;
 }): Promise<OpenAICodexTokenRefreshResult> {
   authLog.verbose('openai-codex-client', 'Refreshing access token');
+  // Align with CLIProxyAPI CodexAuth.refreshTokensSingleFlight.
   const response = await fetch(`${OPENAI_CODEX_ISSUER}/oauth/token`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    headers: { ...OPENAI_CODEX_TOKEN_HEADERS },
     body: new URLSearchParams({
+      client_id: OPENAI_CODEX_CLIENT_ID,
       grant_type: 'refresh_token',
       refresh_token: options.refreshToken,
-      client_id: OPENAI_CODEX_CLIENT_ID,
-      scope: 'openid profile email',
+      scope: OPENAI_CODEX_REFRESH_SCOPE,
     }).toString(),
   });
 
