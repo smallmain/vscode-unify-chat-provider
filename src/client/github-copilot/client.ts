@@ -23,6 +23,7 @@ import {
 } from '../../utils';
 import type { ApiProvider } from '../interface';
 import { buildBaseUrl, createCustomFetch, getToken } from '../utils';
+import { createRateLimiter } from '../../rate-limit';
 import { OpenAIChatCompletionProvider } from '../openai/chat-completion-client';
 import { OpenAIResponsesProvider } from '../openai/responses-client';
 import type { ChatCompletionChunk } from 'openai/resources/chat/completions';
@@ -669,6 +670,7 @@ export class GitHubCopilotProvider implements ApiProvider {
   private readonly chatProvider: GitHubCopilotChatCompletionProvider;
   private readonly responsesProvider: GitHubCopilotResponsesProvider;
   private readonly messagesProvider: GitHubCopilotMessagesProvider;
+  private readonly rateLimiter: ReturnType<typeof createRateLimiter>;
 
   private assertCopilotAuth(): void {
     if (this.providerConfig.auth?.method !== 'github-copilot') {
@@ -679,6 +681,7 @@ export class GitHubCopilotProvider implements ApiProvider {
   }
 
   constructor(config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     const extraBody = config.extraBody ?? {};
     const hasStore = Object.prototype.hasOwnProperty.call(extraBody, 'store');
     const configWithDefaults: ProviderConfig = hasStore
@@ -697,6 +700,14 @@ export class GitHubCopilotProvider implements ApiProvider {
       baseUrl: resolveCopilotMessagesBaseUrl(configWithDefaults),
       extraBody: stripCopilotOpenAiDefaults(configWithDefaults.extraBody),
     });
+  }
+
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(): Promise<void> {
+    await this.rateLimiter?.acquire();
   }
 
   async *streamChat(

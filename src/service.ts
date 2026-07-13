@@ -769,6 +769,10 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       providerForBalance = resolvedProvider;
       this.balanceManager?.notifyChatRequestStarted(resolvedProvider.name);
 
+      const client = this.getClient(resolvedProvider);
+      await client.acquireRateLimitToken?.();
+      const rateLimitStatus = client.getRateLimitStatus?.();
+
       logger.start({
         providerName: resolvedProvider.name,
         providerType: resolvedProvider.type,
@@ -776,10 +780,10 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         vscodeModelId: model.id,
         modelId: resolvedRequestModel.id,
         modelName: resolvedRequestModel.name,
+        rateLimit: rateLimitStatus,
       });
       logger.vscodeInput(messages, options);
 
-      const client = this.getClient(resolvedProvider);
       const chatNetwork = resolveChatNetwork(resolvedProvider);
       const retryConfig = chatNetwork.retry;
       const retryAbortController = new AbortController();

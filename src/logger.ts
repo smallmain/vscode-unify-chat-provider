@@ -140,6 +140,10 @@ function formatLogData(value: unknown): string {
   return stringifyForLog(value);
 }
 
+function formatRateLimitTokenCount(value: number): string {
+  return Number.isFinite(value) ? value.toFixed(2) : 'N/A';
+}
+
 export interface ProviderHttpLogger {
   providerRequest(details: {
     endpoint: string;
@@ -193,13 +197,18 @@ export class RequestLogger implements ProviderHttpLogger {
     vscodeModelId: string;
     modelId: string;
     modelName?: string;
+    rateLimit?: { available: number; capacity: number };
   }): void {
     const modelLabel = details.modelName
       ? `${details.modelName} (${details.modelId})`
       : details.modelId;
 
+    const rateLimitSuffix = details.rateLimit
+      ? ` | Rate Limit: ${formatRateLimitTokenCount(details.rateLimit.available)}/${formatRateLimitTokenCount(details.rateLimit.capacity)} tokens`
+      : '';
+
     this.ch.info(
-      `[${this.requestId}] ▶ Request started | Provider: ${details.providerName} (${details.providerType}) | Base URL: ${details.baseUrl} | VSCode Model ID: ${details.vscodeModelId} | Config Model: ${modelLabel}`,
+      `[${this.requestId}] ▶ Request started | Provider: ${details.providerName} (${details.providerType}) | Base URL: ${details.baseUrl} | VSCode Model ID: ${details.vscodeModelId} | Config Model: ${modelLabel}${rateLimitSuffix}`,
     );
   }
 

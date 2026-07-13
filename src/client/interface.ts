@@ -49,4 +49,17 @@ export interface ApiProvider {
    * Returns a list of model configurations supported by this API client
    */
   getAvailableModels?(credential: AuthTokenInfo): Promise<ModelConfig[]>;
+
+  /**
+   * Get the current rate-limit status (token bucket snapshot).
+   * Returns undefined when no rate limiting is configured for this provider.
+   */
+  getRateLimitStatus?(): { available: number; capacity: number } | undefined;
+
+  /**
+   * Acquire a token for one logical chat request, waiting if necessary.
+   * Called by the service before transport selection so HTTP, SSE, and
+   * WebSocket requests share the same limiter.
+   */
+  acquireRateLimitToken?(): Promise<void>;
 }

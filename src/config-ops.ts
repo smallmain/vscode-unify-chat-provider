@@ -69,6 +69,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'proxy',
   'autoFetchOfficialModels',
   'contextCache',
+  'rateLimit',
 ] as const satisfies ReadonlyArray<ProviderConfigPersistedKey>;
 
 type AssertNever<T extends never> = T;

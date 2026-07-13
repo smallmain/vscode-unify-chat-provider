@@ -1,5 +1,11 @@
 # Changelog
 
+## v7.12.4 - 2026-07-14
+
+### Fixes
+- make provider RPM token buckets FIFO-safe under concurrent chat requests and show available tokens with two decimal places
+- clarify per-window logical chat request RPM behavior and preserve explicit per-provider `rpm: 0` overrides
+
 ## v7.12.3 - 2026-07-12
 
 ### Features

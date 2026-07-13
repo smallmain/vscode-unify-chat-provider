@@ -541,6 +541,7 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
         await ctx.onEditTimeout(draft);
       },
       getDescription: (draft) => {
+        const hasRateLimit = draft.rateLimit?.rpm !== undefined;
         const hasTimeout =
           draft.timeout?.connection !== undefined ||
           draft.timeout?.response !== undefined;
@@ -552,9 +553,13 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
           draft.retry?.jitterFactor !== undefined;
 
         const proxyDescription = getProxyDescription(draft);
-        if (!hasTimeout && !hasRetry && !proxyDescription) return t('default');
+        if (!hasRateLimit && !hasTimeout && !hasRetry && !proxyDescription)
+          return t('default');
 
         const parts: string[] = [];
+        if (hasRateLimit && draft.rateLimit?.rpm !== undefined) {
+          parts.push(t('rpm: {0}', draft.rateLimit.rpm));
+        }
         if (draft.timeout?.connection !== undefined) {
           parts.push(t('conn: {0}ms', draft.timeout.connection));
         }

@@ -49,6 +49,7 @@ import {
   type RetryConfig,
   withIdleTimeout,
 } from '../../utils';
+import { createRateLimiter } from '../../rate-limit';
 import { getBaseModelId } from '../../model-id-utils';
 import { ThinkingBlockMetadata } from '../types';
 import {
@@ -153,8 +154,18 @@ function getThoughtSignature(part: Part): string | undefined {
 export class GoogleAIStudioProvider implements ApiProvider {
   protected readonly baseUrl: string;
   protected readonly apiVersion: string;
+  protected readonly rateLimiter: ReturnType<typeof createRateLimiter>;
+
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(): Promise<void> {
+    await this.rateLimiter?.acquire();
+  }
 
   constructor(protected readonly config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     if (isRawBaseUrlEnabled(config)) {
       this.baseUrl = normalizeRawBaseUrlInput(config.baseUrl);
       this.apiVersion = 'v1beta';

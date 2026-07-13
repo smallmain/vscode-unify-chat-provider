@@ -58,6 +58,7 @@ import {
   normalizeToolInputSchema,
   processUsage as sharedProcessUsage,
 } from '../utils';
+import { createRateLimiter } from '../../rate-limit';
 
 const TOOL_CALL_ID_PREFIX = 'ollama-tool:';
 
@@ -100,8 +101,18 @@ const OLLAMA_ABNORMAL_DONE_REASONS: ReadonlySet<string> = new Set([
 
 export class OllamaProvider implements ApiProvider {
   private readonly baseUrl: string;
+  private readonly rateLimiter: ReturnType<typeof createRateLimiter>;
+
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(): Promise<void> {
+    await this.rateLimiter?.acquire();
+  }
 
   constructor(private readonly config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     this.baseUrl = buildBaseUrl(config.baseUrl, {
       stripPattern: /\/api$/i,
       useRawBaseUrl: isRawBaseUrlEnabled(config),
