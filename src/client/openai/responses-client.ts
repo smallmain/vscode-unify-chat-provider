@@ -685,8 +685,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return this.rateLimiter?.getAvailableTokens();
   }
 
-  async acquireRateLimitToken(): Promise<void> {
-    await this.rateLimiter?.acquire();
+  async acquireRateLimitToken(signal?: AbortSignal): Promise<void> {
+    await this.rateLimiter?.acquire(signal);
   }
 
   constructor(protected readonly config: ProviderConfig) {

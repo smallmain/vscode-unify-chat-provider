@@ -16,6 +16,43 @@
  */
 const MAX_SAFE_TIMEOUT_MS = 0x7fffffff;
 
+/**
+ * Build an abort-shaped error so the service layer can detect it via
+ * `isAbortLikeError` and treat a cancelled wait as a normal cancellation.
+ */
+function createRateLimitAbortError(): Error {
+  const error = new Error('Rate-limit token acquisition was aborted.');
+  error.name = 'AbortError';
+  return error;
+}
+
+/**
+ * Resolve after `ms`, or reject with an AbortError if `signal` aborts first.
+ * Used inside {@link RateLimiter.acquireOne} to wake up cancelled waiters so
+ * they don't keep waiting for (and never consume) a token.
+ */
+function waitForTimeoutOrAbort(
+  ms: number,
+  signal?: AbortSignal,
+): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+
+    const onAbort = (): void => {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+      reject(createRateLimitAbortError());
+    };
+
+    signal?.addEventListener('abort', onAbort, { once: true });
+    timeoutId = setTimeout(() => {
+      signal?.removeEventListener('abort', onAbort);
+      resolve();
+    }, ms);
+  });
+}
+
 export class RateLimiter {
   /** Maximum tokens the bucket can hold (= ceil(rpm * 0.8), min 1). */
   readonly maxTokens: number;
@@ -58,15 +95,27 @@ export class RateLimiter {
    *
    * Callers are processed FIFO so simultaneous waits cannot consume the same
    * refilled token or drive the bucket below zero.
+   *
+   * If `signal` is (or becomes) aborted while waiting, rejects with an
+   * AbortError WITHOUT consuming a token, so cancelled chat requests don't pay
+   * for a slot they'll never use.
    */
-  acquire(): Promise<void> {
-    const next = this.acquireQueue.then(() => this.acquireOne());
+  acquire(signal?: AbortSignal): Promise<void> {
+    if (signal?.aborted) {
+      return Promise.reject(createRateLimitAbortError());
+    }
+    const next = this.acquireQueue.then(() => this.acquireOne(signal));
     this.acquireQueue = next.catch(() => {});
     return next;
   }
 
-  private async acquireOne(): Promise<void> {
+  private async acquireOne(signal?: AbortSignal): Promise<void> {
     while (true) {
+      // Abort before consuming so a cancelled request never takes a token.
+      if (signal?.aborted) {
+        throw createRateLimitAbortError();
+      }
+
       this.refill();
 
       if (this.tokens >= 1) {
@@ -81,18 +130,20 @@ export class RateLimiter {
       const timeoutMs = Number.isFinite(waitMs)
         ? Math.min(waitMs, MAX_SAFE_TIMEOUT_MS)
         : MAX_SAFE_TIMEOUT_MS;
-      await new Promise<void>((resolve) => setTimeout(resolve, timeoutMs));
+      await waitForTimeoutOrAbort(timeoutMs, signal);
     }
   }
 
   /**
    * Peek at the current token count without consuming any.
    *
-   * Refills first so the returned value reflects tokens earned since
-   * the last access.  Used for logging / status display.
+   * Does NOT refill: `acquire()` already refills before consuming, so when
+   * called right after a successful acquisition this returns the exact
+   * post-consumption bucket state (used for the request log). Skipping an
+   * extra time-based refill keeps the logged "post-acquire" snapshot accurate
+   * instead of being slightly inflated by freshly earned tokens.
    */
   getAvailableTokens(): { available: number; capacity: number } {
-    this.refill();
     return { available: this.tokens, capacity: this.maxTokens };
   }
 

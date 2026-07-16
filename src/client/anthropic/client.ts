@@ -139,8 +139,8 @@ export class AnthropicProvider implements ApiProvider {
     return this.rateLimiter?.getAvailableTokens();
   }
 
-  async acquireRateLimitToken(): Promise<void> {
-    await this.rateLimiter?.acquire();
+  async acquireRateLimitToken(signal?: AbortSignal): Promise<void> {
+    await this.rateLimiter?.acquire(signal);
   }
 
   protected createClient(

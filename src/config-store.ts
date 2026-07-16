@@ -386,6 +386,7 @@ export class ConfigStore {
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,
     );
+    provider.rateLimit = this.normalizeRateLimitConfig(provider.rateLimit);
 
     // Apply global networkSettings.rateLimit as default when the endpoint
     // does not define its own rate-limit configuration.
@@ -533,6 +534,27 @@ export class ConfigStore {
     }
 
     return out;
+  }
+
+  private normalizeRateLimitConfig(
+    raw: unknown,
+  ): RateLimitConfig | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return undefined;
+    }
+
+    const record = raw as Record<string, unknown>;
+    const rpm = record['rpm'];
+    if (
+      typeof rpm !== 'number' ||
+      !Number.isFinite(rpm) ||
+      !Number.isInteger(rpm) ||
+      rpm < 0
+    ) {
+      return undefined;
+    }
+
+    return { rpm };
   }
 
   private normalizeObjectRecord(
