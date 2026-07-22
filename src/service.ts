@@ -178,6 +178,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly secretStore: SecretStore,
     private readonly authManager?: AuthManager,
     private readonly balanceManager?: BalanceManager,
+    private readonly canUseChatProviderProposal = true,
   ) {}
 
   /**
@@ -263,6 +264,25 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       balanceSnapshot,
     );
 
+    const stableModelInfo: vscode.LanguageModelChatInformation = {
+      id: modelId,
+      name: displayName,
+      family: resolvedModelFamily,
+      version: '',
+      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
+      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      capabilities: {
+        toolCalling: model.capabilities?.toolCalling ?? false,
+        imageInput: model.capabilities?.imageInput ?? false,
+      },
+      detail,
+      tooltip,
+      pricing,
+    };
+    if (!this.canUseChatProviderProposal) {
+      return stableModelInfo;
+    }
+
     const warning = evaluateBalanceWarning(
       balanceSnapshot?.items,
       this.configStore.balanceWarning,
@@ -273,32 +293,17 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     const editTools = resolveConfiguredEditToolsForVsCode(
       model.capabilities?.editTools,
     );
-    const capabilities: vscode.LanguageModelChatInformation['capabilities'] =
-      editTools === undefined
-        ? {
-            toolCalling: model.capabilities?.toolCalling ?? false,
-            imageInput: model.capabilities?.imageInput ?? false,
-          }
-        : {
-            toolCalling: model.capabilities?.toolCalling ?? false,
-            imageInput: model.capabilities?.imageInput ?? false,
-            editTools,
-          };
     const configurationSchema = this.buildModelConfigurationSchema(
       model,
       balanceState,
     );
 
     return {
-      id: modelId,
-      name: displayName,
-      family: resolvedModelFamily,
-      version: '',
-      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
-      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-      capabilities,
-      detail,
-      tooltip,
+      ...stableModelInfo,
+      capabilities:
+        editTools === undefined
+          ? stableModelInfo.capabilities
+          : { ...stableModelInfo.capabilities, editTools },
       isUserSelectable: true,
       statusIcon,
       ...(configurationSchema ? { configurationSchema } : {}),
@@ -722,6 +727,24 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     }
   }
 
+  private async refreshCredential(providerName: string): Promise<AuthTokenInfo> {
+    if (!this.authManager) {
+      throw new Error(
+        t('Authentication required for provider "{0}".', providerName),
+      );
+    }
+    const refreshed = await this.authManager.retryRefresh(providerName);
+    if (!refreshed) {
+      throw (
+        this.authManager.getLastError(providerName)?.error ??
+        new Error(t('Failed to refresh authentication for "{0}".', providerName))
+      );
+    }
+    return this.toAuthTokenInfo(
+      await this.authManager.getCredential(providerName),
+    );
+  }
+
   /**
    * Handle chat request and stream response
    */
@@ -764,7 +787,9 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       const { provider: resolvedProvider, model: resolvedModel } = resolved;
       const resolvedRequestModel = applyPresetTemplateSelections(
         resolvedModel,
-        options.modelConfiguration,
+        this.canUseChatProviderProposal
+          ? options.modelConfiguration
+          : undefined,
       );
       providerForBalance = resolvedProvider;
       this.balanceManager?.notifyChatRequestStarted(resolvedProvider.name);
@@ -838,6 +863,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             token,
             logger,
             credential,
+            () => this.refreshCredential(resolvedProvider.name),
           );
 
           try {

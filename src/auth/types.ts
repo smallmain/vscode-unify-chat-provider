@@ -9,7 +9,8 @@ export type AuthMethod =
   | 'claude-code'
   | 'openai-codex'
   | 'xai-grok-oauth'
-  | 'github-copilot';
+  | 'github-copilot'
+  | 'zed';
 
 export type AuthTokenInfo =
   | { kind: 'none' }
@@ -19,6 +20,8 @@ export type AuthTokenInfo =
       tokenType?: string;
       expiresAt?: number;
     };
+
+export type AuthTokenRefresh = () => Promise<AuthTokenInfo>;
 
 /**
  * OAuth 2.0 grant types
@@ -205,6 +208,31 @@ export interface GitHubCopilotAuthConfig {
   enterpriseUrl?: string;
 }
 
+/** Zed native-app sign-in configuration. */
+export interface ZedAuthConfig {
+  method: 'zed';
+  label?: string;
+  description?: string;
+  /**
+   * Zed site used for native sign-in and cloud requests.
+   * Mirrors provider.baseUrl at configure time (same pattern as
+   * GitHub Copilot `enterpriseUrl`).
+   */
+  baseUrl?: string;
+  /** Stable identity used to partition provider-scoped cached state. */
+  identityId?: string;
+  /** SecretStorage reference containing the long-lived Zed credential. */
+  token?: string;
+  /** Selected organization for token exchange and Zed Cloud requests. */
+  organizationId?: string;
+  /** Explicit source/data collection opt-in. Defaults to false. */
+  dataCollection?: boolean;
+  /** Last observed organization policy. Missing values fail closed. */
+  dataCollectionAllowed?: boolean;
+  /** Account email, when returned by the Zed account endpoint. */
+  email?: string;
+}
+
 /**
  * Google Vertex AI authentication sub-type
  */
@@ -272,6 +300,7 @@ export type AuthConfig =
   | ClaudeCodeAuthConfig
   | XaiGrokOAuthConfig
   | GitHubCopilotAuthConfig
+  | ZedAuthConfig
   | GoogleVertexAIAuthConfig;
 
 /**

@@ -26,7 +26,11 @@ import {
   exportProviderConfigFromDraft,
   saveProviderDraft,
 } from '../provider-ops';
-import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
+import {
+  createAuthProvider,
+  normalizeAuthForProvider,
+  type AuthUiStatusSnapshot,
+} from '../../auth';
 import { deepClone } from '../../config-ops';
 import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import { t } from '../../i18n';
@@ -55,6 +59,12 @@ export async function runProviderFormScreen(
   const context: ProviderFieldContext = {
     store: ctx.store,
     originalName,
+    ...(originalName
+      ? {
+          completionState:
+            ctx.store.getProviderCompletionConfigState(originalName),
+        }
+      : {}),
     onEditModels: async () => {},
     onEditTimeout: async () => {},
     secretStore: ctx.secretStore,
@@ -146,6 +156,11 @@ export async function runProviderFormScreen(
           } else {
             const providerLabel = draft.name?.trim() || originalName || t('Provider');
             const providerId = originalName ?? ensureDraftSessionId(draft);
+            const authForProvider =
+              normalizeAuthForProvider(deepClone(auth), {
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
+              }) ?? auth;
             const authProvider = createAuthProvider(
               {
                 providerId,
@@ -153,7 +168,7 @@ export async function runProviderFormScreen(
                 secretStore: ctx.secretStore,
                 uriHandler: ctx.uriHandler,
               },
-              deepClone(auth),
+              authForProvider,
             );
 
             if (!authProvider) {

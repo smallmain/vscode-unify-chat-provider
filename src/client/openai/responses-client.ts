@@ -53,6 +53,10 @@ import {
 import { createRateLimiter } from '../../rate-limit';
 import * as vscode from 'vscode';
 import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
+import {
   EasyInputMessage,
   FunctionTool,
   Response as OpenAIResponse,
@@ -1036,7 +1040,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -2826,7 +2830,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -2891,7 +2895,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 

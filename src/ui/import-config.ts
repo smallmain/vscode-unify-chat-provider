@@ -33,8 +33,7 @@ export function normalizeLegacyApiKeyProviderConfig(
 export function normalizeLegacyProviderTypeProviderConfig(
   config: Partial<ProviderConfig>,
 ): Partial<ProviderConfig> {
-  const record = config as unknown as Record<string, unknown>;
-  const rawType = record['type'];
+  const rawType: unknown = Reflect.get(config, 'type');
   if (typeof rawType !== 'string') {
     return config;
   }

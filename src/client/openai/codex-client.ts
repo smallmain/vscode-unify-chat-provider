@@ -131,61 +131,65 @@ function resolveCodexWebSocketBaseUrl(baseUrl: string): string {
 //   baseBody.tools = [...baseBody.tools, CODEX_IMAGE_GENERATION_TOOL];
 // }
 
-function stripInputItemIdsFromRecord(record: Record<string, unknown>): void {
-  const input = record['input'];
+function stripInputItemIdsFromRecord(record: object): void {
+  const input: unknown = Reflect.get(record, 'input');
   if (!Array.isArray(input)) {
     return;
   }
 
-  record['input'] = input.map((item) => {
+  Reflect.set(record, 'input', input.map((item) => {
     if (!isRecord(item) || !Object.prototype.hasOwnProperty.call(item, 'id')) {
       return item;
     }
 
     const { id: _id, ...rest } = item;
     return rest;
-  });
+  }));
 }
 
-function ensureCodexReasoningInclude(record: Record<string, unknown>): void {
-  if (!isRecord(record['reasoning'])) {
+function ensureCodexReasoningInclude(record: object): void {
+  if (!isRecord(Reflect.get(record, 'reasoning'))) {
     return;
   }
 
-  const include = record['include'];
+  const include: unknown = Reflect.get(record, 'include');
   if (!Array.isArray(include)) {
-    record['include'] = ['reasoning.encrypted_content'];
+    Reflect.set(record, 'include', ['reasoning.encrypted_content']);
     return;
   }
 
   if (!include.includes('reasoning.encrypted_content')) {
-    record['include'] = [...include, 'reasoning.encrypted_content'];
+    Reflect.set(record, 'include', [...include, 'reasoning.encrypted_content']);
   }
 }
 
 function normalizeCodexRequestRecord(
-  record: Record<string, unknown>,
+  record: object,
   options: { deletePreviousResponseId: boolean },
 ): void {
   for (const field of CODEX_COMMON_REQUEST_FIELDS_TO_DELETE) {
-    delete record[field];
+    Reflect.deleteProperty(record, field);
   }
 
   if (options.deletePreviousResponseId) {
-    delete record['previous_response_id'];
+    Reflect.deleteProperty(record, 'previous_response_id');
   }
 
+  const instructions: unknown = Reflect.get(record, 'instructions');
   if (
-    record['instructions'] === undefined ||
-    record['instructions'] === null ||
-    (typeof record['instructions'] === 'string' &&
-      record['instructions'].trim() === '')
+    instructions === undefined ||
+    instructions === null ||
+    (typeof instructions === 'string' && instructions.trim() === '')
   ) {
-    record['instructions'] = codexBaseInstructionsForModel(record['model']);
+    Reflect.set(
+      record,
+      'instructions',
+      codexBaseInstructionsForModel(Reflect.get(record, 'model')),
+    );
   }
-  record['store'] = false;
-  if (record['stream'] === undefined) {
-    record['stream'] = true;
+  Reflect.set(record, 'store', false);
+  if (Reflect.get(record, 'stream') === undefined) {
+    Reflect.set(record, 'stream', true);
   }
   ensureCodexReasoningInclude(record);
 
@@ -367,7 +371,7 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     // Align body scrubbing with CLIProxyAPI CodexExecutor.Execute:
     // drop previous_response_id / prompt_cache_retention / safety_identifier /
     // stream_options and force store=false + prompt_cache_key for session affinity.
-    normalizeCodexRequestRecord(baseBody as unknown as Record<string, unknown>, {
+    normalizeCodexRequestRecord(baseBody, {
       deletePreviousResponseId: true,
     });
     Object.assign(baseBody, {

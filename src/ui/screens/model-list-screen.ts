@@ -30,7 +30,7 @@ import {
   OfficialModelsFetchState,
 } from '../../official-models-manager';
 import { t } from '../../i18n';
-import { isSecretRef } from '../../secret';
+import { cleanupUnusedSecrets } from '../../secret';
 import {
   isRawBaseUrlEnabled,
   normalizeBaseUrlInput,
@@ -240,20 +240,7 @@ export async function runModelListScreen(
         // Clean up draft session when discarding changes
         officialModelsManager.clearDraftSession(sessionId);
 
-        if (route.invocation !== 'providerEdit') {
-          const tokenRef = (() => {
-            const auth = route.draft.auth;
-            if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
-              return undefined;
-            }
-            const record = auth as unknown as Record<string, unknown>;
-            const token = record['token'];
-            return typeof token === 'string' ? token.trim() : undefined;
-          })();
-          if (tokenRef && isSecretRef(tokenRef)) {
-            await ctx.secretStore.deleteOAuth2Token(tokenRef);
-          }
-        }
+        await cleanupUnusedSecrets(ctx.secretStore);
         return route.invocation === 'addFromWellKnownProvider'
           ? { kind: 'popToRoot' }
           : { kind: 'pop' };
@@ -442,6 +429,14 @@ export async function runModelListScreen(
         model: selectedModel,
         models: route.models,
         originalId: selectedModel.id,
+        ...(route.originalName
+          ? {
+              completionState: ctx.store.getModelCompletionConfigState(
+                route.originalName,
+                selectedModel.id,
+              ),
+            }
+          : {}),
         providerLabel: route.draft?.name ?? route.providerLabel,
         providerType: route.draft?.type,
       },
@@ -464,6 +459,13 @@ function applyResume(
       if (originalId) {
         const idx = route.models.findIndex((m) => m.id === originalId);
         if (idx !== -1) {
+          if (result.model.id !== originalId && route.draft) {
+            const sourceIds = route.draft._completionModelSourceIds ?? {};
+            const sourceId = sourceIds[originalId] ?? originalId;
+            delete sourceIds[originalId];
+            sourceIds[result.model.id] = sourceId;
+            route.draft._completionModelSourceIds = sourceIds;
+          }
           route.models[idx] = result.model;
           return;
         }
@@ -473,6 +475,9 @@ function applyResume(
     }
 
     if (result.kind === 'deleted') {
+      if (route.draft?._completionModelSourceIds) {
+        delete route.draft._completionModelSourceIds[result.modelId];
+      }
       removeModel(route.models, result.modelId);
     }
 

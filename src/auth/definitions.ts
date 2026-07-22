@@ -10,7 +10,16 @@ import { ClaudeCodeAuthProvider } from './providers/claude-code';
 import { OpenAICodexAuthProvider } from './providers/openai-codex';
 import { XaiGrokOAuthProvider } from './providers/xai-grok-build';
 import { OAuth2AuthProvider } from './providers/oauth2';
-import { AuthConfig } from './types';
+import { ZedAuthProvider } from './providers/zed';
+import { AuthConfig, AuthMethod } from './types';
+
+export interface AuthProviderBindingContext {
+  readonly providerType?: string;
+  readonly baseUrl?: string;
+  readonly previousProviderType?: string;
+  readonly previousBaseUrl?: string;
+  readonly previousAuth?: AuthConfig;
+}
 
 export type AuthMethodDefinition = {
   id: string;
@@ -26,6 +35,16 @@ export type AuthMethodDefinition = {
 };
 
 export type AuthProviderStatics<TAuth extends AuthConfig> = {
+  /**
+   * Bind auth-owned endpoint data to a provider configuration.
+   *
+   * This is a pure configuration transform. Runtime auth providers remain
+   * independent of ProviderConfig and only consume their own config.
+   */
+  normalizeForProvider?: (
+    auth: TAuth | undefined,
+    context: AuthProviderBindingContext,
+  ) => TAuth | undefined;
   /**
    * Whether this auth method supports storing its sensitive data in `settings.json`
    * when the user enables `unifyChatProvider.storeApiKeyInSettings`.
@@ -117,6 +136,13 @@ export const AUTH_METHODS = {
     category: 'Experimental',
     ctor: GitHubCopilotAuthProvider,
   },
+  zed: {
+    id: 'zed',
+    label: 'Zed',
+    description: 'Sign in with a Zed account',
+    category: 'Experimental',
+    ctor: ZedAuthProvider,
+  },
 } as const satisfies Record<string, AuthMethodDefinition>;
 
 export function getAuthMethodDefinition<M extends keyof typeof AUTH_METHODS>(
@@ -132,4 +158,18 @@ export function getAuthMethodCtor<M extends keyof typeof AUTH_METHODS>(
       AuthProviderStatics<any>)
   | undefined {
   return method === 'none' ? undefined : AUTH_METHODS[method].ctor;
+}
+
+export function normalizeAuthForProvider(
+  auth: AuthConfig | undefined,
+  context: AuthProviderBindingContext,
+  method: AuthMethod = auth?.method ?? 'none',
+): AuthConfig | undefined {
+  if (method === 'none') {
+    return auth?.method === 'none' ? auth : undefined;
+  }
+
+  const matchingAuth = auth?.method === method ? auth : undefined;
+  const ctor = getAuthMethodCtor(method);
+  return ctor?.normalizeForProvider?.(matchingAuth, context) ?? matchingAuth;
 }

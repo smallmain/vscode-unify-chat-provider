@@ -41,8 +41,7 @@ function getApiKeyFromAuth(auth: AuthConfig | undefined): string | undefined {
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return undefined;
   }
-  const record = auth as unknown as Record<string, unknown>;
-  const apiKey = record['apiKey'];
+  const apiKey: unknown = Reflect.get(auth, 'apiKey');
   return typeof apiKey === 'string' ? apiKey : undefined;
 }
 

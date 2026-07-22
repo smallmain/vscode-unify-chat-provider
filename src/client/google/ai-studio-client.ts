@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
 import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
+import {
   BlockedReason,
   ContentUnion,
   FunctionCallingConfigMode,
@@ -828,7 +832,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
 
     if (part instanceof vscode.LanguageModelTextPart) {
       return part.value.trim() ? { text: part.value } : undefined;
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -1176,7 +1180,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
           if (text) {
             metadata._completeThinking =
               (metadata._completeThinking ?? '') + text;
-            yield new vscode.LanguageModelThinkingPart(text);
+            yield* createLanguageModelThinkingParts(text);
           }
           stateParts.push(part);
         } else {
@@ -1197,7 +1201,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     }
 
     if (Object.keys(metadata).length > 0) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
 
     const normalizedUsage = message.usageMetadata
@@ -1278,7 +1282,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
           if (part.text) {
             if (part.thought) {
               _completeThinking += part.text;
-              yield new vscode.LanguageModelThinkingPart(part.text);
+              yield* createLanguageModelThinkingParts(part.text);
             } else {
               yield new vscode.LanguageModelTextPart(part.text);
             }
@@ -1312,7 +1316,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     }
 
     if (_completeThinking) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, {
+      yield* createLanguageModelThinkingParts('', undefined, {
         _completeThinking,
       });
     }

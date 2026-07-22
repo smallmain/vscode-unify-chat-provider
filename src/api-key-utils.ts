@@ -12,8 +12,7 @@ function getApiKeyFromAuth(auth: AuthConfig | undefined): string | undefined {
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return undefined;
   }
-  const record = auth as unknown as Record<string, unknown>;
-  const apiKey = record['apiKey'];
+  const apiKey: unknown = Reflect.get(auth, 'apiKey');
   return typeof apiKey === 'string' ? apiKey : undefined;
 }
 
@@ -21,7 +20,9 @@ function setAuthApiKey(auth: AuthConfig, apiKey: string | undefined): AuthConfig
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return auth;
   }
-  return { ...(auth as unknown as Record<string, unknown>), apiKey } as AuthConfig;
+  const next: AuthConfig = { ...auth };
+  Reflect.set(next, 'apiKey', apiKey);
+  return next;
 }
 
 export async function resolveAuthApiKeyForExport(

@@ -44,6 +44,8 @@ export type ProviderFormDraft = Omit<
   models: ModelConfig[];
   /** Internal: Session ID for draft-only state (official models, oauth2 token, etc.) (not persisted) */
   _draftSessionId?: string;
+  /** Internal: current model ID to persisted source ID, used across renames. */
+  _completionModelSourceIds?: Record<string, string>;
 };
 
 type AssertNever<T extends never> = T;
@@ -108,7 +110,11 @@ export function normalizeProviderDraft(
   draft: ProviderFormDraft,
 ): ProviderConfig {
   const cloned = deepClone(draft);
-  const { _draftSessionId: _, ...rest } = cloned;
+  const {
+    _draftSessionId: _draftSessionId,
+    _completionModelSourceIds: _completionModelSourceIds,
+    ...rest
+  } = cloned;
   return {
     ...rest,
     type: draft.type!,
@@ -185,7 +191,11 @@ export function thinkingEqual(
 }
 
 function toComparableProviderDraft(draft: ProviderFormDraft): unknown {
-  const { _draftSessionId: _, ...rest } = deepClone(draft);
+  const {
+    _draftSessionId: _draftSessionId,
+    _completionModelSourceIds: _completionModelSourceIds,
+    ...rest
+  } = deepClone(draft);
   return {
     ...rest,
     name: rest.name?.trim() ?? '',

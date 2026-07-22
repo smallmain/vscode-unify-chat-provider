@@ -1,0 +1,20 @@
+{
+  "extends": "../tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": "..",
+    "types": ["node", "vscode", "vitest/globals"]
+  },
+  "include": [
+    "unit/**/*.ts",
+    "parity/**/*.ts",
+    "support/**/*.ts",
+    "../src/dts/**/*.d.ts",
+    "../src/client/openai/openai.d.ts"
+  ],
+  "exclude": [
+    "../node_modules",
+    "../.vscode-test",
+    "../src/chat-lib/upstream/**"
+  ]
+}

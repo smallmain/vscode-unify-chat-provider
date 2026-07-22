@@ -15,6 +15,7 @@ import {
   resolveCommitMessageGenerationModel,
 } from './model';
 import { buildPromptMessages, normalizeGeneratedCommitMessage } from './prompt';
+import { isLanguageModelThinkingPart } from '../proposed-api/thinking';
 import type {
   CommitMessageCompressionResult,
   CommitMessageGenerationConfiguration,
@@ -455,13 +456,14 @@ async function buildCompressedPromptMessages(
   progress: vscode.Progress<{ message?: string; increment?: number }>,
   token: vscode.CancellationToken,
   generationLease: CommitMessageGenerationLease,
+  canUseSystemMessage: boolean,
 ): Promise<CommitMessageCompressionResult> {
   const workingState = clonePromptState(promptState);
 
   for (;;) {
     throwIfCancelled(token, generationLease);
 
-    const messages = buildPromptMessages(workingState);
+    const messages = buildPromptMessages(workingState, canUseSystemMessage);
     const totalTokens = await countPromptTokens(model, messages, token);
     if (totalTokens <= model.maxInputTokens) {
       return { messages, totalTokens };
@@ -501,6 +503,7 @@ async function generateCommitMessage(
   explicitRepository: unknown,
   scope: CommitMessageGenerationRequestScope,
   resourceGroup: vscode.SourceControlResourceGroup | undefined,
+  canUseSystemMessage: boolean,
 ): Promise<void> {
   const logger = createCommitMessageLogger();
   const generationLease = tryAcquireCommitMessageGenerationLease();
@@ -655,6 +658,7 @@ async function generateCommitMessage(
                       progress,
                       token,
                       generationLease,
+                      canUseSystemMessage,
                     ),
                 );
                 const resolvedPromptPayload = promptPayload;
@@ -712,7 +716,7 @@ async function generateCommitMessage(
                         throwIfCancelled(token, generationLease);
                         partCount += 1;
 
-                        if (part instanceof vscode.LanguageModelThinkingPart) {
+                        if (isLanguageModelThinkingPart(part)) {
                           const thinkingChars = getLanguageModelPartCharCount(
                             part.value,
                           );
@@ -914,6 +918,7 @@ async function handleCommitMessageGenerationError(
 
 export function registerCommitMessageGeneration(
   context: vscode.ExtensionContext,
+  canUseSystemMessage = true,
 ): void {
   context.subscriptions.push(
     registerCommitMessageGenerationButtonsContext(),
@@ -924,25 +929,45 @@ export function registerCommitMessageGeneration(
     vscode.commands.registerCommand(
       'unifyChatProvider.commitMessageGeneration.generate',
       async (repository?: unknown) => {
-        await generateCommitMessage(repository, 'auto', undefined);
+        await generateCommitMessage(
+          repository,
+          'auto',
+          undefined,
+          canUseSystemMessage,
+        );
       },
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.commitMessageGeneration.generateAll',
       async (repository?: unknown) => {
-        await generateCommitMessage(repository, 'all', undefined);
+        await generateCommitMessage(
+          repository,
+          'all',
+          undefined,
+          canUseSystemMessage,
+        );
       },
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.commitMessageGeneration.generateStaged',
       async (resourceGroup?: vscode.SourceControlResourceGroup) => {
-        await generateCommitMessage(undefined, 'staged', resourceGroup);
+        await generateCommitMessage(
+          undefined,
+          'staged',
+          resourceGroup,
+          canUseSystemMessage,
+        );
       },
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.commitMessageGeneration.generateWorkingTree',
       async (resourceGroup?: vscode.SourceControlResourceGroup) => {
-        await generateCommitMessage(undefined, 'workingTree', resourceGroup);
+        await generateCommitMessage(
+          undefined,
+          'workingTree',
+          resourceGroup,
+          canUseSystemMessage,
+        );
       },
     ),
     vscode.commands.registerCommand(

@@ -4,6 +4,7 @@ export {
   SECRET_REF_SUFFIX,
   SECRET_STORAGE_PREFIX,
   SECRET_KEY_PREFIXES,
+  DEVICE_STATE_STORAGE_PREFIX,
   createSecretRef,
   isSecretRef,
   extractUuidFromRef,

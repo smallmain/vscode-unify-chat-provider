@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { ConfigStore } from '../config-store';
+import type { CompletionConfigNormalizationResult } from '../completion/model/configuration';
 import type { FormSchema, FieldContext } from './field-schema';
 import {
   ensureDraftSessionId,
@@ -30,6 +31,7 @@ import {
   createAuthProvider,
   createAuthProviderForMethod,
   getAuthMethodDefinition,
+  normalizeAuthForProvider,
   type AuthConfig,
   type AuthMethod,
   type AuthStatusViewItem,
@@ -57,6 +59,10 @@ import {
   isLeaderUnavailableError,
   isVersionIncompatibleError,
 } from '../main-instance/errors';
+import {
+  editCompletionConfig,
+  formatCompletionConfig,
+} from './completion-fields';
 
 function getTransportModeDescription(draft: ProviderFormDraft): string {
   switch (draft.transport) {
@@ -196,8 +202,16 @@ async function editBaseUrl(draft: ProviderFormDraft): Promise<void> {
   });
 
   if (result) {
+    const previousBaseUrl = draft.baseUrl;
+    const previousAuth = draft.auth;
     draft.baseUrl = result.baseUrl;
     draft.useRawBaseUrl = normalizeUseRawBaseUrl(result.useRawBaseUrl);
+    draft.auth = normalizeAuthForDraft(
+      draft,
+      draft.auth,
+      draft.auth?.method,
+      { baseUrl: previousBaseUrl, auth: previousAuth },
+    );
   }
 }
 
@@ -207,6 +221,7 @@ async function editBaseUrl(draft: ProviderFormDraft): Promise<void> {
 export interface ProviderFieldContext extends FieldContext {
   store: ConfigStore;
   originalName?: string;
+  completionState?: CompletionConfigNormalizationResult;
   onEditModels: (draft: ProviderFormDraft) => Promise<void>;
   onEditTimeout: (draft: ProviderFormDraft) => Promise<void>;
   /** SecretStore for auth providers */
@@ -412,6 +427,23 @@ export const providerFormSchema: FormSchema<ProviderFormDraft> = {
       ],
       getDescription: (draft) =>
         draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
+    {
+      key: 'completion',
+      type: 'custom',
+      label: t('Completion'),
+      icon: 'sparkle',
+      section: 'primary',
+      edit: async (draft) => {
+        await editCompletionConfig(draft, { modelOverride: false });
+      },
+      getDescription: (draft, context) =>
+        formatCompletionConfig(
+          draft.completion,
+          t('default'),
+          (context as ProviderFieldContext | undefined)?.completionState,
+          false,
+        ),
     },
     {
       key: 'contextCache',
@@ -777,6 +809,29 @@ type AuthStatusPickItem = AuthStatusViewItem & {
   viewAction?: 'reconfigure';
 };
 
+function normalizeAuthForDraft(
+  draft: ProviderFormDraft,
+  auth: AuthConfig | undefined,
+  method: AuthMethod | undefined = auth?.method,
+  previous?: {
+    readonly type?: ProviderType;
+    readonly baseUrl?: string;
+    readonly auth?: AuthConfig;
+  },
+): AuthConfig | undefined {
+  return normalizeAuthForProvider(
+    auth,
+    {
+      providerType: draft.type,
+      baseUrl: draft.baseUrl,
+      previousProviderType: previous?.type,
+      previousBaseUrl: previous?.baseUrl,
+      previousAuth: previous?.auth,
+    },
+    method ?? auth?.method ?? 'none',
+  );
+}
+
 type BalanceAction =
   | { kind: 'none' }
   | { kind: 'method'; method: Exclude<BalanceMethod, 'none'> };
@@ -799,8 +854,7 @@ function getAuthDisplayLabel(auth: AuthConfig | undefined): string | undefined {
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return undefined;
   }
-  const record = auth as unknown as Record<string, unknown>;
-  const label = record['label'];
+  const label: unknown = Reflect.get(auth, 'label');
   return typeof label === 'string' ? label : undefined;
 }
 
@@ -943,14 +997,21 @@ async function showAuthStatusView(options: {
     secretStore: options.ctx.secretStore,
     uriHandler: options.ctx.uriHandler,
     persistAuthConfig: async (auth: AuthConfig) => {
-      options.draft.auth = normalizeAuthDisplay(auth);
+      options.draft.auth = normalizeAuthDisplay(
+        normalizeAuthForDraft(options.draft, auth, auth.method) ?? auth,
+      );
     },
   };
 
-  const authProvider = createAuthProvider(
-    providerContext,
-    deepClone(options.auth),
-  );
+  const clonedAuth = deepClone(options.auth);
+  const authForProvider =
+    normalizeAuthForDraft(
+      options.draft,
+      clonedAuth,
+      clonedAuth.method,
+    ) ?? clonedAuth;
+
+  const authProvider = createAuthProvider(providerContext, authForProvider);
   if (!authProvider) {
     return 'exit';
   }
@@ -1037,7 +1098,10 @@ async function showAuthStatusView(options: {
     if (picked?.action?.kind === 'close') {
       await picked.action.run();
       options.draft.auth = normalizeAuthDisplay(
-        authProvider.getConfig() ?? options.auth,
+        normalizeAuthForDraft(
+          options.draft,
+          authProvider.getConfig() ?? options.auth,
+        ) ?? options.auth,
       );
       return 'stay';
     }
@@ -1088,7 +1152,9 @@ async function editAuthField(
         secretStore: ctx.secretStore,
         uriHandler: ctx.uriHandler,
         persistAuthConfig: async (auth: AuthConfig) => {
-          draft.auth = normalizeAuthDisplay(auth);
+          draft.auth = normalizeAuthDisplay(
+            normalizeAuthForDraft(draft, auth, auth.method) ?? auth,
+          );
         },
       };
 
@@ -1097,10 +1163,15 @@ async function editAuthField(
       if (authAction.kind === 'method') {
         const method = authAction.method;
         const current = draft.auth?.method === method ? draft.auth : undefined;
+        const seededCurrent = normalizeAuthForDraft(
+          draft,
+          current,
+          method,
+        );
         authProvider = createAuthProviderForMethod(
           providerContext,
           method,
-          current,
+          seededCurrent,
         );
       } else if (authAction.kind === 'preset') {
         const preset =
@@ -1109,9 +1180,14 @@ async function editAuthField(
         if (!preset) {
           return;
         }
+        const presetAuth = deepClone(preset.auth);
         authProvider = createAuthProvider(
           providerContext,
-          deepClone(preset.auth),
+          normalizeAuthForDraft(
+            draft,
+            presetAuth,
+            presetAuth.method,
+          ) ?? presetAuth,
         );
       }
 
@@ -1125,7 +1201,13 @@ async function editAuthField(
       try {
         const result = await authProvider.configure();
         if (result.success && result.config) {
-          draft.auth = normalizeAuthDisplay(result.config);
+          draft.auth = normalizeAuthDisplay(
+            normalizeAuthForDraft(
+              draft,
+              result.config,
+              result.config.method,
+            ) ?? result.config,
+          );
           return;
         }
         return;
@@ -1170,7 +1252,9 @@ async function editAuthField(
       secretStore: ctx.secretStore,
       uriHandler: ctx.uriHandler,
       persistAuthConfig: async (auth: AuthConfig) => {
-        draft.auth = normalizeAuthDisplay(auth);
+        draft.auth = normalizeAuthDisplay(
+          normalizeAuthForDraft(draft, auth, auth.method) ?? auth,
+        );
       },
     };
 
@@ -1179,10 +1263,15 @@ async function editAuthField(
     if (authAction.kind === 'method') {
       const method = authAction.method;
       const current = draft.auth?.method === method ? draft.auth : undefined;
+      const seededCurrent = normalizeAuthForDraft(
+        draft,
+        current,
+        method,
+      );
       authProvider = createAuthProviderForMethod(
         providerContext,
         method,
-        current,
+        seededCurrent,
       );
     } else if (authAction.kind === 'preset') {
       const preset =
@@ -1191,9 +1280,14 @@ async function editAuthField(
       if (!preset) {
         continue;
       }
+      const presetAuth = deepClone(preset.auth);
       authProvider = createAuthProvider(
         providerContext,
-        deepClone(preset.auth),
+        normalizeAuthForDraft(
+          draft,
+          presetAuth,
+          presetAuth.method,
+        ) ?? presetAuth,
       );
     }
 
@@ -1207,7 +1301,13 @@ async function editAuthField(
     try {
       const result = await authProvider.configure();
       if (result.success && result.config) {
-        draft.auth = normalizeAuthDisplay(result.config);
+        draft.auth = normalizeAuthDisplay(
+          normalizeAuthForDraft(
+            draft,
+            result.config,
+            result.config.method,
+          ) ?? result.config,
+        );
       } else {
         draft.auth = baseline;
       }
@@ -1307,7 +1407,12 @@ function resolveDraftProviderConfig(
   }
 
   try {
-    return normalizeProviderDraft(draft);
+    const provider = normalizeProviderDraft(draft);
+    provider.auth = normalizeAuthForProvider(provider.auth, {
+      providerType: provider.type,
+      baseUrl: provider.baseUrl,
+    });
+    return provider;
   } catch {
     return undefined;
   }
@@ -1317,7 +1422,7 @@ async function resolveDraftCredential(
   draft: ProviderFormDraft,
   ctx: ProviderFieldContext,
 ): Promise<AuthTokenInfo | undefined> {
-  const auth = draft.auth;
+  const auth = normalizeAuthForDraft(draft, deepClone(draft.auth));
   if (!auth || auth.method === 'none') {
     return { kind: 'none' };
   }
@@ -1335,7 +1440,7 @@ async function resolveDraftCredential(
       secretStore: ctx.secretStore,
       uriHandler: ctx.uriHandler,
     },
-    deepClone(auth),
+    auth,
   );
 
   if (!authProvider) {

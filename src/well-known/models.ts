@@ -108,6 +108,15 @@ const GEMINI_2_5_FLASH_REASONING_BUDGETS = {
 } as const;
 const GROK_4_5_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const GROK_4_3_REASONING_EFFORTS = ['high', 'medium', 'low', 'none'] as const;
+const INCEPTION_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
+const MISTRAL_REASONING_EFFORTS = [
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+  'minimal',
+  'none',
+] as const;
 
 function doubaoReasoningEffort(
   defaultEffort: (typeof DOUBAO_REASONING_EFFORTS)[number] | 'auto',
@@ -222,6 +231,128 @@ function mergeModelConfig(
  * Well-known models configuration
  */
 const _WELL_KNOWN_MODELS = [
+  {
+    id: 'zeta',
+    overrides: ['zed-industries/zeta'],
+    name: 'Zeta',
+    completion: {
+      templates: ['zeta1'],
+    },
+  },
+  {
+    id: 'zeta-2',
+    overrides: ['zed-industries/zeta-2', 'zeta2'],
+    name: 'Zeta 2',
+    completion: {
+      templates: ['zeta2'],
+    },
+  },
+  {
+    id: 'zeta-2.1',
+    overrides: ['zed-industries/zeta-2.1', 'zeta2.1'],
+    name: 'Zeta 2.1',
+    completion: {
+      templates: ['zeta2.1'],
+    },
+  },
+  {
+    id: 'zeta-cloud',
+    name: 'Zeta Cloud',
+    completion: {
+      templates: ['zeta3-internal'],
+    },
+  },
+  {
+    id: 'mercury-2',
+    name: 'Mercury 2',
+    maxInputTokens: 128000,
+    maxOutputTokens: 50000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    presetTemplates: [
+      reasoningEffort({
+        supported: INCEPTION_REASONING_EFFORTS,
+        default: 'high',
+      }),
+    ],
+  },
+  {
+    id: 'mercury-edit-2',
+    name: 'Mercury Edit 2',
+    maxInputTokens: 32000,
+    maxOutputTokens: 8192,
+    stream: false,
+    capabilities: {
+      toolCalling: false,
+      imageInput: false,
+    },
+    completion: {
+      templates: ['mercury-edit-2'],
+    },
+  },
+  {
+    id: 'mistral-medium-3-5',
+    name: 'Mistral Medium 3.5',
+    maxInputTokens: 256000,
+    maxOutputTokens: 65536,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      reasoningEffort({
+        supported: MISTRAL_REASONING_EFFORTS,
+        default: 'xhigh',
+      }),
+    ],
+  },
+  {
+    id: 'mistral-small-2603',
+    name: 'Mistral Small',
+    maxInputTokens: 256000,
+    maxOutputTokens: 65536,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'xhigh',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      reasoningEffort({
+        supported: MISTRAL_REASONING_EFFORTS,
+        default: 'xhigh',
+      }),
+    ],
+  },
+  {
+    id: 'codestral-2508',
+    name: 'Codestral',
+    maxInputTokens: 128000,
+    maxOutputTokens: 65536,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+    completion: {
+      templates: ['codestral'],
+    },
+  },
   {
     id: 'doubao-seed-evolving',
     overrides: ['doubao-seed-evolving'],
@@ -2214,6 +2345,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 384000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
       effort: 'max',
@@ -2242,6 +2374,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 384000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
       effort: 'max',
@@ -2261,6 +2394,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2274,6 +2408,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 64000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2295,6 +2430,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2312,6 +2448,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2329,6 +2466,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2347,6 +2485,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2365,6 +2504,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2383,6 +2523,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2397,6 +2538,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2411,6 +2553,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 32768,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2431,6 +2574,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 32768,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     thinking: {
       type: 'enabled',
     },
@@ -2447,6 +2591,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2460,6 +2605,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2473,6 +2619,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 4096,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2486,6 +2633,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 8000,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: true,
       imageInput: false,
@@ -2499,6 +2647,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 4096,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: false,
       imageInput: false,
@@ -2512,6 +2661,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 4096,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: false,
       imageInput: true,
@@ -2525,6 +2675,7 @@ const _WELL_KNOWN_MODELS = [
     maxOutputTokens: 4096,
     stream: true,
     tokenizer: 'deepseek',
+    completion: { templates: ['fim'] },
     capabilities: {
       toolCalling: false,
       imageInput: true,

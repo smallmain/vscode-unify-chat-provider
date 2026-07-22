@@ -6,7 +6,7 @@ import type {
 } from 'vscode';
 import type { ChatRequestTrace, ModelConfig, ProviderConfig } from '../types';
 import type { RequestLogger } from '../logger';
-import type { AuthTokenInfo } from '../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../auth/types';
 import { ProviderType } from './definitions';
 
 export interface ProviderDefinition {
@@ -37,6 +37,7 @@ export interface ApiProvider {
     token: CancellationToken,
     logger: RequestLogger,
     credential: AuthTokenInfo,
+    refreshCredential?: AuthTokenRefresh,
   ): AsyncGenerator<LanguageModelResponsePart2>;
 
   /**
@@ -48,7 +49,10 @@ export interface ApiProvider {
    * Get available models from the provider
    * Returns a list of model configurations supported by this API client
    */
-  getAvailableModels?(credential: AuthTokenInfo): Promise<ModelConfig[]>;
+  getAvailableModels?(
+    credential: AuthTokenInfo,
+    refreshCredential?: AuthTokenRefresh,
+  ): Promise<ModelConfig[]>;
 
   /**
    * Get the current rate-limit status (token bucket snapshot).

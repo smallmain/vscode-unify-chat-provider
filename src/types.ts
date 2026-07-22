@@ -15,6 +15,26 @@ export interface ContextCacheConfig {
 
 export type ProxyType = 'vscode' | 'direct' | 'custom';
 
+export type CompletionTemplate =
+  | 'fim'
+  | 'codegemma'
+  | 'copilot-replica-nes'
+  | 'zeta1'
+  | 'zeta2'
+  | 'zeta2.1'
+  | 'zeta3-internal'
+  | 'mercury-edit-2'
+  | 'codestral';
+
+export type CompletionTemplates = 'all' | readonly CompletionTemplate[];
+
+export interface CompletionConfig {
+  transport?: 'auto' | 'native' | 'compatible';
+  /** Absolute URL or a path relative to the provider API base URL. */
+  baseUrl?: string;
+  templates?: CompletionTemplates;
+}
+
 export interface ProxyConfig {
   /**
    * Proxy mode.
@@ -100,13 +120,15 @@ export interface ProviderConfig {
   /** Context cache / prompt caching configuration. */
   contextCache?: ContextCacheConfig;
   /**
-    * Rate-limit configuration for logical chat requests in this VS Code window.
-    * One token is consumed per request at the service entry point, covering
-    * HTTP, SSE, and WebSocket transports without sharing limits across windows.
+   * Rate-limit configuration for logical chat requests in this VS Code window.
+   * One token is consumed per request at the service entry point, covering
+   * HTTP, SSE, and WebSocket transports without sharing limits across windows.
    *
    * When `rpm` is 0 or unset, no rate limiting is applied.
    */
   rateLimit?: RateLimitConfig;
+  /** Default code-completion capability settings for this provider. */
+  completion?: CompletionConfig;
 }
 
 export type DeprecatedProviderConfigKey = 'apiKey';
@@ -229,6 +251,8 @@ export interface ModelConfig {
   extraBody?: Record<string, unknown>;
   /** Request-time preset templates exposed to VS Code model configuration UI. */
   presetTemplates?: PresetTemplate[];
+  /** Code-completion capability overrides for this model. */
+  completion?: CompletionConfig;
 }
 
 type PresetTemplateReplaceConfig = Pick<
