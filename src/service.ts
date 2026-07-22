@@ -794,6 +794,27 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       providerForBalance = resolvedProvider;
       this.balanceManager?.notifyChatRequestStarted(resolvedProvider.name);
 
+      const client = this.getClient(resolvedProvider);
+
+      // Acquire a rate-limit token before transport selection so HTTP, SSE,
+      // and WebSocket chats share the same limiter. The acquisition is
+      // cancellation-aware: if the user cancels while waiting for a token, we
+      // abort early and avoid consuming a token for a request that won't run.
+      const rateLimitAbortController = new AbortController();
+      const rateLimitAbortListener = token.onCancellationRequested(() => {
+        rateLimitAbortController.abort();
+      });
+      if (token.isCancellationRequested) {
+        rateLimitAbortController.abort();
+      }
+      let rateLimitStatus: { available: number; capacity: number } | undefined;
+      try {
+        await client.acquireRateLimitToken?.(rateLimitAbortController.signal);
+        rateLimitStatus = client.getRateLimitStatus?.();
+      } finally {
+        rateLimitAbortListener.dispose();
+      }
+
       logger.start({
         providerName: resolvedProvider.name,
         providerType: resolvedProvider.type,
@@ -801,10 +822,10 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         vscodeModelId: model.id,
         modelId: resolvedRequestModel.id,
         modelName: resolvedRequestModel.name,
+        rateLimit: rateLimitStatus,
       });
       logger.vscodeInput(messages, options);
 
-      const client = this.getClient(resolvedProvider);
       const chatNetwork = resolveChatNetwork(resolvedProvider);
       const retryConfig = chatNetwork.retry;
       const retryAbortController = new AbortController();

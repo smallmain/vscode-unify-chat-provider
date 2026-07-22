@@ -1,5 +1,19 @@
 # Changelog
 
+## v7.12.5 - 2026-07-23
+
+### Fixes
+- return cancelled queued RPM acquisitions immediately instead of waiting behind earlier FIFO entries; cancelled entries still consume no token when they reach the queue head
+
+## v7.12.4 - 2026-07-14
+
+### Fixes
+- make provider RPM token buckets FIFO-safe under concurrent chat requests and show available tokens with two decimal places
+- clarify per-window logical chat request RPM behavior and preserve explicit per-provider `rpm: 0` overrides
+- treat invalid/empty per-provider `rateLimit` (e.g. `{}` or non-integer `rpm`) as unconfigured so the global default applies, while still honoring explicit `rpm: 0`
+- make RPM token acquisition cancellation-aware: aborting a chat request while waiting for a token no longer blocks or consumes a token
+- log the exact post-acquire token snapshot by peeking the bucket without an extra time-based refill
+
 ## v7.12.3 - 2026-07-12
 
 ### Features

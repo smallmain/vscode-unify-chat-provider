@@ -7,6 +7,7 @@ import {
   ProxyConfig,
 } from '../../types';
 import type { RetryConfig } from '../../utils';
+import type { RateLimitConfig } from '../../rate-limit';
 import type { WellKnownProviderConfig } from '../../well-known/providers';
 import type { OfficialModelsFetchState } from '../../official-models-manager';
 import type { SecretStore } from '../../secret';
@@ -121,6 +122,7 @@ export interface TimeoutFormRoute {
   timeout: TimeoutConfig;
   retry: RetryConfig;
   proxy: ProxyConfig;
+  rateLimit: RateLimitConfig;
   draft: ProviderFormDraft;
 }
 

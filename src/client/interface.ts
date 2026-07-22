@@ -53,4 +53,20 @@ export interface ApiProvider {
     credential: AuthTokenInfo,
     refreshCredential?: AuthTokenRefresh,
   ): Promise<ModelConfig[]>;
+
+  /**
+   * Get the current rate-limit status (token bucket snapshot).
+   * Returns undefined when no rate limiting is configured for this provider.
+   */
+  getRateLimitStatus?(): { available: number; capacity: number } | undefined;
+
+  /**
+   * Acquire a token for one logical chat request, waiting if necessary.
+   * Called by the service before transport selection so HTTP, SSE, and
+   * WebSocket requests share the same limiter.
+   *
+   * If `signal` is aborted while waiting, rejects (without consuming a token)
+   * so a cancelled chat request doesn't waste a rate-limit slot.
+   */
+  acquireRateLimitToken?(signal?: AbortSignal): Promise<void>;
 }

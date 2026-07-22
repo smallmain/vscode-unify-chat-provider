@@ -76,6 +76,7 @@ import {
   setUserAgentHeader,
 } from '../utils';
 import type { AuthTokenInfo } from '../../auth/types';
+import { createRateLimiter } from '../../rate-limit';
 
 type AnthropicMarkerData = {
   raw: BetaMessage;
@@ -116,8 +117,10 @@ const ANTHROPIC_ABNORMAL_STOP_REASONS: ReadonlySet<string> = new Set([
 
 export class AnthropicProvider implements ApiProvider {
   private readonly baseUrl: string;
+  private readonly rateLimiter: ReturnType<typeof createRateLimiter>;
 
   constructor(protected readonly config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     this.baseUrl = buildBaseUrl(config.baseUrl, {
       stripPattern: /\/v1$/i,
       useRawBaseUrl: isRawBaseUrlEnabled(config),
@@ -136,6 +139,14 @@ export class AnthropicProvider implements ApiProvider {
    * Create an Anthropic client with custom fetch for retry support.
    * A new client is created per request to enable per-request logging.
    */
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(signal?: AbortSignal): Promise<void> {
+    await this.rateLimiter?.acquire(signal);
+  }
+
   protected createClient(
     logger: ProviderHttpLogger | undefined,
     stream: boolean,

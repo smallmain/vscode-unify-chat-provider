@@ -395,29 +395,30 @@ export function patchChatLibDiffSource(
   source: string,
 ): string {
   const resolved = resolve(filePath);
+  const normalizedSource = source.replace(/\r\n?/g, '\n');
   if (resolved === arraysPath) {
-    return patchArrays(filePath, source);
+    return patchArrays(filePath, normalizedSource);
   }
   if (resolved === assertPath) {
-    return patchAssert(filePath, source);
+    return patchAssert(filePath, normalizedSource);
   }
   if (resolved === abstractTextPath) {
-    return patchAbstractText(filePath, source);
+    return patchAbstractText(filePath, normalizedSource);
   }
   if (resolved === defaultLinesDiffComputerPath) {
-    return patchDefaultLinesDiffComputer(filePath, source);
+    return patchDefaultLinesDiffComputer(filePath, normalizedSource);
   }
   if (resolved === heuristicSequenceOptimizationsPath) {
-    return patchHeuristicSequenceOptimizations(filePath, source);
+    return patchHeuristicSequenceOptimizations(filePath, normalizedSource);
   }
   if (resolved === positionToOffsetPath) {
-    return patchPositionToOffset(filePath, source);
+    return patchPositionToOffset(filePath, normalizedSource);
   }
   if (resolved === positionToOffsetImplPath) {
-    return patchPositionToOffsetImpl(filePath, source);
+    return patchPositionToOffsetImpl(filePath, normalizedSource);
   }
   if (resolved === rangeMappingPath) {
-    return patchRangeMapping(filePath, source);
+    return patchRangeMapping(filePath, normalizedSource);
   }
   return source;
 }

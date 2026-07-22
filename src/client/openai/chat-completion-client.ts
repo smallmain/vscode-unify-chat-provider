@@ -55,6 +55,7 @@ import {
   resolveOpenAIServiceTier,
   setUserAgentHeader,
 } from '../utils';
+import { createRateLimiter } from '../../rate-limit';
 import * as vscode from 'vscode';
 import {
   createLanguageModelThinkingParts,
@@ -203,8 +204,18 @@ function isChatCompletionChunk(
 
 export class OpenAIChatCompletionProvider implements ApiProvider {
   protected readonly baseUrl: string;
+  private readonly rateLimiter: ReturnType<typeof createRateLimiter>;
+
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(signal?: AbortSignal): Promise<void> {
+    await this.rateLimiter?.acquire(signal);
+  }
 
   constructor(protected readonly config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     this.baseUrl = this.resolveBaseUrl(config);
   }
 

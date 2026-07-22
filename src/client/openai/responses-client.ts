@@ -50,6 +50,7 @@ import {
   resolveOpenAIServiceTier,
   setUserAgentHeader,
 } from '../utils';
+import { createRateLimiter } from '../../rate-limit';
 import * as vscode from 'vscode';
 import {
   createLanguageModelThinkingParts,
@@ -682,8 +683,18 @@ export class OpenAIResponsesProvider implements ApiProvider {
   protected readonly baseUrl: string;
   private websocketCapability: 'unknown' | 'supported' | 'unsupported' =
     'unknown';
+  protected readonly rateLimiter: ReturnType<typeof createRateLimiter>;
+
+  getRateLimitStatus(): { available: number; capacity: number } | undefined {
+    return this.rateLimiter?.getAvailableTokens();
+  }
+
+  async acquireRateLimitToken(signal?: AbortSignal): Promise<void> {
+    await this.rateLimiter?.acquire(signal);
+  }
 
   constructor(protected readonly config: ProviderConfig) {
+    this.rateLimiter = createRateLimiter(config.rateLimit);
     this.baseUrl = this.resolveBaseUrl(config);
   }
 

@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.12.3",
+  "version": "7.12.5",
   "categories": [
     "AI",
     "Chat"
@@ -268,6 +268,18 @@
           "scope": "application",
           "description": "%configuration.networkSettings.description%",
           "properties": {
+            "rateLimit": {
+              "type": "object",
+              "description": "%configuration.networkSettings.rateLimit.description%",
+              "properties": {
+                "rpm": {
+                  "type": "integer",
+                  "description": "%configuration.networkSettings.rateLimit.rpm.description%",
+                  "default": 0,
+                  "minimum": 0
+                }
+              }
+            },
             "timeout": {
               "type": "object",
               "description": "%configuration.networkSettings.timeout.description%",
@@ -1002,6 +1014,18 @@
                 "type": "object",
                 "description": "%configuration.endpoints.extraBody.description%",
                 "additionalProperties": true
+              },
+              "rateLimit": {
+                "type": "object",
+                "description": "%configuration.endpoints.rateLimit.description%",
+                "properties": {
+                  "rpm": {
+                    "type": "integer",
+                    "description": "%configuration.endpoints.rateLimit.rpm.description%",
+                    "default": 0,
+                    "minimum": 0
+                  }
+                }
               },
               "timeout": {
                 "type": "object",

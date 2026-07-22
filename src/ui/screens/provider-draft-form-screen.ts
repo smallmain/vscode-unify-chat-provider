@@ -257,6 +257,7 @@ export async function runProviderDraftFormScreen(
         timeout: draft.timeout ?? {},
         retry: draft.retry ?? {},
         proxy: draft.proxy ?? {},
+        rateLimit: draft.rateLimit ?? {},
         draft,
       },
     };

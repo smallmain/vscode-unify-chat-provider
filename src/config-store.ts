@@ -27,6 +27,7 @@ import {
   ProxyType,
   ServiceTier,
 } from './types';
+import type { RateLimitConfig } from './rate-limit';
 
 export const CONFIG_NAMESPACE = 'unifyChatProvider';
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
@@ -256,6 +257,25 @@ export class ConfigStore {
     return this.normalizeProxyConfig((raw as Record<string, unknown>)['proxy']);
   }
 
+  private readNetworkRateLimit(): RateLimitConfig | undefined {
+    const raw = this.readConfiguredUnknown('networkSettings');
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return undefined;
+    }
+
+    const rateLimit = (raw as Record<string, unknown>)['rateLimit'];
+    if (!rateLimit || typeof rateLimit !== 'object' || Array.isArray(rateLimit)) {
+      return undefined;
+    }
+
+    const rpm = (rateLimit as Record<string, unknown>)['rpm'];
+    if (typeof rpm !== 'number' || !Number.isInteger(rpm) || rpm <= 0) {
+      return undefined;
+    }
+
+    return { rpm };
+  }
+
   /**
    * Get the full extension configuration
    */
@@ -379,6 +399,17 @@ export class ConfigStore {
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,
     );
+    provider.rateLimit = this.normalizeRateLimitConfig(provider.rateLimit);
+
+    // Apply global networkSettings.rateLimit as default when the endpoint
+    // does not define its own rate-limit configuration.
+    if (provider.rateLimit === undefined) {
+      const globalRateLimit = this.readNetworkRateLimit();
+      if (globalRateLimit) {
+        provider.rateLimit = globalRateLimit;
+      }
+    }
+
     const completion = normalizeCompletionConfig(obj.completion);
     if (completion.status === 'valid') {
       provider.completion = completion.value;
@@ -523,6 +554,27 @@ export class ConfigStore {
     }
 
     return out;
+  }
+
+  private normalizeRateLimitConfig(
+    raw: unknown,
+  ): RateLimitConfig | undefined {
+    if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+      return undefined;
+    }
+
+    const record = raw as Record<string, unknown>;
+    const rpm = record['rpm'];
+    if (
+      typeof rpm !== 'number' ||
+      !Number.isFinite(rpm) ||
+      !Number.isInteger(rpm) ||
+      rpm < 0
+    ) {
+      return undefined;
+    }
+
+    return { rpm };
   }
 
   private normalizeObjectRecord(
