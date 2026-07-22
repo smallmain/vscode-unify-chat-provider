@@ -14,6 +14,7 @@
   "command.refreshAllProvidersBalance.title": "Unify Chat Provider: 刷新所有供应商的余额信息",
   "command.syncBuiltInParamsToAllConfigs.title": "Unify Chat Provider: 同步内置参数到所有配置",
   "command.changeVSCodeDefaultModel.title": "Unify Chat Provider: 更改 VS Code 默认模型",
+  "command.enableProposedApi.title": "Unify Chat Provider: 启用 Proposed API",
   "command.completion.settings.title": "Unify Chat Provider: 代码补全设置",
   "command.commitMessageGeneration.generate.title": "Unify Chat Provider: 生成提交消息",
   "command.commitMessageGeneration.generateAll.title": "Unify Chat Provider: 生成提交消息(全部更改)",

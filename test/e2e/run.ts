@@ -275,38 +275,54 @@ async function main(): Promise<void> {
     "test/e2e/fixtures/workspace",
   );
   const isolationRoot = await mkdtemp(path.join(tmpdir(), "ucp-e2e-"));
-  const userDataDir = path.join(isolationRoot, "user-data");
-  const extensionsDir = path.join(isolationRoot, "extensions");
-  const fixtureWorkspace = path.join(isolationRoot, "workspace");
-  const notebookContributionPath = path.join(
-    isolationRoot,
-    "notebook-contribution",
-  );
-  const fakeLanguageModelPath = path.join(isolationRoot, "fake-language-model");
   const fixtureHashBefore = await hashDirectory(fixtureWorkspaceSource);
 
   try {
-    await createNotebookContributionExtension(notebookContributionPath);
-    await createFakeLanguageModelExtension(fakeLanguageModelPath);
-    await cp(fixtureWorkspaceSource, fixtureWorkspace, { recursive: true });
-    await runTests({
-      extensionDevelopmentPath: [
-        sourceExtensionPath,
-        notebookContributionPath,
-        fakeLanguageModelPath,
-      ],
-      extensionTestsPath,
-      launchArgs: [
-        fixtureWorkspace,
-        `--user-data-dir=${userDataDir}`,
-        `--extensions-dir=${extensionsDir}`,
-        "--disable-extensions",
-        "--enable-proposed-api=SmallMain.vscode-unify-chat-provider",
-        "--enable-proposed-api=ucp-e2e.fake-language-model",
-        "--skip-welcome",
-        "--skip-release-notes",
-      ],
-    });
+    const runMode = async (mode: "enabled" | "disabled"): Promise<void> => {
+      const modeRoot = path.join(isolationRoot, mode);
+      const userDataDir = path.join(modeRoot, "user-data");
+      const extensionsDir = path.join(modeRoot, "extensions");
+      const fixtureWorkspace = path.join(modeRoot, "workspace");
+      const notebookContributionPath = path.join(
+        modeRoot,
+        "notebook-contribution",
+      );
+      const fakeLanguageModelPath = path.join(
+        modeRoot,
+        "fake-language-model",
+      );
+      await createNotebookContributionExtension(notebookContributionPath);
+      await createFakeLanguageModelExtension(fakeLanguageModelPath);
+      await cp(fixtureWorkspaceSource, fixtureWorkspace, { recursive: true });
+      const proposalArgs =
+        mode === "enabled"
+          ? [
+              "--enable-proposed-api=SmallMain.vscode-unify-chat-provider",
+              "--enable-proposed-api=ucp-e2e.fake-language-model",
+            ]
+          : [];
+      await runTests({
+        extensionDevelopmentPath: [
+          sourceExtensionPath,
+          notebookContributionPath,
+          fakeLanguageModelPath,
+        ],
+        extensionTestsPath,
+        extensionTestsEnv: { UCP_E2E_PROPOSED_MODE: mode },
+        launchArgs: [
+          fixtureWorkspace,
+          `--user-data-dir=${userDataDir}`,
+          `--extensions-dir=${extensionsDir}`,
+          "--disable-extensions",
+          ...proposalArgs,
+          "--skip-welcome",
+          "--skip-release-notes",
+        ],
+      });
+    };
+
+    await runMode("enabled");
+    await runMode("disabled");
   } finally {
     const fixtureHashAfter = await hashDirectory(fixtureWorkspaceSource);
     await rm(isolationRoot, { recursive: true, force: true });

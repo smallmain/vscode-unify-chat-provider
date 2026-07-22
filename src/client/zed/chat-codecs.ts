@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import type { ModelConfig } from '../../types';
 import { getBaseModelId } from '../../model-id-utils';
 import type { ZedUpstreamProvider } from './types';
+import { isLanguageModelThinkingPart } from '../../proposed-api/thinking';
 
 type NormalizedPart =
   | { kind: 'text'; text: string }
@@ -89,7 +90,7 @@ function normalizeMessages(
     for (const part of message.content) {
       if (part instanceof vscode.LanguageModelTextPart) {
         if (part.value) parts.push({ kind: 'text', text: part.value });
-      } else if (part instanceof vscode.LanguageModelThinkingPart) {
+      } else if (isLanguageModelThinkingPart(part)) {
         if (role !== 'assistant') {
           throw new Error('Zed thinking content must belong to an assistant message.');
         }

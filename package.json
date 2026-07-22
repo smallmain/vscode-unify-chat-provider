@@ -44,6 +44,8 @@
     "gemini-cli",
     "antigravity",
     "kiro",
+    "zed",
+    "zeta",
     "free-ai",
     "free-chat",
     "free-agent",
@@ -51,10 +53,15 @@
     "coding-plan",
     "custom-models",
     "custom-chat",
+    "fim",
+    "tab",
+    "nes",
+    "next-edit-prediction",
     "自定义模型",
     "自定义聊天",
     "免费模型",
-    "免费聊天"
+    "免费聊天",
+    "代码补全"
   ],
   "publisher": "SmallMain",
   "icon": "icon.png",
@@ -71,53 +78,11 @@
   },
   "packageManager": "npm@10.8.2",
   "enabledApiProposals": [
-    "extensionsAny",
-    "newSymbolNamesProvider",
-    "interactive",
-    "codeActionAI",
-    "activeComment",
-    "commentReveal",
-    "contribCommentThreadAdditionalMenu",
-    "contribCommentsViewThreadMenus",
-    "documentFiltersExclusive",
-    "embeddings",
-    "findTextInFiles",
-    "findTextInFiles2",
-    "findFiles2",
-    "textSearchProvider",
-    "terminalDataWriteEvent",
-    "terminalExecuteCommandEvent",
-    "terminalSelection",
-    "terminalQuickFixProvider",
-    "mappedEditsProvider",
-    "aiRelatedInformation",
-    "aiSettingsSearch",
-    "chatParticipantAdditions",
-    "defaultChatParticipant",
-    "contribSourceControlInputBoxMenu",
-    "authLearnMore",
-    "testObserver",
-    "aiTextSearchProvider",
-    "chatParticipantPrivate",
-    "chatProvider",
-    "contribDebugCreateConfiguration",
-    "chatReferenceDiagnostic",
-    "textSearchProvider2",
-    "chatReferenceBinaryData",
     "languageModelSystem",
-    "languageModelCapabilities",
+    "chatProvider",
     "inlineCompletionsAdditions",
-    "chatStatusItem",
-    "taskProblemMatcherStatus",
-    "contribLanguageModelToolSets",
-    "textDocumentChangeReason",
-    "resolvers",
-    "taskExecutionTerminal",
-    "dataChannels",
-    "languageModelThinkingPart",
-    "chatSessionsProvider",
-    "devDeviceId",
-    "contribEditorContentMenu"
+    "contribSourceControlInputBoxMenu",
+    "languageModelThinkingPart"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -180,6 +145,10 @@
       {
         "command": "unifyChatProvider.changeVSCodeDefaultModel",
         "title": "%command.changeVSCodeDefaultModel.title%"
+      },
+      {
+        "command": "unifyChatProvider.enableProposedApi",
+        "title": "%command.enableProposedApi.title%"
       },
       {
         "command": "unifyChatProvider.completion.settings",
@@ -2001,7 +1970,14 @@
       "scm/inputBox": [
         {
           "command": "unifyChatProvider.commitMessageGeneration.generate",
-          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled"
+          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled && unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "unifyChatProvider.commitMessageGeneration.generate",
+          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled && !unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu",
+          "group": "navigation"
         }
       ]
     }
@@ -2041,6 +2017,7 @@
     "@google/genai": "^2.8.0",
     "@huggingface/tokenizers": "^0.1.3",
     "@iarna/toml": "^2.2.5",
+    "@vscode/sudo-prompt": "^9.3.2",
     "ignore": "7.0.6",
     "minimatch": "^10.2.5",
     "ollama": "^0.6.3",

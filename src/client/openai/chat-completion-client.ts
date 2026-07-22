@@ -57,6 +57,10 @@ import {
 } from '../utils';
 import * as vscode from 'vscode';
 import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
+import {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
   ChatCompletionChunk,
@@ -453,7 +457,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -1320,9 +1324,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       if (!part.text) {
         continue;
       }
-      yield part.type === 'thinking'
-        ? new vscode.LanguageModelThinkingPart(part.text)
-        : new vscode.LanguageModelTextPart(part.text);
+      if (part.type === 'thinking') {
+        yield* createLanguageModelThinkingParts(part.text);
+      } else {
+        yield new vscode.LanguageModelTextPart(part.text);
+      }
     }
 
     return true;
@@ -1394,7 +1400,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -1477,7 +1483,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 

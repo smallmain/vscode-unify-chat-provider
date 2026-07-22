@@ -48,6 +48,16 @@ import {
   registerDefaultCopilotContextProviders,
 } from './completion/copilot/default-context-providers';
 import type { CopilotContextProvider } from './completion/copilot/context-provider';
+import {
+  createProposedApiCapabilities,
+  initializeProposedApiCapabilities,
+  type ProposedApiCapabilities,
+} from './proposed-api/capabilities';
+import { canUseLanguageModelThinkingPart } from './proposed-api/thinking';
+import {
+  registerProposedApiEnableCommand,
+  scheduleProposedApiStartupReminder,
+} from './proposed-api/reminder';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
@@ -69,6 +79,56 @@ export async function activate(
 
   await mainInstance.initialize(context);
   context.subscriptions.push(mainInstance);
+
+  const proposedApiCapabilities =
+    await initializeExtensionProposedApiCapabilities(context);
+  const shouldScheduleProposedApiReminder = mainInstance.isLeader();
+  const canUseSystemMessage = proposedApiCapabilities.isProposedCanUse(
+    'languageModelSystem',
+  );
+  const canUseChatProvider = proposedApiCapabilities.isProposedCanUse(
+    'chatProvider',
+  );
+  const completionAvailable = proposedApiCapabilities.isProposedCanUse(
+    'inlineCompletionsAdditions',
+  );
+  await Promise.all([
+    vscode.commands.executeCommand(
+      'setContext',
+      'unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu',
+      proposedApiCapabilities.isProposedCanUse(
+        'contribSourceControlInputBoxMenu',
+      ),
+    ),
+    vscode.commands.executeCommand(
+      'setContext',
+      'unifyChatProvider.completion.available',
+      completionAvailable,
+    ),
+  ]);
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.proposedApi.test.getState',
+        () => ({
+          declared: [...proposedApiCapabilities.declared],
+          enabled: [...proposedApiCapabilities.enabled],
+          missing: [...proposedApiCapabilities.missing],
+          canUse: Object.fromEntries(
+            proposedApiCapabilities.declared.map((proposal) => [
+              proposal,
+              proposedApiCapabilities.isProposedCanUse(proposal),
+            ]),
+          ),
+          completionAvailable,
+          scmInputBoxMenuAvailable:
+            proposedApiCapabilities.isProposedCanUse(
+              'contribSourceControlInputBoxMenu',
+            ),
+        }),
+      ),
+    );
+  }
 
   const configStore = new ConfigStore();
   const secretStore = new SecretStore(context.secrets);
@@ -240,7 +300,26 @@ export async function activate(
     secretStore,
     authManager,
     balanceManager,
+    canUseChatProvider,
   );
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.proposedApi.test.getModelInformation',
+        async () => {
+          const cancellation = new vscode.CancellationTokenSource();
+          try {
+            return await chatProvider.provideLanguageModelChatInformation(
+              { silent: true },
+              cancellation.token,
+            );
+          } finally {
+            cancellation.dispose();
+          }
+        },
+      ),
+    );
+  }
 
   // Initialize official models manager
   await officialModelsManager.initialize(
@@ -290,95 +369,118 @@ export async function activate(
 
   // Register commands
   registerCommands(context, configStore, secretStore, uriHandler);
-  registerCommitMessageGeneration(context);
+  registerProposedApiEnableCommand(context);
+  registerCommitMessageGeneration(context, canUseSystemMessage);
 
-  const productionCompletionModelResolver = new ConfiguredCompletionModelResolver(
-    configStore,
-    authManager,
-  );
-  let completionModelResolver: CompletionModelResolver =
-    productionCompletionModelResolver;
-  let completionTestControl:
-    | {
-        setTestResponse(value: unknown): boolean;
-        getTestRequests(): readonly AlgorithmRequest[];
-      }
-    | undefined;
-  if (context.extensionMode !== vscode.ExtensionMode.Production) {
-    const { TestingCompletionModelResolver } = await import(
-      './completion/model/testing-resolver'
+  if (completionAvailable) {
+    const productionCompletionModelResolver =
+      new ConfiguredCompletionModelResolver(
+        configStore,
+        authManager,
+        undefined,
+        canUseSystemMessage,
+      );
+    let completionModelResolver: CompletionModelResolver =
+      productionCompletionModelResolver;
+    let completionTestControl:
+      | {
+          setTestResponse(value: unknown): boolean;
+          getTestRequests(): readonly AlgorithmRequest[];
+        }
+      | undefined;
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      const { TestingCompletionModelResolver } = await import(
+        './completion/model/testing-resolver'
+      );
+      const testingResolver = new TestingCompletionModelResolver(
+        productionCompletionModelResolver,
+      );
+      completionModelResolver = testingResolver;
+      completionTestControl = testingResolver;
+    }
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.settings',
+        () => showCompletionSettings(completionModelResolver, configStore),
+      ),
     );
-    const testingResolver = new TestingCompletionModelResolver(
-      productionCompletionModelResolver,
-    );
-    completionModelResolver = testingResolver;
-    completionTestControl = testingResolver;
-  }
-  context.subscriptions.push(registerDefaultCopilotContextProviders());
-  const completionManager = new CompletionManager(completionModelResolver);
-  context.subscriptions.push(
-    completionManager,
-    vscode.commands.registerCommand(
-      'unifyChatProvider.completion.settings',
-      () => showCompletionSettings(completionModelResolver, configStore),
-    ),
-  );
-  if (context.extensionMode !== vscode.ExtensionMode.Production) {
-    const [{ registerCompletionWarningTestCommands }, { CompletionTestHarness }] =
-      await Promise.all([
+    context.subscriptions.push(registerDefaultCopilotContextProviders());
+    const completionManager = new CompletionManager(completionModelResolver);
+    context.subscriptions.push(completionManager);
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      const [
+        { registerCompletionWarningTestCommands },
+        { CompletionTestHarness },
+      ] = await Promise.all([
         import('./completion/test-control'),
         import('./completion/test-harness'),
       ]);
-    registerCompletionWarningTestCommands(context);
-    const completionTestHarness = new CompletionTestHarness(completionManager);
+      registerCompletionWarningTestCommands(context);
+      const completionTestHarness = new CompletionTestHarness(completionManager);
+      context.subscriptions.push(
+        completionTestHarness,
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getState',
+          () => completionManager.getState(),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.setResponse',
+          (value: unknown) =>
+            completionTestControl?.setTestResponse(value) ?? false,
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getRequests',
+          () => completionTestControl?.getTestRequests() ?? [],
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getRuntimeState',
+          (providerId: unknown) =>
+            typeof providerId === 'string'
+              ? completionManager.getRuntimeDebugState(providerId)
+              : undefined,
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.provide',
+          (options: unknown) => completionTestHarness.provideTexts(options),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.provideDetailed',
+          (options: unknown) => completionTestHarness.provide(options),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.cancelProvide',
+          (cancellationKey: unknown) =>
+            completionTestHarness.cancelProvide(cancellationKey),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.dispatchLifecycle',
+          (event: unknown) => completionTestHarness.dispatchLifecycle(event),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getHarnessState',
+          () => completionTestHarness.getState(),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.clearHarness',
+          () => completionTestHarness.clear(),
+        ),
+      );
+    }
+  } else {
     context.subscriptions.push(
-      completionTestHarness,
       vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.getState',
-        () => completionManager.getState(),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.setResponse',
-        (value: unknown) =>
-          completionTestControl?.setTestResponse(value) ?? false,
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.getRequests',
-        () => completionTestControl?.getTestRequests() ?? [],
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.getRuntimeState',
-        (providerId: unknown) =>
-          typeof providerId === 'string'
-            ? completionManager.getRuntimeDebugState(providerId)
-            : undefined,
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.provide',
-        (options: unknown) => completionTestHarness.provideTexts(options),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.provideDetailed',
-        (options: unknown) => completionTestHarness.provide(options),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.cancelProvide',
-        (cancellationKey: unknown) =>
-          completionTestHarness.cancelProvide(cancellationKey),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.dispatchLifecycle',
-        (event: unknown) => completionTestHarness.dispatchLifecycle(event),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.getHarnessState',
-        () => completionTestHarness.getState(),
-      ),
-      vscode.commands.registerCommand(
-        'unifyChatProvider.completion.test.clearHarness',
-        () => completionTestHarness.clear(),
+        'unifyChatProvider.completion.settings',
+        () =>
+          vscode.window.showWarningMessage(
+            t(
+              'Code completion is unavailable because the inlineCompletionsAdditions Proposed API is not enabled.',
+            ),
+          ),
       ),
     );
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      registerUnavailableCompletionTestCommands(context);
+    }
   }
 
   context.subscriptions.push(
@@ -419,6 +521,9 @@ export async function activate(
   context.subscriptions.push(configStore);
 
   setMainInstanceReadyIfPossible();
+  if (shouldScheduleProposedApiReminder) {
+    scheduleProposedApiStartupReminder(context, proposedApiCapabilities);
+  }
   return {
     getContextProviderAPI(version) {
       if (version !== 'v1') {
@@ -558,6 +663,62 @@ export function registerCommands(
  */
 export function deactivate(): void {
   // Cleanup handled by disposables
+}
+
+async function initializeExtensionProposedApiCapabilities(
+  context: vscode.ExtensionContext,
+): Promise<ProposedApiCapabilities> {
+  try {
+    return await initializeProposedApiCapabilities(context, {
+      canUseLanguageModelThinkingPart,
+    });
+  } catch (error) {
+    authLog.error(
+      'proposed-api',
+      'Unable to read the Proposed API manifest; all Proposed API features will use their fallback behavior',
+      error,
+    );
+    return createProposedApiCapabilities(
+      { declared: [], enabled: [] },
+      { canUseLanguageModelThinkingPart: () => false },
+    );
+  }
+}
+
+function registerUnavailableCompletionTestCommands(
+  context: vscode.ExtensionContext,
+): void {
+  const unavailableState = Object.freeze({
+    available: false,
+    unavailableReason: 'inlineCompletionsAdditions',
+    registered: false,
+    enabled: false,
+    providerCount: 0,
+    providerIds: Object.freeze([]),
+    excludedProviderGroups: Object.freeze([]),
+    runtimeCount: 0,
+    runtimeInstances: Object.freeze({}),
+  });
+  const unavailable = (): typeof unavailableState => unavailableState;
+  const commandIds = [
+    'unifyChatProvider.completion.test.getState',
+    'unifyChatProvider.completion.test.setResponse',
+    'unifyChatProvider.completion.test.getRequests',
+    'unifyChatProvider.completion.test.getRuntimeState',
+    'unifyChatProvider.completion.test.provide',
+    'unifyChatProvider.completion.test.provideDetailed',
+    'unifyChatProvider.completion.test.cancelProvide',
+    'unifyChatProvider.completion.test.dispatchLifecycle',
+    'unifyChatProvider.completion.test.getHarnessState',
+    'unifyChatProvider.completion.test.clearHarness',
+    'unifyChatProvider.completion.test.getWarnings',
+    'unifyChatProvider.completion.test.clearWarnings',
+  ];
+  context.subscriptions.push(
+    ...commandIds.map((commandId) =>
+      vscode.commands.registerCommand(commandId, unavailable),
+    ),
+  );
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

@@ -15,6 +15,29 @@ interface CompletionManagerState {
   runtimeInstances: Record<string, number>;
 }
 
+interface ProposedApiTestState {
+  declared: string[];
+  enabled: string[];
+  missing: string[];
+  canUse: Record<string, boolean>;
+  completionAvailable: boolean;
+  scmInputBoxMenuAvailable: boolean;
+}
+
+interface UnavailableCompletionState extends CompletionManagerState {
+  available: false;
+  unavailableReason: string;
+}
+
+interface ProposedApiModelInformation {
+  id: string;
+  capabilities: Record<string, unknown>;
+  isUserSelectable?: unknown;
+  statusIcon?: unknown;
+  configurationSchema?: unknown;
+  multiplierNumeric?: unknown;
+}
+
 interface CompletionWarningEvent {
   key: string;
   message: string;
@@ -2792,7 +2815,115 @@ async function runCompletionTemplateEligibilityE2E(
   }
 }
 
+async function runDisabledProposedApiE2E(): Promise<void> {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
+  await extension.activate();
+  assert.equal(
+    extension.isActive,
+    true,
+    "Extension should activate without --enable-proposed-api",
+  );
+
+  const state = await vscode.commands.executeCommand<ProposedApiTestState>(
+    "unifyChatProvider.proposedApi.test.getState",
+  );
+  assert.deepEqual(state.declared, [
+    "languageModelSystem",
+    "chatProvider",
+    "inlineCompletionsAdditions",
+    "contribSourceControlInputBoxMenu",
+    "languageModelThinkingPart",
+  ]);
+  assert.deepEqual(state.enabled, []);
+  assert.deepEqual(state.missing, state.declared);
+  assert.equal(state.canUse.languageModelSystem, false);
+  assert.equal(state.canUse.chatProvider, false);
+  assert.equal(state.completionAvailable, false);
+  assert.equal(state.scmInputBoxMenuAvailable, false);
+
+  const completionState =
+    await vscode.commands.executeCommand<UnavailableCompletionState>(
+      "unifyChatProvider.completion.test.getState",
+    );
+  assert.equal(completionState.available, false);
+  assert.equal(
+    completionState.unavailableReason,
+    "inlineCompletionsAdditions",
+  );
+  assert.equal(completionState.registered, false);
+  assert.equal(completionState.providerCount, 0);
+  assert.equal(completionState.runtimeCount, 0);
+  assert.deepEqual(completionState.runtimeInstances, {});
+
+  const commands = await vscode.commands.getCommands(true);
+  assert.ok(commands.includes("unifyChatProvider.enableProposedApi"));
+  assert.ok(commands.includes("unifyChatProvider.completion.settings"));
+
+  const configuration = vscode.workspace.getConfiguration("unifyChatProvider");
+  try {
+    await configuration.update(
+      "endpoints",
+      [
+        {
+          type: "openai-chat-completion",
+          name: "disabled-proposal-e2e",
+          baseUrl: "http://127.0.0.1:1/v1",
+          auth: { method: "none" },
+          models: [
+            {
+              id: "basic-model",
+              capabilities: {
+                toolCalling: true,
+                imageInput: true,
+                editTools: ["apply-patch"],
+              },
+            },
+          ],
+        },
+      ],
+      vscode.ConfigurationTarget.Global,
+    );
+    await delay(100);
+    const models = await vscode.lm.selectChatModels({
+      vendor: "unify-chat-provider",
+    });
+    const model = models.find((candidate) =>
+      candidate.id.includes("disabled-proposal-e2e/basic-model"),
+    );
+    assert.ok(model, "Stable model information should remain enumerable");
+    const modelInformation =
+      await vscode.commands.executeCommand<ProposedApiModelInformation[]>(
+        "unifyChatProvider.proposedApi.test.getModelInformation",
+      );
+    const rawModel = modelInformation.find((candidate) =>
+      candidate.id.includes("disabled-proposal-e2e/basic-model"),
+    );
+    assert.ok(rawModel);
+    assert.equal(rawModel.capabilities.toolCalling, true);
+    assert.equal(rawModel.capabilities.imageInput, true);
+    assert.equal(rawModel.capabilities.editTools, undefined);
+    assert.equal(rawModel.isUserSelectable, undefined);
+    assert.equal(rawModel.statusIcon, undefined);
+    assert.equal(rawModel.configurationSchema, undefined);
+    assert.equal(rawModel.multiplierNumeric, undefined);
+  } finally {
+    await configuration.update(
+      "endpoints",
+      undefined,
+      vscode.ConfigurationTarget.Global,
+    );
+  }
+
+  console.log("Extension Host disabled Proposed API fallback E2E passed");
+}
+
 export async function run(): Promise<void> {
+  if (process.env["UCP_E2E_PROPOSED_MODE"] === "disabled") {
+    await runDisabledProposedApiE2E();
+    return;
+  }
+
   const fakeLanguageModelExtension = vscode.extensions.getExtension(
     FAKE_LANGUAGE_MODEL_EXTENSION_ID,
   );

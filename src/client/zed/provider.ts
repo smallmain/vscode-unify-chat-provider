@@ -28,6 +28,7 @@ import {
   resolveCachedZedModelRoute,
 } from './route-cache';
 import type { ZedLlmTokenSource } from './cloud-client';
+import { createLanguageModelThinkingPart } from '../../proposed-api/thinking';
 
 interface ZedModelDiscoveryOptions {
   readonly signal?: AbortSignal;
@@ -81,12 +82,12 @@ async function* responseLines(
 
 function toVscodePart(
   chunk: Exclude<ZedChatChunk, { kind: 'status' }>,
-): vscode.LanguageModelResponsePart2 {
+): vscode.LanguageModelResponsePart2 | undefined {
   switch (chunk.kind) {
     case 'text':
       return new vscode.LanguageModelTextPart(chunk.text);
     case 'thinking':
-      return new vscode.LanguageModelThinkingPart(
+      return createLanguageModelThinkingPart(
         chunk.text,
         chunk.id,
         chunk.metadata,
@@ -257,12 +258,13 @@ export class ZedProvider implements ApiProvider {
         }
         for (const chunk of decoder.decode(event)) {
           if (chunk.kind === 'status') continue;
+          const part = toVscodePart(chunk);
+          if (!part) continue;
           if (!sawOutput) {
             sawOutput = true;
             requestTrace.performance.ttft =
               Date.now() - requestTrace.performance.tts;
           }
-          const part = toVscodePart(chunk);
           logger.vscodeOutput(part);
           yield part;
         }
@@ -272,12 +274,13 @@ export class ZedProvider implements ApiProvider {
       }
       for (const chunk of decoder.finish()) {
         if (chunk.kind === 'status') continue;
+        const part = toVscodePart(chunk);
+        if (!part) continue;
         if (!sawOutput) {
           sawOutput = true;
           requestTrace.performance.ttft =
             Date.now() - requestTrace.performance.tts;
         }
-        const part = toVscodePart(chunk);
         logger.vscodeOutput(part);
         yield part;
       }

@@ -155,6 +155,7 @@ export class ConfiguredCompletionModelResolver
     private readonly authManager: CompletionCredentialManager,
     private readonly getProviderModels: CompletionProviderModelCatalog =
       getAllModelsForProviderSync,
+    private readonly canUseSystemMessage = true,
   ) {}
 
   getConfigurationFingerprint(reference: CompletionModelReference): string {
@@ -369,6 +370,7 @@ export class ConfiguredCompletionModelResolver
         compatiblePromise ??= resolveChatModel().then((model) =>
           createCompatibleApiProvider(model, {
             model: `${reference.vendor}/${reference.id}`,
+            canUseSystemMessage: this.canUseSystemMessage,
           }),
         );
         return compatiblePromise;

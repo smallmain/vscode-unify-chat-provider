@@ -2,7 +2,6 @@ import * as vscode from 'vscode';
 import { t } from '../../i18n';
 import type {
   CodeGemmaCompletionRequest,
-  CompletionChatMessage,
   CopilotReplicaNesCompletionRequest,
   FimCompletionRequest,
 } from '../model/requests';
@@ -22,11 +21,13 @@ import type {
   CompletionApiProvider,
 } from './provider';
 import { defineCompletionApiProvider } from './provider';
+import { createOutgoingLanguageModelMessages } from '../../proposed-api/system-message';
 
 export type CompatibleChatModel = Pick<vscode.LanguageModelChat, 'sendRequest'>;
 
 export interface CompatibleApiProviderContext {
   readonly model: string;
+  readonly canUseSystemMessage?: boolean;
 }
 
 type RequestLogger = NonNullable<
@@ -102,17 +103,6 @@ function createOperationLogger(
   return logger ? new CompatibleOperationLogger(logger) : undefined;
 }
 
-function toVsCodeMessage(
-  message: CompletionChatMessage,
-): vscode.LanguageModelChatMessage {
-  return message.role === 'system'
-    ? new vscode.LanguageModelChatMessage(
-        vscode.LanguageModelChatMessageRole.System,
-        message.content,
-      )
-    : vscode.LanguageModelChatMessage.User(message.content);
-}
-
 async function collectText(
   chunks: AsyncIterable<string>,
   token: vscode.CancellationToken,
@@ -164,13 +154,13 @@ function createBufferedOperation<
       const logger = createOperationLogger(context, kind);
       try {
         const userPrompt = buildCompatibleUserPrompt(request);
-        const messages = [
-          new vscode.LanguageModelChatMessage(
-            vscode.LanguageModelChatMessageRole.System,
-            buildCompatibleSystemPrompt(kind),
-          ),
-          vscode.LanguageModelChatMessage.User(userPrompt),
-        ];
+        const messages = createOutgoingLanguageModelMessages(
+          [
+            { role: 'system', content: buildCompatibleSystemPrompt(kind) },
+            { role: 'user', content: userPrompt },
+          ],
+          context.canUseSystemMessage ?? true,
+        );
         const options = {
           justification: t('Provide inline code completion'),
         };
@@ -211,7 +201,10 @@ function createNesOperation(
       const logger = createOperationLogger(context, request.kind);
       try {
         const modelOptions = buildNesModelOptions(request);
-        const messages = request.messages.map(toVsCodeMessage);
+        const messages = createOutgoingLanguageModelMessages(
+          request.messages,
+          context.canUseSystemMessage ?? true,
+        );
         const options = {
           justification: t('Predict the next code edit'),
           ...(modelOptions === undefined ? {} : { modelOptions }),

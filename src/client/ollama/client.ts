@@ -4,6 +4,10 @@ import {
   CancellationToken,
 } from 'vscode';
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
@@ -362,7 +366,7 @@ export class OllamaProvider implements ApiProvider {
         };
       }
       return undefined;
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -716,7 +720,7 @@ export class OllamaProvider implements ApiProvider {
 
       const delta = event.message;
       if (delta.thinking) {
-        yield new vscode.LanguageModelThinkingPart(delta.thinking);
+        yield* createLanguageModelThinkingParts(delta.thinking);
       }
 
       if (delta.content) {
@@ -826,7 +830,7 @@ export class OllamaProvider implements ApiProvider {
     }
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(thinkingText);
+      yield* createLanguageModelThinkingParts(thinkingText);
     }
 
     metadata!._completeThinking =
@@ -837,7 +841,7 @@ export class OllamaProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 
