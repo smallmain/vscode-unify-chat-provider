@@ -53,6 +53,38 @@ function waitForTimeoutOrAbort(
   });
 }
 
+function waitForPromiseOrAbort<T>(
+  promise: Promise<T>,
+  signal?: AbortSignal,
+): Promise<T> {
+  if (!signal) {
+    return promise;
+  }
+
+  if (signal.aborted) {
+    return Promise.reject(createRateLimitAbortError());
+  }
+
+  return new Promise<T>((resolve, reject) => {
+    const onAbort = (): void => {
+      signal.removeEventListener('abort', onAbort);
+      reject(createRateLimitAbortError());
+    };
+
+    signal.addEventListener('abort', onAbort, { once: true });
+    promise.then(
+      (value) => {
+        signal.removeEventListener('abort', onAbort);
+        resolve(value);
+      },
+      (error) => {
+        signal.removeEventListener('abort', onAbort);
+        reject(error);
+      },
+    );
+  });
+}
+
 export class RateLimiter {
   /** Maximum tokens the bucket can hold (= ceil(rpm * 0.8), min 1). */
   readonly maxTokens: number;
@@ -104,9 +136,11 @@ export class RateLimiter {
     if (signal?.aborted) {
       return Promise.reject(createRateLimitAbortError());
     }
-    const next = this.acquireQueue.then(() => this.acquireOne(signal));
-    this.acquireQueue = next.catch(() => {});
-    return next;
+    const queuedAcquisition = this.acquireQueue.then(() =>
+      this.acquireOne(signal),
+    );
+    this.acquireQueue = queuedAcquisition.catch(() => {});
+    return waitForPromiseOrAbort(queuedAcquisition, signal);
   }
 
   private async acquireOne(signal?: AbortSignal): Promise<void> {

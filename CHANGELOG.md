@@ -1,5 +1,10 @@
 # Changelog
 
+## v7.12.5 - 2026-07-23
+
+### Fixes
+- return cancelled queued RPM acquisitions immediately instead of waiting behind earlier FIFO entries; cancelled entries still consume no token when they reach the queue head
+
 ## v7.12.4 - 2026-07-14
 
 ### Fixes
