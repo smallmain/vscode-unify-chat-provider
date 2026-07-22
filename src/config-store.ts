@@ -16,6 +16,10 @@ import { getRenamedProviderType } from './secret/migration';
 import { normalizePresetTemplates } from './preset-templates';
 import { normalizeConfiguredModelCapabilities } from './model-capabilities';
 import {
+  normalizeCompletionConfig,
+  type CompletionConfigNormalizationResult,
+} from './completion/model/configuration';
+import {
   ContextCacheConfig,
   ModelConfig,
   ProxyConfig,
@@ -40,6 +44,10 @@ const DEFAULT_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 1;
 const MIN_BALANCE_WARNING_TIME_THRESHOLD_DAYS = 0;
 const MIN_BALANCE_WARNING_AMOUNT_THRESHOLD = 0;
 const MIN_BALANCE_WARNING_TOKEN_THRESHOLD_MILLIONS = 0;
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
 const OBSERVED_CONFIG_KEYS = [
   'endpoints',
   'verbose',
@@ -77,6 +85,11 @@ export interface BalanceWarningConfiguration {
   amountThreshold: number;
   /** Token remaining threshold in millions. */
   tokenThresholdMillions: number;
+}
+
+export interface ProviderCompletionPersistenceHints {
+  readonly originalName?: string;
+  readonly modelSourceIds?: Readonly<Record<string, string>>;
 }
 
 /** Manages extension configuration stored in VS Code application-scoped user settings. */
@@ -366,6 +379,12 @@ export class ConfigStore {
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,
     );
+    const completion = normalizeCompletionConfig(obj.completion);
+    if (completion.status === 'valid') {
+      provider.completion = completion.value;
+    } else {
+      delete provider.completion;
+    }
 
     const legacyApiKey = obj.apiKey;
     if (
@@ -559,6 +578,12 @@ export class ConfigStore {
         model.extraHeaders = this.normalizeStringRecord(model.extraHeaders);
         model.extraBody = this.normalizeObjectRecord(model.extraBody);
         model.presetTemplates = normalizePresetTemplates(model.presetTemplates);
+        const completion = normalizeCompletionConfig(obj.completion);
+        if (completion.status === 'valid') {
+          model.completion = completion.value;
+        } else {
+          delete model.completion;
+        }
 
         return model;
       }
@@ -574,17 +599,107 @@ export class ConfigStore {
     return this.endpoints.find((p) => p.name === name);
   }
 
+  getProviderCompletionConfigState(
+    name: string,
+  ): CompletionConfigNormalizationResult {
+    const provider = this.rawEndpoints.find(
+      (candidate) => isRecord(candidate) && candidate.name === name,
+    );
+    return normalizeCompletionConfig(
+      isRecord(provider) ? provider.completion : undefined,
+    );
+  }
+
+  getModelCompletionConfigState(
+    providerName: string,
+    modelId: string,
+  ): CompletionConfigNormalizationResult {
+    const provider = this.rawEndpoints.find(
+      (candidate) => isRecord(candidate) && candidate.name === providerName,
+    );
+    const models = isRecord(provider) && Array.isArray(provider.models)
+      ? provider.models
+      : [];
+    const model = models.find(
+      (candidate) =>
+        isRecord(candidate) && candidate.id === modelId,
+    );
+    return normalizeCompletionConfig(
+      isRecord(model) ? model.completion : undefined,
+    );
+  }
+
   /**
    * Save endpoints to configuration
    * Always writes to application-scoped user settings.
    */
-  async setEndpoints(endpoints: ProviderConfig[]): Promise<void> {
+  async setEndpoints(
+    endpoints: ProviderConfig[],
+    completionHints?: ReadonlyMap<string, ProviderCompletionPersistenceHints>,
+  ): Promise<void> {
     const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
     await config.update(
       'endpoints',
-      endpoints,
+      this.preserveUnspecifiedCompletionConfigs(endpoints, completionHints),
       vscode.ConfigurationTarget.Global,
     );
+  }
+
+  private preserveUnspecifiedCompletionConfigs(
+    endpoints: readonly ProviderConfig[],
+    completionHints?: ReadonlyMap<string, ProviderCompletionPersistenceHints>,
+  ): unknown[] {
+    // Normalized endpoints omit invalid completion values. Treat omission as
+    // unchanged; callers can use {} to reset or { templates: [] } to disable.
+    const current = this.rawEndpoints;
+    return endpoints.map((provider) => {
+      const hints = completionHints?.get(provider.name);
+      const sourceProviderName = hints?.originalName ?? provider.name;
+      const explicitlyConsumedModelIds = new Set(
+        Object.values(hints?.modelSourceIds ?? {}),
+      );
+      const previous = current.find(
+        (candidate) =>
+          isRecord(candidate) && candidate.name === sourceProviderName,
+      );
+      const persisted: Record<string, unknown> = { ...provider };
+      if (
+        !Object.hasOwn(provider, 'completion') &&
+        isRecord(previous) &&
+        Object.hasOwn(previous, 'completion')
+      ) {
+        persisted.completion = previous.completion;
+      }
+
+      persisted.models = provider.models.map((model) => {
+        const hasExplicitSource =
+          hints?.modelSourceIds !== undefined &&
+          Object.hasOwn(hints.modelSourceIds, model.id);
+        const sourceModelId = hasExplicitSource
+          ? hints.modelSourceIds?.[model.id]
+          : explicitlyConsumedModelIds.has(model.id)
+            ? undefined
+            : model.id;
+        const previousModel =
+          sourceModelId !== undefined &&
+          isRecord(previous) &&
+          Array.isArray(previous.models)
+            ? previous.models.find(
+                (candidate) =>
+                  isRecord(candidate) && candidate.id === sourceModelId,
+              )
+            : undefined;
+        if (
+          Object.hasOwn(model, 'completion') ||
+          !isRecord(previousModel) ||
+          !Object.hasOwn(previousModel, 'completion')
+        ) {
+          return model;
+        }
+        return { ...model, completion: previousModel.completion };
+      });
+      return persisted;
+    });
   }
 
   /**
@@ -616,10 +731,20 @@ export class ConfigStore {
   /**
    * Add or update a provider
    */
-  async upsertProvider(provider: ProviderConfig): Promise<void> {
-    const endpoints = this.endpoints.filter((p) => p.name !== provider.name);
+  async upsertProvider(
+    provider: ProviderConfig,
+    hints: ProviderCompletionPersistenceHints = {},
+  ): Promise<void> {
+    const endpoints = this.endpoints.filter(
+      (candidate) =>
+        candidate.name !== provider.name &&
+        candidate.name !== hints.originalName,
+    );
     endpoints.push(provider);
-    await this.setEndpoints(endpoints);
+    await this.setEndpoints(
+      endpoints,
+      new Map([[provider.name, hints]]),
+    );
   }
 
   /**

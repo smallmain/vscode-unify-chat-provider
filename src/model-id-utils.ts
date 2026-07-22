@@ -1,4 +1,13 @@
-import { ModelConfig } from './types';
+import type { ModelConfig } from './types';
+
+/** Placeholder used while a provider's official model catalog is loading. */
+export const PLACEHOLDER_MODEL_ID = '__PLACEHOLDER__';
+
+export function isPlaceholderModelId(modelId: string): boolean {
+  const slashIndex = modelId.indexOf('/');
+  const modelName = slashIndex === -1 ? modelId : modelId.slice(slashIndex + 1);
+  return modelName === PLACEHOLDER_MODEL_ID;
+}
 
 /**
  * Delimiter used to separate base model ID from version.

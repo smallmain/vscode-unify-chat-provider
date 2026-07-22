@@ -12,6 +12,7 @@ import type { SecretStore } from '../secret';
 import { authLog } from '../logger';
 import { mainInstance } from '../main-instance';
 import { MainInstanceError } from '../main-instance/errors';
+import { normalizeAuthForProvider } from './definitions';
 
 /**
  * Stored error information for a provider
@@ -132,7 +133,12 @@ export class AuthManager implements vscode.Disposable {
   }
 
   private resolveCurrentAuth(providerName: string): AuthConfig | undefined {
-    return this.configStore.getProvider(providerName)?.auth;
+    const provider = this.configStore.getProvider(providerName);
+    if (!provider) return undefined;
+    return normalizeAuthForProvider(provider.auth, {
+      providerType: provider.type,
+      baseUrl: provider.baseUrl,
+    });
   }
 
   private clearProviderErrors(providerName: string): void {

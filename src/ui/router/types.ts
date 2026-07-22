@@ -12,6 +12,7 @@ import type { OfficialModelsFetchState } from '../../official-models-manager';
 import type { SecretStore } from '../../secret';
 import type { EventedUriHandler } from '../../uri-handler';
 import type { ProviderFormDraft } from '../form-utils';
+import type { CompletionConfigNormalizationResult } from '../../completion/model/configuration';
 
 export interface UiContext {
   store: ConfigStore;
@@ -82,6 +83,7 @@ export interface ModelFormRoute {
   models: ModelConfig[];
   initialConfig?: Partial<ModelConfig>;
   originalId?: string;
+  completionState?: CompletionConfigNormalizationResult;
   draft?: ModelConfig;
 }
 

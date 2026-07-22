@@ -74,18 +74,17 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
+          node-version: 24
           cache: npm
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
-        with:
-          bun-version: latest
 
       - name: Configure git author
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Preserve current release tooling
+        if: ${{ inputs.mode == 'github_from_tag' }}
+        run: cp scripts/release.mts "${RUNNER_TEMP}/release.mts"
 
       - name: Select ref
         run: |
@@ -128,8 +127,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Install vsce
-        run: npm install -g @vscode/vsce
+      - name: Run checks
+        if: ${{ github.event.inputs.mode == 'full' }}
+        run: npm run check
+
+      - name: Run extension host tests
+        if: ${{ github.event.inputs.mode == 'full' }}
+        run: xvfb-run -a npm run test:e2e
 
       - name: Validate secrets
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.mode == 'full' && github.event.inputs.publish_to_marketplace == 'true' }}
@@ -186,7 +190,7 @@ jobs:
               ext_name="$(node -p "require('./package.json').name")"
               version="${tag#v}"
               vsix_path="${ext_name}-${version}.vsix"
-              vsce package --out "${vsix_path}"
+              npx --yes @vscode/vsce@3.9.2 package --out "${vsix_path}"
               args+=(--github-tag "${tag}" --github-asset "${vsix_path}")
             else
               args+=(--github-tag "${tag}")
@@ -214,7 +218,11 @@ jobs:
             fi
           fi
 
-          bun run scripts/release.ts "${args[@]}"
+          if [ "${{ inputs.mode }}" = "github_from_tag" ]; then
+            node "${RUNNER_TEMP}/release.mts" "${args[@]}"
+          else
+            npm run release -- "${args[@]}"
+          fi
 
       - name: Push release commit
         if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.mode == 'full' }}
@@ -224,5 +232,5 @@ jobs:
             echo "Pushed release commit to ${GITHUB_REF_NAME}."
           else
             echo "Unable to push release commit to ${GITHUB_REF_NAME} (branch may be protected)."
-            echo "The tag was already pushed by scripts/release.ts; merge/cherry-pick the release commit from the tag if needed."
+            echo "The tag was already pushed by scripts/release.mts; merge/cherry-pick the release commit from the tag if needed."
           fi

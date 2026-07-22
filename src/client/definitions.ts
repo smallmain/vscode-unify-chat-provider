@@ -13,6 +13,7 @@ import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
 import { OpenAICodexProvider } from './openai/codex-client';
 import { OpenAIResponsesProvider } from './openai/responses-client';
 import { XaiGrokBuildProvider } from './xai/grok-build-client';
+import { ZedProvider } from './zed/provider';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
@@ -24,6 +25,7 @@ export type ProviderType =
   | 'google-antigravity'
   | 'google-gemini-cli'
   | 'github-copilot'
+  | 'zed'
   | 'openai-chat-completion'
   | 'openai-codex'
   | 'xai-grok-build'
@@ -58,6 +60,13 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/v1/chat/completions',
     category: 'General',
     class: OpenAIChatCompletionProvider,
+  },
+  zed: {
+    type: 'zed',
+    label: t('Zed'),
+    description: '/completions',
+    category: 'Experimental',
+    class: ZedProvider,
   },
   'openai-responses': {
     type: 'openai-responses',
@@ -358,6 +367,14 @@ export enum FeatureId {
    * @see https://ai.google.dev/gemini-api/docs/thinking?hl=zh-cn#levels-budgets
    */
   GeminiUseThinkingLevel = 'gemini_use-thinking-level',
+  /**
+   * Parse Mistral's structured `content` / `delta.content` chunk arrays
+   * (`thinking` / `text`) instead of treating `content` as a plain string, and
+   * preserve the original arrays for multi-turn replay.
+   *
+   * @see https://docs.mistral.ai/
+   */
+  MistralContentChunks = 'mistral_content-chunks',
 }
 
 export const FEATURES: Record<FeatureId, Feature> = {
@@ -489,6 +506,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.siliconflow.com',
       'api.stepfun.com',
       'api.stepfun.ai',
+      'api.inceptionlabs.ai',
+      'api.mistral.ai',
     ],
   },
   [FeatureId.OpenAICacheControl]: {
@@ -766,5 +785,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'models/gemini-3-',
       'models/gemma-4-',
     ],
+  },
+  [FeatureId.MistralContentChunks]: {
+    supportedProviders: ['api.mistral.ai'],
   },
 };

@@ -26,6 +26,11 @@ import type { ModelConfig, TimeoutConfig } from '../types';
 import { normalizePresetTemplates } from '../preset-templates';
 import { normalizeUseRawBaseUrl, type RetryConfig } from '../utils';
 import { migrateLegacyVSCodeModelIds } from '../vscode-model-id-migration';
+import {
+  normalizeCompletionConfig,
+  type CompletionConfigIssue,
+} from '../completion/model/configuration';
+import type { CompletionConfig } from '../types';
 
 type OAuthWaitResult = { type: 'success'; url: string } | { type: 'cancel' };
 
@@ -109,6 +114,31 @@ function requireString(value: unknown, method: string, field: string): string {
     );
   }
   return value;
+}
+
+function requireOptionalStringRecord(
+  value: unknown,
+  method: string,
+  field: string,
+): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: "${field}" must be an object of non-empty strings`,
+    );
+  }
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (key.trim() === '' || typeof item !== 'string' || item.trim() === '') {
+      throw new MainInstanceError(
+        'BAD_REQUEST',
+        `${method}: "${field}" must be an object of non-empty strings`,
+      );
+    }
+    result[key] = item;
+  }
+  return result;
 }
 
 function requireNumber(value: unknown, method: string, field: string): number {
@@ -299,13 +329,236 @@ function parseStringRecord(value: unknown): Record<string, string> | undefined {
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-function parseModels(value: unknown): ModelConfig[] {
+function hasOptionalStringFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  return fields.every(
+    (field) => record[field] === undefined || typeof record[field] === 'string',
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function isOAuthConfig(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value['tokenUrl'] !== 'string' ||
+    !hasOptionalStringFields(value, ['revocationUrl']) ||
+    (value['scopes'] !== undefined && !isStringArray(value['scopes']))
+  ) {
+    return false;
+  }
+  switch (value['grantType']) {
+    case 'authorization_code':
+      return (
+        typeof value['authorizationUrl'] === 'string' &&
+        typeof value['clientId'] === 'string' &&
+        hasOptionalStringFields(value, ['clientSecret', 'redirectUri']) &&
+        (value['pkce'] === undefined || typeof value['pkce'] === 'boolean')
+      );
+    case 'client_credentials':
+      return (
+        typeof value['clientId'] === 'string' &&
+        typeof value['clientSecret'] === 'string'
+      );
+    case 'device_code':
+      return (
+        typeof value['deviceAuthorizationUrl'] === 'string' &&
+        typeof value['clientId'] === 'string'
+      );
+    default:
+      return false;
+  }
+}
+
+function isAuthConfig(value: unknown): value is AuthConfig {
+  if (!isRecord(value)) return false;
+  const commonFields = ['label', 'description'] as const;
+  if (!hasOptionalStringFields(value, commonFields)) return false;
+  switch (value['method']) {
+    case 'none':
+      return true;
+    case 'api-key':
+      return hasOptionalStringFields(value, ['apiKey']);
+    case 'oauth2':
+      return (
+        hasOptionalStringFields(value, ['identityId', 'token']) &&
+        isOAuthConfig(value['oauth'])
+      );
+    case 'antigravity-oauth':
+      return (
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tierId',
+          'email',
+        ]) &&
+        (value['tier'] === undefined ||
+          value['tier'] === 'free' ||
+          value['tier'] === 'paid')
+      );
+    case 'google-gemini-oauth':
+      return (
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tierId',
+          'email',
+        ]) &&
+        (value['oauthType'] === undefined ||
+          value['oauthType'] === 'code_assist' ||
+          value['oauthType'] === 'ai_studio' ||
+          value['oauthType'] === 'google_one') &&
+        (value['tier'] === undefined ||
+          value['tier'] === 'free' ||
+          value['tier'] === 'paid')
+      );
+    case 'openai-codex':
+      return hasOptionalStringFields(value, [
+        'identityId',
+        'token',
+        'accountId',
+        'email',
+      ]);
+    case 'claude-code':
+    case 'xai-grok-oauth':
+      return hasOptionalStringFields(value, [
+        'identityId',
+        'token',
+        'email',
+      ]);
+    case 'github-copilot':
+      return hasOptionalStringFields(value, [
+        'identityId',
+        'token',
+        'enterpriseUrl',
+      ]);
+    case 'zed':
+      return (
+        hasOptionalStringFields(value, [
+          'baseUrl',
+          'identityId',
+          'token',
+          'organizationId',
+          'email',
+        ]) &&
+        (value['dataCollection'] === undefined ||
+          typeof value['dataCollection'] === 'boolean') &&
+        (value['dataCollectionAllowed'] === undefined ||
+          typeof value['dataCollectionAllowed'] === 'boolean')
+      );
+    case 'google-vertex-ai-auth':
+      switch (value['subType']) {
+        case 'adc':
+          return (
+            typeof value['projectId'] === 'string' &&
+            typeof value['location'] === 'string'
+          );
+        case 'service-account':
+          return (
+            typeof value['keyFilePath'] === 'string' &&
+            typeof value['location'] === 'string' &&
+            hasOptionalStringFields(value, ['projectId'])
+          );
+        case 'api-key':
+          return hasOptionalStringFields(value, ['apiKey']);
+        default:
+          return false;
+      }
+    default:
+      return false;
+  }
+}
+
+function isBalanceConfig(value: unknown): value is BalanceConfig {
+  if (!isRecord(value)) return false;
+  switch (value['method']) {
+    case 'none':
+    case 'moonshot-ai':
+    case 'kimi-code':
+    case 'deepseek':
+    case 'openrouter':
+    case 'siliconflow':
+    case 'aihubmix':
+    case 'antigravity':
+    case 'gemini-cli':
+    case 'codex':
+    case 'synthetic':
+    case 'minimax':
+      return true;
+    case 'claude-relay-service':
+      return hasOptionalStringFields(value, ['baseUrl']);
+    case 'newapi': {
+      if (!hasOptionalStringFields(value, ['userId', 'systemToken'])) {
+        return false;
+      }
+      const transform = value['quotaTransform'];
+      return (
+        transform === undefined ||
+        (isRecord(transform) &&
+          hasOptionalStringFields(transform, ['quotaField']) &&
+          (transform['extraQuotaFields'] === undefined ||
+            isStringArray(transform['extraQuotaFields'])) &&
+          (transform['divisor'] === undefined ||
+            typeof transform['divisor'] === 'number') &&
+          (transform['multiplier'] === undefined ||
+            typeof transform['multiplier'] === 'number'))
+      );
+    }
+    default:
+      return false;
+  }
+}
+
+function formatCompletionConfigIssues(
+  issues: readonly CompletionConfigIssue[],
+): string {
+  return issues
+    .map((issue) =>
+      issue.field
+        ? `${issue.code} (${issue.field})`
+        : issue.code,
+    )
+    .join(', ');
+}
+
+function parseCompletionConfig(
+  value: unknown,
+  method: string,
+  path: string,
+): CompletionConfig | undefined {
+  const result = normalizeCompletionConfig(value);
+  if (result.status === 'invalid') {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid ${path}: ${formatCompletionConfigIssues(result.issues)}`,
+    );
+  }
+  return result.status === 'valid' ? result.value : undefined;
+}
+
+function parseModels(
+  value: unknown,
+  method: string,
+  path = 'provider.models',
+): ModelConfig[] {
   if (!Array.isArray(value)) {
     return [];
   }
   const out: ModelConfig[] = [];
-  for (const item of value) {
-    const parsed = parseModelConfig(item);
+  for (const [index, item] of value.entries()) {
+    const parsed = parseModelConfig(
+      item,
+      method,
+      `${path}[${index}]`,
+    );
     if (parsed) {
       out.push(parsed);
     }
@@ -313,7 +566,11 @@ function parseModels(value: unknown): ModelConfig[] {
   return out;
 }
 
-function parseModelConfig(value: unknown): ModelConfig | null {
+export function parseModelConfig(
+  value: unknown,
+  method = 'config.syncPersistedProvider',
+  path = 'provider.model',
+): ModelConfig | null {
   if (typeof value === 'string' && value.trim() !== '') {
     return { id: value };
   }
@@ -327,11 +584,19 @@ function parseModelConfig(value: unknown): ModelConfig | null {
     return null;
   }
 
-  const model: ModelConfig = { id };
+  const completion = parseCompletionConfig(
+    value['completion'],
+    method,
+    `${path}.completion`,
+  );
+  const model: ModelConfig = {
+    id,
+    ...(completion === undefined ? {} : { completion }),
+  };
   mergePartialFromRecordByKeys(
     model,
     value,
-    withoutKeys(MODEL_CONFIG_KEYS, ['id'] as const),
+    withoutKeys(MODEL_CONFIG_KEYS, ['id', 'completion'] as const),
   );
 
   const extraHeaders = parseStringRecord(model.extraHeaders);
@@ -350,7 +615,10 @@ function parseModelConfig(value: unknown): ModelConfig | null {
   return model;
 }
 
-function parseProviderConfig(value: unknown, method: string): ProviderConfig {
+export function parseProviderConfig(
+  value: unknown,
+  method: string,
+): ProviderConfig {
   const record = requireRecord(value, method);
 
   const typeRaw = record['type'];
@@ -366,28 +634,32 @@ function parseProviderConfig(value: unknown, method: string): ProviderConfig {
 
   const authConfig = record['authConfig'] ?? record['auth'];
   const auth =
-    isRecord(authConfig) && typeof authConfig['method'] === 'string'
-      ? (authConfig as unknown as AuthConfig)
-      : undefined;
+    authConfig === undefined
+      ? undefined
+      : parseAuthConfig(authConfig, method);
 
-  const balanceProvider =
-    isRecord(record['balanceProvider']) &&
-    typeof record['balanceProvider']['method'] === 'string'
-      ? (record['balanceProvider'] as unknown as BalanceConfig)
-      : undefined;
+  const balanceProvider = isBalanceConfig(record['balanceProvider'])
+    ? record['balanceProvider']
+    : undefined;
   const transport = parseTransportMode(record['transport']);
   const serviceTier = parseServiceTier(record['serviceTier']);
   const extraHeaders = parseStringRecord(record['extraHeaders']);
   const timeout = parseTimeoutConfig(record['timeout']);
   const retry = parseRetryConfig(record['retry']);
   const contextCache = parseContextCacheConfig(record['contextCache']);
+  const completion = parseCompletionConfig(
+    record['completion'],
+    method,
+    'provider.completion',
+  );
 
   return {
     type: typeRaw,
     name,
     baseUrl,
     useRawBaseUrl: normalizeUseRawBaseUrl(record['useRawBaseUrl']),
-    models: parseModels(record['models']),
+    models: parseModels(record['models'], method),
+    ...(completion === undefined ? {} : { completion }),
     ...(transport ? { transport } : {}),
     ...(serviceTier ? { serviceTier } : {}),
     ...(auth ? { auth } : {}),
@@ -416,9 +688,13 @@ function parseOptionalFiniteNumber(value: unknown): number | undefined {
 }
 
 function parseAuthConfig(value: unknown, method: string): AuthConfig {
-  const record = requireRecord(value, method);
-  requireString(record['method'], method, 'authConfig.method');
-  return record as unknown as AuthConfig;
+  if (!isAuthConfig(value)) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid authConfig`,
+    );
+  }
+  return value;
 }
 
 function resolveCurrentProvidersByNames(options: {
@@ -444,7 +720,7 @@ function resolveCurrentProvidersByNames(options: {
   return resolved;
 }
 
-function parseOfficialModelsFetchState(
+export function parseOfficialModelsFetchState(
   value: unknown,
   method: string,
 ): OfficialModelsFetchState {
@@ -522,7 +798,7 @@ function parseOfficialModelsFetchState(
 
   return {
     lastFetchTime,
-    models: parseModels(record['models']),
+    models: parseModels(record['models'], method, 'state.models'),
     modelsHash,
     consecutiveIdenticalFetches,
     currentIntervalMs,
@@ -1250,14 +1526,18 @@ export function registerMainInstanceHandlers(options: {
       if (typeof originalNameValue === 'string') {
         options.authManager.clearProvider(originalNameValue);
       }
+      const modelSourceIds = requireOptionalStringRecord(
+        p['modelSourceIds'],
+        'config.syncPersistedProvider',
+        'modelSourceIds',
+      );
       options.authManager.clearProvider(provider.name);
-      if (
-        typeof originalNameValue === 'string' &&
-        originalNameValue !== provider.name
-      ) {
-        await options.configStore.removeProvider(originalNameValue);
-      }
-      await options.configStore.upsertProvider(provider);
+      await options.configStore.upsertProvider(provider, {
+        ...(typeof originalNameValue === 'string'
+          ? { originalName: originalNameValue }
+          : {}),
+        ...(modelSourceIds === undefined ? {} : { modelSourceIds }),
+      });
       await migrateLegacyVSCodeModelIds(options.configStore);
       return { ok: true };
     },

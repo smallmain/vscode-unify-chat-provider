@@ -14,6 +14,26 @@ export interface ContextCacheConfig {
 
 export type ProxyType = 'vscode' | 'direct' | 'custom';
 
+export type CompletionTemplate =
+  | 'fim'
+  | 'codegemma'
+  | 'copilot-replica-nes'
+  | 'zeta1'
+  | 'zeta2'
+  | 'zeta2.1'
+  | 'zeta3-internal'
+  | 'mercury-edit-2'
+  | 'codestral';
+
+export type CompletionTemplates = 'all' | readonly CompletionTemplate[];
+
+export interface CompletionConfig {
+  transport?: 'auto' | 'native' | 'compatible';
+  /** Absolute URL or a path relative to the provider API base URL. */
+  baseUrl?: string;
+  templates?: CompletionTemplates;
+}
+
 export interface ProxyConfig {
   /**
    * Proxy mode.
@@ -98,6 +118,8 @@ export interface ProviderConfig {
   autoFetchOfficialModels?: boolean;
   /** Context cache / prompt caching configuration. */
   contextCache?: ContextCacheConfig;
+  /** Default code-completion capability settings for this provider. */
+  completion?: CompletionConfig;
 }
 
 export type DeprecatedProviderConfigKey = 'apiKey';
@@ -220,6 +242,8 @@ export interface ModelConfig {
   extraBody?: Record<string, unknown>;
   /** Request-time preset templates exposed to VS Code model configuration UI. */
   presetTemplates?: PresetTemplate[];
+  /** Code-completion capability overrides for this model. */
+  completion?: CompletionConfig;
 }
 
 type PresetTemplateReplaceConfig = Pick<

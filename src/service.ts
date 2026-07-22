@@ -722,6 +722,24 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     }
   }
 
+  private async refreshCredential(providerName: string): Promise<AuthTokenInfo> {
+    if (!this.authManager) {
+      throw new Error(
+        t('Authentication required for provider "{0}".', providerName),
+      );
+    }
+    const refreshed = await this.authManager.retryRefresh(providerName);
+    if (!refreshed) {
+      throw (
+        this.authManager.getLastError(providerName)?.error ??
+        new Error(t('Failed to refresh authentication for "{0}".', providerName))
+      );
+    }
+    return this.toAuthTokenInfo(
+      await this.authManager.getCredential(providerName),
+    );
+  }
+
   /**
    * Handle chat request and stream response
    */
@@ -817,6 +835,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             token,
             logger,
             credential,
+            () => this.refreshCredential(resolvedProvider.name),
           );
 
           try {

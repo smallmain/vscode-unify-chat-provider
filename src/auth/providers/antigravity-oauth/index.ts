@@ -55,8 +55,7 @@ async function cleanupLegacyClientSecret(
     return;
   }
 
-  const record = config as unknown as Record<string, unknown>;
-  const raw = record['clientSecret'];
+  const raw: unknown = Reflect.get(config, 'clientSecret');
   if (typeof raw === 'string' && isSecretRef(raw)) {
     await secretStore.deleteOAuth2ClientSecret(raw);
   }

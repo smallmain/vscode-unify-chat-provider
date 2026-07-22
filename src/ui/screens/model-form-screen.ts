@@ -47,6 +47,9 @@ export async function runModelFormScreen(
     models: route.models,
     originalId,
     providerType: route.providerType,
+    ...(route.completionState === undefined
+      ? {}
+      : { completionState: route.completionState }),
   };
 
   const providerSuffix = route.providerLabel ? ` (${route.providerLabel})` : '';

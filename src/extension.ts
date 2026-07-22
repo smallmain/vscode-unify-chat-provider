@@ -39,17 +39,32 @@ import {
   handleVSCodeDefaultModelError,
 } from './vscode-default-model';
 import { migrateLegacyVSCodeModelIds } from './vscode-model-id-migration';
+import { CompletionManager, showCompletionSettings } from './completion';
+import { ConfiguredCompletionModelResolver } from './completion/model/resolver';
+import type { AlgorithmRequest } from './completion/model/requests';
+import type { CompletionModelResolver } from './completion/types';
+import {
+  contextProviderApiV1,
+  registerDefaultCopilotContextProviders,
+} from './completion/copilot/default-context-providers';
+import type { CopilotContextProvider } from './completion/copilot/context-provider';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
 const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
+
+export interface UnifyChatProviderExtensionApi {
+  getContextProviderAPI(version: 'v1'): {
+    registerContextProvider(provider: CopilotContextProvider): vscode.Disposable;
+  };
+}
 
 /**
  * Extension activation
  */
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<void> {
+): Promise<UnifyChatProviderExtensionApi> {
   await ensureAgentsWindowSupportConfigured(context);
 
   await mainInstance.initialize(context);
@@ -277,6 +292,95 @@ export async function activate(
   registerCommands(context, configStore, secretStore, uriHandler);
   registerCommitMessageGeneration(context);
 
+  const productionCompletionModelResolver = new ConfiguredCompletionModelResolver(
+    configStore,
+    authManager,
+  );
+  let completionModelResolver: CompletionModelResolver =
+    productionCompletionModelResolver;
+  let completionTestControl:
+    | {
+        setTestResponse(value: unknown): boolean;
+        getTestRequests(): readonly AlgorithmRequest[];
+      }
+    | undefined;
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    const { TestingCompletionModelResolver } = await import(
+      './completion/model/testing-resolver'
+    );
+    const testingResolver = new TestingCompletionModelResolver(
+      productionCompletionModelResolver,
+    );
+    completionModelResolver = testingResolver;
+    completionTestControl = testingResolver;
+  }
+  context.subscriptions.push(registerDefaultCopilotContextProviders());
+  const completionManager = new CompletionManager(completionModelResolver);
+  context.subscriptions.push(
+    completionManager,
+    vscode.commands.registerCommand(
+      'unifyChatProvider.completion.settings',
+      () => showCompletionSettings(completionModelResolver, configStore),
+    ),
+  );
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    const [{ registerCompletionWarningTestCommands }, { CompletionTestHarness }] =
+      await Promise.all([
+        import('./completion/test-control'),
+        import('./completion/test-harness'),
+      ]);
+    registerCompletionWarningTestCommands(context);
+    const completionTestHarness = new CompletionTestHarness(completionManager);
+    context.subscriptions.push(
+      completionTestHarness,
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.getState',
+        () => completionManager.getState(),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.setResponse',
+        (value: unknown) =>
+          completionTestControl?.setTestResponse(value) ?? false,
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.getRequests',
+        () => completionTestControl?.getTestRequests() ?? [],
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.getRuntimeState',
+        (providerId: unknown) =>
+          typeof providerId === 'string'
+            ? completionManager.getRuntimeDebugState(providerId)
+            : undefined,
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.provide',
+        (options: unknown) => completionTestHarness.provideTexts(options),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.provideDetailed',
+        (options: unknown) => completionTestHarness.provide(options),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.cancelProvide',
+        (cancellationKey: unknown) =>
+          completionTestHarness.cancelProvide(cancellationKey),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.dispatchLifecycle',
+        (event: unknown) => completionTestHarness.dispatchLifecycle(event),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.getHarnessState',
+        () => completionTestHarness.getState(),
+      ),
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.test.clearHarness',
+        () => completionTestHarness.clear(),
+      ),
+    );
+  }
+
   context.subscriptions.push(
     registerBalanceStatusBar({ context, store: configStore }),
   );
@@ -315,6 +419,14 @@ export async function activate(
   context.subscriptions.push(configStore);
 
   setMainInstanceReadyIfPossible();
+  return {
+    getContextProviderAPI(version) {
+      if (version !== 'v1') {
+        throw new Error(`Unsupported context provider API version: ${version}`);
+      }
+      return contextProviderApiV1();
+    },
+  };
 }
 
 export function registerCommands(

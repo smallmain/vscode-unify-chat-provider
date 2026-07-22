@@ -23,7 +23,7 @@ import {
   promptConflictResolution,
   generateUniqueProviderName,
 } from './conflict-resolution';
-import { getAuthMethodCtor } from '../auth';
+import { getAuthMethodCtor, normalizeAuthForProvider } from '../auth';
 import { getBalanceMethodDefinition } from '../balance';
 import { mainInstance } from '../main-instance';
 import {
@@ -39,7 +39,17 @@ async function applyAuthStoragePolicy(options: {
   existing?: ProviderConfig;
 }): Promise<ProviderConfig> {
   const next = options.provider;
-  const auth = next.auth;
+  const auth = normalizeAuthForProvider(
+    next.auth,
+    {
+      providerType: next.type,
+      baseUrl: next.baseUrl,
+      previousProviderType: options.existing?.type,
+      previousBaseUrl: options.existing?.baseUrl,
+      previousAuth: options.existing?.auth,
+    },
+  );
+  next.auth = auth;
   if (!auth || auth.method === 'none') {
     return next;
   }
@@ -101,6 +111,7 @@ async function applyBalanceStoragePolicy(options: {
 async function syncPersistedProvider(options: {
   provider: ProviderConfig;
   originalName?: string;
+  modelSourceIds?: Readonly<Record<string, string>>;
 }): Promise<void> {
   if (mainInstance.isLeader()) {
     return;
@@ -115,6 +126,9 @@ async function syncPersistedProvider(options: {
         options.originalName !== options.provider.name
           ? { originalName: options.originalName }
           : {}),
+        ...(options.modelSourceIds === undefined
+          ? {}
+          : { modelSourceIds: options.modelSourceIds }),
       },
     );
   } catch (error) {
@@ -187,11 +201,14 @@ export async function saveProviderDraft(options: {
     existingToOverwrite = options.store.getProvider(options.draft.name!.trim());
   }
 
+  const previousProvider = options.existing ?? existingToOverwrite;
+  const normalizedProvider = normalizeProviderDraft(finalDraft);
+
   const providerWithAuth = await applyAuthStoragePolicy({
     store: options.store,
     secretStore: options.secretStore,
-    provider: normalizeProviderDraft(finalDraft),
-    existing: options.existing ?? existingToOverwrite,
+    provider: normalizedProvider,
+    existing: previousProvider,
   });
   const provider = await applyBalanceStoragePolicy({
     store: options.store,
@@ -199,16 +216,19 @@ export async function saveProviderDraft(options: {
     provider: providerWithAuth,
     existing: options.existing ?? existingToOverwrite,
   });
-
-  if (options.originalName && provider.name !== options.originalName) {
-    await options.store.removeProvider(options.originalName);
-  }
-  await options.store.upsertProvider(provider);
+  await options.store.upsertProvider(provider, {
+    ...(options.originalName === undefined
+      ? {}
+      : { originalName: options.originalName }),
+    ...(options.draft._completionModelSourceIds === undefined
+      ? {}
+      : { modelSourceIds: options.draft._completionModelSourceIds }),
+  });
   await syncPersistedProvider({
     provider,
     originalName: options.originalName,
+    modelSourceIds: options.draft._completionModelSourceIds,
   });
-
   const draftSessionId = finalDraft._draftSessionId;
 
   // Handle official models state migration

@@ -344,8 +344,7 @@ function hasWebSearchTool(tools: Tool[] | undefined): boolean {
       if (isWebSearchName(decl.name)) {
         return true;
       }
-      const record = decl as unknown as Record<string, unknown>;
-      return isWebSearchName(record['type']);
+      return isWebSearchName(Reflect.get(decl, 'type'));
     }) === true;
   });
 }

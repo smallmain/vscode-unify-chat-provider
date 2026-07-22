@@ -27,25 +27,15 @@ import type { buildConnector } from 'undici';
 import { SocksClient } from 'socks';
 import type { SocksProxy } from 'socks';
 import { t } from './i18n';
+import { PLACEHOLDER_MODEL_ID } from './model-id-utils';
 
-/**
- * Placeholder model ID used when official models are loading.
- * Uses double underscores to clearly distinguish from real model IDs.
- */
-export const PLACEHOLDER_MODEL_ID = '__PLACEHOLDER__';
+export {
+  isPlaceholderModelId,
+  PLACEHOLDER_MODEL_ID,
+} from './model-id-utils';
 
 export const DEFAULT_CONTEXT_CACHE_TTL_SECONDS = 300;
 export const DEFAULT_CONTEXT_CACHE_TYPE: ContextCacheType = 'only-free';
-
-/**
- * Check if a model ID is a placeholder.
- * Works with both raw model ID and full model ID format (provider/model).
- */
-export function isPlaceholderModelId(modelId: string): boolean {
-  const slashIndex = modelId.indexOf('/');
-  const modelName = slashIndex === -1 ? modelId : modelId.slice(slashIndex + 1);
-  return modelName === PLACEHOLDER_MODEL_ID;
-}
 
 /**
  * HTTP status codes that should trigger a retry.
@@ -2966,6 +2956,33 @@ export interface GetAllModelsOptions {
   forceFetch?: boolean;
 }
 
+export interface GetAllModelsResult {
+  readonly models: ModelConfig[];
+  readonly error?: string;
+}
+
+export async function getAllModelsForProviderData(
+  provider: ProviderConfig,
+  options?: GetAllModelsOptions,
+): Promise<GetAllModelsResult> {
+  const userModels = provider.models;
+  const userModelIds = new Set(userModels.map((model) => model.id));
+  if (!provider.autoFetchOfficialModels) {
+    return { models: [...userModels] };
+  }
+
+  const official = await officialModelsManager.getOfficialModelsData(provider, {
+    forceFetch: options?.forceFetch,
+  });
+  const officialModels = official.models.filter(
+    (model) => !userModelIds.has(model.id),
+  );
+  return {
+    models: [...userModels, ...officialModels],
+    ...(official.state?.lastError ? { error: official.state.lastError } : {}),
+  };
+}
+
 /**
  * Get all models for a provider (user models + official models)
  * - Automatically deduplicates, user models take priority
@@ -2975,23 +2992,7 @@ export async function getAllModelsForProvider(
   provider: ProviderConfig,
   options?: GetAllModelsOptions,
 ): Promise<ModelConfig[]> {
-  const userModels = provider.models;
-  const userModelIds = new Set(userModels.map((m) => m.id));
-
-  let officialModels: ModelConfig[] = [];
-  if (provider.autoFetchOfficialModels) {
-    officialModels = await officialModelsManager.getOfficialModels(
-      provider,
-      options?.forceFetch,
-    );
-  }
-
-  // Filter out official models that conflict with user models
-  const filteredOfficialModels = officialModels.filter(
-    (m) => !userModelIds.has(m.id),
-  );
-
-  return [...userModels, ...filteredOfficialModels];
+  return (await getAllModelsForProviderData(provider, options)).models;
 }
 
 /**

@@ -47,6 +47,7 @@ import {
   getTokenType,
   getUnifiedUserAgent,
   isFeatureSupported,
+  isFeatureSupportedByProvider,
   mergeHeaders,
   normalizeToolInputSchema,
   parseToolArguments,
@@ -79,6 +80,10 @@ import {
   ThinkingBlockMetadata,
 } from '../types';
 import { FeatureId } from '../definitions';
+import {
+  appendMistralContentChunks,
+  parseMistralContentChunks,
+} from './mistral-content';
 
 /**
  * Identifies which provider-specific API shape to use for reasoning/thinking parameters.
@@ -267,7 +272,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     });
   }
 
-  private convertMessages(
+  protected convertMessages(
     encodedModelId: string,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     shouldApplyCacheControl: boolean,
@@ -1249,7 +1254,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       thinkingOutputState,
     );
 
-    if (content) {
+    const handledMistralContent = yield* this.extractMistralContentParts(
+      content,
+    );
+    if (!handledMistralContent && typeof content === 'string' && content) {
       for (const segment of parseThinkingTags(content)) {
         if (segment.type === 'thinking') {
           yield* this.emitThinkingText(
@@ -1289,6 +1297,35 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       expectedIdentity,
       markerData,
     );
+  }
+
+  private *extractMistralContentParts(
+    content: unknown,
+  ): Generator<vscode.LanguageModelResponsePart2, boolean> {
+    if (
+      !isFeatureSupportedByProvider(
+        FeatureId.MistralContentChunks,
+        this.config,
+      )
+    ) {
+      return false;
+    }
+
+    const progress = parseMistralContentChunks(content);
+    if (progress === undefined) {
+      return false;
+    }
+
+    for (const part of progress) {
+      if (!part.text) {
+        continue;
+      }
+      yield part.type === 'thinking'
+        ? new vscode.LanguageModelThinkingPart(part.text)
+        : new vscode.LanguageModelTextPart(part.text);
+    }
+
+    return true;
   }
 
   private stringifyArguments(input: unknown): string {
@@ -1499,7 +1536,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         );
       }
 
-      if (content) {
+      const handledMistralContent = yield* this.extractMistralContentParts(
+        content,
+      );
+      if (!handledMistralContent && typeof content === 'string' && content) {
         for (const segment of thinkingTagParser.push(content)) {
           if (segment.type === 'thinking') {
             yield* this.emitThinkingText(
@@ -1700,7 +1740,19 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
       if (role) choice.message.role = role;
 
-      if (content) {
+      const rawContent: unknown = content;
+      if (
+        isFeatureSupportedByProvider(
+          FeatureId.MistralContentChunks,
+          this.config,
+        ) && Array.isArray(rawContent)
+      ) {
+        const messageWithProviderContent: { content?: unknown } = choice.message;
+        messageWithProviderContent.content = appendMistralContentChunks(
+          messageWithProviderContent.content,
+          rawContent,
+        );
+      } else if (typeof content === 'string' && content) {
         choice.message.content = (choice.message.content || '') + content;
       }
 

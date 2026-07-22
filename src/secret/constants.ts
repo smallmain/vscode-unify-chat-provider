@@ -21,6 +21,8 @@ export const SECRET_KEY_PREFIXES = {
   oauth2ClientSecret: `${SECRET_STORAGE_PREFIX}oauth2-client-secret:`,
 } as const;
 
+export const DEVICE_STATE_STORAGE_PREFIX = `${SECRET_STORAGE_PREFIX}state:`;
+
 const UUID_V4_LIKE_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 

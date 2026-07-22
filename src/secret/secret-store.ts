@@ -8,6 +8,7 @@ import {
   buildOAuth2ClientSecretStorageKey,
   SECRET_STORAGE_PREFIX,
   SECRET_KEY_PREFIXES,
+  DEVICE_STATE_STORAGE_PREFIX,
 } from './constants';
 import type { OAuth2TokenData } from '../auth/types';
 import { authLog } from '../logger';
@@ -267,5 +268,25 @@ export class SecretStore {
    */
   isOAuth2ClientSecretStorageKey(key: string): boolean {
     return key.startsWith(SECRET_KEY_PREFIXES.oauth2ClientSecret);
+  }
+
+  async getDeviceState(key: string): Promise<string | undefined> {
+    return this.secrets.get(this.deviceStateStorageKey(key));
+  }
+
+  async setDeviceState(key: string, value: string): Promise<void> {
+    await this.secrets.store(this.deviceStateStorageKey(key), value);
+  }
+
+  async deleteDeviceState(key: string): Promise<void> {
+    await this.secrets.delete(this.deviceStateStorageKey(key));
+  }
+
+  private deviceStateStorageKey(key: string): string {
+    const normalized = key.trim();
+    if (!/^[a-z0-9][a-z0-9._-]*$/i.test(normalized)) {
+      throw new Error(`Invalid device state key: ${key}`);
+    }
+    return `${DEVICE_STATE_STORAGE_PREFIX}${normalized}`;
   }
 }

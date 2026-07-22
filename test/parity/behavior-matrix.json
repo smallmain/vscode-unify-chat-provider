@@ -1,0 +1,416 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/microsoft/vscode.git",
+    "ref": "fc3def6774c76082adf699d366f31a557ce5573f",
+    "commit": "fc3def6774c76082adf699d366f31a557ce5573f"
+  },
+  "allowedDifferences": [
+    "One outer InlineCompletionItemProvider replaces the upstream completions and nes provider registrations.",
+    "The unified CompletionModel boundary and the same public LanguageModelChat contract for internal and external compatible models replace upstream authentication, entitlement, and model transports; Completion does not signal its request kind to or add body invariants to Chat Providers.",
+    "CompletionModel may deliver a complete response instead of upstream first-choice/background streaming; the official splitter, postprocessing, and cache behavior run after arrival.",
+    "Telemetry and product UI may be no-op adapters only when they have no completion-state side effects.",
+    "Analytics-only partial-acceptance feedback, internal trace/timestamp metadata, callback multiplicity, and exact scheduling or cancellation-grace intervals may differ when returned items, retained completion state, arbitration winners, and cancellation results are unchanged.",
+    "Copilot NES eagerness is stored per completion.providers[].options and is not exposed through VS Code InlineCompletionItemProvider provider options.",
+    "Copilot FIM candidate count is stored in completion.providers[].options.n, defaults locally to one, remains explicit in AlgorithmRequest, and is intentionally not synchronized with the upstream cycling default; request-level temperature is not reproduced.",
+    "Remote experiment values are replaced by reviewed, commit-versioned local behavior configuration."
+  ],
+  "rows": [
+    {
+      "id": "fim-provider-input",
+      "category": "fim",
+      "observable": "Request UUID, trigger kind, selected completion, formatting options, document, position, and cancellation reach GhostText.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/ghostText/ghostTextProvider.ts",
+      "lineStart": 45,
+      "lineEnd": 112,
+      "anchor": "provideInlineCompletionItems("
+    },
+    {
+      "id": "fim-production-context-adapter",
+      "category": "fim",
+      "observable": "Production workspace context-provider traits and code snippets retain importance and exact prompt bytes, provider-backed files are deduplicated from OpenTab and neighbor channels, and final source-level token usage is supplied as the next completion's previousUsageStatistics.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/completionsPromptFactory/componentsCompletionsPromptFactory.tsx",
+      "lineStart": 250,
+      "lineEnd": 370,
+      "anchor": "computeMatch(promptMatcher)"
+    },
+    {
+      "id": "fim-similar-file-selection",
+      "category": "fim",
+      "observable": "Similar-file selection preserves the official case-sensitive generic stop set and ordinary versus C++ limits for snippet count, file count, file size, and per-file windows.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/experiments/similarFileOptionsProvider.ts",
+      "lineStart": 21,
+      "lineEnd": 48,
+      "anchor": "export function getSimilarFilesOptions("
+    },
+    {
+      "id": "fim-recent-edits-reducer",
+      "category": "fim",
+      "observable": "Recent edits use the pinned debounce, merge, context, character, line, edit, and file limits; summaries filter whitespace/oversize edits and place insertions before IGNORE-marked deletions using relative paths.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/recentEdits/recentEditsProvider.ts",
+      "lineStart": 31,
+      "lineEnd": 133,
+      "anchor": "const RECENT_EDITS_DEFAULT_CONFIG"
+    },
+    {
+      "id": "fim-notebook-context",
+      "category": "fim",
+      "observable": "Prompt extraction prepends compatible preceding notebook cells, comments normalized-language aliases with the active language marker, excludes incompatible cells, and maps the active cursor into the virtual document.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/prompt.ts",
+      "lineStart": 121,
+      "lineEnd": 180,
+      "anchor": "function applyEditsForNotebook("
+    },
+    {
+      "id": "fim-prompt-cascade-budget",
+      "category": "fim",
+      "observable": "The registered SplitContextPromptRenderer reserves five encoding tokens for a non-empty suffix, shares the remaining budget across prefix/context, and applies WishlistElision chunk removal and last-lines-first trimming.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/completionsPromptRenderer.tsx",
+      "lineStart": 52,
+      "lineEnd": 155,
+      "anchor": "private getPromptLimits("
+    },
+    {
+      "id": "fim-current-cache",
+      "category": "fim",
+      "observable": "Current typing completions are ordered before deduplicated cache choices, with cache-only fallback retaining its result type.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/ghostText.ts",
+      "lineStart": 683,
+      "lineEnd": 711,
+      "anchor": "function getLocalInlineSuggestion("
+    },
+    {
+      "id": "fim-context-postprocess",
+      "category": "fim",
+      "observable": "Context postprocessing rejects a duplicate next line, snips duplicated block closes, and retains usable completion text.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/suggestions/suggestions.ts",
+      "lineStart": 163,
+      "lineEnd": 208,
+      "anchor": "export function postProcessChoiceInContext("
+    },
+    {
+      "id": "fim-speculative-request",
+      "category": "fim",
+      "observable": "A shown completion consumes a 100-entry LRU callback into an independently owned speculative transport; item/list end-of-life does not cancel it, completion fills cache, and async prefix/suffix compatibility controls reuse.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/inlineCompletion.ts",
+      "lineStart": 26,
+      "lineEnd": 116,
+      "anchor": "public async getInlineCompletions("
+    },
+    {
+      "id": "fim-default-block-mode",
+      "category": "fim",
+      "observable": "Default block mode selection uses StatementTree language support: JavaScript, TypeScript, and Go use MoreMultiline; Ruby uses Parsing; other parser-supported languages use ParsingAndServer; unsupported languages use Server.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/configBlockMode.ts",
+      "lineStart": 26,
+      "lineEnd": 54,
+      "anchor": "forLanguage(languageId: string"
+    },
+    {
+      "id": "fim-multiline",
+      "category": "fim",
+      "observable": "Single-line versus multiline request and trimming decisions use the official strategy and feature inputs; accepted MoreMultiline remains on its streamed splitter path with the 200-token budget.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/ghostTextStrategy.ts",
+      "lineStart": 48,
+      "lineEnd": 211,
+      "anchor": "export async function getGhostTextStrategy("
+    },
+    {
+      "id": "nes-transport-prompt",
+      "category": "nes",
+      "observable": "Xtab strategy configuration controls edit window, prompt pieces, budgets, request options, and response pipeline.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+      "lineStart": 200,
+      "lineEnd": 1210,
+      "anchor": "public async *provideNextEdit("
+    },
+    {
+      "id": "nes-cursor-prediction-prompt",
+      "category": "nes",
+      "observable": "Cursor prediction rebuilds its dedicated numbered and clipped prompt with default lint diagnostics, recent snippets, language traits, fixed system text, and cursor-model request options.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/node/xtabNextCursorPredictor.ts",
+      "lineStart": 38,
+      "lineEnd": 310,
+      "anchor": "public buildCursorPredictionPrompt("
+    },
+    {
+      "id": "nes-diagnostics-context-provider",
+      "category": "context",
+      "observable": "The diagnostics language-context provider is experiment-gated, resolves its primary path immediately with no items, samples fresh diagnostics through its fallback, contains whole diagnostic ranges in the edit window, preserves the pinned asymmetric distance order and three-item cap, and emits one exact trait.",
+      "sourcePath": "extensions/copilot/src/extension/diagnosticsContext/vscode/diagnosticsContextProvider.ts",
+      "lineStart": 21,
+      "lineEnd": 150,
+      "anchor": "resolveOnTimeout(request:"
+    },
+    {
+      "id": "nes-language-context-deadline",
+      "category": "timing",
+      "observable": "NES language-context primary providers share the remaining dynamic debounce budget and absolute timeout, all fallbacks run after primary settlement or deadline, deadline does not cancel late providers, cancellation suppresses fallback, and repeated requests sample fallback state afresh.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+      "lineStart": 682,
+      "lineEnd": 757,
+      "anchor": "private async getLanguageContext("
+    },
+    {
+      "id": "nes-system-prompt-strategy",
+      "category": "nes",
+      "observable": "copilotNesXtab, xtab275, and unified strategies select their exact system prompt.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+      "lineStart": 1790,
+      "lineEnd": 1817,
+      "anchor": "export function pickSystemPrompt("
+    },
+    {
+      "id": "nes-system-prompt-bytes",
+      "category": "nes",
+      "observable": "The three supported strategy system prompts are frozen byte-for-byte.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/systemMessages.ts",
+      "lineStart": 8,
+      "lineEnd": 107,
+      "anchor": "export const systemPromptTemplate"
+    },
+    {
+      "id": "nes-prompt-message-bytes",
+      "category": "nes",
+      "observable": "The official prompt body constructs exact system/user messages for all three supported strategies and cascades the shared global budget.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/promptCrafting.ts",
+      "lineStart": 61,
+      "lineEnd": 294,
+      "anchor": "export function getUserPrompt("
+    },
+    {
+      "id": "nes-recent-history",
+      "category": "context",
+      "observable": "Edit and visible-range events share one recency timeline, and older multi-location focal ranges are transformed into the newest document coordinates.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/recentFilesForPrompt.ts",
+      "lineStart": 97,
+      "lineEnd": 319,
+      "anchor": "function collectRecentDocuments("
+    },
+    {
+      "id": "nes-similar-file-selection",
+      "category": "context",
+      "observable": "Neighbor snippets use the official fixed-window Jaccard matcher, filters, limits, scores, and low-to-high output order.",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/similarFiles.ts",
+      "lineStart": 76,
+      "lineEnd": 118,
+      "anchor": "export async function getSimilarSnippets("
+    },
+    {
+      "id": "nes-diff-history",
+      "category": "context",
+      "observable": "Multiple replacements retain adjacent grouping and disjoint unified-diff hunks with official coordinates.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/diffHistoryForPrompt.ts",
+      "lineStart": 20,
+      "lineEnd": 139,
+      "anchor": "export function getEditDiffHistory("
+    },
+    {
+      "id": "nes-response-formats",
+      "category": "nes",
+      "observable": "Edit-window and XML insert/edit/no-change chunk boundaries use official response handlers.",
+      "sourcePath": "extensions/copilot/src/extension/xtab/node/responseFormatHandlers.ts",
+      "lineStart": 61,
+      "lineEnd": 210,
+      "anchor": "export function handleEditWindowOnly("
+    },
+    {
+      "id": "nes-rebase-agreement",
+      "category": "nes",
+      "observable": "Strict rebase handles type-through, editor auto-close subsequences, reverse agreement, edit-window bounds, and inconsistent user edits.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/common/editRebase.ts",
+      "lineStart": 60,
+      "lineEnd": 389,
+      "anchor": "export function tryRebase("
+    },
+    {
+      "id": "nes-cache-lookup",
+      "category": "nes",
+      "observable": "The next-edit cache returns exact, negative, rebased, and later edits, enforces cursor windows, and preserves exact entries but not tracked rebases across close/reopen.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditCache.ts",
+      "lineStart": 139,
+      "lineEnd": 436,
+      "anchor": "export class NextEditCache extends Disposable"
+    },
+    {
+      "id": "nes-cross-file-stream-cache",
+      "category": "nes",
+      "observable": "Streamed cross-file edits are cached under each real target, while only global edit zero handles an exact active-document alias attempt and owns a same-target bundle; a closed alias owner prevents the entry but not the handled result.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 525,
+      "lineEnd": 907,
+      "anchor": "private _maybeCacheCrossFileEditUnderActiveDoc("
+    },
+    {
+      "id": "nes-cursor-retry-cache-ownership",
+      "category": "nes",
+      "observable": "Cursor retry edits keep target and active-alias cache ownership distinct; empty synthetic-target terminals cache under the outer source owner; undefined edit tracking counts as user input; and cross-file open failure/success preserve no-root, token, typing, and target-read order.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 58,
+      "lineEnd": 1007,
+      "anchor": "function computeReducedWindow("
+    },
+    {
+      "id": "nes-rejection-tracking",
+      "category": "nes",
+      "observable": "Rejected edits are removed after overlapping user input, while later unshown edits from the same request remain independent.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/common/rejectionCollector.ts",
+      "lineStart": 15,
+      "lineEnd": 164,
+      "anchor": "export class RejectionCollector extends Disposable"
+    },
+    {
+      "id": "nes-speculative-lifecycle",
+      "category": "nes",
+      "observable": "Scheduled and pending speculative requests retain stream ownership and cancel on replacement or type-through trajectory divergence.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/speculativeRequestManager.ts",
+      "lineStart": 74,
+      "lineEnd": 199,
+      "anchor": "export class SpeculativeRequestManager extends Disposable"
+    },
+    {
+      "id": "nes-speculative-provider",
+      "category": "nes",
+      "observable": "Pending speculative reuse checks cancellation and cursor windows, detaches before joining, and applies all speculative edit-window expansion modes.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 605,
+      "lineEnd": 1370,
+      "anchor": "private async fetchNextEdit("
+    },
+    {
+      "id": "nes-accept-edit-window-expansion",
+      "category": "nes",
+      "observable": "Accepting the latest served edit enables the configured expanded window for a fresh request, while non-latest acceptance does not and edit or no-suggestion outcomes reset the state.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 213,
+      "lineEnd": 1513,
+      "anchor": "private _shouldExpandEditWindow = false;"
+    },
+    {
+      "id": "nes-async-completions",
+      "category": "nes",
+      "observable": "The pinned async-completions setting controls document-change cancellation, changed-document pending reuse and rebase, and intermediate stream edit tracking for every NES prompt strategy.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 250,
+      "lineEnd": 835,
+      "anchor": "private _cancelPendingRequestDueToDocChange("
+    },
+    {
+      "id": "nes-cache-rebase-filter",
+      "category": "nes",
+      "observable": "Provider-level rejected-cache filtering and source patch attribution affect the returned edit.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+      "lineStart": 281,
+      "lineEnd": 1045,
+      "anchor": "public async getNextEdit("
+    },
+    {
+      "id": "nes-history-context",
+      "category": "context",
+      "observable": "Workspace edit history and active/recent documents are projected into NES history context in official order.",
+      "sourcePath": "extensions/copilot/src/platform/inlineEdits/common/workspaceEditTracker/nesHistoryContextProvider.ts",
+      "lineStart": 78,
+      "lineEnd": 123,
+      "anchor": "public getHistoryContext("
+    },
+    {
+      "id": "nes-trigger-state-machine",
+      "category": "trigger",
+      "observable": "Document edits, selection changes, document switches, debounce, cooldown, and trigger reasons follow InlineEditTriggerer.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineEditTriggerer.ts",
+      "lineStart": 48,
+      "lineEnd": 360,
+      "anchor": "export class InlineEditTriggerer"
+    },
+    {
+      "id": "nes-change-hint",
+      "category": "trigger",
+      "observable": "Selection and active-document triggers preserve their UUID and reason through the routed changeHint.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/common/nesTriggerHint.ts",
+      "lineStart": 7,
+      "lineEnd": 34,
+      "anchor": "export namespace NesChangeHint"
+    },
+    {
+      "id": "nes-diagnostics-race",
+      "category": "arbitration",
+      "observable": "LLM NES and diagnostics NES race, empty-result waiting, timeout, and cancellation retain official ordering.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+      "lineStart": 296,
+      "lineEnd": 351,
+      "anchor": "const { first, all } = raceAndAll(["
+    },
+    {
+      "id": "nes-lifecycle",
+      "category": "lifecycle",
+      "observable": "Shown, accepted, rejected, and ignored callbacks update interaction, rejection, and trigger outcome state.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+      "lineStart": 574,
+      "lineEnd": 680,
+      "anchor": "public handleDidShowCompletionItem("
+    },
+    {
+      "id": "core-provider-presentation",
+      "category": "arbitration",
+      "observable": "Visible inline completions hide inline edits, while an all-edit result retains the last resolved inline edit.",
+      "sourcePath": "src/vs/editor/contrib/inlineCompletions/browser/model/inlineCompletionsModel.ts",
+      "lineStart": 521,
+      "lineEnd": 570,
+      "anchor": "private readonly _inlineSuggestionItems"
+    },
+    {
+      "id": "core-provider-cycling-order",
+      "category": "arbitration",
+      "observable": "When ordinary completions are preferred, non-inline-edit showInlineEditMenu suggestions remain in the cycling list and sort after ordinary completions.",
+      "sourcePath": "src/vs/editor/contrib/inlineCompletions/browser/model/inlineCompletionsSource.ts",
+      "lineStart": 672,
+      "lineEnd": 713,
+      "anchor": "updatedItems.sort(compareBy(i => i.showInlineEditMenu, booleanComparator));"
+    },
+    {
+      "id": "model-unification-routing",
+      "category": "arbitration",
+      "observable": "Model unification suppresses the independent FIM path and leaves the unified NES model path, while the separate-versus-joint Provider topology remains an independent default-disabled treatment.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+      "lineStart": 102,
+      "lineEnd": 246,
+      "anchor": "const useJointCompletionsProviderObs"
+    },
+    {
+      "id": "separate-provider-change-ownership",
+      "category": "lifecycle",
+      "observable": "A provider change is ignored while the active inline suggestion belongs to another separately registered provider; the joint provider instead suppresses NES changes only during an in-flight FIM request.",
+      "sourcePath": "src/vs/editor/contrib/inlineCompletions/browser/model/inlineCompletionsModel.ts",
+      "lineStart": 213,
+      "lineEnd": 248,
+      "anchor": "If there is an active suggestion from a different provider"
+    },
+    {
+      "id": "joint-default-and-selection",
+      "category": "arbitration",
+      "observable": "Completions are preferred by default, NES is fallback, and selection change requests NES only.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+      "lineStart": 498,
+      "lineEnd": 535,
+      "anchor": "private async _provideInlineCompletionItemsRegular("
+    },
+    {
+      "id": "joint-cursor-end-of-line",
+      "category": "arbitration",
+      "observable": "The joint cursorEndOfLine strategy requests only FIM when the remainder of the cursor line is whitespace and only NES otherwise.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+      "lineStart": 363,
+      "lineEnd": 409,
+      "anchor": "case JointCompletionsProviderStrategy.CursorEndOfLine:"
+    },
+    {
+      "id": "joint-cache-wait-agreement",
+      "category": "arbitration",
+      "observable": "Previously shown NES receives a 10ms cache window and must agree before it wins; cancellation disposes both branches.",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+      "lineStart": 537,
+      "lineEnd": 595,
+      "anchor": "const NES_CACHE_WAIT_MS = 10;"
+    }
+  ]
+}

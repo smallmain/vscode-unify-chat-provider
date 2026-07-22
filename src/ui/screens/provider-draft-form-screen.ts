@@ -18,7 +18,11 @@ import type {
   UiResume,
 } from '../router/types';
 import { deepClone } from '../../config-ops';
-import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
+import {
+  createAuthProvider,
+  normalizeAuthForProvider,
+  type AuthUiStatusSnapshot,
+} from '../../auth';
 import { officialModelsManager } from '../../official-models-manager';
 import { cleanupUnusedSecrets } from '../../secret';
 import { t } from '../../i18n';
@@ -122,6 +126,11 @@ export async function runProviderDraftFormScreen(
           } else {
             const providerLabel = draft.name?.trim() || t('Provider');
             const providerId = ensureDraftSessionId(draft);
+            const authForProvider =
+              normalizeAuthForProvider(deepClone(auth), {
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
+              }) ?? auth;
             const authProvider = createAuthProvider(
               {
                 providerId,
@@ -129,7 +138,7 @@ export async function runProviderDraftFormScreen(
                 secretStore: ctx.secretStore,
                 uriHandler: ctx.uriHandler,
               },
-              deepClone(auth),
+              authForProvider,
             );
 
             if (!authProvider) {

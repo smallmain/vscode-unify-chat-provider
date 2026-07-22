@@ -1,0 +1,1303 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/microsoft/vscode.git",
+  "ref": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "commit": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "runtimeEntries": [
+    {
+      "id": "ghost-text-contextual-filter",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+      "purpose": "Compiled GhostText contextual-filter constants."
+    },
+    {
+      "id": "ghost-text-multiline-weights",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+      "purpose": "Compiled GhostText multiline model weights and character map."
+    },
+    {
+      "id": "inline-edit-presentation",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/isInlineSuggestion.ts",
+      "purpose": "Compiled inline-suggestion presentation predicate."
+    },
+    {
+      "id": "nes-system-messages",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/systemMessages.ts",
+      "purpose": "Compiled NES system prompts."
+    },
+    {
+      "id": "nes-tags",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/tags.ts",
+      "purpose": "Compiled NES prompt and response tags."
+    },
+    {
+      "id": "parser-block-trimmer",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+      "purpose": "Bundled multiline completion block trimming."
+    },
+    {
+      "id": "parser-statement-tree",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+      "purpose": "Bundled statement-tree block position detection."
+    },
+    {
+      "id": "parser-language-support",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "purpose": "Bundled parser language support and WASM loading."
+    },
+    {
+      "id": "parser-block-boundaries",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts",
+      "purpose": "Bundled parsed-block completion boundaries."
+    },
+    {
+      "id": "diff-computer",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+      "purpose": "Bundled detailed line diff implementation used by NES rebase."
+    },
+    {
+      "id": "diff-text",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+      "purpose": "Bundled text/range conversion used by the NES diff runtime."
+    },
+    {
+      "id": "diff-offset-transform",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts",
+      "purpose": "Bundled position-to-offset transformation used by the NES diff runtime."
+    }
+  ],
+  "modules": [
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-trimmer"
+      ],
+      "sourceSha256": "4699f4604ee56932ca63b7f0bedd725e3c978f5da7a4361d06ddab830adbd6c5",
+      "snapshotSha256": "baaa97bc639dc594b9729b6377759f43c2af9866ea6e31bb49914be494cb6c9d",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "./statementTree",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "ghost-text-contextual-filter"
+      ],
+      "sourceSha256": "619c3d09246d068875ef6957ca5998d019ca7d31f588acf9fbd0c3bc0913cf50",
+      "snapshotSha256": "7a9a7f113df7e791b8c236a4e2c109c972d2a9949484b7e6808c452620aa9f14",
+      "importedBy": [],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "ghost-text-multiline-weights"
+      ],
+      "sourceSha256": "d142159926831758b007cdb98a32427c2918e85fe7f6e9f4e89f5f54ede7437a",
+      "snapshotSha256": "5a8a2cce4c63e9d4ec76cafebdf6757532454ae1f9a0f93524aea3e0b53ae328",
+      "importedBy": [],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-trimmer",
+        "parser-statement-tree"
+      ],
+      "sourceSha256": "243cf0858f28d6413380abc56d38ee4063c72762e3df66f02a11fd994cd77487",
+      "snapshotSha256": "4d4564e87e99ea59b58d30be70cc2f3b5427ace4c2fb7a4f0694d7d00a83773c",
+      "importedBy": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../prompt/src/parse",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "web-tree-sitter",
+          "kind": "external",
+          "externalPackage": "web-tree-sitter",
+          "externalProvider": "upstream-package",
+          "reason": "declared in upstream dependencies"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/error.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/prompt/src/error.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ],
+      "sourceSha256": "ee666f2cfaf154e07eba68b8c69503546ad9e104f76801e1219d9c3a2a9ee259",
+      "snapshotSha256": "eae5e9c8d5f82707e2cf773495badc37d2611e6715de6d98deb816c4307b0d6b",
+      "importedBy": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts"
+      ],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/prompt/src/fileLoader.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ],
+      "sourceSha256": "854cfab78616a6e4761e4881a2f480e671df47ddd8722bb3722ec8fdb0c17890",
+      "snapshotSha256": "734e6b1474ede12aacd557d7be6f17332da681c2c266587cd932213ebba887ee",
+      "importedBy": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "node:fs/promises",
+          "kind": "external",
+          "externalPackage": "fs/promises",
+          "externalProvider": "node"
+        },
+        {
+          "specifier": "node:path",
+          "kind": "external",
+          "externalPackage": "path",
+          "externalProvider": "node"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ],
+      "sourceSha256": "6ebc6dde815535bf3dda95851dc0e6e4350086cd674a243012f63337cba08490",
+      "snapshotSha256": "f97fa7590ebfd9745ad598297a8f7283ae55c5fdf89bba4a7d8ee8ba247eb1f4",
+      "importedBy": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./error",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/error.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./fileLoader",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "web-tree-sitter",
+          "kind": "external",
+          "externalPackage": "web-tree-sitter",
+          "externalProvider": "upstream-package",
+          "reason": "declared in upstream dependencies"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/completions-core/vscode-node/prompt/src/parseBlock.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "parser-block-boundaries"
+      ],
+      "sourceSha256": "2592284591f20a4029046a7ef49925552ff229ec31e1e53d14f0ddb6e20562a0",
+      "snapshotSha256": "1a4cbd0699d268143ea369abf0531c604ef6cd1c82290d67e8f73b960a857798",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "./parse",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "web-tree-sitter",
+          "kind": "external",
+          "externalPackage": "web-tree-sitter",
+          "externalProvider": "upstream-package",
+          "reason": "declared in upstream dependencies"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/isInlineSuggestion.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/inlineEdits/vscode-node/isInlineSuggestion.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "inline-edit-presentation"
+      ],
+      "sourceSha256": "4f7dfa2b2d00e6505ab339e03526dfee8d43ff39d67e8d1aec325634e6317246",
+      "snapshotSha256": "6378fe44c3bb952ecb6101b5c2a4d096d4bb236445d61c1aa087b6a0cce1d602",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "vscode",
+          "kind": "external",
+          "externalPackage": "vscode",
+          "externalProvider": "vscode"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/systemMessages.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/xtab/common/systemMessages.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "nes-system-messages"
+      ],
+      "sourceSha256": "2798513c0d55910f681482e577a5291c57a4076800625b0170c013c0db6cc949",
+      "snapshotSha256": "2eeee350bb2a80ab9e6d6a81cb484f61bcdd2d0da9aa9a3796eb10dea31ef1aa",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "./tags",
+          "kind": "source",
+          "target": "extensions/copilot/src/extension/xtab/common/tags.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/tags.ts",
+      "snapshotPath": "src/chat-lib/upstream/extension/xtab/common/tags.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "nes-system-messages",
+        "nes-tags"
+      ],
+      "sourceSha256": "f225077301a05ea202a297de000e3019c779421f145ab15110ecd328fc8c90ff",
+      "snapshotSha256": "3344fc07f0bbfdb2754bf4840d5385ff7d05c759fc80ddecc3e671182ec2947b",
+      "importedBy": [
+        "extensions/copilot/src/extension/xtab/common/systemMessages.ts"
+      ],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/base/common/arrays.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "f30544cb41319c45cdaf559180cbc932e44fe619e7b51b4b8a6a11de567b1703",
+      "snapshotSha256": "388425197ee985270f58496bdf1d10fa9d991b08980fc47864fa2b1e16d518f5",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./arraysFind",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/base/common/arraysFind.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "21847602d13d3a9c48b24e9ff16065272fdba362f15bee6663839a67dbed6558",
+      "snapshotSha256": "996607588a1d938677d29fdf3c2192beeb6442b387fbd4d724529ab866295ef5",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/base/common/arrays.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/base/common/assert.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/base/common/assert.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-text"
+      ],
+      "sourceSha256": "7d6685711c5bf72e50617f22ae3092ca41fa069c35af8965337d2e5f460e6691",
+      "snapshotSha256": "0f3dce5f5752fca9b384ad03b44124d104960f81567f96837848d7f91664dba2",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/base/common/charCode.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/base/common/charCode.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "50a22e92cbec5284640e8a7ade8109ceebab9e6cb872fe973c790dbbdca916ce",
+      "snapshotSha256": "b10a6bdd8d27447f3a5766a58b0ef8efdb2d099033362e9b6f27e98f758e9dd0",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts"
+      ],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/base/common/errors.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/base/common/errors.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "57b38681811531ebab2ecc750ce5dc5c8c4926bf1501aa92191ca15b86a31bba",
+      "snapshotSha256": "b0620a8cb971a58de042792d42edcfd99e71ac1691f7ba67cd5da99ebfe498f6",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/base/common/arrays.ts",
+        "extensions/copilot/src/util/vs/base/common/assert.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/position.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "17850cb9429073079ee806286ed328623e82682ec4f67822c8e17e34a9663a8b",
+      "snapshotSha256": "7a3572ae7fdb062bcb8c91ee5d98bf9e30807a748afbcab9464012de8488de9a",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": []
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/range.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "7efba2778dbd44f2544db0d6b8f7e71261d834b59e14375f95267b097da6bbbc",
+      "snapshotSha256": "2a9099f0bf5a2e79cc8cb74be34f3bb84f58ad9e73ba508f0ecb87a2e86366a2",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/ranges/lineRange.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "8edf08e2f743ef8bf3e56f445a06340893dd53ead4e8cace9c479af96abed231",
+      "snapshotSha256": "ebcb8a064ad0c9c089f0dcf194528b6bc0089d07fdef49461549b326292bdfe1",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../../base/common/arraysFind",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../../base/common/errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/ranges/offsetRange.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "68f21a98e526f2a0052e10092c98636b24ca8200ae969863dbfa6d32ee8a65be",
+      "snapshotSha256": "0b113534e754a7bc666248430c4d2b2ddd91bd12ef4710fa38eea17eef13ab2d",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/text/abstractText.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-text"
+      ],
+      "sourceSha256": "d10df7203442124d983f50e0645bbb4707f6e3733d4fe63db6b31717046ce8a3",
+      "snapshotSha256": "7e984cf94890de64a2f7fceef85283c8a12249fc60507b74d9332c7b7ae7b05b",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/assert",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/assert.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../ranges/lineRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./positionToOffsetImpl",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./textLength",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/text/positionToOffset.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-offset-transform"
+      ],
+      "sourceSha256": "c881234c38f31bf94bad9f9a4b6e201490c2a1eb80552760703f43a36b9ba792",
+      "snapshotSha256": "fe1a6b5ca163aba35a61da50c7163900198bd25612298e1d3e93c55ec581c66f",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "./positionToOffsetImpl",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./textLength",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "8237c073222295346601cf181ea298a78b1f2bc018c54b93cee13058af08a9e8",
+      "snapshotSha256": "d3b6e9be6571f9c3453fa90e35eb00e4db4f8f6db8872dbdde67be7700307526",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/arraysFind",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./textLength",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/textLength.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/core/text/textLength.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer",
+        "diff-offset-transform",
+        "diff-text"
+      ],
+      "sourceSha256": "569ae3f6f6467ac4dbedcafbe8f3131deaac1af51e08011e7fdd1b1359fac28a",
+      "snapshotSha256": "ed359d454b754083a94390412bd90323e6dc7f633b9f0edc12ac9c29edf5c056",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../ranges/lineRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "d7e61ead2aad530e814782199ffe0f7a1317367a4d0d91a1909001496c6320a3",
+      "snapshotSha256": "b3b006782d5ad2587ec4250e23493440caaf2082e0dd545d1ed283b1ed5f9e0d",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../../base/common/arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../../../base/common/errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "4216f6fa31ce865f4bf1f02579ac994adf86e18952cc304dfabaccd9c0426a85",
+      "snapshotSha256": "86febebf6e27a01ddafcf6545917dd24de46c6f550600f84583b0dd1d9c72738",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../utils",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "d5158e6b62b97575ac5edba202240c09a136eaad4823ac48c562f61d28835c5f",
+      "snapshotSha256": "bf19f068deaa2203a3073f5b063e5bd29727bd5955b02d17a483d9d15eae57da",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "06a2719c6a4b0c28f8a22c1cfd880670ff3bbdda9871b5911dd88b1eee01be18",
+      "snapshotSha256": "7c0bf14b42c845ed81986a455e12677953fdf4bf60e08349c559f3fc66793d8e",
+      "importedBy": [],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../../base/common/assert",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/assert.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/lineRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/text/abstractText",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../linesDiffComputer",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/linesDiffComputer.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../rangeMapping",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/dynamicProgrammingDiffing",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/myersDiffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/myersDiffAlgorithm.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./heuristicSequenceOptimizations",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./lineSequence",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./linesSliceCharSequence",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "55650c5d55eb32bd535844ed8016d10446db24f54e44b1368b10f229cdbe2153",
+      "snapshotSha256": "db38c17d3148b7ca863d4b49acfd92c46da42805df98ba4987537971767910d3",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./lineSequence",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./linesSliceCharSequence",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/lineSequence.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "40395ef30b40ebfb5ed880913bc53413dcb302869260c74472f71661cfaa1573",
+      "snapshotSha256": "acbadf7b9b4015a6d7072968febfc26fa49ddd3857d17fa2173459bf28ccd44d",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/charCode",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/charCode.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "ca6580274e7d86ad8b7449f0b31479932f11eb91d9d3fa5f9534d8ae8e29f3d6",
+      "snapshotSha256": "c8c767afb7eb894fda5470fe9abecd2a707bd2d6f067b88c3e17562310172d9c",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/heuristicSequenceOptimizations.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/arraysFind",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arraysFind.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../../base/common/charCode",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/charCode.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/offsetRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./algorithms/diffAlgorithm",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/diffAlgorithm.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "./utils",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "ac5cf3f845fd445883d3908c11d10d80ed2a7880d0ffda97661cbaedace32d60",
+      "snapshotSha256": "c5998ef58baf161153931bcb89629ea5beba272bce586768caf5b100a6de7896",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/algorithms/dynamicProgrammingDiffing.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/linesSliceCharSequence.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../../base/common/charCode",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/charCode.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../core/ranges/lineRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../rangeMapping",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/linesDiffComputer.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/linesDiffComputer.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "4a2b74d4d1ba7408f0f695e3cb500957adeb5dd597a8ac23214395897bd04724",
+      "snapshotSha256": "ec39421194e0855915109028d2a03ff0505db5bb939393b34daa9aedc22d9e07",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "./rangeMapping",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts",
+          "reason": "static import"
+        }
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts",
+      "snapshotPath": "src/chat-lib/upstream/util/vs/editor/common/diff/rangeMapping.ts",
+      "kind": "source",
+      "runtimeEntries": [
+        "diff-computer"
+      ],
+      "sourceSha256": "8c4a3712b71d46ba48ee099bc571d24966c930407a2de57c30064e09462e6873",
+      "snapshotSha256": "04c931b64e5decb47c213113577af62b243548d16862fb5c9bb5fa875e8021c5",
+      "importedBy": [
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/utils.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/linesDiffComputer.ts"
+      ],
+      "dependencies": [
+        {
+          "specifier": "../../../base/common/arrays",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/arrays.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../base/common/assert",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/assert.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../../../base/common/errors",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/base/common/errors.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../core/position",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/position.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../core/range",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/range.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../core/ranges/lineRange",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/ranges/lineRange.ts",
+          "reason": "static import"
+        },
+        {
+          "specifier": "../core/text/abstractText",
+          "kind": "source",
+          "target": "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+          "reason": "static import"
+        }
+      ]
+    }
+  ],
+  "externalDependencies": [
+    {
+      "specifier": "node:fs/promises",
+      "package": "fs/promises",
+      "provider": "node",
+      "importers": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts"
+      ],
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    },
+    {
+      "specifier": "node:path",
+      "package": "path",
+      "provider": "node",
+      "importers": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts"
+      ],
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    },
+    {
+      "specifier": "vscode",
+      "package": "vscode",
+      "provider": "vscode",
+      "importers": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/isInlineSuggestion.ts"
+      ],
+      "runtimeEntries": [
+        "inline-edit-presentation"
+      ]
+    },
+    {
+      "specifier": "web-tree-sitter",
+      "package": "web-tree-sitter",
+      "provider": "upstream-package",
+      "importers": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts"
+      ],
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    }
+  ],
+  "boundaryDependencies": [],
+  "dynamicResourceAudits": [
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts",
+      "markers": [
+        "__dirname",
+        "locateFile("
+      ],
+      "resolution": "Generic dist resource locator; tokenizer and parser callers have explicit resource declarations.",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    },
+    {
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "markers": [
+        "locateFile("
+      ],
+      "resolution": "Tree-sitter runtime and supported grammars are declared as exact package resources.",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    }
+  ],
+  "externalResources": [
+    {
+      "loadedBy": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "package": "@vscode/tree-sitter-wasm",
+      "version": "0.0.5-php.2",
+      "resourcePaths": [
+        "wasm/tree-sitter.wasm",
+        "wasm/tree-sitter-c-sharp.wasm",
+        "wasm/tree-sitter-cpp.wasm",
+        "wasm/tree-sitter-go.wasm",
+        "wasm/tree-sitter-java.wasm",
+        "wasm/tree-sitter-javascript.wasm",
+        "wasm/tree-sitter-php.wasm",
+        "wasm/tree-sitter-python.wasm",
+        "wasm/tree-sitter-ruby.wasm",
+        "wasm/tree-sitter-tsx.wasm",
+        "wasm/tree-sitter-typescript.wasm"
+      ],
+      "reason": "The files are installed from the exact upstream package and are not Git blobs in microsoft/vscode.",
+      "runtimeEntries": [
+        "parser-block-boundaries",
+        "parser-block-trimmer",
+        "parser-language-support",
+        "parser-statement-tree"
+      ]
+    }
+  ]
+}
