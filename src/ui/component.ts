@@ -158,6 +158,200 @@ export async function pickQuickItem<T extends vscode.QuickPickItem>(
   });
 }
 
+export interface AsyncQuickPickFailure {
+  readonly label?: string;
+  readonly message: string;
+}
+
+export interface AsyncQuickPickLoadResult<T extends vscode.QuickPickItem> {
+  readonly items: readonly T[];
+  readonly failures?: readonly AsyncQuickPickFailure[];
+  readonly retry?: () => Promise<AsyncQuickPickLoadResult<T>>;
+}
+
+export interface AsyncQuickPickConfig<T extends vscode.QuickPickItem> {
+  readonly title?: string;
+  readonly loadingPlaceholder?: string;
+  readonly placeholder: string;
+  readonly loadItems: () => Promise<AsyncQuickPickLoadResult<T>>;
+  readonly emptyItem?: vscode.QuickPickItem;
+  readonly retryLabel?: string;
+  readonly matchOnDescription?: boolean;
+  readonly matchOnDetail?: boolean;
+  readonly ignoreFocusOut?: boolean;
+  readonly canSelectMany?: boolean;
+  readonly buttons?: readonly vscode.QuickInputButton[];
+  readonly onWillAccept?: (
+    items: readonly T[],
+  ) => Promise<boolean | void> | boolean | void;
+}
+
+const ASYNC_ITEM_VALUE = Symbol('asyncQuickPickValue');
+const ASYNC_ITEM_ACTION = Symbol('asyncQuickPickAction');
+
+type AsyncQuickPickAction = 'status' | 'retry';
+
+type InternalAsyncQuickPickItem<T extends vscode.QuickPickItem> =
+  | (vscode.QuickPickItem & { readonly [ASYNC_ITEM_VALUE]: T })
+  | (vscode.QuickPickItem & {
+      readonly [ASYNC_ITEM_ACTION]: AsyncQuickPickAction;
+    });
+
+function toInternalAsyncValue<T extends vscode.QuickPickItem>(
+  item: T,
+): InternalAsyncQuickPickItem<T> {
+  return { ...item, [ASYNC_ITEM_VALUE]: item };
+}
+
+function asyncItemValue<T extends vscode.QuickPickItem>(
+  item: InternalAsyncQuickPickItem<T>,
+): T | undefined {
+  return ASYNC_ITEM_VALUE in item ? item[ASYNC_ITEM_VALUE] : undefined;
+}
+
+function asyncItemAction<T extends vscode.QuickPickItem>(
+  item: InternalAsyncQuickPickItem<T>,
+): AsyncQuickPickAction | undefined {
+  return ASYNC_ITEM_ACTION in item ? item[ASYNC_ITEM_ACTION] : undefined;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
+}
+
+/**
+ * Shows a QuickPick immediately while its items load. Loading failures stay in
+ * the picker and can be retried; closing the picker does not cancel the loader.
+ */
+export async function pickAsyncQuickItems<T extends vscode.QuickPickItem>(
+  config: AsyncQuickPickConfig<T>,
+): Promise<readonly T[] | undefined> {
+  const qp = vscode.window.createQuickPick<InternalAsyncQuickPickItem<T>>();
+  qp.title = config.title;
+  qp.placeholder = config.loadingPlaceholder ?? t('Loading...');
+  qp.matchOnDescription = config.matchOnDescription ?? true;
+  qp.matchOnDetail = config.matchOnDetail ?? true;
+  qp.ignoreFocusOut = config.ignoreFocusOut ?? false;
+  qp.canSelectMany = config.canSelectMany ?? false;
+  qp.buttons = config.buttons
+    ? [...config.buttons]
+    : [vscode.QuickInputButtons.Back];
+  qp.items = [];
+  qp.busy = true;
+
+  let accepting = false;
+  let closed = false;
+  let resolved = false;
+  let currentResult: AsyncQuickPickLoadResult<T> | undefined;
+
+  return new Promise<readonly T[] | undefined>((resolve) => {
+    const finish = (value: readonly T[] | undefined) => {
+      if (resolved) return;
+      resolved = true;
+      resolve(value);
+    };
+
+    const render = (result: AsyncQuickPickLoadResult<T>) => {
+      if (closed) return;
+      currentResult = result;
+      const items: InternalAsyncQuickPickItem<T>[] = result.items.map(
+        toInternalAsyncValue,
+      );
+
+      if (result.items.length === 0) {
+        items.push({
+          ...(config.emptyItem ?? {
+            label: `$(info) ${t('No items available')}`,
+          }),
+          [ASYNC_ITEM_ACTION]: 'status',
+        });
+      }
+
+      for (const failure of result.failures ?? []) {
+        items.push({
+          label: `$(warning) ${failure.label ?? t('Failed to load')}`,
+          detail: failure.message,
+          [ASYNC_ITEM_ACTION]: 'status',
+        });
+      }
+
+      if (result.retry) {
+        items.push({
+          label: `$(refresh) ${config.retryLabel ?? t('Retry')}`,
+          [ASYNC_ITEM_ACTION]: 'retry',
+        });
+      }
+
+      qp.items = items;
+      qp.placeholder = config.placeholder;
+      qp.busy = false;
+    };
+
+    const load = async (
+      loader: () => Promise<AsyncQuickPickLoadResult<T>>,
+      preserveItems: boolean,
+    ) => {
+      if (closed) return;
+      qp.busy = true;
+      qp.placeholder = config.loadingPlaceholder ?? t('Loading...');
+      if (!preserveItems) qp.items = [];
+      try {
+        render(await loader());
+      } catch (error) {
+        render({
+          items: preserveItems ? (currentResult?.items ?? []) : [],
+          failures: [{ message: errorMessage(error) }],
+          retry: loader,
+        });
+      }
+    };
+
+    const accept = async () => {
+      if (accepting || qp.busy) return;
+      const retryItem = qp.selectedItems.find(
+        (item) => asyncItemAction(item) === 'retry',
+      );
+      if (retryItem) {
+        const retry = currentResult?.retry ?? config.loadItems;
+        await load(retry, true);
+        return;
+      }
+
+      const values = qp.selectedItems
+        .map(asyncItemValue)
+        .filter((item): item is T => item !== undefined);
+      if (values.length === 0) return;
+
+      accepting = true;
+      try {
+        if ((await config.onWillAccept?.(values)) === false) return;
+        finish(values);
+        qp.hide();
+      } catch {
+        // Keep the picker open so the user can retry the action.
+      } finally {
+        accepting = false;
+      }
+    };
+
+    qp.onDidChangeSelection(() => {
+      if (!qp.canSelectMany) void accept();
+    });
+    qp.onDidAccept(() => void accept());
+    qp.onDidTriggerButton((button) => {
+      if (button === vscode.QuickInputButtons.Back) qp.hide();
+    });
+    qp.onDidHide(() => {
+      closed = true;
+      finish(undefined);
+      qp.dispose();
+    });
+
+    qp.show();
+    void load(config.loadItems, false);
+  });
+}
+
 /**
  * Show an input box with optional async validation on accept.
  * If onWillAccept returns false, the input box stays open with the user's input preserved.

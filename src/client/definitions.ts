@@ -13,6 +13,7 @@ import { OpenAIChatCompletionProvider } from './openai/chat-completion-client';
 import { OpenAICodexProvider } from './openai/codex-client';
 import { OpenAIResponsesProvider } from './openai/responses-client';
 import { XaiGrokBuildProvider } from './xai/grok-build-client';
+import { ZedProvider } from './zed/provider';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
@@ -24,6 +25,7 @@ export type ProviderType =
   | 'google-antigravity'
   | 'google-gemini-cli'
   | 'github-copilot'
+  | 'zed'
   | 'openai-chat-completion'
   | 'openai-codex'
   | 'xai-grok-build'
@@ -58,6 +60,13 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/v1/chat/completions',
     category: 'General',
     class: OpenAIChatCompletionProvider,
+  },
+  zed: {
+    type: 'zed',
+    label: t('Zed'),
+    description: '/completions',
+    category: 'Experimental',
+    class: ZedProvider,
   },
   'openai-responses': {
     type: 'openai-responses',
@@ -156,6 +165,16 @@ function modelIdentityIncludes(
   );
 }
 
+function isMoonshotOpenAIProvider(provider: { baseUrl: string }): boolean {
+  return ['api.moonshot.cn', 'api.moonshot.ai'].some((pattern) =>
+    matchProvider(provider.baseUrl, pattern),
+  );
+}
+
+function isKimiK3Model(model: { id: string; family?: string }): boolean {
+  return modelIdentityIncludes(model, 'kimi-k3');
+}
+
 export enum FeatureId {
   /**
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
@@ -229,6 +248,7 @@ export enum FeatureId {
    * Use `reasoning_effort` parameter in OpenAI-compatible Chat Completion APIs.
    *
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
+   * @see https://platform.kimi.com/docs/guide/kimi-k3-quickstart
    */
   OpenAIUseReasoningEffortParam = 'openai_use-reasoning-effort-param',
   /**
@@ -358,6 +378,14 @@ export enum FeatureId {
    * @see https://ai.google.dev/gemini-api/docs/thinking?hl=zh-cn#levels-budgets
    */
   GeminiUseThinkingLevel = 'gemini_use-thinking-level',
+  /**
+   * Parse Mistral's structured `content` / `delta.content` chunk arrays
+   * (`thinking` / `text`) instead of treating `content` as a plain string, and
+   * preserve the original arrays for multi-turn replay.
+   *
+   * @see https://docs.mistral.ai/
+   */
+  MistralContentChunks = 'mistral_content-chunks',
 }
 
 export const FEATURES: Record<FeatureId, Feature> = {
@@ -489,6 +517,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.siliconflow.com',
       'api.stepfun.com',
       'api.stepfun.ai',
+      'api.inceptionlabs.ai',
+      'api.mistral.ai',
     ],
   },
   [FeatureId.OpenAICacheControl]: {
@@ -557,10 +587,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
       'api.z.ai',
-      'api.moonshot.cn',
-      'api.moonshot.ai',
     ],
     customCheckers: [
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && !isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, [
           'deepseek-v3.2',
@@ -576,8 +606,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
-        (model) => modelFamilyIncludes(model, 'deepseek-v4'),
-        (model) => modelFamilyIncludes(model, 'glm-5.2'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+      (model) => modelFamilyIncludes(model, 'glm-5.2'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -596,6 +626,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.synthetic.new',
     ],
     customCheckers: [
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, ['gpt-oss-120b', 'gpt-oss-20b']),
     ],
@@ -766,5 +798,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'models/gemini-3-',
       'models/gemma-4-',
     ],
+  },
+  [FeatureId.MistralContentChunks]: {
+    supportedProviders: ['api.mistral.ai'],
   },
 };

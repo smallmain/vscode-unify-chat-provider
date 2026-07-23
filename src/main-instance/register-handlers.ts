@@ -9,7 +9,7 @@ import {
   MODEL_CONFIG_KEYS,
   withoutKeys,
 } from '../config-ops';
-import type { AuthConfig, AuthCredential } from '../auth/types';
+import type { AuthCredential, AuthRuntimeConfig } from '../auth/types';
 import type { AuthErrorType } from '../auth/auth-provider';
 import type { AuthManager } from '../auth';
 import type { BalanceManager } from '../balance';
@@ -28,6 +28,26 @@ import type { ModelConfig, TimeoutConfig } from '../types';
 import { normalizePresetTemplates } from '../preset-templates';
 import { normalizeUseRawBaseUrl, type RetryConfig } from '../utils';
 import { migrateLegacyVSCodeModelIds } from '../vscode-model-id-migration';
+import {
+  normalizeCompletionConfig,
+  type CompletionConfigIssue,
+} from '../completion/model/configuration';
+import type { CompletionConfig } from '../types';
+import {
+  LocalAuthStateConflictError,
+  type LocalAuthCommitGuard,
+} from '../secret/secret-store';
+import {
+  isSessionAuthConfig,
+  isSessionAuthMethod,
+  isValidAuthBindingId,
+  parseSessionAuthConfig,
+} from '../auth/local-auth-state';
+import {
+  isProviderSourceGuardCurrent,
+  parseProviderSourceGuard as parseProviderSourceGuardValue,
+  type ProviderSourceGuard,
+} from '../auth/provider-source-guard';
 
 type OAuthWaitResult = { type: 'success'; url: string } | { type: 'cancel' };
 
@@ -122,6 +142,31 @@ function requireString(value: unknown, method: string, field: string): string {
     );
   }
   return value;
+}
+
+function requireOptionalStringRecord(
+  value: unknown,
+  method: string,
+  field: string,
+): Record<string, string> | undefined {
+  if (value === undefined) return undefined;
+  if (!isRecord(value)) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: "${field}" must be an object of non-empty strings`,
+    );
+  }
+  const result: Record<string, string> = {};
+  for (const [key, item] of Object.entries(value)) {
+    if (key.trim() === '' || typeof item !== 'string' || item.trim() === '') {
+      throw new MainInstanceError(
+        'BAD_REQUEST',
+        `${method}: "${field}" must be an object of non-empty strings`,
+      );
+    }
+    result[key] = item;
+  }
+  return result;
 }
 
 function requireNumber(value: unknown, method: string, field: string): number {
@@ -402,13 +447,384 @@ function parseStringRecord(value: unknown): Record<string, string> | undefined {
   return Object.keys(out).length === 0 ? undefined : out;
 }
 
-function parseModels(value: unknown): ModelConfig[] {
+function hasOptionalStringFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  return fields.every(
+    (field) => record[field] === undefined || typeof record[field] === 'string',
+  );
+}
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string');
+}
+
+function hasOnlyFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  const allowed = new Set(fields);
+  return Object.keys(record).every((field) => allowed.has(field));
+}
+
+function isStrictOAuthConfig(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  if (
+    typeof value['tokenUrl'] !== 'string' ||
+    !hasOptionalStringFields(value, ['revocationUrl']) ||
+    (value['scopes'] !== undefined && !isStringArray(value['scopes']))
+  ) {
+    return false;
+  }
+  switch (value['grantType']) {
+    case 'authorization_code':
+      return (
+        hasOnlyFields(value, [
+          'grantType',
+          'authorizationUrl',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'clientSecret',
+          'redirectUri',
+          'scopes',
+          'pkce',
+        ]) &&
+        typeof value['authorizationUrl'] === 'string' &&
+        typeof value['clientId'] === 'string' &&
+        hasOptionalStringFields(value, ['clientSecret', 'redirectUri']) &&
+        (value['pkce'] === undefined || typeof value['pkce'] === 'boolean')
+      );
+    case 'client_credentials':
+      return (
+        hasOnlyFields(value, [
+          'grantType',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'clientSecret',
+          'scopes',
+        ]) &&
+        typeof value['clientId'] === 'string' &&
+        hasOptionalStringFields(value, ['clientSecret'])
+      );
+    case 'device_code':
+      return (
+        hasOnlyFields(value, [
+          'grantType',
+          'deviceAuthorizationUrl',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'scopes',
+        ]) &&
+        typeof value['deviceAuthorizationUrl'] === 'string' &&
+        typeof value['clientId'] === 'string'
+      );
+    default:
+      return false;
+  }
+}
+
+function isStrictAuthConfig(value: unknown): boolean {
+  if (!isRecord(value)) return false;
+  const commonFields = ['label', 'description'] as const;
+  if (!hasOptionalStringFields(value, commonFields)) return false;
+  if (
+    isSessionAuthMethod(value['method']) &&
+    !isValidAuthBindingId(value['bindingId'])
+  ) {
+    return false;
+  }
+  switch (value['method']) {
+    case 'none':
+      return hasOnlyFields(value, ['method']);
+    case 'api-key':
+      return (
+        hasOnlyFields(value, ['method', 'label', 'description', 'apiKey']) &&
+        hasOptionalStringFields(value, ['apiKey'])
+      );
+    case 'oauth2':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'oauth',
+        ]) &&
+        hasOptionalStringFields(value, ['identityId', 'token']) &&
+        isStrictOAuthConfig(value['oauth'])
+      );
+    case 'antigravity-oauth':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tier',
+          'tierId',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tierId',
+          'email',
+        ]) &&
+        (value['tier'] === undefined ||
+          value['tier'] === 'free' ||
+          value['tier'] === 'paid')
+      );
+    case 'google-gemini-oauth':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'oauthType',
+          'projectId',
+          'managedProjectId',
+          'tier',
+          'tierId',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tierId',
+          'email',
+        ]) &&
+        (value['oauthType'] === undefined ||
+          value['oauthType'] === 'code_assist' ||
+          value['oauthType'] === 'ai_studio' ||
+          value['oauthType'] === 'google_one') &&
+        (value['tier'] === undefined ||
+          value['tier'] === 'free' ||
+          value['tier'] === 'paid')
+      );
+    case 'openai-codex':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'accountId',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'accountId',
+          'email',
+        ])
+      );
+    case 'claude-code':
+    case 'xai-grok-oauth':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, ['identityId', 'token', 'email'])
+      );
+    case 'github-copilot':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'enterpriseUrl',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'enterpriseUrl',
+        ])
+      );
+    case 'zed':
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'baseUrl',
+          'identityId',
+          'token',
+          'organizationId',
+          'dataCollection',
+          'dataCollectionAllowed',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'baseUrl',
+          'identityId',
+          'token',
+          'organizationId',
+          'email',
+        ]) &&
+        (value['dataCollection'] === undefined ||
+          typeof value['dataCollection'] === 'boolean') &&
+        (value['dataCollectionAllowed'] === undefined ||
+          typeof value['dataCollectionAllowed'] === 'boolean')
+      );
+    case 'google-vertex-ai-auth':
+      switch (value['subType']) {
+        case 'adc':
+          return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'projectId',
+              'location',
+            ]) &&
+            typeof value['projectId'] === 'string' &&
+            typeof value['location'] === 'string'
+          );
+        case 'service-account':
+          return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'keyFilePath',
+              'projectId',
+              'location',
+            ]) &&
+            typeof value['keyFilePath'] === 'string' &&
+            typeof value['location'] === 'string' &&
+            hasOptionalStringFields(value, ['projectId'])
+          );
+        case 'api-key':
+          return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'apiKey',
+            ]) && hasOptionalStringFields(value, ['apiKey'])
+          );
+        default:
+          return false;
+      }
+    default:
+      return false;
+  }
+}
+
+function isBalanceConfig(value: unknown): value is BalanceConfig {
+  if (!isRecord(value)) return false;
+  switch (value['method']) {
+    case 'none':
+    case 'moonshot-ai':
+    case 'kimi-code':
+    case 'deepseek':
+    case 'openrouter':
+    case 'siliconflow':
+    case 'aihubmix':
+    case 'antigravity':
+    case 'gemini-cli':
+    case 'codex':
+    case 'synthetic':
+    case 'minimax':
+      return true;
+    case 'claude-relay-service':
+      return hasOptionalStringFields(value, ['baseUrl']);
+    case 'newapi': {
+      if (!hasOptionalStringFields(value, ['userId', 'systemToken'])) {
+        return false;
+      }
+      const transform = value['quotaTransform'];
+      return (
+        transform === undefined ||
+        (isRecord(transform) &&
+          hasOptionalStringFields(transform, ['quotaField']) &&
+          (transform['extraQuotaFields'] === undefined ||
+            isStringArray(transform['extraQuotaFields'])) &&
+          (transform['divisor'] === undefined ||
+            typeof transform['divisor'] === 'number') &&
+          (transform['multiplier'] === undefined ||
+            typeof transform['multiplier'] === 'number'))
+      );
+    }
+    default:
+      return false;
+  }
+}
+
+function formatCompletionConfigIssues(
+  issues: readonly CompletionConfigIssue[],
+): string {
+  return issues
+    .map((issue) =>
+      issue.field
+        ? `${issue.code} (${issue.field})`
+        : issue.code,
+    )
+    .join(', ');
+}
+
+function parseCompletionConfig(
+  value: unknown,
+  method: string,
+  path: string,
+): CompletionConfig | undefined {
+  const result = normalizeCompletionConfig(value);
+  if (result.status === 'invalid') {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid ${path}: ${formatCompletionConfigIssues(result.issues)}`,
+    );
+  }
+  return result.status === 'valid' ? result.value : undefined;
+}
+
+function parseModels(
+  value: unknown,
+  method: string,
+  path = 'provider.models',
+): ModelConfig[] {
   if (!Array.isArray(value)) {
     return [];
   }
   const out: ModelConfig[] = [];
-  for (const item of value) {
-    const parsed = parseModelConfig(item);
+  for (const [index, item] of value.entries()) {
+    const parsed = parseModelConfig(
+      item,
+      method,
+      `${path}[${index}]`,
+    );
     if (parsed) {
       out.push(parsed);
     }
@@ -416,7 +832,11 @@ function parseModels(value: unknown): ModelConfig[] {
   return out;
 }
 
-function parseModelConfig(value: unknown): ModelConfig | null {
+export function parseModelConfig(
+  value: unknown,
+  method = 'config.syncPersistedProvider',
+  path = 'provider.model',
+): ModelConfig | null {
   if (typeof value === 'string' && value.trim() !== '') {
     return { id: value };
   }
@@ -430,11 +850,19 @@ function parseModelConfig(value: unknown): ModelConfig | null {
     return null;
   }
 
-  const model: ModelConfig = { id };
+  const completion = parseCompletionConfig(
+    value['completion'],
+    method,
+    `${path}.completion`,
+  );
+  const model: ModelConfig = {
+    id,
+    ...(completion === undefined ? {} : { completion }),
+  };
   mergePartialFromRecordByKeys(
     model,
     value,
-    withoutKeys(MODEL_CONFIG_KEYS, ['id'] as const),
+    withoutKeys(MODEL_CONFIG_KEYS, ['id', 'completion'] as const),
   );
 
   const extraHeaders = parseStringRecord(model.extraHeaders);
@@ -453,7 +881,10 @@ function parseModelConfig(value: unknown): ModelConfig | null {
   return model;
 }
 
-function parseProviderConfig(value: unknown, method: string): ProviderConfig {
+export function parseProviderConfig(
+  value: unknown,
+  method: string,
+): ProviderConfig {
   const record = requireRecord(value, method);
 
   const typeRaw = record['type'];
@@ -469,28 +900,32 @@ function parseProviderConfig(value: unknown, method: string): ProviderConfig {
 
   const authConfig = record['authConfig'] ?? record['auth'];
   const auth =
-    isRecord(authConfig) && typeof authConfig['method'] === 'string'
-      ? (authConfig as unknown as AuthConfig)
-      : undefined;
+    authConfig === undefined
+      ? undefined
+      : parseAuthConfig(authConfig, method);
 
-  const balanceProvider =
-    isRecord(record['balanceProvider']) &&
-    typeof record['balanceProvider']['method'] === 'string'
-      ? (record['balanceProvider'] as unknown as BalanceConfig)
-      : undefined;
+  const balanceProvider = isBalanceConfig(record['balanceProvider'])
+    ? record['balanceProvider']
+    : undefined;
   const transport = parseTransportMode(record['transport']);
   const serviceTier = parseServiceTier(record['serviceTier']);
   const extraHeaders = parseStringRecord(record['extraHeaders']);
   const timeout = parseTimeoutConfig(record['timeout']);
   const retry = parseRetryConfig(record['retry']);
   const contextCache = parseContextCacheConfig(record['contextCache']);
+  const completion = parseCompletionConfig(
+    record['completion'],
+    method,
+    'provider.completion',
+  );
 
   return {
     type: typeRaw,
     name,
     baseUrl,
     useRawBaseUrl: normalizeUseRawBaseUrl(record['useRawBaseUrl']),
-    models: parseModels(record['models']),
+    models: parseModels(record['models'], method),
+    ...(completion === undefined ? {} : { completion }),
     ...(transport ? { transport } : {}),
     ...(serviceTier ? { serviceTier } : {}),
     ...(auth ? { auth } : {}),
@@ -518,10 +953,138 @@ function parseOptionalFiniteNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-function parseAuthConfig(value: unknown, method: string): AuthConfig {
+export function parseAuthConfig(
+  value: unknown,
+  method: string,
+): AuthRuntimeConfig {
+  if (!isStrictAuthConfig(value) || !isRecord(value)) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid authConfig`,
+    );
+  }
+  if (isSessionAuthMethod(value['method'])) {
+    const parsed = parseSessionAuthConfig(value);
+    if (parsed) return parsed;
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid authConfig`,
+    );
+  }
+
+  const label = parseOptionalString(value['label']);
+  const description = parseOptionalString(value['description']);
+  const common = {
+    ...(label === undefined ? {} : { label }),
+    ...(description === undefined ? {} : { description }),
+  };
+  switch (value['method']) {
+    case 'none':
+      return { method: 'none' };
+    case 'api-key': {
+      const apiKey = parseOptionalString(value['apiKey']);
+      return {
+        method: 'api-key',
+        ...common,
+        ...(apiKey === undefined ? {} : { apiKey }),
+      };
+    }
+    case 'google-vertex-ai-auth': {
+      const subType = value['subType'];
+      if (subType === 'adc') {
+        const projectId = value['projectId'];
+        const location = value['location'];
+        if (typeof projectId === 'string' && typeof location === 'string') {
+          return {
+            method: 'google-vertex-ai-auth',
+            subType,
+            ...common,
+            projectId,
+            location,
+          };
+        }
+      }
+      if (subType === 'service-account') {
+        const keyFilePath = value['keyFilePath'];
+        const projectId = parseOptionalString(value['projectId']);
+        const location = value['location'];
+        if (typeof keyFilePath === 'string' && typeof location === 'string') {
+          return {
+            method: 'google-vertex-ai-auth',
+            subType,
+            ...common,
+            keyFilePath,
+            ...(projectId === undefined ? {} : { projectId }),
+            location,
+          };
+        }
+      }
+      if (subType === 'api-key') {
+        const apiKey = parseOptionalString(value['apiKey']);
+        return {
+          method: 'google-vertex-ai-auth',
+          subType,
+          ...common,
+          ...(apiKey === undefined ? {} : { apiKey }),
+        };
+      }
+      break;
+    }
+  }
+  throw new MainInstanceError(
+    'BAD_REQUEST',
+    `${method}: invalid authConfig`,
+  );
+}
+
+export function parseLocalAuthCommitGuard(
+  value: unknown,
+  method: string,
+): LocalAuthCommitGuard | undefined {
+  if (value === undefined) return undefined;
   const record = requireRecord(value, method);
-  requireString(record['method'], method, 'authConfig.method');
-  return record as unknown as AuthConfig;
+  const epoch = record['epoch'];
+  const revision = record['revision'];
+  const sessionId = record['sessionId'];
+  const staticConfigFingerprint = record['staticConfigFingerprint'];
+  if (
+    typeof staticConfigFingerprint !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(staticConfigFingerprint) ||
+    typeof epoch !== 'number' ||
+    !Number.isSafeInteger(epoch) ||
+    epoch < 0 ||
+    typeof revision !== 'number' ||
+    !Number.isSafeInteger(revision) ||
+    revision < 0 ||
+    (sessionId !== undefined &&
+      (typeof sessionId !== 'string' || sessionId.trim() === ''))
+  ) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid auth commit guard`,
+    );
+  }
+  return {
+    staticConfigFingerprint,
+    epoch,
+    revision,
+    ...(typeof sessionId === 'string' ? { sessionId } : {}),
+  };
+}
+
+export function parseProviderSourceGuard(
+  value: unknown,
+  method: string,
+): ProviderSourceGuard | undefined {
+  if (value === undefined) return undefined;
+  const guard = parseProviderSourceGuardValue(value);
+  if (!guard) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid provider source guard`,
+    );
+  }
+  return guard;
 }
 
 function resolveCurrentProvidersByNames(options: {
@@ -547,7 +1110,7 @@ function resolveCurrentProvidersByNames(options: {
   return resolved;
 }
 
-function parseOfficialModelsFetchState(
+export function parseOfficialModelsFetchState(
   value: unknown,
   method: string,
 ): OfficialModelsFetchState {
@@ -625,7 +1188,7 @@ function parseOfficialModelsFetchState(
 
   return {
     lastFetchTime,
-    models: parseModels(record['models']),
+    models: parseModels(record['models'], method, 'state.models'),
     modelsHash,
     consecutiveIdenticalFetches,
     currentIntervalMs,
@@ -1191,6 +1754,7 @@ function serializeAuthCredential(
     value,
     tokenType: credential.tokenType,
     expiresAt: credential.expiresAt,
+    authContext: credential.authContext,
   };
 }
 
@@ -1324,47 +1888,119 @@ export function registerMainInstanceHandlers(options: {
         p['authConfig'],
         'auth.syncPersistedAuthConfig',
       );
-      await options.authManager.syncPersistedAuthConfig(
+      const guard = parseLocalAuthCommitGuard(
+        p['guard'],
+        'auth.syncPersistedAuthConfig',
+      );
+      const sourceGuard = parseProviderSourceGuard(
+        p['sourceGuard'],
+        'auth.syncPersistedAuthConfig',
+      );
+      if (isSessionAuthConfig(authConfig) && !sourceGuard) {
+        throw new MainInstanceError(
+          'BAD_REQUEST',
+          'auth.syncPersistedAuthConfig: missing provider source guard',
+        );
+      }
+      const persisted = await options.authManager.syncPersistedAuthConfig(
         providerName,
         authConfig,
+        { reloadLocalState: true, guard, sourceGuard },
       );
-      return { ok: true };
+      return { ok: true, authConfig: persisted };
     },
   );
 
   mainInstance.registerHandler(
     'config.syncPersistedProvider',
-    async (params) => {
-      const p = requireRecord(params, 'config.syncPersistedProvider');
-      const provider = parseProviderConfig(
-        p['provider'],
-        'config.syncPersistedProvider',
-      );
-      const originalNameValue = p['originalName'];
-      if (
-        originalNameValue !== undefined &&
-        (typeof originalNameValue !== 'string' ||
-          originalNameValue.trim() === '')
-      ) {
-        throw new MainInstanceError(
-          'BAD_REQUEST',
-          'config.syncPersistedProvider: "originalName" must be a non-empty string',
+    async (params) =>
+      mainInstance.runLeaderMutation(async () => {
+        const p = requireRecord(params, 'config.syncPersistedProvider');
+        const providerIntent = parseProviderConfig(
+          p['provider'],
+          'config.syncPersistedProvider',
         );
-      }
-      if (typeof originalNameValue === 'string') {
-        options.authManager.clearProvider(originalNameValue);
-      }
-      options.authManager.clearProvider(provider.name);
-      if (
-        typeof originalNameValue === 'string' &&
-        originalNameValue !== provider.name
-      ) {
-        await options.configStore.removeProvider(originalNameValue);
-      }
-      await options.configStore.upsertProvider(provider);
-      await migrateLegacyVSCodeModelIds(options.configStore);
-      return { ok: true };
-    },
+        const authGuard = parseLocalAuthCommitGuard(
+          p['authGuard'],
+          'config.syncPersistedProvider',
+        );
+        const sourceGuard = parseProviderSourceGuard(
+          p['sourceGuard'],
+          'config.syncPersistedProvider',
+        );
+        if (
+          providerIntent.auth &&
+          isSessionAuthConfig(providerIntent.auth) &&
+          !sourceGuard
+        ) {
+          throw new MainInstanceError(
+            'BAD_REQUEST',
+            'config.syncPersistedProvider: missing provider source guard',
+          );
+        }
+        const originalNameValue = p['originalName'];
+        if (
+          originalNameValue !== undefined &&
+          (typeof originalNameValue !== 'string' ||
+            originalNameValue.trim() === '')
+        ) {
+          throw new MainInstanceError(
+            'BAD_REQUEST',
+            'config.syncPersistedProvider: "originalName" must be a non-empty string',
+          );
+        }
+        const modelSourceIds = requireOptionalStringRecord(
+          p['modelSourceIds'],
+          'config.syncPersistedProvider',
+          'modelSourceIds',
+        );
+        const prepared =
+          await options.authManager.prepareProviderForPersistence(
+            providerIntent,
+            authGuard,
+            sourceGuard,
+          );
+        const hints = {
+          ...(typeof originalNameValue === 'string'
+            ? { originalName: originalNameValue }
+            : {}),
+          ...(modelSourceIds === undefined ? {} : { modelSourceIds }),
+        };
+        try {
+          if (providerIntent.auth && isSessionAuthConfig(providerIntent.auth)) {
+            if (!sourceGuard) throw new LocalAuthStateConflictError();
+            const updated = await options.configStore.upsertProviderIfUnchanged(
+              prepared.provider,
+              hints,
+              () =>
+                isProviderSourceGuardCurrent(sourceGuard, (providerName) =>
+                  options.configStore.getProvider(providerName),
+                ),
+            );
+            if (!updated) throw new LocalAuthStateConflictError();
+          } else {
+            await options.configStore.upsertProvider(prepared.provider, hints);
+          }
+          prepared.commit();
+        } catch (error) {
+          await prepared.rollback();
+          throw error;
+        }
+        if (typeof originalNameValue === 'string') {
+          options.authManager.clearProvider(originalNameValue);
+        }
+        options.authManager.clearProvider(prepared.provider.name);
+        try {
+          await migrateLegacyVSCodeModelIds(options.configStore);
+        } catch (error) {
+          authLog.error(
+            'main-instance',
+            'Provider saved, but legacy VS Code model ID migration failed',
+            error,
+          );
+        }
+        return { ok: true };
+      }),
   );
 
   mainInstance.registerHandler('balance.forceRefresh', async (params) => {

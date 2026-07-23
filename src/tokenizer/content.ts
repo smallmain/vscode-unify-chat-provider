@@ -5,6 +5,7 @@ import {
   isInternalMarker,
   isUsageMarker,
 } from '../utils';
+import { isLanguageModelThinkingPart } from '../proposed-api/thinking';
 
 const MESSAGE_OVERHEAD_TOKENS = 4;
 const IMAGE_PART_TOKENS = 512;
@@ -52,7 +53,7 @@ function collectUnknown(state: CountState, value: unknown): void {
     return;
   }
 
-  if (value instanceof vscode.LanguageModelThinkingPart) {
+  if (isLanguageModelThinkingPart(value)) {
     const chunks =
       typeof value.value === 'string' ? [value.value] : value.value;
     pushText(state, chunks.join(''));

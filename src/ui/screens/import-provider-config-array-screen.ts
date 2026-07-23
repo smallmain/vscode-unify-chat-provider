@@ -15,7 +15,11 @@ import type {
   UiNavAction,
   UiResume,
 } from '../router/types';
-import { saveProviderDraft } from '../provider-ops';
+import {
+  assertValidProviderDraftSessionAuthToken,
+  discardDraftAuthState,
+  saveProviderDraft,
+} from '../provider-ops';
 import { officialModelsManager } from '../../official-models-manager';
 import {
   promptConflictResolution,
@@ -23,6 +27,7 @@ import {
 } from '../conflict-resolution';
 import { t } from '../../i18n';
 import { cleanupUnusedSecrets } from '../../secret';
+import { mainInstance } from '../../main-instance';
 
 const editButton: vscode.QuickInputButton = {
   iconPath: new vscode.ThemeIcon('edit'),
@@ -112,6 +117,7 @@ function validateSelectedProviders(options: {
 
   // Validate each provider, but skip name uniqueness check (handled separately)
   for (const { id, draft } of selected) {
+    const displayName = getProviderDisplayName(draft, id);
     const providerErrors = validateProviderForm(
       draft,
       options.store,
@@ -121,10 +127,18 @@ function validateSelectedProviders(options: {
       },
     );
     if (providerErrors.length > 0) {
-      const displayName = getProviderDisplayName(draft, id);
       for (const err of providerErrors) {
         errors.push(t('{0}: {1}', displayName, err));
       }
+    }
+    try {
+      assertValidProviderDraftSessionAuthToken(draft);
+    } catch (error) {
+      const message =
+        error instanceof Error
+          ? error.message
+          : t('Invalid authentication token data.');
+      errors.push(t('{0}: {1}', displayName, message));
     }
   }
 
@@ -193,13 +207,18 @@ export async function runImportProviderConfigArrayScreen(
     if (!confirmed) return { kind: 'stay' };
 
     for (const draft of drafts) {
+      discardDraftAuthState(draft, ctx.secretStore);
       const sessionId = draft._draftSessionId;
       if (sessionId) {
         officialModelsManager.clearDraftSession(sessionId);
       }
     }
 
-    await cleanupUnusedSecrets(ctx.secretStore);
+    if (mainInstance.isLeader() && mainInstance.isReady()) {
+      await mainInstance.runLeaderMutation(async () =>
+        cleanupUnusedSecrets(ctx.secretStore),
+      );
+    }
 
     return { kind: 'pop' };
   }
@@ -290,7 +309,17 @@ export async function runImportProviderConfigArrayScreen(
     }
   }
 
-  await cleanupUnusedSecrets(ctx.secretStore);
+  for (const [index, draft] of drafts.entries()) {
+    if (!route.selectedIds.has(index)) {
+      discardDraftAuthState(draft, ctx.secretStore);
+    }
+  }
+
+  if (mainInstance.isLeader() && mainInstance.isReady()) {
+    await mainInstance.runLeaderMutation(async () =>
+      cleanupUnusedSecrets(ctx.secretStore),
+    );
+  }
 
   return { kind: 'pop' };
 }

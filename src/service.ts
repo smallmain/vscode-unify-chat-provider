@@ -37,7 +37,11 @@ import {
 } from './utils';
 import { SecretStore } from './secret';
 import { AuthManager } from './auth';
-import type { AuthCredential, AuthTokenInfo } from './auth/types';
+import { toAuthTokenInfo, type AuthTokenInfo } from './auth/types';
+import {
+  computeStaticAuthFingerprint,
+  isSessionAuthConfig,
+} from './auth/local-auth-state';
 import { t } from './i18n';
 import {
   applyPresetTemplateSelections,
@@ -180,6 +184,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     private readonly authManager?: AuthManager,
     private readonly balanceManager?: BalanceManager,
     private readonly usageStore?: UsageStore,
+    private readonly canUseChatProviderProposal = true,
   ) {}
 
   /**
@@ -265,6 +270,25 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       balanceSnapshot,
     );
 
+    const stableModelInfo: vscode.LanguageModelChatInformation = {
+      id: modelId,
+      name: displayName,
+      family: resolvedModelFamily,
+      version: '',
+      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
+      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
+      capabilities: {
+        toolCalling: model.capabilities?.toolCalling ?? false,
+        imageInput: model.capabilities?.imageInput ?? false,
+      },
+      detail,
+      tooltip,
+      pricing,
+    };
+    if (!this.canUseChatProviderProposal) {
+      return stableModelInfo;
+    }
+
     const warning = evaluateBalanceWarning(
       balanceSnapshot?.items,
       this.configStore.balanceWarning,
@@ -275,32 +299,17 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     const editTools = resolveConfiguredEditToolsForVsCode(
       model.capabilities?.editTools,
     );
-    const capabilities: vscode.LanguageModelChatInformation['capabilities'] =
-      editTools === undefined
-        ? {
-            toolCalling: model.capabilities?.toolCalling ?? false,
-            imageInput: model.capabilities?.imageInput ?? false,
-          }
-        : {
-            toolCalling: model.capabilities?.toolCalling ?? false,
-            imageInput: model.capabilities?.imageInput ?? false,
-            editTools,
-          };
     const configurationSchema = this.buildModelConfigurationSchema(
       model,
       balanceState,
     );
 
     return {
-      id: modelId,
-      name: displayName,
-      family: resolvedModelFamily,
-      version: '',
-      maxInputTokens: model.maxInputTokens ?? DEFAULT_MAX_INPUT_TOKENS,
-      maxOutputTokens: model.maxOutputTokens ?? DEFAULT_MAX_OUTPUT_TOKENS,
-      capabilities,
-      detail,
-      tooltip,
+      ...stableModelInfo,
+      capabilities:
+        editTools === undefined
+          ? stableModelInfo.capabilities
+          : { ...stableModelInfo.capabilities, editTools },
       isUserSelectable: true,
       statusIcon,
       ...(configurationSchema ? { configurationSchema } : {}),
@@ -595,21 +604,6 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     return client;
   }
 
-  private toAuthTokenInfo(
-    credential: AuthCredential | undefined,
-  ): AuthTokenInfo {
-    if (!credential?.value) {
-      return { kind: 'none' };
-    }
-
-    return {
-      kind: 'token',
-      token: credential.value,
-      tokenType: credential.tokenType,
-      expiresAt: credential.expiresAt,
-    };
-  }
-
   private async resolveCredential(
     providerName: string,
   ): Promise<AuthTokenInfo> {
@@ -633,7 +627,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       const credential = await this.authManager.getCredential(providerName);
 
       if (credential) {
-        return this.toAuthTokenInfo(credential);
+        return toAuthTokenInfo(credential);
       }
 
       const lastError = this.authManager.getLastError(providerName);
@@ -667,7 +661,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             const newCredential =
               await this.authManager.getCredential(providerName);
             if (newCredential) {
-              return this.toAuthTokenInfo(newCredential);
+              return toAuthTokenInfo(newCredential);
             }
           }
           continue;
@@ -686,7 +680,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           const newCredential =
             await this.authManager.getCredential(providerName);
           if (newCredential) {
-            return this.toAuthTokenInfo(newCredential);
+            return toAuthTokenInfo(newCredential);
           }
 
           throw new Error(
@@ -712,7 +706,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             const newCredential =
               await this.authManager.getCredential(providerName);
             if (newCredential) {
-              return this.toAuthTokenInfo(newCredential);
+              return toAuthTokenInfo(newCredential);
             }
           }
         }
@@ -722,6 +716,58 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         t('Authentication required for provider "{0}".', provider.name),
       );
     }
+  }
+
+  private async refreshCredential(providerName: string): Promise<AuthTokenInfo> {
+    if (!this.authManager) {
+      throw new Error(
+        t('Authentication required for provider "{0}".', providerName),
+      );
+    }
+    const refreshed = await this.authManager.retryRefresh(providerName);
+    if (!refreshed) {
+      throw (
+        this.authManager.getLastError(providerName)?.error ??
+        new Error(t('Failed to refresh authentication for "{0}".', providerName))
+      );
+    }
+    return toAuthTokenInfo(
+      await this.authManager.getCredential(providerName),
+    );
+  }
+
+  private async resolveRequestProviderAndCredential(
+    modelId: string,
+  ): Promise<{
+    provider: ProviderConfig;
+    model: ModelConfig;
+    credential: AuthTokenInfo;
+  }> {
+    let found = await this.findProviderAndModel(modelId);
+    if (!found) {
+      throw new Error(`Model not found: ${modelId}`);
+    }
+
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const credential = await this.resolveCredential(found.provider.name);
+      const resolved = await this.findProviderAndModel(modelId);
+      if (!resolved) {
+        throw new Error(`Model not found: ${modelId}`);
+      }
+
+      const before = sessionAuthTargetSignature(found.provider);
+      const after = sessionAuthTargetSignature(resolved.provider);
+      if (before === after || (before === undefined && after === undefined)) {
+        return { ...resolved, credential };
+      }
+      found = resolved;
+    }
+
+    throw new Error(
+      t(
+        'Authentication configuration changed while the request was starting. Please retry.',
+      ),
+    );
   }
 
   /**
@@ -752,23 +798,16 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     let outcome: 'success' | 'error' | 'cancelled' = 'success';
 
     try {
-      const found = await this.findProviderAndModel(model.id);
-      if (!found) {
-        throw new Error(`Model not found: ${model.id}`);
-      }
-
-      const { provider } = found;
-      const credential = await this.resolveCredential(provider.name);
-
-      const resolved = await this.findProviderAndModel(model.id);
-      if (!resolved) {
-        throw new Error(`Model not found: ${model.id}`);
-      }
-
-      const { provider: resolvedProvider, model: resolvedModel } = resolved;
+      const {
+        provider: resolvedProvider,
+        model: resolvedModel,
+        credential,
+      } = await this.resolveRequestProviderAndCredential(model.id);
       const resolvedRequestModel = applyPresetTemplateSelections(
         resolvedModel,
-        options.modelConfiguration,
+        this.canUseChatProviderProposal
+          ? options.modelConfiguration
+          : undefined,
       );
       providerForBalance = resolvedProvider;
       providerForUsage = resolvedProvider;
@@ -823,6 +862,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             token,
             logger,
             credential,
+            () => this.refreshCredential(resolvedProvider.name),
           );
 
           try {
@@ -1012,8 +1052,28 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
     this.onDidChangeModelInfoEmitter.fire();
   }
 
+  handleAuthStateChange(providerName: string): void {
+    this.clients.delete(providerName);
+    this.onDidChangeModelInfoEmitter.fire();
+  }
+
   dispose(): void {
     this.clearClients();
     this.onDidChangeModelInfoEmitter.dispose();
   }
+}
+
+function sessionAuthTargetSignature(
+  provider: ProviderConfig,
+): string | undefined {
+  const auth = provider.auth;
+  if (!auth || !isSessionAuthConfig(auth)) return undefined;
+  return `${auth.method}:${auth.bindingId}:${computeStaticAuthFingerprint(
+    {
+      providerType: provider.type,
+      baseUrl: provider.baseUrl,
+      useRawBaseUrl: provider.useRawBaseUrl,
+    },
+    auth,
+  )}`;
 }

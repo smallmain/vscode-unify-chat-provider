@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { t } from '../i18n';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../defaults';
 import type { FieldContext, FormSchema } from './field-schema';
+import type { CompletionConfigNormalizationResult } from '../completion/model/configuration';
 import { booleanOptions, formatBoolean } from './field-editors';
 import { pickQuickItem, showInput } from './component';
 import {
@@ -25,6 +26,10 @@ import {
   resolveTokenizerId,
 } from '../tokenizer/tokenizers';
 import { MODEL_EDIT_TOOLS } from '../model-capabilities';
+import {
+  editCompletionConfig,
+  formatCompletionConfig,
+} from './completion-fields';
 
 /**
  * Context for model form fields.
@@ -33,6 +38,7 @@ export interface ModelFieldContext extends FieldContext {
   models: ModelConfig[];
   originalId?: string;
   providerType?: ProviderType;
+  completionState?: CompletionConfigNormalizationResult;
 }
 
 type EditToolQuickPickItem = vscode.QuickPickItem & {
@@ -517,6 +523,22 @@ export const modelFormSchema: FormSchema<ModelConfig> = {
       ],
       getDescription: (draft) =>
         draft.serviceTier === undefined ? t('default') : draft.serviceTier,
+    },
+    {
+      key: 'completion',
+      type: 'custom',
+      label: t('Completion'),
+      icon: 'sparkle',
+      section: 'capabilities',
+      edit: async (draft) => {
+        await editCompletionConfig(draft, { modelOverride: true });
+      },
+      getDescription: (draft, context) =>
+        formatCompletionConfig(
+          draft.completion,
+          t('inherit'),
+          (context as ModelFieldContext | undefined)?.completionState,
+        ),
     },
     {
       key: 'multi-agent',

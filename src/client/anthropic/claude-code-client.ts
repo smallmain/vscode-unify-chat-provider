@@ -1,5 +1,4 @@
 import type { AuthTokenInfo } from '../../auth/types';
-import type { AuthConfig } from '../../auth/types';
 import type { ModelConfig } from '../../types';
 import type {
   BetaContentBlockParam,
@@ -8,12 +7,14 @@ import type {
   MessageCreateParamsStreaming,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { serializeClaudeCodeCchInput } from './claude-code-cch';
+import { deriveClaudeCodeIdentitySeed } from './claude-code-identity';
 import { AnthropicProvider } from './client';
 
 const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.161';
 const CLAUDE_CODE_NEW_METADATA_FORMAT_MIN_VERSION = '2.1.78';
 const DEFAULT_CLAUDE_SDK_VERSION = '0.94.0';
-const CCH_SEED = 0x6e52736ac806831en;
+const CCH_SEED = 0x4d659218e32a3268n;
 const FINGERPRINT_SALT = '59cf53e54c78';
 const XXH64_PRIME1 = 0x9e3779b185ebca87n;
 const XXH64_PRIME2 = 0xc2b2ae3d27d4eb4fn;
@@ -289,8 +290,9 @@ function computeClaudeCodeFingerprint(
 
 function signClaudeCodeBillingHeader(
   requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
+  stream: boolean,
 ): void {
-  const body = JSON.stringify(requestBase);
+  const body = serializeClaudeCodeCchInput(requestBase, stream);
   const cch = (xxHash64Seeded(body, CCH_SEED) & 0xfffffn)
     .toString(16)
     .padStart(5, '0');
@@ -333,31 +335,6 @@ function createSystemCarrierMessage(
       ],
     },
   ];
-}
-
-function pickStableAuthIdentifier(auth: AuthConfig | undefined): string | null {
-  if (!auth || auth.method === 'none') {
-    return null;
-  }
-  if (
-    'identityId' in auth &&
-    typeof auth.identityId === 'string' &&
-    auth.identityId.trim() !== ''
-  ) {
-    return auth.identityId.trim();
-  }
-  if ('email' in auth && typeof auth.email === 'string' && auth.email.trim()) {
-    return auth.email.trim();
-  }
-  if (
-    auth.method === 'api-key' &&
-    'apiKey' in auth &&
-    typeof auth.apiKey === 'string' &&
-    auth.apiKey.trim()
-  ) {
-    return auth.apiKey.trim();
-  }
-  return null;
 }
 
 function deterministicUuidFromSeed(seed: string): string {
@@ -501,12 +478,19 @@ function toTextBlocks(
 export class AnthropicClaudeCodeProvider extends AnthropicProvider {
   private readonly fallbackUserSeed = randomBytes(32).toString('hex');
 
-  private resolveStableUserId(historyUserId?: string): string {
+  private resolveStableUserId(
+    historyUserId?: string,
+    credential?: AuthTokenInfo,
+  ): string {
     if (historyUserId && isValidUserId(historyUserId)) {
       return historyUserId;
     }
     return generateFakeUserId({
-      seed: pickStableAuthIdentifier(this.config.auth) ?? this.fallbackUserSeed,
+      seed:
+        deriveClaudeCodeIdentitySeed(
+          this.config.auth,
+          credential,
+        ) ?? this.fallbackUserSeed,
     });
   }
 
@@ -563,7 +547,8 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     headers['x-client-request-id'] = randomUUID();
 
     const sessionId = extractSessionIdFromUserId(
-      options?.requestState?.userId ?? this.resolveStableUserId(),
+      options?.requestState?.userId ??
+        this.resolveStableUserId(undefined, credential),
     );
     if (sessionId) {
       headers['X-Claude-Code-Session-Id'] = sessionId;
@@ -630,7 +615,10 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     requestBase.system = mergedSystem;
 
-    const userId = this.resolveStableUserId(options.historyUserId);
+    const userId = this.resolveStableUserId(
+      options.historyUserId,
+      options.credential,
+    );
     options.requestState.userId = userId;
     requestBase.metadata = { user_id: userId };
 
@@ -663,7 +651,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
         options.requestState.userId = metadataUserId;
       }
     }
-    signClaudeCodeBillingHeader(requestBase);
+    signClaudeCodeBillingHeader(requestBase, options.stream);
     return requestBase;
   }
 

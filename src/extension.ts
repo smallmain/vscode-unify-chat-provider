@@ -4,8 +4,10 @@ import {
   SecretStore,
   migrateApiKeyToAuth,
   migrateProviderTypes,
+  migrateSessionAuthState,
   migrateApiKeyStorage,
   cleanupUnusedSecrets,
+  reconcileLocalAuthStateWithConfiguredEndpoints,
 } from './secret';
 import { UnifyChatService } from './service';
 import {
@@ -29,6 +31,7 @@ import { registerBalanceStatusBar } from './ui/balance-status-bar';
 import { registerUsageStatusBar } from './ui/usage-status-bar';
 import { usageStore } from './usage/usage-store';
 import { mainInstance } from './main-instance';
+import { isLeaderUnavailableError } from './main-instance/errors';
 import {
   ensureMainInstanceCompatibility,
   showMainInstanceCompatibilityWarning,
@@ -46,10 +49,59 @@ import {
   handleVSCodeDefaultModelError,
 } from './vscode-default-model';
 import { migrateLegacyVSCodeModelIds } from './vscode-model-id-migration';
+import { CompletionManager, showCompletionSettings } from './completion';
+import { ConfiguredCompletionModelResolver } from './completion/model/resolver';
+import type { AlgorithmRequest } from './completion/model/requests';
+import type { CompletionModelResolver } from './completion/types';
+import {
+  contextProviderApiV1,
+  registerDefaultCopilotContextProviders,
+} from './completion/copilot/default-context-providers';
+import type { CopilotContextProvider } from './completion/copilot/context-provider';
+import {
+  createProposedApiCapabilities,
+  initializeProposedApiCapabilities,
+  type ProposedApiCapabilities,
+} from './proposed-api/capabilities';
+import { canUseLanguageModelThinkingPart } from './proposed-api/thinking';
+import {
+  registerProposedApiEnableCommand,
+  scheduleProposedApiStartupReminder,
+} from './proposed-api/reminder';
+import { clearZedModelRoutes } from './client/zed/route-cache';
+import {
+  isSessionAuthConfig,
+  isValidAuthBindingId,
+} from './auth/local-auth-state';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
 const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
+const E2E_SECRET_STORAGE_FILE_ENV = 'UCP_E2E_SECRET_STORAGE_FILE';
+
+export interface UnifyChatProviderExtensionApi {
+  getContextProviderAPI(version: 'v1'): {
+    registerContextProvider(provider: CopilotContextProvider): vscode.Disposable;
+  };
+}
+
+async function resolveSecretStorage(
+  context: vscode.ExtensionContext,
+): Promise<vscode.SecretStorage> {
+  if (context.extensionMode === vscode.ExtensionMode.Production) {
+    return context.secrets;
+  }
+
+  const filePath = process.env[E2E_SECRET_STORAGE_FILE_ENV]?.trim();
+  if (!filePath) return context.secrets;
+
+  const { E2EFileSecretStorage } = await import(
+    './secret/e2e-file-secret-storage'
+  );
+  const storage = new E2EFileSecretStorage(filePath);
+  context.subscriptions.push(storage);
+  return storage;
+}
 
 function filterUsageRecords(value: unknown): UsageRecord[] {
   return Array.isArray(value) ? value.filter(isUsageRecord) : [];
@@ -64,25 +116,107 @@ function isNotImplementedError(error: unknown): boolean {
  */
 export async function activate(
   context: vscode.ExtensionContext,
-): Promise<void> {
+): Promise<UnifyChatProviderExtensionApi> {
   await ensureAgentsWindowSupportConfigured(context);
 
   await mainInstance.initialize(context);
   context.subscriptions.push(mainInstance);
 
+  const proposedApiCapabilities =
+    await initializeExtensionProposedApiCapabilities(context);
+  const shouldScheduleProposedApiReminder = mainInstance.isLeader();
+  const canUseSystemMessage = proposedApiCapabilities.isProposedCanUse(
+    'languageModelSystem',
+  );
+  const canUseChatProvider = proposedApiCapabilities.isProposedCanUse(
+    'chatProvider',
+  );
+  const completionAvailable = proposedApiCapabilities.isProposedCanUse(
+    'inlineCompletionsAdditions',
+  );
+  await Promise.all([
+    vscode.commands.executeCommand(
+      'setContext',
+      'unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu',
+      proposedApiCapabilities.isProposedCanUse(
+        'contribSourceControlInputBoxMenu',
+      ),
+    ),
+    vscode.commands.executeCommand(
+      'setContext',
+      'unifyChatProvider.completion.available',
+      completionAvailable,
+    ),
+  ]);
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.proposedApi.test.getState',
+        () => ({
+          declared: [...proposedApiCapabilities.declared],
+          enabled: [...proposedApiCapabilities.enabled],
+          missing: [...proposedApiCapabilities.missing],
+          canUse: Object.fromEntries(
+            proposedApiCapabilities.declared.map((proposal) => [
+              proposal,
+              proposedApiCapabilities.isProposedCanUse(proposal),
+            ]),
+          ),
+          completionAvailable,
+          scmInputBoxMenuAvailable:
+            proposedApiCapabilities.isProposedCanUse(
+              'contribSourceControlInputBoxMenu',
+            ),
+        }),
+      ),
+    );
+  }
+
   const configStore = new ConfigStore();
-  const secretStore = new SecretStore(context.secrets);
+  const secretStore = new SecretStore(await resolveSecretStorage(context));
+  await secretStore.initializeLocalAuthState();
+  let localAuthReloadQueue = Promise.resolve();
+  const reloadConfiguredLocalAuthState = (): Promise<void> => {
+    const run = async (): Promise<void> => {
+      const bindingIds = new Set(
+        configStore.endpoints.flatMap((provider) => {
+          const auth = provider.auth;
+          return auth &&
+            isSessionAuthConfig(auth) &&
+            isValidAuthBindingId(auth.bindingId)
+            ? [auth.bindingId]
+            : [];
+        }),
+      );
+      await Promise.all(
+        Array.from(bindingIds, (bindingId) =>
+          secretStore.reloadLocalAuthState(bindingId),
+        ),
+      );
+    };
+    localAuthReloadQueue = localAuthReloadQueue.then(run, run);
+    return localAuthReloadQueue;
+  };
+  context.subscriptions.push(
+    configStore.onDidChange(() => {
+      void reloadConfiguredLocalAuthState().catch((error) => {
+        authLog.warn(
+          'auth-state',
+          `Failed to reload device-local auth state after configuration change: ${String(error)}`,
+        );
+      });
+    }),
+  );
+  await reloadConfiguredLocalAuthState();
 
   // Register URI handler (import-config + OAuth callbacks)
   const uriHandler = registerUriHandler(context, configStore, secretStore);
 
-  // Initialize auth system
-  const authManager = new AuthManager(configStore, secretStore, uriHandler);
-  context.subscriptions.push(authManager);
   let mainInstanceHandlersRegistered = false;
   let leaderStartupReady = false;
   let leaderPromotionPromise: Promise<void> | undefined;
   let leaderPromotionRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  let authManager: AuthManager | undefined;
 
   const syncUsageSnapshotFromLeader = (): void => {
     if (mainInstance.isLeader() || !mainInstance.isReady()) {
@@ -131,10 +265,15 @@ export async function activate(
       );
       return;
     }
-    authLog.verbose('main-instance', 'Running leader startup migrations');
-    await migrateProviderTypes(configStore);
-    await migrateApiKeyToAuth(configStore);
-    authLog.verbose('main-instance', 'Leader startup migrations completed');
+    await mainInstance.runLeaderMutation(async () => {
+      authLog.verbose('main-instance', 'Running leader startup migrations');
+      await reloadConfiguredLocalAuthState();
+      await migrateProviderTypes(configStore);
+      await migrateApiKeyToAuth(configStore);
+      await migrateSessionAuthState({ configStore, secretStore });
+      await reconcileLocalAuthStateWithConfiguredEndpoints(secretStore);
+      authLog.verbose('main-instance', 'Leader startup migrations completed');
+    });
   };
 
   const setMainInstanceReadyIfPossible = (): void => {
@@ -202,6 +341,7 @@ export async function activate(
       return;
     }
     leaderStartupReady = true;
+    authManager?.setLeaderAuthReady(true);
     authLog.verbose(
       'main-instance',
       'Leader startup marked ready; scheduling secret storage maintenance',
@@ -242,6 +382,7 @@ export async function activate(
       }
       if (snapshot.role !== 'leader') {
         leaderStartupReady = false;
+        authManager?.setLeaderAuthReady(false);
         if (leaderPromotionRetryTimer) {
           clearTimeout(leaderPromotionRetryTimer);
           leaderPromotionRetryTimer = undefined;
@@ -267,6 +408,20 @@ export async function activate(
   );
   if (mainInstance.isLeader()) {
     await ensureLeaderPromotionFinalized();
+  }
+
+  // Leader migration must finish before any auth provider can read legacy state.
+  authManager = new AuthManager(
+    configStore,
+    secretStore,
+    uriHandler,
+    leaderStartupReady,
+  );
+  context.subscriptions.push(authManager);
+
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    const { registerAuthTestCommands } = await import('./auth/test-control');
+    registerAuthTestCommands({ context, configStore, secretStore });
   }
 
   await balanceManager.initialize({
@@ -303,7 +458,26 @@ export async function activate(
     authManager,
     balanceManager,
     usageStore,
+    canUseChatProvider,
   );
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.proposedApi.test.getModelInformation',
+        async () => {
+          const cancellation = new vscode.CancellationTokenSource();
+          try {
+            return await chatProvider.provideLanguageModelChatInformation(
+              { silent: true },
+              cancellation.token,
+            );
+          } finally {
+            cancellation.dispose();
+          }
+        },
+      ),
+    );
+  }
 
   // Initialize official models manager
   await officialModelsManager.initialize(
@@ -314,6 +488,43 @@ export async function activate(
     uriHandler,
   );
   context.subscriptions.push(officialModelsManager);
+  context.subscriptions.push(
+    authManager.onDidChangeAuthState((change) => {
+      if (
+        change.reason === 'refresh' ||
+        change.reason === 'migration'
+      ) {
+        return;
+      }
+      if (change.method === 'zed') {
+        clearZedModelRoutes(change.bindingId);
+      }
+      chatProvider.handleAuthStateChange(change.providerName);
+      if (!mainInstance.isLeader()) return;
+      const provider = configStore.getProvider(change.providerName);
+      void officialModelsManager
+        .clearProviderState(change.providerName)
+        .then(() => {
+          if (provider?.autoFetchOfficialModels) {
+            officialModelsManager.triggerBackgroundFetch(provider);
+          }
+        })
+        .catch((error) => {
+          authLog.warn(
+            'auth-state',
+            `Failed to reset official models after auth context changed for ${change.providerName}: ${String(error)}`,
+          );
+        });
+      void balanceManager
+        .handleAuthStateChange(change.providerName)
+        .catch((error) => {
+          authLog.warn(
+            'auth-state',
+            `Failed to reset balance after auth context changed for ${change.providerName}: ${String(error)}`,
+          );
+        });
+    }),
+  );
   if (mainInstance.isLeader()) {
     await migrateLegacyVSCodeModelIds(configStore);
   }
@@ -354,7 +565,129 @@ export async function activate(
 
   // Register commands
   registerCommands(context, configStore, secretStore, uriHandler);
-  registerCommitMessageGeneration(context);
+  registerProposedApiEnableCommand(context);
+  registerCommitMessageGeneration(context, canUseSystemMessage);
+
+  if (completionAvailable) {
+    const productionCompletionModelResolver =
+      new ConfiguredCompletionModelResolver(
+        configStore,
+        authManager,
+        undefined,
+        canUseSystemMessage,
+      );
+    let completionModelResolver: CompletionModelResolver =
+      productionCompletionModelResolver;
+    let completionTestControl:
+      | {
+          setTestResponse(value: unknown): boolean;
+          getTestRequests(): readonly AlgorithmRequest[];
+        }
+      | undefined;
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      const { TestingCompletionModelResolver } = await import(
+        './completion/model/testing-resolver'
+      );
+      const testingResolver = new TestingCompletionModelResolver(
+        productionCompletionModelResolver,
+      );
+      completionModelResolver = testingResolver;
+      completionTestControl = testingResolver;
+    }
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.settings',
+        () => showCompletionSettings(completionModelResolver, configStore),
+      ),
+    );
+    context.subscriptions.push(registerDefaultCopilotContextProviders());
+    const completionManager = new CompletionManager(completionModelResolver);
+    context.subscriptions.push(completionManager);
+    context.subscriptions.push(
+      authManager.onDidChangeAuthState((change) => {
+        if (
+          change.reason !== 'refresh' &&
+          change.reason !== 'migration'
+        ) {
+          completionManager.handleAuthStateChange(change.providerName);
+        }
+      }),
+    );
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      const [
+        { registerCompletionWarningTestCommands },
+        { CompletionTestHarness },
+      ] = await Promise.all([
+        import('./completion/test-control'),
+        import('./completion/test-harness'),
+      ]);
+      registerCompletionWarningTestCommands(context);
+      const completionTestHarness = new CompletionTestHarness(completionManager);
+      context.subscriptions.push(
+        completionTestHarness,
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getState',
+          () => completionManager.getState(),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.setResponse',
+          (value: unknown) =>
+            completionTestControl?.setTestResponse(value) ?? false,
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getRequests',
+          () => completionTestControl?.getTestRequests() ?? [],
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getRuntimeState',
+          (providerId: unknown) =>
+            typeof providerId === 'string'
+              ? completionManager.getRuntimeDebugState(providerId)
+              : undefined,
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.provide',
+          (options: unknown) => completionTestHarness.provideTexts(options),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.provideDetailed',
+          (options: unknown) => completionTestHarness.provide(options),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.cancelProvide',
+          (cancellationKey: unknown) =>
+            completionTestHarness.cancelProvide(cancellationKey),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.dispatchLifecycle',
+          (event: unknown) => completionTestHarness.dispatchLifecycle(event),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.getHarnessState',
+          () => completionTestHarness.getState(),
+        ),
+        vscode.commands.registerCommand(
+          'unifyChatProvider.completion.test.clearHarness',
+          () => completionTestHarness.clear(),
+        ),
+      );
+    }
+  } else {
+    context.subscriptions.push(
+      vscode.commands.registerCommand(
+        'unifyChatProvider.completion.settings',
+        () =>
+          vscode.window.showWarningMessage(
+            t(
+              'Code completion is unavailable because the inlineCompletionsAdditions Proposed API is not enabled.',
+            ),
+          ),
+      ),
+    );
+    if (context.extensionMode !== vscode.ExtensionMode.Production) {
+      registerUnavailableCompletionTestCommands(context);
+    }
+  }
 
   context.subscriptions.push(
     registerBalanceStatusBar({ context, store: configStore }),
@@ -370,6 +703,7 @@ export async function activate(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
       usageStore.setDetailRetentionDays(configStore.usageDetailRetentionDays);
+      if (!mainInstance.isLeader() || !mainInstance.isReady()) return;
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });
@@ -412,6 +746,17 @@ export async function activate(
   context.subscriptions.push(configStore);
 
   setMainInstanceReadyIfPossible();
+  if (shouldScheduleProposedApiReminder) {
+    scheduleProposedApiStartupReminder(context, proposedApiCapabilities);
+  }
+  return {
+    getContextProviderAPI(version) {
+      if (version !== 'v1') {
+        throw new Error(`Unsupported context provider API version: ${version}`);
+      }
+      return contextProviderApiV1();
+    },
+  };
 }
 
 export function registerCommands(
@@ -551,6 +896,62 @@ export function deactivate(): void {
   // Cleanup handled by disposables
 }
 
+async function initializeExtensionProposedApiCapabilities(
+  context: vscode.ExtensionContext,
+): Promise<ProposedApiCapabilities> {
+  try {
+    return await initializeProposedApiCapabilities(context, {
+      canUseLanguageModelThinkingPart,
+    });
+  } catch (error) {
+    authLog.error(
+      'proposed-api',
+      'Unable to read the Proposed API manifest; all Proposed API features will use their fallback behavior',
+      error,
+    );
+    return createProposedApiCapabilities(
+      { declared: [], enabled: [] },
+      { canUseLanguageModelThinkingPart: () => false },
+    );
+  }
+}
+
+function registerUnavailableCompletionTestCommands(
+  context: vscode.ExtensionContext,
+): void {
+  const unavailableState = Object.freeze({
+    available: false,
+    unavailableReason: 'inlineCompletionsAdditions',
+    registered: false,
+    enabled: false,
+    providerCount: 0,
+    providerIds: Object.freeze([]),
+    excludedProviderGroups: Object.freeze([]),
+    runtimeCount: 0,
+    runtimeInstances: Object.freeze({}),
+  });
+  const unavailable = (): typeof unavailableState => unavailableState;
+  const commandIds = [
+    'unifyChatProvider.completion.test.getState',
+    'unifyChatProvider.completion.test.setResponse',
+    'unifyChatProvider.completion.test.getRequests',
+    'unifyChatProvider.completion.test.getRuntimeState',
+    'unifyChatProvider.completion.test.provide',
+    'unifyChatProvider.completion.test.provideDetailed',
+    'unifyChatProvider.completion.test.cancelProvide',
+    'unifyChatProvider.completion.test.dispatchLifecycle',
+    'unifyChatProvider.completion.test.getHarnessState',
+    'unifyChatProvider.completion.test.clearHarness',
+    'unifyChatProvider.completion.test.getWarnings',
+    'unifyChatProvider.completion.test.clearWarnings',
+  ];
+  context.subscriptions.push(
+    ...commandIds.map((commandId) =>
+      vscode.commands.registerCommand(commandId, unavailable),
+    ),
+  );
+}
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -613,9 +1014,16 @@ function enqueueMaintenance(
     }
     try {
       authLog.verbose('main-instance', `Starting maintenance task (${label})`);
-      await work();
+      await mainInstance.runLeaderMutation(work);
       authLog.verbose('main-instance', `Completed maintenance task (${label})`);
     } catch (error) {
+      if (isLeaderUnavailableError(error)) {
+        authLog.verbose(
+          'main-instance',
+          `Maintenance stopped because leadership changed (${label})`,
+        );
+        return;
+      }
       authLog.error(
         'main-instance',
         `Secret storage maintenance failed (${label})`,
@@ -657,7 +1065,9 @@ function registerSecretStorageMaintenance(
           storeApiKeyInSettings: nextStoreApiKeyInSettings,
           showProgress: true,
         });
-        await cleanupUnusedSecrets(secretStore);
+        if (mainInstance.isLeader() && mainInstance.isReady()) {
+          await cleanupUnusedSecrets(secretStore);
+        }
       });
     }),
   );

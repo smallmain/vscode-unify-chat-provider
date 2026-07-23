@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   BetaContentBlock,
@@ -71,7 +75,7 @@ import {
   getUnifiedUserAgent,
   setUserAgentHeader,
 } from '../utils';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 
 type AnthropicMarkerData = {
   raw: BetaMessage;
@@ -559,7 +563,7 @@ export class AnthropicProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -1162,7 +1166,7 @@ export class AnthropicProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -1230,7 +1234,7 @@ export class AnthropicProvider implements ApiProvider {
             undefined,
             thinkingOutputState,
           );
-          yield new vscode.LanguageModelThinkingPart('', undefined, {
+          yield* createLanguageModelThinkingParts('', undefined, {
             signature: block.signature,
             _completeThinking: block.thinking,
           } satisfies ThinkingBlockMetadata);
@@ -1244,7 +1248,7 @@ export class AnthropicProvider implements ApiProvider {
             undefined,
             thinkingOutputState,
           );
-          yield new vscode.LanguageModelThinkingPart('', undefined, {
+          yield* createLanguageModelThinkingParts('', undefined, {
             redactedData: block.data,
           } satisfies ThinkingBlockMetadata);
           break;
@@ -1411,14 +1415,14 @@ export class AnthropicProvider implements ApiProvider {
               break;
 
             case 'thinking':
-              yield new vscode.LanguageModelThinkingPart('', undefined, {
+              yield* createLanguageModelThinkingParts('', undefined, {
                 signature: block.signature,
                 _completeThinking: block.thinking,
               } satisfies ThinkingBlockMetadata);
               break;
 
             case 'redacted_thinking':
-              yield new vscode.LanguageModelThinkingPart('', undefined, {
+              yield* createLanguageModelThinkingParts('', undefined, {
                 redactedData: block.data,
               } satisfies ThinkingBlockMetadata);
               break;
@@ -1745,7 +1749,11 @@ export class AnthropicProvider implements ApiProvider {
    * Get available models from the Anthropic API
    * Uses the ListModels endpoint with pagination support
    */
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1766,7 +1774,7 @@ export class AnthropicProvider implements ApiProvider {
       do {
         const page = await client.models.list(
           { after_id: afterId },
-          { headers: this.buildHeaders(credential) },
+          { headers: this.buildHeaders(credential), signal },
         );
 
         for (const model of page.data) {

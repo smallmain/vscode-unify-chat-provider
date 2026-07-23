@@ -58,7 +58,11 @@ export async function addProviderFromConfig(
     return;
   }
 
-  await runUiStack(ctx, { kind: 'providerForm', initialConfig: imported.config });
+  await runUiStack(ctx, {
+    kind: 'providerForm',
+    initialConfig: imported.config,
+    initialConfigValidated: true,
+  });
 }
 
 export async function addProviderFromWellKnownList(
@@ -112,8 +116,8 @@ export async function exportAllProviders(
 
 export async function removeProvider(
   store: ConfigStore,
-  secretStore: SecretStore,
+  _secretStore: SecretStore,
   _uriHandler?: EventedUriHandler,
 ): Promise<void> {
-  await runRemoveProviderScreen(store, secretStore);
+  await runRemoveProviderScreen(store);
 }

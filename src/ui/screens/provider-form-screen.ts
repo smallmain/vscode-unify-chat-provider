@@ -4,7 +4,7 @@ import { confirmDelete, pickQuickItem, showDeletedMessage } from '../component';
 import { mergePartialProviderConfig } from '../base64-config';
 import { editField } from '../field-editors';
 import { buildFormItems, type FormItem } from '../field-schema';
-import { normalizeLegacyProviderConfig } from '../import-config';
+import { parseProviderConfigInput } from '../import-config';
 import {
   confirmDiscardProviderChanges,
   createProviderDraft,
@@ -22,15 +22,21 @@ import type {
   UiResume,
 } from '../router/types';
 import {
+  captureDraftAuthCommitGuard,
+  discardDraftAuthState,
   duplicateProvider,
   exportProviderConfigFromDraft,
   saveProviderDraft,
 } from '../provider-ops';
-import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
+import {
+  createAuthProvider,
+  normalizeAuthForProvider,
+  type AuthUiStatusSnapshot,
+} from '../../auth';
 import { deepClone } from '../../config-ops';
-import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import { t } from '../../i18n';
 import { cleanupUnusedSecrets } from '../../secret';
+import { mainInstance } from '../../main-instance';
 import { resolveBalanceFieldDetail } from '../balance-detail';
 
 const providerSettingsSchema = {
@@ -51,10 +57,17 @@ export async function runProviderFormScreen(
   const existing = route.existing;
   const originalName = route.originalName;
   const isSettings = route.mode === 'settings';
+  captureDraftAuthCommitGuard(draft, ctx.secretStore);
 
   const context: ProviderFieldContext = {
     store: ctx.store,
     originalName,
+    ...(originalName
+      ? {
+          completionState:
+            ctx.store.getProviderCompletionConfigState(originalName),
+        }
+      : {}),
     onEditModels: async () => {},
     onEditTimeout: async () => {},
     secretStore: ctx.secretStore,
@@ -146,14 +159,21 @@ export async function runProviderFormScreen(
           } else {
             const providerLabel = draft.name?.trim() || originalName || t('Provider');
             const providerId = originalName ?? ensureDraftSessionId(draft);
+            const authForProvider =
+              normalizeAuthForProvider(deepClone(auth), {
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
+              }) ?? auth;
             const authProvider = createAuthProvider(
               {
                 providerId,
                 providerLabel,
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
                 secretStore: ctx.secretStore,
                 uriHandler: ctx.uriHandler,
               },
-              deepClone(auth),
+              authForProvider,
             );
 
             if (!authProvider) {
@@ -209,7 +229,12 @@ export async function runProviderFormScreen(
 
     const decision = await confirmDiscardProviderChanges(draft, existing);
     if (decision === 'discard') {
-      await cleanupUnusedSecrets(ctx.secretStore);
+      discardDraftAuthState(draft, ctx.secretStore, existing);
+      if (mainInstance.isLeader() && mainInstance.isReady()) {
+        await mainInstance.runLeaderMutation(async () =>
+          cleanupUnusedSecrets(ctx.secretStore),
+        );
+      }
       return { kind: 'pop' };
     }
     if (decision === 'save') {
@@ -228,11 +253,6 @@ export async function runProviderFormScreen(
   if (!isSettings && selection.action === 'delete' && existing) {
     const confirmed = await confirmDelete(existing.name, 'provider');
     if (confirmed) {
-      await deleteProviderApiKeySecretIfUnused({
-        secretStore: ctx.secretStore,
-        providers: ctx.store.endpoints,
-        providerName: existing.name,
-      });
       await ctx.store.removeProvider(existing.name);
       showDeletedMessage(existing.name, 'Provider');
       return { kind: 'pop' };
@@ -324,10 +344,14 @@ async function ensureInitialized(
   const draft = createProviderDraft(existing);
 
   if (route.initialConfig && !existing) {
-    mergePartialProviderConfig(
-      draft,
-      normalizeLegacyProviderConfig(route.initialConfig),
-    );
+    const imported = route.initialConfigValidated
+      ? route.initialConfig
+      : parseProviderConfigInput(route.initialConfig);
+    if (!imported) {
+      vscode.window.showErrorMessage(t('Invalid provider configuration.'));
+      return;
+    }
+    mergePartialProviderConfig(draft, imported);
   }
 
   route.existing = existing;

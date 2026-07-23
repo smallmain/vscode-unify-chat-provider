@@ -18,11 +18,20 @@ import type {
   UiResume,
 } from '../router/types';
 import { deepClone } from '../../config-ops';
-import { createAuthProvider, type AuthUiStatusSnapshot } from '../../auth';
+import {
+  createAuthProvider,
+  normalizeAuthForProvider,
+  type AuthUiStatusSnapshot,
+} from '../../auth';
 import { officialModelsManager } from '../../official-models-manager';
 import { cleanupUnusedSecrets } from '../../secret';
+import { mainInstance } from '../../main-instance';
 import { t } from '../../i18n';
 import { resolveBalanceFieldDetail } from '../balance-detail';
+import {
+  captureDraftAuthCommitGuard,
+  discardDraftAuthState,
+} from '../provider-ops';
 
 export async function runProviderDraftFormScreen(
   ctx: UiContext,
@@ -31,6 +40,7 @@ export async function runProviderDraftFormScreen(
 ): Promise<UiNavAction> {
   const draft = route.draft;
   const original = route.original;
+  captureDraftAuthCommitGuard(draft, ctx.secretStore);
 
   const context: ProviderFieldContext = {
     store: ctx.store,
@@ -122,14 +132,21 @@ export async function runProviderDraftFormScreen(
           } else {
             const providerLabel = draft.name?.trim() || t('Provider');
             const providerId = ensureDraftSessionId(draft);
+            const authForProvider =
+              normalizeAuthForProvider(deepClone(auth), {
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
+              }) ?? auth;
             const authProvider = createAuthProvider(
               {
                 providerId,
                 providerLabel,
+                providerType: draft.type,
+                baseUrl: draft.baseUrl,
                 secretStore: ctx.secretStore,
                 uriHandler: ctx.uriHandler,
               },
-              deepClone(auth),
+              authForProvider,
             );
 
             if (!authProvider) {
@@ -181,18 +198,23 @@ export async function runProviderDraftFormScreen(
 
   if (!selection || selection.action === 'cancel') {
     const decision = await confirmDiscardProviderChanges(draft, original);
-      if (decision === 'discard') {
-        const sessionId = draft._draftSessionId;
-        const originalSessionId = original._draftSessionId;
-        if (sessionId && sessionId !== originalSessionId) {
-          officialModelsManager.clearDraftSession(sessionId);
-        }
+    if (decision === 'discard') {
+      discardDraftAuthState(draft, ctx.secretStore, original);
+      const sessionId = draft._draftSessionId;
+      const originalSessionId = original._draftSessionId;
+      if (sessionId && sessionId !== originalSessionId) {
+        officialModelsManager.clearDraftSession(sessionId);
+      }
 
-        if (!route.skipSecretCleanupOnDiscard) {
-          await cleanupUnusedSecrets(ctx.secretStore);
+      if (!route.skipSecretCleanupOnDiscard) {
+        if (mainInstance.isLeader() && mainInstance.isReady()) {
+          await mainInstance.runLeaderMutation(async () =>
+            cleanupUnusedSecrets(ctx.secretStore),
+          );
         }
+      }
 
-        const result: ProviderDraftFormResult = { kind: 'cancelled' };
+      const result: ProviderDraftFormResult = { kind: 'cancelled' };
       return {
         kind: 'pop',
         resume: { kind: 'providerDraftFormResult', result },

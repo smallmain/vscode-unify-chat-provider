@@ -50,6 +50,8 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://generativelanguage.googleapis.com',
     authTypes: ['api-key'],
     models: [
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
       'gemini-3.5-flash',
       'gemini-3.1-pro-preview',
       'gemini-3-pro-preview',
@@ -68,6 +70,8 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://aiplatform.googleapis.com',
     authTypes: ['google-vertex-ai-auth'],
     models: [
+      'gemini-3.6-flash',
+      'gemini-3.5-flash-lite',
       'gemini-3.5-flash',
       'gemini-3.1-pro-preview',
       'gemini-3-pro-preview',
@@ -96,6 +100,28 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
       'claude-sonnet-4-5',
       'claude-haiku-4-5',
     ],
+  },
+  {
+    name: 'Inception',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.inceptionlabs.ai/v1',
+    authTypes: ['api-key'],
+    models: ['mercury-2', 'mercury-edit-2'],
+    completion: { baseUrl: './edit' },
+  },
+  {
+    name: 'Mistral AI',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.mistral.ai/v1',
+    authTypes: ['api-key'],
+    models: [
+      'mistral-medium-3-5',
+      'mistral-small-2603',
+      'codestral-2508',
+    ],
+    completion: { baseUrl: './fim' },
   },
   {
     name: 'xAI',
@@ -128,6 +154,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     type: 'openai-chat-completion',
     baseUrl: 'https://openrouter.ai/api/v1',
     balanceProvider: { method: 'openrouter' },
+    authTypes: ['api-key'],
+    models: [],
+  },
+  {
+    name: 'Kilo Code',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.kilo.ai/api/gateway',
+    useRawBaseUrl: true,
     authTypes: ['api-key'],
     models: [],
   },
@@ -427,6 +462,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.deepseek.com',
+    completion: { baseUrl: '../beta' },
     balanceProvider: { method: 'deepseek' },
     authTypes: ['api-key'],
     models: ['deepseek-v4-flash', 'deepseek-v4-pro'],
@@ -486,6 +522,16 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.stepfun.ai/v1',
     authTypes: ['api-key'],
     models: ['step-3.5-flash', 'step-2-mini', 'step-1o-turbo-vision'],
+  },
+  {
+    name: 'LiteLLM',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'http://localhost:4000',
+    balanceProvider: { method: 'litellm' },
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
   },
   {
     name: 'Ollama Local',
@@ -609,7 +655,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.cn',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k2.7-code', 'kimi-k2.6'],
+    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
   },
   {
     name: 'Moonshot AI (International)',
@@ -618,7 +664,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.ai',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k2.7-code', 'kimi-k2.6'],
+    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
   },
   {
     name: 'Moonshot AI (Coding Plan)',
@@ -627,7 +673,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.kimi.com/coding',
     balanceProvider: { method: 'kimi-code' },
     authTypes: ['api-key'],
-    models: ['kimi-for-coding'],
+    models: ['k3', 'kimi-for-coding', 'kimi-for-coding-highspeed'],
   },
   {
     name: 'SiliconFlow (China)',
@@ -654,10 +700,8 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://wanqing.streamlakeapi.com/api/gateway/v1/endpoints',
     authTypes: ['api-key'],
     models: [
-      'kat-coder-pro-v2',
-      'kat-coder-pro-v1',
-      'kat-coder-exp-72b-1010',
-      'kat-coder-air-v1',
+      'kat-coder-pro-v2.5',
+      'kat-coder-air-v2.5',
     ],
   },
   {
@@ -667,7 +711,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl:
       'https://wanqing.streamlakeapi.com/api/gateway/coding/kat-coder-pro-v1/claude-code-proxy',
     authTypes: ['api-key'],
-    models: ['kat-coder-pro-v2', 'kat-coder-pro-v1'],
+    models: ['kat-coder-pro-v2.5', 'kat-coder-air-v2.5'],
   },
   {
     name: 'StreamLake Vanchin (International)',
@@ -676,10 +720,8 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://vanchin.streamlake.ai/api/gateway/v1/endpoints',
     authTypes: ['api-key'],
     models: [
-      'kat-coder-pro-v2',
-      'kat-coder-pro-v1',
-      'kat-coder-exp-72b-1010',
-      'kat-coder-air-v1',
+      'kat-coder-pro-v2.5',
+      'kat-coder-air-v2.5',
     ],
   },
   {
@@ -689,7 +731,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl:
       'https://vanchin.streamlake.ai/api/gateway/coding/kat-coder-pro-v1/claude-code-proxy',
     authTypes: ['api-key'],
-    models: ['kat-coder-pro-v2', 'kat-coder-pro-v1'],
+    models: ['kat-coder-pro-v2.5', 'kat-coder-air-v2.5'],
   },
   {
     name: 'OpenAI Codex (ChatGPT Plus/Pro)',
@@ -759,13 +801,13 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
-    name: 'Kilo Code',
-    category: 'General',
-    type: 'openai-chat-completion',
-    baseUrl: 'https://api.kilo.ai/api/gateway',
-    useRawBaseUrl: true,
-    authTypes: ['api-key'],
+    name: 'Zed',
+    category: 'Experimental',
+    type: 'zed',
+    baseUrl: 'https://zed.dev',
+    authTypes: ['zed'],
     models: [],
+    autoFetchOfficialModels: true,
   },
 ];
 

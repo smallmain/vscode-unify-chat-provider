@@ -11,8 +11,7 @@ import {
 } from '../../auth-provider';
 import { t } from '../../../i18n';
 import {
-  createSecretRef,
-  isSecretRef,
+  isSessionSecretRef,
   type SecretStore,
 } from '../../../secret';
 import type {
@@ -73,6 +72,7 @@ function toPersistableConfig(
 ): GitHubCopilotAuthConfig {
   return {
     method: 'github-copilot',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     identityId: config?.identityId,
@@ -299,7 +299,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       throw new Error('Missing token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -327,14 +327,14 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(raw)) {
+        if (!isSessionSecretRef(raw)) {
           return raw;
         }
         const stored = await secretStore.getOAuth2Token(raw);
         return stored ? JSON.stringify(stored) : raw;
       }
 
-      if (isSecretRef(raw)) {
+      if (isSessionSecretRef(raw)) {
         return raw;
       }
 
@@ -344,17 +344,25 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
 
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
 
     const token = await normalizeToken();
-    return { ...toPersistableConfig(auth), token };
+    return {
+      ...toPersistableConfig(auth),
+      identityId:
+        auth.token?.trim() && !isSessionSecretRef(auth.token.trim())
+          ? randomUUID()
+          : auth.identityId,
+      token,
+    };
   }
 
   static async prepareForDuplicate(
@@ -382,7 +390,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const tokenRaw = auth.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
+    if (tokenRaw && isSessionSecretRef(tokenRaw)) {
       await secretStore.deleteOAuth2Token(tokenRaw);
     }
   }
@@ -410,9 +418,12 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(next: GitHubCopilotAuthConfig): Promise<void> {
+  private async persistConfig(
+    next: GitHubCopilotAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     this.config = next;
-    await this.context.persistAuthConfig?.(next);
   }
 
   private async resolveTokenData(): Promise<OAuth2TokenData | null> {
@@ -421,7 +432,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
@@ -438,7 +449,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       return { kind: 'not-authorized' };
     }
 
-    if (isSecretRef(tokenRaw)) {
+    if (isSessionSecretRef(tokenRaw)) {
       const token = await this.context.secretStore.getOAuth2Token(tokenRaw);
       if (!token) {
         return { kind: 'missing-secret', message: t('Missing stored token') };
@@ -530,6 +541,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     try {
       const picked = await vscode.window.showQuickPick(
         [
@@ -687,7 +699,8 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
         return { success: false, error: t('Cancelled') };
       }
 
-      const tokenRef = createSecretRef();
+      const tokenRef =
+        this.context.secretStore.createTransientOAuth2TokenRef();
       const tokenData: OAuth2TokenData = {
         accessToken: tokenResult.accessToken,
         refreshToken: tokenResult.accessToken,
@@ -698,6 +711,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
 
       const nextConfig: GitHubCopilotAuthConfig = {
         method: 'github-copilot',
+        bindingId: this.config?.bindingId ?? randomUUID(),
         label: this.config?.label,
         description: this.config?.description,
         identityId: randomUUID(),
@@ -705,7 +719,7 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
         enterpriseUrl: enterpriseDomain,
       };
 
-      await this.persistConfig(nextConfig);
+      await this.persistConfig(nextConfig, commitGuard);
       this._onDidChangeStatus.fire({ status: 'valid' });
 
       vscode.window.showInformationMessage(t('Authorization successful!'));
@@ -726,13 +740,11 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
   }
 
   async revoke(): Promise<void> {
-    const tokenRaw = this.config?.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
-      await this.context.secretStore.deleteOAuth2Token(tokenRaw);
-    }
-
+    const commitGuard = this.context.captureAuthCommitGuard?.();
+    const oldTokenRef = this.config?.token?.trim();
     const nextConfig: GitHubCopilotAuthConfig = {
       method: 'github-copilot',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: this.config?.identityId,
@@ -740,7 +752,10 @@ export class GitHubCopilotAuthProvider implements AuthProvider {
       enterpriseUrl: this.config?.enterpriseUrl,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
+    }
     this._onDidChangeStatus.fire({ status: 'revoked' });
   }
 }

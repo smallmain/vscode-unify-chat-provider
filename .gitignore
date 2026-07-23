@@ -1,6 +1,7 @@
 node_modules
 out
-out-tests
+out-test
+/dist
 .vscode-test
 *.vsix
 npm-debug.log*

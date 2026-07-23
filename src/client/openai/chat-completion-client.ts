@@ -12,7 +12,7 @@ import {
   ProviderConfig,
   ModelConfig,
 } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
@@ -47,6 +47,7 @@ import {
   getTokenType,
   getUnifiedUserAgent,
   isFeatureSupported,
+  isFeatureSupportedByProvider,
   mergeHeaders,
   normalizeToolInputSchema,
   parseToolArguments,
@@ -55,6 +56,10 @@ import {
   setUserAgentHeader,
 } from '../utils';
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
@@ -79,6 +84,10 @@ import {
   ThinkingBlockMetadata,
 } from '../types';
 import { FeatureId } from '../definitions';
+import {
+  appendMistralContentChunks,
+  parseMistralContentChunks,
+} from './mistral-content';
 
 /**
  * Identifies which provider-specific API shape to use for reasoning/thinking parameters.
@@ -267,7 +276,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     });
   }
 
-  private convertMessages(
+  protected convertMessages(
     encodedModelId: string,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     shouldApplyCacheControl: boolean,
@@ -448,7 +457,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -1249,7 +1258,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       thinkingOutputState,
     );
 
-    if (content) {
+    const handledMistralContent = yield* this.extractMistralContentParts(
+      content,
+    );
+    if (!handledMistralContent && typeof content === 'string' && content) {
       for (const segment of parseThinkingTags(content)) {
         if (segment.type === 'thinking') {
           yield* this.emitThinkingText(
@@ -1289,6 +1301,37 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       expectedIdentity,
       markerData,
     );
+  }
+
+  private *extractMistralContentParts(
+    content: unknown,
+  ): Generator<vscode.LanguageModelResponsePart2, boolean> {
+    if (
+      !isFeatureSupportedByProvider(
+        FeatureId.MistralContentChunks,
+        this.config,
+      )
+    ) {
+      return false;
+    }
+
+    const progress = parseMistralContentChunks(content);
+    if (progress === undefined) {
+      return false;
+    }
+
+    for (const part of progress) {
+      if (!part.text) {
+        continue;
+      }
+      if (part.type === 'thinking') {
+        yield* createLanguageModelThinkingParts(part.text);
+      } else {
+        yield new vscode.LanguageModelTextPart(part.text);
+      }
+    }
+
+    return true;
   }
 
   private stringifyArguments(input: unknown): string {
@@ -1357,7 +1400,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -1440,7 +1483,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 
@@ -1499,7 +1542,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         );
       }
 
-      if (content) {
+      const handledMistralContent = yield* this.extractMistralContentParts(
+        content,
+      );
+      if (!handledMistralContent && typeof content === 'string' && content) {
         for (const segment of thinkingTagParser.push(content)) {
           if (segment.type === 'thinking') {
             yield* this.emitThinkingText(
@@ -1700,7 +1746,19 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
       if (role) choice.message.role = role;
 
-      if (content) {
+      const rawContent: unknown = content;
+      if (
+        isFeatureSupportedByProvider(
+          FeatureId.MistralContentChunks,
+          this.config,
+        ) && Array.isArray(rawContent)
+      ) {
+        const messageWithProviderContent: { content?: unknown } = choice.message;
+        messageWithProviderContent.content = appendMistralContentChunks(
+          messageWithProviderContent.content,
+          rawContent,
+        );
+      } else if (typeof content === 'string' && content) {
         choice.message.content = (choice.message.content || '') + content;
       }
 
@@ -1802,7 +1860,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1819,6 +1881,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       );
       const page = await client.models.list({
         headers: this.buildHeaders(credential),
+        signal,
       });
       for await (const model of page) {
         const name = model.name?.trim();

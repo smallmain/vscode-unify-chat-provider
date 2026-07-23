@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { t } from './i18n';
-import { NoLanguageModelsAvailableError } from './commit-message/types';
 import { decodeVsCodeProviderSegment } from './model-id-utils';
+import { pickAsyncQuickItems } from './ui/component';
 
 const EXTENSION_VENDOR_ID = 'unify-chat-provider';
 const COPILOT_VENDOR_ID = 'copilot';
@@ -41,7 +41,13 @@ export type LanguageModelPickResult =
 export interface PickLanguageModelOptions {
   placeHolder: string;
   includeDefault?: boolean;
+  defaultLabel?: string;
+  defaultDetail?: string;
   includeCopilotUtilityModels?: boolean;
+  current?: Pick<LanguageModelReference, 'vendor' | 'id'>;
+  filter?: (
+    model: LanguageModelReference,
+  ) => boolean | Promise<boolean>;
 }
 
 const COPILOT_UTILITY_MODELS = [
@@ -115,9 +121,13 @@ export async function getAvailableLanguageModels(): Promise<
 
 function createModelQuickPickItem(
   model: vscode.LanguageModelChat,
+  currentKey?: string,
 ): ModelQuickPickItem {
   return {
-    label: model.name,
+    label:
+      getLanguageModelKey(model) === currentKey
+        ? `$(check) ${model.name}`
+        : model.name,
     description: model.vendor,
     detail: model.id,
     model,
@@ -127,19 +137,25 @@ function createModelQuickPickItem(
 
 function createFixedModelQuickPickItem(
   model: LanguageModelReference,
+  currentKey?: string,
 ): ModelQuickPickItem {
   return {
-    label: model.name,
+    label:
+      getLanguageModelKey(model) === currentKey
+        ? `$(check) ${model.name}`
+        : model.name,
     description: model.vendor,
     detail: model.id,
     model,
   };
 }
 
-function createDefaultModelQuickPickItem(): DefaultModelQuickPickItem {
+function createDefaultModelQuickPickItem(
+  options: PickLanguageModelOptions,
+): DefaultModelQuickPickItem {
   return {
-    label: t('Default'),
-    detail: t('Use the VS Code default model.'),
+    label: options.defaultLabel ?? t('Default'),
+    detail: options.defaultDetail ?? t('Use the VS Code default model.'),
     isDefault: true,
   };
 }
@@ -175,39 +191,57 @@ function insertFixedCopilotModels(
 export async function pickLanguageModel(
   options: PickLanguageModelOptions,
 ): Promise<LanguageModelPickResult | undefined> {
-  const models = await getAvailableLanguageModels();
-  const fixedModelItems = options.includeCopilotUtilityModels
-    ? COPILOT_UTILITY_MODELS.map(createFixedModelQuickPickItem)
-    : [];
-  if (
-    models.length === 0 &&
-    fixedModelItems.length === 0 &&
-    !options.includeDefault
-  ) {
-    throw new NoLanguageModelsAvailableError();
-  }
-
-  const fixedModelKeys = new Set(
-    fixedModelItems.map((item) => getLanguageModelKey(item.model)),
-  );
-  const modelItems = models
-    .filter((model) => !fixedModelKeys.has(getLanguageModelKey(model)))
-    .map(createModelQuickPickItem);
-  const orderedModelItems = insertFixedCopilotModels(
-    modelItems,
-    fixedModelItems,
-  );
-  const items: LanguageModelQuickPickItem[] = [
-    ...(options.includeDefault ? [createDefaultModelQuickPickItem()] : []),
-    ...orderedModelItems,
-  ];
-
-  const selected = await vscode.window.showQuickPick(items, {
-    placeHolder: options.placeHolder,
+  const selections = await pickAsyncQuickItems<LanguageModelQuickPickItem>({
+    loadingPlaceholder: t('Loading models...'),
+    placeholder: options.placeHolder,
     matchOnDescription: true,
     matchOnDetail: true,
+    emptyItem: {
+      label: `$(info) ${t('No language models are available.')}`,
+    },
+    loadItems: async () => {
+      const models = await getAvailableLanguageModels();
+      const eligibleModels = options.filter
+        ? (
+            await Promise.all(
+              models.map(async (model) => ({
+                model,
+                eligible: await options.filter?.(model),
+              })),
+            )
+          )
+            .filter((entry) => entry.eligible)
+            .map((entry) => entry.model)
+        : models;
+      const currentKey = options.current
+        ? `${options.current.vendor}/${options.current.id}`
+        : undefined;
+      const fixedModelItems = options.includeCopilotUtilityModels
+        ? COPILOT_UTILITY_MODELS.map((model) =>
+            createFixedModelQuickPickItem(model, currentKey),
+          )
+        : [];
+      const fixedModelKeys = new Set(
+        fixedModelItems.map((item) => getLanguageModelKey(item.model)),
+      );
+      const modelItems = eligibleModels
+        .filter((model) => !fixedModelKeys.has(getLanguageModelKey(model)))
+        .map((model) => createModelQuickPickItem(model, currentKey));
+      const orderedModelItems = insertFixedCopilotModels(
+        modelItems,
+        fixedModelItems,
+      );
+      return {
+        items: [
+          ...(options.includeDefault
+            ? [createDefaultModelQuickPickItem(options)]
+            : []),
+          ...orderedModelItems,
+        ],
+      };
+    },
   });
-
+  const selected = selections?.[0];
   if (!selected) {
     return undefined;
   }

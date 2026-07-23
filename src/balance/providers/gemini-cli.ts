@@ -1,7 +1,6 @@
 import { GEMINI_CLI_API_HEADERS, GEMINI_CLI_ENDPOINT_FALLBACKS } from '../../auth/providers/google-gemini-oauth/constants';
 import { t } from '../../i18n';
 import type { SecretStore } from '../../secret';
-import type { ProviderConfig } from '../../types';
 import type {
   BalanceConfig,
   BalanceRefreshInput,
@@ -17,19 +16,22 @@ import type {
 import { refreshCodeAssistQuota } from './code-assist-quota';
 
 function resolveGeminiCliProjectId(
-  provider: ProviderConfig,
+  input: BalanceRefreshInput,
 ): string | undefined {
-  const auth = provider.auth;
-  if (auth?.method !== 'google-gemini-oauth') {
+  const context =
+    input.credential?.kind === 'token'
+      ? input.credential.authContext
+      : undefined;
+  if (context?.method !== 'google-gemini-oauth') {
     return undefined;
   }
 
-  const managedProjectId = auth.managedProjectId?.trim();
+  const managedProjectId = context.managedProjectId?.trim();
   if (managedProjectId) {
     return managedProjectId;
   }
 
-  const projectId = auth.projectId?.trim();
+  const projectId = context.projectId?.trim();
   if (projectId) {
     return projectId;
   }
@@ -110,8 +112,7 @@ export class GeminiCliBalanceProvider implements BalanceProvider {
       providerName: 'Gemini CLI',
       endpointFallbacks: GEMINI_CLI_ENDPOINT_FALLBACKS,
       requestHeaders: GEMINI_CLI_API_HEADERS,
-      resolveProjectId: (refreshInput) =>
-        resolveGeminiCliProjectId(refreshInput.provider),
+      resolveProjectId: resolveGeminiCliProjectId,
     });
   }
 }

@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.12.3",
+  "version": "8.0.1",
   "categories": [
     "AI",
     "Chat"
@@ -44,6 +44,8 @@
     "gemini-cli",
     "antigravity",
     "kiro",
+    "zed",
+    "zeta",
     "free-ai",
     "free-chat",
     "free-agent",
@@ -51,10 +53,15 @@
     "coding-plan",
     "custom-models",
     "custom-chat",
+    "fim",
+    "tab",
+    "nes",
+    "next-edit-prediction",
     "自定义模型",
     "自定义聊天",
     "免费模型",
-    "免费聊天"
+    "免费聊天",
+    "代码补全"
   ],
   "publisher": "SmallMain",
   "icon": "icon.png",
@@ -66,57 +73,16 @@
   },
   "license": "MIT",
   "engines": {
-    "vscode": "^1.104.0"
+    "node": ">=24.12.0",
+    "vscode": "^1.115.0"
   },
   "packageManager": "npm@10.8.2",
   "enabledApiProposals": [
-    "extensionsAny",
-    "newSymbolNamesProvider",
-    "interactive",
-    "codeActionAI",
-    "activeComment",
-    "commentReveal",
-    "contribCommentThreadAdditionalMenu",
-    "contribCommentsViewThreadMenus",
-    "documentFiltersExclusive",
-    "embeddings",
-    "findTextInFiles",
-    "findTextInFiles2",
-    "findFiles2",
-    "textSearchProvider",
-    "terminalDataWriteEvent",
-    "terminalExecuteCommandEvent",
-    "terminalSelection",
-    "terminalQuickFixProvider",
-    "mappedEditsProvider",
-    "aiRelatedInformation",
-    "aiSettingsSearch",
-    "chatParticipantAdditions",
-    "defaultChatParticipant",
-    "contribSourceControlInputBoxMenu",
-    "authLearnMore",
-    "testObserver",
-    "aiTextSearchProvider",
-    "chatParticipantPrivate",
-    "chatProvider",
-    "contribDebugCreateConfiguration",
-    "chatReferenceDiagnostic",
-    "textSearchProvider2",
-    "chatReferenceBinaryData",
     "languageModelSystem",
-    "languageModelCapabilities",
+    "chatProvider",
     "inlineCompletionsAdditions",
-    "chatStatusItem",
-    "taskProblemMatcherStatus",
-    "contribLanguageModelToolSets",
-    "textDocumentChangeReason",
-    "resolvers",
-    "taskExecutionTerminal",
-    "dataChannels",
-    "languageModelThinkingPart",
-    "chatSessionsProvider",
-    "devDeviceId",
-    "contribEditorContentMenu"
+    "contribSourceControlInputBoxMenu",
+    "languageModelThinkingPart"
   ],
   "activationEvents": [
     "onStartupFinished"
@@ -187,6 +153,14 @@
       {
         "command": "unifyChatProvider.changeVSCodeDefaultModel",
         "title": "%command.changeVSCodeDefaultModel.title%"
+      },
+      {
+        "command": "unifyChatProvider.enableProposedApi",
+        "title": "%command.enableProposedApi.title%"
+      },
+      {
+        "command": "unifyChatProvider.completion.settings",
+        "title": "%command.completion.settings.title%"
       },
       {
         "command": "unifyChatProvider.commitMessageGeneration.generate",
@@ -405,6 +379,184 @@
             }
           }
         },
+        "unifyChatProvider.completion.enabled": {
+          "type": "boolean",
+          "scope": "window",
+          "description": "%configuration.completion.enabled.description%",
+          "default": true
+        },
+        "unifyChatProvider.completion.providers": {
+          "type": "array",
+          "scope": "window",
+          "description": "%configuration.completion.providers.description%",
+          "default": [],
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": [
+              "id",
+              "algorithm"
+            ],
+            "properties": {
+              "id": {
+                "type": "string",
+                "minLength": 1
+              },
+              "algorithm": {
+                "type": "string",
+                "enum": [
+                  "simple",
+                  "copilot-replica",
+                  "zed",
+                  "inception",
+                  "mistral"
+                ]
+              },
+              "options": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          }
+        },
+        "unifyChatProvider.completion.strategy": {
+          "type": "object",
+          "scope": "window",
+          "description": "%configuration.completion.strategy.description%",
+          "additionalProperties": false,
+          "required": [
+            "mode",
+            "stopWhen"
+          ],
+          "default": {
+            "mode": "all",
+            "disableVSCodeBuiltinCompletion": true,
+            "disabledGlobs": [
+              "**/.env*",
+              "**/*.pem",
+              "**/*.key",
+              "**/*.cert",
+              "**/*.crt",
+              "**/.dev.vars",
+              "**/secrets.yml"
+            ],
+            "stopWhen": {
+              "type": "firstUsable",
+              "graceMs": 0
+            }
+          },
+          "properties": {
+            "mode": {
+              "type": "string",
+              "enum": [
+                "all",
+                "main-first"
+              ]
+            },
+            "disableVSCodeBuiltinCompletion": {
+              "type": "boolean",
+              "default": true
+            },
+            "disabledGlobs": {
+              "type": "array",
+              "description": "%configuration.completion.disabledGlobs.description%",
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1
+              },
+              "default": [
+                "**/.env*",
+                "**/*.pem",
+                "**/*.key",
+                "**/*.cert",
+                "**/*.crt",
+                "**/.dev.vars",
+                "**/secrets.yml"
+              ]
+            },
+            "mainProvider": {
+              "type": "string"
+            },
+            "mainFirstTimeoutMs": {
+              "type": "number",
+              "minimum": 0
+            },
+            "parallelRequestOthers": {
+              "type": "boolean"
+            },
+            "stopWhen": {
+              "oneOf": [
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "firstUsable"
+                    },
+                    "graceMs": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "timeoutMs"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "deadline"
+                    },
+                    "timeoutMs": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type",
+                    "minItems"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "enoughResults"
+                    },
+                    "minItems": {
+                      "type": "integer",
+                      "minimum": 1
+                    },
+                    "graceMs": {
+                      "type": "number",
+                      "minimum": 0
+                    }
+                  }
+                },
+                {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "required": [
+                    "type"
+                  ],
+                  "properties": {
+                    "type": {
+                      "const": "allSettled"
+                    }
+                  }
+                }
+              ]
+            }
+          }
+        },
         "unifyChatProvider.commitMessageGeneration.enableButtons": {
           "type": "boolean",
           "scope": "window",
@@ -498,7 +650,8 @@
                   "openai-codex",
                   "xai-grok-build",
                   "ollama",
-                  "claude-code"
+                  "claude-code",
+                  "zed"
                 ],
                 "enumDescriptions": [
                   "%configuration.endpoints.type.enumDescriptions.0%",
@@ -512,7 +665,8 @@
                   "%configuration.endpoints.type.enumDescriptions.7%",
                   "%configuration.endpoints.type.enumDescriptions.11%",
                   "%configuration.endpoints.type.enumDescriptions.5%",
-                  "%configuration.endpoints.type.enumDescriptions.9%"
+                  "%configuration.endpoints.type.enumDescriptions.9%",
+                  "%configuration.endpoints.type.enumDescriptions.12%"
                 ]
               },
               "name": {
@@ -761,6 +915,55 @@
                     "type": "integer",
                     "description": "%configuration.endpoints.contextCache.ttl.description%",
                     "minimum": 1
+                  }
+                }
+              },
+              "completion": {
+                "type": "object",
+                "description": "%configuration.endpoints.completion.description%",
+                "additionalProperties": false,
+                "properties": {
+                  "transport": {
+                    "type": "string",
+                    "description": "%configuration.completion.transport.description%",
+                    "enum": [
+                      "auto",
+                      "native",
+                      "compatible"
+                    ]
+                  },
+                  "baseUrl": {
+                    "type": "string",
+                    "description": "%configuration.completion.baseUrl.description%"
+                  },
+                  "templates": {
+                    "description": "%configuration.completion.templates.description%",
+                    "oneOf": [
+                      {
+                        "type": "string",
+                        "enum": [
+                          "all"
+                        ]
+                      },
+                      {
+                        "type": "array",
+                        "uniqueItems": true,
+                        "items": {
+                          "type": "string",
+                          "enum": [
+                            "fim",
+                            "codegemma",
+                            "copilot-replica-nes",
+                            "zeta1",
+                            "zeta2",
+                            "zeta2.1",
+                            "zeta3-internal",
+                            "mercury-edit-2",
+                            "codestral"
+                          ]
+                        }
+                      }
+                    ]
                   }
                 }
               },
@@ -1341,6 +1544,55 @@
                           "description": "%configuration.endpoints.models.extraBody.description%",
                           "additionalProperties": true
                         },
+                        "completion": {
+                          "type": "object",
+                          "description": "%configuration.endpoints.models.completion.description%",
+                          "additionalProperties": false,
+                          "properties": {
+                            "transport": {
+                              "type": "string",
+                              "description": "%configuration.completion.transport.description%",
+                              "enum": [
+                                "auto",
+                                "native",
+                                "compatible"
+                              ]
+                            },
+                            "baseUrl": {
+                              "type": "string",
+                              "description": "%configuration.completion.baseUrl.description%"
+                            },
+                            "templates": {
+                              "description": "%configuration.completion.templates.description%",
+                              "oneOf": [
+                                {
+                                  "type": "string",
+                                  "enum": [
+                                    "all"
+                                  ]
+                                },
+                                {
+                                  "type": "array",
+                                  "uniqueItems": true,
+                                  "items": {
+                                    "type": "string",
+                                    "enum": [
+                                      "fim",
+                                      "codegemma",
+                                      "copilot-replica-nes",
+                                      "zeta1",
+                                      "zeta2",
+                                      "zeta2.1",
+                                      "zeta3-internal",
+                                      "mercury-edit-2",
+                                      "codestral"
+                                    ]
+                                  }
+                                }
+                              ]
+                            }
+                          }
+                        },
                         "presetTemplates": {
                           "type": "array",
                           "description": "%configuration.endpoints.models.presetTemplates.description%",
@@ -1733,7 +1985,14 @@
       "scm/inputBox": [
         {
           "command": "unifyChatProvider.commitMessageGeneration.generate",
-          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled"
+          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled && unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu"
+        }
+      ],
+      "scm/title": [
+        {
+          "command": "unifyChatProvider.commitMessageGeneration.generate",
+          "when": "config.git.enabled && scmProvider == git && unifyChatProvider.gitAvailable && unifyChatProvider.commitMessageGenerationButtonsEnabled && !unifyChatProvider.proposedApi.contribSourceControlInputBoxMenu",
+          "group": "navigation"
         }
       ]
     }
@@ -1741,22 +2000,36 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "update-dts": "npx vscode-dts dev",
-    "compile": "npm run webview:build && tsc -p .",
+    "clean:build": "tsx scripts/clean-build.ts",
+    "compile": "npm run clean:build && npm run webview:build && tsc -p . && npm run build:chat-lib-runtime",
     "compile:extension": "tsc -p .",
     "webview:build": "vite build",
-    "watch": "tsc -watch -p .",
-    "l10n:check": "bun run scripts/l10n-audit.ts",
-    "l10n:sync": "bun run scripts/l10n-audit.ts --write --write-locales",
-    "count-loc": "bun run scripts/count-loc.ts",
-    "release": "bun run scripts/release.ts"
+    "watch": "npm run clean:build && npm run webview:build && npm run build:chat-lib-runtime && tsc -watch -p .",
+    "build:chat-lib-runtime": "tsx scripts/copy-chat-lib-resources.ts",
+    "test": "npm run test:unit",
+    "test:unit": "tsc -p . --noEmit && tsc -p test/tsconfig.json && npm run build:chat-lib-runtime && vitest run",
+    "test:e2e": "npm run compile && tsc -p test/e2e/tsconfig.json && node out-test/e2e/run.js",
+    "extract:chat-lib": "tsx scripts/update-chat-lib.ts",
+    "verify:chat-lib": "tsx scripts/verify-chat-lib.ts",
+    "l10n:check": "tsx scripts/l10n-audit.ts",
+    "l10n:sync": "tsx scripts/l10n-audit.ts --write --write-locales",
+    "check": "npm run test:unit && npm run verify:chat-lib && npm run l10n:check",
+    "release": "node scripts/release.mts"
   },
   "devDependencies": {
-    "@types/node": "^22",
-    "@types/vscode": "^1.104.0",
+    "@types/node": "^24",
+    "@types/vscode": "1.115.0",
     "@types/ws": "^8.18.1",
     "@vitejs/plugin-vue": "^6.0.7",
     "@vscode/l10n-dev": "^0.0.35",
+    "@vscode/test-electron": "^3.0.0",
+    "@vscode/tree-sitter-wasm": "0.0.5-php.2",
+    "@vscode/vsce": "3.9.2",
+    "esbuild": "0.28.1",
+    "tsx": "^4.23.0",
     "typescript": "^6.0.3",
+    "vitest": "^4.1.10",
+    "web-tree-sitter": "0.23.2",
     "vite": "^8.0.16"
   },
   "dependencies": {
@@ -1765,7 +2038,9 @@
     "@huggingface/tokenizers": "^0.1.3",
     "@iarna/toml": "^2.2.5",
     "@vscode/l10n": "^0.0.18",
+    "@vscode/sudo-prompt": "^9.3.2",
     "echarts": "^6.1.0",
+    "ignore": "7.0.6",
     "lucide-vue-next": "^0.577.0",
     "minimatch": "^10.2.5",
     "naive-ui": "^2.44.1",

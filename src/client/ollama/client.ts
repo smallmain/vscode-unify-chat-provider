@@ -4,6 +4,10 @@ import {
   CancellationToken,
 } from 'vscode';
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
@@ -13,7 +17,7 @@ import {
   ModelConfig,
   ProviderConfig,
 } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import { Ollama } from 'ollama';
 import type {
   AbortableAsyncIterator,
@@ -362,7 +366,7 @@ export class OllamaProvider implements ApiProvider {
         };
       }
       return undefined;
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -716,7 +720,7 @@ export class OllamaProvider implements ApiProvider {
 
       const delta = event.message;
       if (delta.thinking) {
-        yield new vscode.LanguageModelThinkingPart(delta.thinking);
+        yield* createLanguageModelThinkingParts(delta.thinking);
       }
 
       if (delta.content) {
@@ -826,7 +830,7 @@ export class OllamaProvider implements ApiProvider {
     }
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(thinkingText);
+      yield* createLanguageModelThinkingParts(thinkingText);
     }
 
     metadata!._completeThinking =
@@ -837,7 +841,7 @@ export class OllamaProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 
@@ -895,7 +899,11 @@ export class OllamaProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -906,7 +914,7 @@ export class OllamaProvider implements ApiProvider {
       headers,
       logger,
       false,
-      undefined,
+      signal,
       'normal',
     );
 

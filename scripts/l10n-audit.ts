@@ -1,4 +1,3 @@
-#!/usr/bin/env bun
 import { parseArgs } from 'node:util';
 import { readFile, readdir, writeFile } from 'node:fs/promises';
 import { existsSync } from 'node:fs';
@@ -23,6 +22,15 @@ type Options = {
   strict: boolean;
   locales?: Set<string>;
 };
+
+const ENGLISH_ONLY_EXACT_KEYS = [
+  'Simple',
+  'Copilot (Replica)',
+] as const;
+const ENGLISH_ONLY_EMBEDDED_TERMS = [
+  'Simple',
+  'Copilot Replica',
+] as const;
 
 const { values } = parseArgs({
   options: {
@@ -379,6 +387,26 @@ function diffKeys(a: Set<string>, b: Set<string>): {
   return { missing, extra };
 }
 
+function findEnglishOnlyNameViolations(
+  baseBundle: Bundle,
+  localeBundle: Bundle,
+): string[] {
+  const violations = new Set<string>();
+  for (const key of ENGLISH_ONLY_EXACT_KEYS) {
+    if (localeBundle[key] !== baseBundle[key]) {
+      violations.add(key);
+    }
+  }
+  for (const [key, value] of Object.entries(localeBundle)) {
+    for (const term of ENGLISH_ONLY_EMBEDDED_TERMS) {
+      if (key.includes(term) && !value.includes(term)) {
+        violations.add(key);
+      }
+    }
+  }
+  return [...violations].sort();
+}
+
 async function discoverLocaleBundles(repoRoot: string, baseName: string): Promise<string[]> {
   const l10nDir = join(repoRoot, 'l10n');
   if (!existsSync(l10nDir)) return [];
@@ -479,6 +507,7 @@ async function auditBundles(repoRoot: string): Promise<number> {
   const localePaths = await discoverLocaleBundles(repoRoot, 'bundle.l10n');
   let localeMissingTotal = 0;
   let localeExtraTotal = 0;
+  let localeEnglishOnlyViolationTotal = 0;
 
   for (const localePath of localePaths) {
     const localeBundle = await readJson<Bundle>(localePath);
@@ -507,9 +536,14 @@ async function auditBundles(repoRoot: string): Promise<number> {
     const missingAfter = Array.from(baseKeysAfter)
       .filter((k) => !localeKeysAfter.has(k))
       .sort();
+    const englishOnlyViolations = findEnglishOnlyNameViolations(
+      baseBundleAfter,
+      localeBundleAfter,
+    );
 
     localeMissingTotal += missingAfter.length;
     localeExtraTotal += extra.length;
+    localeEnglishOnlyViolationTotal += englishOnlyViolations.length;
 
     const localeName = relative(repoRoot, localePath);
     console.log(`[l10n] ${localeName}: missing=${missingAfter.length} extra=${extra.length}`);
@@ -522,6 +556,10 @@ async function auditBundles(repoRoot: string): Promise<number> {
     if (extra.length) {
       console.log(`--- extra keys (${localeName}) ---`);
       console.log(extra.join('\n'));
+    }
+    if (englishOnlyViolations.length) {
+      console.log(`--- translated English-only names (${localeName}) ---`);
+      console.log(englishOnlyViolations.join('\n'));
     }
   }
 
@@ -563,11 +601,14 @@ async function auditBundles(repoRoot: string): Promise<number> {
   const hasBaseMissing = baseDiff.missing.length > 0;
   const hasLocaleMissing = localeMissingTotal > 0;
   const hasShowMessageIssues = nonLocalizedMessages.length > 0;
+  const hasEnglishOnlyNameViolations =
+    localeEnglishOnlyViolationTotal > 0;
 
   const shouldFail =
     hasBaseMissing ||
     hasLocaleMissing ||
     hasShowMessageIssues ||
+    hasEnglishOnlyNameViolations ||
     (options.strict &&
       (baseDiff.extra.length > 0 ||
         localeExtraTotal > 0 ||

@@ -18,6 +18,7 @@ import { GeminiCliBalanceProvider } from './providers/gemini-cli';
 import { CodexBalanceProvider } from './providers/codex';
 import { SyntheticBalanceProvider } from './providers/synthetic';
 import { MiniMaxBalanceProvider } from './providers/minimax';
+import { LiteLLMBalanceProvider } from './providers/litellm';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -231,6 +232,19 @@ export const BALANCE_METHODS = {
     resolveForExport: MiniMaxBalanceProvider.resolveForExport,
     normalizeOnImport: MiniMaxBalanceProvider.normalizeOnImport,
     prepareForDuplicate: MiniMaxBalanceProvider.prepareForDuplicate,
+  },
+  litellm: {
+    id: 'litellm',
+    label: t('LiteLLM Budget'),
+    description: t('Monitor budget via LiteLLM key info API'),
+    category: 'General',
+    ctor: LiteLLMBalanceProvider,
+    supportsSensitiveDataInSettings:
+      LiteLLMBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: LiteLLMBalanceProvider.redactForExport,
+    resolveForExport: LiteLLMBalanceProvider.resolveForExport,
+    normalizeOnImport: LiteLLMBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: LiteLLMBalanceProvider.prepareForDuplicate,
   },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,

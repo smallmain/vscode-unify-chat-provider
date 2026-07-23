@@ -1,0 +1,83 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/microsoft/vscode.git",
+  "ref": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "commit": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "sourceCommitDate": "2026-07-07T15:14:24-07:00",
+  "entryPoints": [
+    {
+      "id": "ghost-text-contextual-filter",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+      "purpose": "Compiled GhostText contextual-filter constants."
+    },
+    {
+      "id": "ghost-text-multiline-weights",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+      "purpose": "Compiled GhostText multiline model weights and character map."
+    },
+    {
+      "id": "inline-edit-presentation",
+      "sourcePath": "extensions/copilot/src/extension/inlineEdits/vscode-node/isInlineSuggestion.ts",
+      "purpose": "Compiled inline-suggestion presentation predicate."
+    },
+    {
+      "id": "nes-system-messages",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/systemMessages.ts",
+      "purpose": "Compiled NES system prompts."
+    },
+    {
+      "id": "nes-tags",
+      "sourcePath": "extensions/copilot/src/extension/xtab/common/tags.ts",
+      "purpose": "Compiled NES prompt and response tags."
+    },
+    {
+      "id": "parser-block-trimmer",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+      "purpose": "Bundled multiline completion block trimming."
+    },
+    {
+      "id": "parser-statement-tree",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+      "purpose": "Bundled statement-tree block position detection."
+    },
+    {
+      "id": "parser-language-support",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+      "purpose": "Bundled parser language support and WASM loading."
+    },
+    {
+      "id": "parser-block-boundaries",
+      "sourcePath": "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts",
+      "purpose": "Bundled parsed-block completion boundaries."
+    },
+    {
+      "id": "diff-computer",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+      "purpose": "Bundled detailed line diff implementation used by NES rebase."
+    },
+    {
+      "id": "diff-text",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+      "purpose": "Bundled text/range conversion used by the NES diff runtime."
+    },
+    {
+      "id": "diff-offset-transform",
+      "sourcePath": "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts",
+      "purpose": "Bundled position-to-offset transformation used by the NES diff runtime."
+    }
+  ],
+  "sourceModuleCount": 34,
+  "resourceCount": 0,
+  "extractionRules": [
+    "Start only from upstream modules that are compiled or bundled into the extension runtime.",
+    "Apply the same parser/diff build transforms before following TypeScript imports so unreachable host-only dependencies are not retained.",
+    "Follow every remaining TypeScript static import/export and triple-slash source reference.",
+    "Resolve relative imports and extensions/copilot/tsconfig.json path aliases.",
+    "Fail on unresolved source imports and undeclared external packages.",
+    "Keep manual-port and host-adapter provenance in src/chat-lib/porting-manifest.json without retaining their full source closure.",
+    "Include declared implicit worker and tokenizer resource dependencies.",
+    "Attribute every retained module/resource to at least one runtime entry."
+  ],
+  "manifest": "dependency-manifest.json",
+  "rewriteLedger": "rewrite-ledger.json"
+}
