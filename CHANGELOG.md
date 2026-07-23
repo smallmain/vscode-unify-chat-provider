@@ -1,5 +1,10 @@
 # Changelog
 
+## v8.0.2 - 2026-07-23
+
+### Fixes
+- detect empty output in OpenAI Responses API and handle final text/refusal deltas (62f991d, SmallMain)
+
 ## v8.0.1 - 2026-07-23
 
 ### Fixes
