@@ -165,6 +165,16 @@ function modelIdentityIncludes(
   );
 }
 
+function isMoonshotOpenAIProvider(provider: { baseUrl: string }): boolean {
+  return ['api.moonshot.cn', 'api.moonshot.ai'].some((pattern) =>
+    matchProvider(provider.baseUrl, pattern),
+  );
+}
+
+function isKimiK3Model(model: { id: string; family?: string }): boolean {
+  return modelIdentityIncludes(model, 'kimi-k3');
+}
+
 export enum FeatureId {
   /**
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
@@ -238,6 +248,7 @@ export enum FeatureId {
    * Use `reasoning_effort` parameter in OpenAI-compatible Chat Completion APIs.
    *
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
+   * @see https://platform.kimi.com/docs/guide/kimi-k3-quickstart
    */
   OpenAIUseReasoningEffortParam = 'openai_use-reasoning-effort-param',
   /**
@@ -576,10 +587,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
       'api.z.ai',
-      'api.moonshot.cn',
-      'api.moonshot.ai',
     ],
     customCheckers: [
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && !isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, [
           'deepseek-v3.2',
@@ -595,8 +606,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
-        (model) => modelFamilyIncludes(model, 'deepseek-v4'),
-        (model) => modelFamilyIncludes(model, 'glm-5.2'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+      (model) => modelFamilyIncludes(model, 'glm-5.2'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -615,6 +626,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.synthetic.new',
     ],
     customCheckers: [
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, ['gpt-oss-120b', 'gpt-oss-20b']),
     ],
