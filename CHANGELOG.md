@@ -1,5 +1,24 @@
 # Changelog
 
+## v8.0.0 - 2026-07-23
+
+### Breaking Changes
+- fix multiple issues with the account process (fa2ad26, SmallMain)
+- add Zed, Inception, Mistral AI providers; add zeta, mercury-2... models; add code completion support (ca0fb1d, SmallMain)
+
+### Features
+- add LiteLLM preset template and model hints (41bffd5, RheagalFire)
+- add LiteLLM as AI gateway provider (5fdb37c, RheagalFire)
+- add Kimi K3, Gemini 3.6 Flash, KAT-Coder V2.5 models and update features (c060388, SmallMain)
+- add Proposed API enablement support with code completion and system message fallbacks (e5576d5, SmallMain)
+
+### Fixes
+- isolate completion e2e sessions (326596a, SmallMain)
+- unblock release validation (b83b5e9, SmallMain)
+- correct DeepSeek V4 Flash and Pro max output tokens to 64000 (f4b7813, SmallMain)
+- reduce maxInputTokens for GPT-5.6 models to 272000 (b5febfc, SmallMain)
+- remove redundant Anthropic Messages variant (aa0d17c, RheagalFire)
+
 ## v7.12.3 - 2026-07-12
 
 ### Features
