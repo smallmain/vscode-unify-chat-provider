@@ -414,13 +414,18 @@ async function triggerInlineSuggestion(): Promise<void> {
 async function waitForVscodeRequest(
   documentUri: string,
   minimumCount = 1,
+  predicate: (
+    request: CompletionHarnessState["requests"][number],
+  ) => boolean = () => true,
 ): Promise<CompletionHarnessState> {
   return waitForHarnessState(
     `${minimumCount} VS Code request(s) for ${documentUri}`,
     (state) =>
       state.requests.filter(
         (request) =>
-          request.origin === "vscode" && request.documentUri === documentUri,
+          request.origin === "vscode" &&
+          request.documentUri === documentUri &&
+          predicate(request),
       ).length >= minimumCount,
   );
 }
@@ -1419,12 +1424,27 @@ async function runRealVsCodeCompletionLifecycleE2E(
   const crossSourceUri = crossSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();
-  const crossRequestState = await waitForVscodeRequest(crossSourceUri);
+  const crossRequestState = await waitForVscodeRequest(
+    crossSourceUri,
+    1,
+    (request) =>
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
+  );
   const crossRequest = crossRequestState.requests.find(
     (request) =>
-      request.origin === "vscode" && request.documentUri === crossSourceUri,
+      request.origin === "vscode" &&
+      request.documentUri === crossSourceUri &&
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
   );
-  assert.equal(crossRequest?.itemCount, 1);
+  assert.equal(
+    crossRequest?.itemCount,
+    1,
+    JSON.stringify({
+      harness: crossRequestState,
+      runtime: await getRuntimeState("vscode-nes-cross-file"),
+      modelRequests: await getNesRequests(),
+    }),
+  );
   await waitForVscodeLifecycle(crossSourceUri, "show");
   await vscode.commands.executeCommand("editor.action.inlineSuggest.commit");
   await waitForVscodeLifecycle(crossSourceUri, "accept");
@@ -1506,10 +1526,17 @@ async function runRealVsCodeCompletionLifecycleE2E(
   const pureJumpSourceUri = pureJumpSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();
-  const pureJumpRequestState = await waitForVscodeRequest(pureJumpSourceUri);
+  const pureJumpRequestState = await waitForVscodeRequest(
+    pureJumpSourceUri,
+    1,
+    (request) =>
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
+  );
   const pureJumpRequest = pureJumpRequestState.requests.find(
     (request) =>
-      request.origin === "vscode" && request.documentUri === pureJumpSourceUri,
+      request.origin === "vscode" &&
+      request.documentUri === pureJumpSourceUri &&
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
   );
   assert.equal(
     pureJumpRequest?.itemCount,

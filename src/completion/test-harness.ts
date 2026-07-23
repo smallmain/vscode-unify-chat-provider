@@ -221,6 +221,7 @@ export class CompletionTestHarness implements vscode.Disposable {
   private lastSessionId: number | undefined;
   private harnessProvideDepth = 0;
   private harnessLifecycleDepth = 0;
+  private generation = 0;
 
   constructor(private readonly manager: CompletionManager) {
     this.originalProvideInlineCompletionItems =
@@ -240,6 +241,7 @@ export class CompletionTestHarness implements vscode.Disposable {
       context,
       token,
     ) => {
+      const generation = this.generation;
       const origin: CompletionTestInvocationOrigin =
         this.harnessProvideDepth > 0 ? "harness" : "vscode";
       const list = await this.originalProvideInlineCompletionItems(
@@ -248,7 +250,9 @@ export class CompletionTestHarness implements vscode.Disposable {
         context,
         token,
       );
-      this.recordSession(list, document, context, origin);
+      if (generation === this.generation) {
+        this.recordSession(list, document, context, origin);
+      }
       return list;
     };
     manager.handleDidShowCompletionItem = (item, updatedInsertText) => {
@@ -497,6 +501,7 @@ export class CompletionTestHarness implements vscode.Disposable {
   }
 
   clear(): void {
+    this.generation += 1;
     for (const source of this.cancellableSources.values()) {
       source.cancel();
     }
