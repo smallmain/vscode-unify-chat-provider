@@ -902,6 +902,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Xiaomi MIMO (欧洲站, Token Plan)](https://mimo.xiaomi.com/)                                  | <li>ThinkingParam <li>ReasoningContent                                               |                       |
 | [Ollama Local](https://ollama.com/)                                                           |                                                                                      |                       |
 | [Ollama Cloud](https://ollama.com/)                                                           |                                                                                      |                       |
+| [LM Studio Local](https://lmstudio.ai/)                                                           |                                                                                      |                       |
 | [阶跃星辰 (中国站)](https://platform.stepfun.com/)                                            | <li>ReasoningField                                                                   |                       |
 | [阶跃星辰 (国际站)](https://platform.stepfun.com/)                                            | <li>ReasoningField                                                                   |                       |
 | [智谱 AI](https://open.bigmodel.cn/)                                                          | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    | [详情](#智谱-ai--zai) |
