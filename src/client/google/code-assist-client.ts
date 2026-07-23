@@ -48,6 +48,15 @@ import {
 } from '../../auth/providers/antigravity-oauth/constants';
 import { getBaseModelId } from '../../model-id-utils';
 import { extractServerSuggestedRetryDelayMs } from './retry-info';
+import {
+  isAntigravityImageModel,
+  type Gemini3ThinkingLevel,
+} from './antigravity-model-resolver';
+
+export {
+  resolveAntigravityModelForRequest,
+  type Gemini3ThinkingLevel,
+} from './antigravity-model-resolver';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -1031,12 +1040,6 @@ function normalizeToolParametersSchema(
   return out;
 }
 
-export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
-
-const IMAGE_MODEL_PATTERN = /image|imagen/i;
-const GEMINI_3_TIER_SUFFIX = /-(minimal|low|medium|high)$/i;
-const GEMINI_3_PRO_PATTERN = /^gemini-3(?:\.\d+)?-pro/i;
-const CLAUDE_THINKING_SUFFIX = /-thinking$/i;
 const CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY = 32768;
 const CLAUDE_OPUS_LOW_THINKING_BUDGET_ANTIGRAVITY = 8192;
 const CLAUDE_OPUS_MAX_OUTPUT_TOKENS_ANTIGRAVITY = 64000;
@@ -1080,31 +1083,6 @@ function resolveClaudeOpusThinkingBudgetForAntigravity(
     default:
       return CLAUDE_OPUS_HIGH_THINKING_BUDGET_ANTIGRAVITY;
   }
-}
-
-function parseGemini3TierSuffix(modelId: string): {
-  baseModelId: string;
-  tier?: Gemini3ThinkingLevel;
-} {
-  const tierMatch = modelId.match(GEMINI_3_TIER_SUFFIX);
-  if (!tierMatch || typeof tierMatch[1] !== 'string') {
-    return { baseModelId: modelId };
-  }
-
-  const candidate = tierMatch[1].toLowerCase();
-  if (
-    candidate !== 'minimal' &&
-    candidate !== 'low' &&
-    candidate !== 'medium' &&
-    candidate !== 'high'
-  ) {
-    return { baseModelId: modelId };
-  }
-
-  return {
-    baseModelId: modelId.slice(0, modelId.length - tierMatch[0].length),
-    tier: candidate,
-  };
 }
 
 function hasMeaningfulPartValue(value: unknown): boolean {
@@ -1198,64 +1176,6 @@ function sanitizeContentsForRequest(contents: Content[]): void {
 
     content.parts = sanitizedParts;
   }
-}
-
-export function resolveAntigravityModelForRequest(
-  modelId: string,
-  preferredGemini3ThinkingLevel?: Gemini3ThinkingLevel,
-  thinkingEnabled?: boolean,
-): {
-  requestModelId: string;
-  gemini3ThinkingLevel?: Gemini3ThinkingLevel;
-} {
-  // Sync rule: `modelId` here is the model ID from this project's config.
-  // Keep conversion minimal for request protocol needs (tier/thinking),
-  // and do NOT port reference project's full alias/prefix resolver.
-  const trimmed = modelId.trim();
-  const modelLower = trimmed.toLowerCase();
-
-  // Antigravity currently exposes Claude Opus as a dedicated `-thinking`
-  // request model, while Claude Sonnet keeps its canonical model ID even
-  // when thinking is enabled. Normalize any existing suffix first so we do
-  // not accidentally produce `-thinking-thinking`.
-  if (modelLower.includes('claude')) {
-    const baseClaudeModelId = trimmed.replace(CLAUDE_THINKING_SUFFIX, '');
-    const isOpus = baseClaudeModelId.toLowerCase().includes('opus');
-    const requestModelId = isOpus
-      ? `${baseClaudeModelId}-thinking`
-      : baseClaudeModelId;
-    return { requestModelId };
-  }
-
-  // Handle Gemini 3 models
-  const isGemini3 = modelLower.includes('gemini-3');
-  if (!isGemini3) {
-    return { requestModelId: trimmed };
-  }
-
-  const isGemini3Pro = GEMINI_3_PRO_PATTERN.test(modelLower);
-
-  if (isGemini3Pro) {
-    const { baseModelId, tier } = parseGemini3TierSuffix(trimmed);
-    const effectiveLevel: Gemini3ThinkingLevel =
-      preferredGemini3ThinkingLevel ?? tier ?? 'high';
-    // Antigravity requires tier suffix for Gemini 3 Pro. Default to -high.
-    const isImageModel = IMAGE_MODEL_PATTERN.test(baseModelId);
-    const requestModelId = isImageModel
-      ? baseModelId
-      : `${baseModelId}-${effectiveLevel}`;
-    return { requestModelId, gemini3ThinkingLevel: effectiveLevel };
-  }
-
-  // Default thinking level for non-Pro Gemini 3 models is high.
-  const effectiveLevel: Gemini3ThinkingLevel =
-    preferredGemini3ThinkingLevel ?? 'high';
-
-  // Other Gemini 3 models: keep as-is, but still expose default thinkingLevel.
-  return {
-    requestModelId: trimmed,
-    gemini3ThinkingLevel: effectiveLevel,
-  };
 }
 
 type AntigravityFunctionDeclaration = {
@@ -1889,7 +1809,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
       ? undefined
       : resolvedModel.gemini3ThinkingLevel;
     const modelIdLower = requestModelId.toLowerCase();
-    const isImageModel = IMAGE_MODEL_PATTERN.test(requestModelId);
+    const isImageModel = isAntigravityImageModel(requestModelId);
     const isClaudeModel = modelIdLower.includes('claude');
     const isClaudeOpusModel = modelIdLower.includes('claude-opus');
     const isAntigravityImageRequest =
@@ -2033,7 +1953,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
     if (
       typeof generationConfig.maxOutputTokens === 'number' &&
       requestModelId.toLowerCase().startsWith('gemini-3-pro') &&
-      !IMAGE_MODEL_PATTERN.test(requestModelId) &&
+      !isAntigravityImageModel(requestModelId) &&
       generationConfig.maxOutputTokens >
         GEMINI_3_PRO_MAX_OUTPUT_TOKENS_ANTIGRAVITY
     ) {
