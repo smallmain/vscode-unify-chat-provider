@@ -1,5 +1,15 @@
 # Changelog
 
+## v8.0.1 - 2026-07-23
+
+### Fixes
+- drop tool call messages on model switch to prevent invalid assistant turns (282a66a, SmallMain)
+- claude-code: update CCH seed and include stream flag in billing signature (7836498, SmallMain)
+- scope auth token and socket paths to VS Code runtime namespace instead of profile (0662a9f, SmallMain)
+
+### Refactors
+- extract model resolver and add Gemini 3.1 Pro routing (409f5e2, SmallMain)
+
 ## v8.0.0 - 2026-07-23
 
 ### Breaking Changes
