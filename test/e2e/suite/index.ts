@@ -6,6 +6,8 @@ import * as vscode from "vscode";
 const EXTENSION_ID = "SmallMain.vscode-unify-chat-provider";
 const FAKE_LANGUAGE_MODEL_EXTENSION_ID = "ucp-e2e.fake-language-model";
 const FAKE_NES_MODEL = { vendor: "ucp-e2e-fake", id: "controlled" } as const;
+const CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX =
+  "Your task is to predict the line number";
 
 interface CompletionManagerState {
   registered: boolean;
@@ -137,6 +139,14 @@ interface FakeLanguageModelResponseInput {
   delayMs?: number;
   chunkDelayMs?: number;
   error?: string;
+  match?: {
+    role?: "system" | "user";
+    includes: string;
+  };
+}
+
+interface FakeLanguageModelResponseProgram {
+  responses: Array<string | FakeLanguageModelResponseInput>;
 }
 
 interface FakeLanguageModelRequestRecord {
@@ -543,7 +553,7 @@ async function setNesResponse(
   response:
     | string
     | FakeLanguageModelResponseInput
-    | { responses: Array<string | FakeLanguageModelResponseInput> }
+    | FakeLanguageModelResponseProgram
     | undefined,
 ): Promise<void> {
   const configured = await vscode.commands.executeCommand<boolean>(
@@ -1367,13 +1377,35 @@ async function runRealVsCodeCompletionLifecycleE2E(
     realCrossSourceLines.join("\n"),
     new vscode.Position(4, realCrossSourceLines[4].length),
   );
-  await setNesResponse({
+  const crossFileResponseProgram = {
     responses: [
+      {
+        chunks: ["vscode-cross-target.ts:4"],
+        match: {
+          role: "system",
+          includes: CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX,
+        },
+      },
+      {
+        chunks: [
+          "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
+        ],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-cross-target.ts",
+        },
+      },
+      {
+        chunks: ["<NO_CHANGE>"],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-cross-source.ts",
+        },
+      },
       "<NO_CHANGE>",
-      "vscode-cross-target.ts:4",
-      "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
     ],
-  });
+  } satisfies FakeLanguageModelResponseProgram;
+  await setNesResponse(crossFileResponseProgram);
   await updateCompletionProviders(completionConfiguration, [
     copilotProvider("vscode-nes-cross-file", {
       enableFIM: false,
@@ -1383,13 +1415,7 @@ async function runRealVsCodeCompletionLifecycleE2E(
     }),
   ]);
   await recordRecentEditForProvider(crossSourceEditor, "vscode-nes-cross-file");
-  await setNesResponse({
-    responses: [
-      "<NO_CHANGE>",
-      "vscode-cross-target.ts:4",
-      "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
-    ],
-  });
+  await setNesResponse(crossFileResponseProgram);
   const crossSourceUri = crossSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();
@@ -1444,9 +1470,26 @@ async function runRealVsCodeCompletionLifecycleE2E(
     pureJumpSourceLines.join("\n"),
     new vscode.Position(2, pureJumpSourceLines[2].length),
   );
-  await setNesResponse({
-    responses: ["<NO_CHANGE>", `${pureJumpTargetUri.toString()}:4`],
-  });
+  const pureJumpResponseProgram = {
+    responses: [
+      {
+        chunks: [`${pureJumpTargetUri.toString()}:4`],
+        match: {
+          role: "system",
+          includes: CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX,
+        },
+      },
+      {
+        chunks: ["<NO_CHANGE>"],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-pure-cursor-jump-source.ts",
+        },
+      },
+      "<NO_CHANGE>",
+    ],
+  } satisfies FakeLanguageModelResponseProgram;
+  await setNesResponse(pureJumpResponseProgram);
   await updateCompletionProviders(completionConfiguration, [
     copilotProvider("vscode-nes-pure-cursor-jump", {
       enableFIM: false,
@@ -1459,9 +1502,7 @@ async function runRealVsCodeCompletionLifecycleE2E(
     pureJumpSourceEditor,
     "vscode-nes-pure-cursor-jump",
   );
-  await setNesResponse({
-    responses: ["<NO_CHANGE>", `${pureJumpTargetUri.toString()}:4`],
-  });
+  await setNesResponse(pureJumpResponseProgram);
   const pureJumpSourceUri = pureJumpSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();

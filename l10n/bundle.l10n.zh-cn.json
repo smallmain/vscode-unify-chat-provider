@@ -1325,5 +1325,13 @@
   "Recover local authorization...": "恢复本地授权...",
   "{0} local authorization candidates": "{0} 个本地授权候选",
   "Authentication changed on this device while this operation was in progress. Please try again.": "操作期间此设备上的认证状态已发生变化，请重试。",
-  "Authentication configuration changed while the request was starting. Please retry.": "请求启动期间认证配置发生了变化，请重试。"
+  "Authentication configuration changed while the request was starting. Please retry.": "请求启动期间认证配置发生了变化，请重试。",
+  "Budget": "预算",
+  "Budget Limit": "预算上限",
+  "Budget Remaining": "剩余预算",
+  "LiteLLM": "LiteLLM",
+  "LiteLLM Budget": "LiteLLM 预算",
+  "Monitor budget via LiteLLM key info API": "通过 LiteLLM Key 信息 API 监控预算",
+  "No budget limit configured": "未配置预算上限",
+  "Spent": "已支出"
 }

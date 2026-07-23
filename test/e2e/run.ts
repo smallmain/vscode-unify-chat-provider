@@ -333,11 +333,33 @@ function normalizeResponse(value) {
   if (value.chunks.some(chunk => typeof chunk !== 'string')) {
     return undefined;
   }
+  if (
+    value.match !== undefined &&
+    (
+      !value.match ||
+      typeof value.match !== 'object' ||
+      typeof value.match.includes !== 'string' ||
+      value.match.includes.length === 0 ||
+      (
+        value.match.role !== undefined &&
+        value.match.role !== 'system' &&
+        value.match.role !== 'user'
+      )
+    )
+  ) {
+    return undefined;
+  }
   return {
     chunks: [...value.chunks],
     delayMs: typeof value.delayMs === 'number' && value.delayMs >= 0 ? value.delayMs : 0,
     chunkDelayMs: typeof value.chunkDelayMs === 'number' && value.chunkDelayMs >= 0 ? value.chunkDelayMs : 0,
     error: typeof value.error === 'string' ? value.error : undefined,
+    match: value.match === undefined
+      ? undefined
+      : {
+          includes: value.match.includes,
+          role: value.match.role,
+        },
   };
 }
 
@@ -419,9 +441,22 @@ function activate(context) {
       const cancellation = token.onCancellationRequested(() => {
         record.cancellationRequested = true;
       });
-      const index = Math.min(responseIndex, responses.length - 1);
-      responseIndex += 1;
-      const response = responses[index];
+      const matchingResponse = responses.find(response =>
+        response.match &&
+        messageRecords.some(message =>
+          (response.match.role === undefined || response.match.role === message.role) &&
+          message.content.includes(response.match.includes),
+        ),
+      );
+      const sequentialResponses = responses.filter(response => !response.match);
+      const index = Math.min(responseIndex, sequentialResponses.length - 1);
+      const response = matchingResponse || sequentialResponses[index];
+      if (!matchingResponse) {
+        responseIndex += 1;
+      }
+      if (!response) {
+        throw new Error('No fake language model response matched the request.');
+      }
       try {
         await waitForDelay(response.delayMs || 0, token);
         if (token.isCancellationRequested) return;

@@ -1325,5 +1325,13 @@
   "Recover local authorization...": "Recover local authorization...",
   "{0} local authorization candidates": "{0} local authorization candidates",
   "Authentication changed on this device while this operation was in progress. Please try again.": "Authentication changed on this device while this operation was in progress. Please try again.",
-  "Authentication configuration changed while the request was starting. Please retry.": "Authentication configuration changed while the request was starting. Please retry."
+  "Authentication configuration changed while the request was starting. Please retry.": "Authentication configuration changed while the request was starting. Please retry.",
+  "Budget": "Budget",
+  "Budget Limit": "Budget Limit",
+  "Budget Remaining": "Budget Remaining",
+  "LiteLLM": "LiteLLM",
+  "LiteLLM Budget": "LiteLLM Budget",
+  "Monitor budget via LiteLLM key info API": "Monitor budget via LiteLLM key info API",
+  "No budget limit configured": "No budget limit configured",
+  "Spent": "Spent"
 }
