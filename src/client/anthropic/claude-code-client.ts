@@ -7,13 +7,14 @@ import type {
   MessageCreateParamsStreaming,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { serializeClaudeCodeCchInput } from './claude-code-cch';
 import { deriveClaudeCodeIdentitySeed } from './claude-code-identity';
 import { AnthropicProvider } from './client';
 
 const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.161';
 const CLAUDE_CODE_NEW_METADATA_FORMAT_MIN_VERSION = '2.1.78';
 const DEFAULT_CLAUDE_SDK_VERSION = '0.94.0';
-const CCH_SEED = 0x6e52736ac806831en;
+const CCH_SEED = 0x4d659218e32a3268n;
 const FINGERPRINT_SALT = '59cf53e54c78';
 const XXH64_PRIME1 = 0x9e3779b185ebca87n;
 const XXH64_PRIME2 = 0xc2b2ae3d27d4eb4fn;
@@ -289,8 +290,9 @@ function computeClaudeCodeFingerprint(
 
 function signClaudeCodeBillingHeader(
   requestBase: Omit<MessageCreateParamsStreaming, 'stream'>,
+  stream: boolean,
 ): void {
-  const body = JSON.stringify(requestBase);
+  const body = serializeClaudeCodeCchInput(requestBase, stream);
   const cch = (xxHash64Seeded(body, CCH_SEED) & 0xfffffn)
     .toString(16)
     .padStart(5, '0');
@@ -649,7 +651,7 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
         options.requestState.userId = metadataUserId;
       }
     }
-    signClaudeCodeBillingHeader(requestBase);
+    signClaudeCodeBillingHeader(requestBase, options.stream);
     return requestBase;
   }
 
