@@ -985,6 +985,117 @@ export function isRetryableNetworkError(
   return hasRetryableNetworkErrorMessage(error);
 }
 
+const RETRYABLE_STREAM_READ_ERROR_CODES = new Set([
+  'stream_read_error',
+]);
+
+export class RetryableStreamReadError extends Error {
+  constructor(cause: Error) {
+    super(cause.message, { cause });
+    this.name = cause.name;
+  }
+}
+
+function readStreamErrorStringField(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function getRetryableStreamReadErrorFields(error: unknown): {
+  code?: string;
+  message?: string;
+} {
+  if (!isRecord(error)) {
+    return typeof error === 'string' ? { message: error } : {};
+  }
+
+  const nestedError = isRecord(error['error']) ? error['error'] : undefined;
+  return {
+    code:
+      readStreamErrorStringField(error, 'code') ??
+      (nestedError
+        ? readStreamErrorStringField(nestedError, 'code')
+        : undefined),
+    message:
+      (error instanceof Error ? error.message : undefined) ??
+      readStreamErrorStringField(error, 'message') ??
+      (nestedError
+        ? readStreamErrorStringField(nestedError, 'message')
+        : undefined),
+  };
+}
+
+export function isRetryableStreamReadError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+
+    if (current instanceof RetryableStreamReadError) {
+      return true;
+    }
+
+    current = getErrorCause(current);
+  }
+
+  if (isAbortLikeError(error)) {
+    return false;
+  }
+
+  seen.clear();
+  current = error;
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+
+    const { code, message } = getRetryableStreamReadErrorFields(current);
+    if (code && RETRYABLE_STREAM_READ_ERROR_CODES.has(code)) {
+      return true;
+    }
+
+    const normalizedMessage = message?.toLowerCase();
+    if (normalizedMessage) {
+      const isInternalStreamError =
+        (normalizedMessage.includes('internal_server_error') ||
+          normalizedMessage.includes('internal_error')) &&
+        (normalizedMessage.includes('stream error') ||
+          normalizedMessage.includes('stream id') ||
+          normalizedMessage.includes('received from peer'));
+      if (
+        normalizedMessage.includes('stream_read_error') ||
+        normalizedMessage.includes('stream read error') ||
+        isInternalStreamError
+      ) {
+        return true;
+      }
+    }
+
+    current = getErrorCause(current);
+  }
+
+  return false;
+}
+
+export function shouldRetryStreamReadError(
+  error: unknown,
+  state: {
+    emittedPartCount: number;
+    cancellationRequested: boolean;
+    retryAttempt: number;
+    maxRetries: number;
+  },
+): boolean {
+  return (
+    state.emittedPartCount === 0 &&
+    !state.cancellationRequested &&
+    state.retryAttempt < state.maxRetries &&
+    isRetryableStreamReadError(error)
+  );
+}
+
 /**
  * Fetch with automatic retry for transient HTTP errors.
  *
@@ -2355,7 +2466,11 @@ export async function* withIdleTimeout<T>(
           if (abortSignal?.aborted) {
             throw abortReasonToError(abortSignal);
           }
-          throw resolveMeaningfulError(error);
+          const meaningfulError = resolveMeaningfulError(error);
+          if (isRetryableNetworkError(error)) {
+            throw new RetryableStreamReadError(meaningfulError);
+          }
+          throw meaningfulError;
         }
 
         if (result.kind === 'abort') {
@@ -2368,7 +2483,7 @@ export async function* withIdleTimeout<T>(
         if (result.kind === 'timeout') {
           const timeoutError = createTimeoutError(timeoutMessage);
           onTimeout?.(timeoutError);
-          throw timeoutError;
+          throw new RetryableStreamReadError(timeoutError);
         }
 
         // Normal iteration result
