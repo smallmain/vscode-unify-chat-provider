@@ -65,6 +65,7 @@ import {
   ResponseCreateParamsNonStreaming,
   ResponseCreateParamsStreaming,
   ResponsesClientEvent,
+  ResponseComputerToolCallOutputItem,
   ResponseFunctionCallOutputItem,
   ResponseFunctionToolCall,
   ResponseInputItem,
@@ -233,6 +234,7 @@ type ResponseImageGenerationTool = Extract<
   { type: 'image_generation' }
 >;
 
+type ResponseOutputItemForInput = Extract<ResponseOutputItem, ResponseInputItem>;
 type ResponseAdditionalToolsInputItem = Extract<
   OpenAIResponsesInputItem,
   { type: 'additional_tools' }
@@ -365,9 +367,37 @@ function isResponseImageGenerationTool(
   return tool.type === 'image_generation';
 }
 
+function isResponseComputerCallOutputItem(
+  item: OpenAIResponsesOutputItem,
+): item is ResponseComputerToolCallOutputItem {
+  return item.type === 'computer_call_output';
+}
+
+function isResponseAdditionalToolsItem(
+  item: OpenAIResponsesOutputItem,
+): item is Extract<ResponseOutputItem, { type: 'additional_tools' }> {
+  return item.type === 'additional_tools';
+}
+
+function isResponseOutputItemForInput(
+  item: OpenAIResponsesOutputItem,
+): item is ResponseOutputItemForInput {
+  return (
+    !isMultiAgentOutputItem(item) &&
+    !isResponseComputerCallOutputItem(item) &&
+    !isResponseAdditionalToolsItem(item)
+  );
+}
+
+function normalizeComputerCallOutputStatus(
+  status: ResponseComputerToolCallOutputItem['status'],
+): NonNullable<ResponseInputItem.ComputerCallOutput['status']> {
+  return status === 'failed' ? 'incomplete' : status;
+}
+
 function normalizeMarkerOutputItem(
   item: OpenAIResponsesOutputItem,
-): OpenAIResponsesInputItem {
+): OpenAIResponsesInputItem | undefined {
   switch (item.type) {
     case 'compaction': {
       const agentName = readAgentName(item);
@@ -395,7 +425,7 @@ function normalizeMarkerOutputItem(
     case 'computer_call_output':
       return {
         ...item,
-        status: item.status === 'failed' ? 'incomplete' : item.status,
+        status: normalizeComputerCallOutputStatus(item.status),
       };
 
     case 'additional_tools':
@@ -424,21 +454,19 @@ function normalizeMarkerOutputItem(
         };
         return inputItem;
       }
-
-      return {
-        role: 'developer',
-        tools: item.tools,
-        type: item.type,
-      };
+      return undefined;
 
     case 'agent_message':
       return normalizeAgentMessageInputItem(item);
+
+    case 'multi_agent_call':
+      return item;
 
     case 'multi_agent_call_output':
       return normalizeMultiAgentCallOutputInputItem(item);
 
     default:
-      return item;
+      return isResponseOutputItemForInput(item) ? item : undefined;
   }
 }
 
@@ -504,7 +532,10 @@ function normalizeAgentMessageInputItem(
 function normalizeMarkerOutputItems(
   items: readonly OpenAIResponsesOutputItem[],
 ): OpenAIResponsesInputItem[] {
-  return items.map((item) => normalizeMarkerOutputItem(item));
+  return items.flatMap((item) => {
+    const normalizedItem = normalizeMarkerOutputItem(item);
+    return normalizedItem === undefined ? [] : [normalizedItem];
+  });
 }
 
 function readStringField(

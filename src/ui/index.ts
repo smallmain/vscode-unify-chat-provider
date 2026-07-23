@@ -11,3 +11,4 @@ export {
   exportAllProviders,
   removeProvider,
 } from './provider-ui';
+export { clearUsageStats, showUsageDashboard } from './usage-detail';

@@ -54,6 +54,50 @@ function decodeCloseReason(reason: Buffer | string): string | undefined {
   return decoded || undefined;
 }
 
+interface WebSocketReadyStateConstants {
+  CONNECTING: number;
+  OPEN: number;
+  CLOSING: number;
+  CLOSED: number;
+}
+
+const STANDARD_READY_STATE: WebSocketReadyStateConstants = {
+  CONNECTING: 0,
+  OPEN: 1,
+  CLOSING: 2,
+  CLOSED: 3,
+};
+
+function getReadyStateConstants(
+  socket: unknown,
+): WebSocketReadyStateConstants {
+  if (!isRecord(socket)) {
+    return STANDARD_READY_STATE;
+  }
+
+  const candidate = isRecord(socket['platformSocket'])
+    ? socket['platformSocket']
+    : socket;
+  const constructorValue = candidate['constructor'];
+  const constants = isReadyStateConstants(constructorValue)
+    ? constructorValue
+    : candidate;
+
+  return isReadyStateConstants(constants) ? constants : STANDARD_READY_STATE;
+}
+
+function isReadyStateConstants(
+  value: unknown,
+): value is WebSocketReadyStateConstants {
+  return (
+    isRecord(value) &&
+    typeof value['CONNECTING'] === 'number' &&
+    typeof value['OPEN'] === 'number' &&
+    typeof value['CLOSING'] === 'number' &&
+    typeof value['CLOSED'] === 'number'
+  );
+}
+
 function normalizeSDKError(error: Error): WebSocketSessionError {
   const message = error.message || 'OpenAI Responses WebSocket runtime error.';
   const normalizedMessage = message.toLowerCase();
@@ -120,7 +164,7 @@ export class OpenAIResponsesWebSocketTransport
       this.resolveReadyState = () =>
         this.normalizeReadyState(
           ws.socket.readyState,
-          ws.socket.platformSocket,
+          getReadyStateConstants(ws.socket),
         );
       ws.socket.on('open', this.handleOpen);
       ws.on('event', this.handleBetaEvent);
@@ -141,7 +185,7 @@ export class OpenAIResponsesWebSocketTransport
     this.resolveReadyState = () =>
       this.normalizeReadyState(
         ws.socket.readyState,
-        ws.socket.platformSocket,
+        getReadyStateConstants(ws.socket),
       );
     ws.socket.on('open', this.handleOpen);
     ws.on('event', this.handleEvent);
@@ -159,24 +203,19 @@ export class OpenAIResponsesWebSocketTransport
 
   private normalizeReadyState(
     readyState: number,
-    platformSocket: {
-      CONNECTING: number;
-      OPEN: number;
-      CLOSING: number;
-      CLOSED: number;
-    },
+    constants: WebSocketReadyStateConstants,
   ): WebSocketSessionTransport<
     OpenAIResponsesClientEvent,
     OpenAIResponsesStreamEvent
   >['readyState'] {
     switch (readyState) {
-      case platformSocket.CONNECTING:
+      case constants.CONNECTING:
         return 'connecting';
-      case platformSocket.OPEN:
+      case constants.OPEN:
         return 'open';
-      case platformSocket.CLOSING:
+      case constants.CLOSING:
         return 'closing';
-      case platformSocket.CLOSED:
+      case constants.CLOSED:
       default:
         return 'closed';
     }

@@ -19,6 +19,8 @@ import {
   manageBalances,
   manageProviders,
   removeProvider,
+  showUsageDashboard,
+  clearUsageStats,
 } from './ui';
 import { officialModelsManager } from './official-models-manager';
 import { registerUriHandler, type EventedUriHandler } from './uri-handler';
@@ -26,17 +28,22 @@ import { t } from './i18n';
 import { AuthManager } from './auth';
 import { balanceManager } from './balance';
 import { registerBalanceStatusBar } from './ui/balance-status-bar';
+import { registerUsageStatusBar } from './ui/usage-status-bar';
+import { usageStore } from './usage/usage-store';
 import { mainInstance } from './main-instance';
 import { isLeaderUnavailableError } from './main-instance/errors';
 import {
   ensureMainInstanceCompatibility,
   showMainInstanceCompatibilityWarning,
 } from './main-instance/compatibility';
+import { MainInstanceError } from './main-instance/errors';
 import { registerMainInstanceHandlers } from './main-instance/register-handlers';
 import { authLog } from './logger';
 import { webSocketSessionManager } from './client/websocket-session-manager';
 import { syncBuiltInParamsToAllConfigs } from './sync-built-in-model-params';
 import { registerCommitMessageGeneration } from './commit-message';
+import { isUsageRecord, isUsageStoreState } from './usage/guards';
+import type { UsageRecord, UsageStoreState } from './usage/types';
 import {
   changeVSCodeDefaultModel,
   handleVSCodeDefaultModelError,
@@ -94,6 +101,14 @@ async function resolveSecretStorage(
   const storage = new E2EFileSecretStorage(filePath);
   context.subscriptions.push(storage);
   return storage;
+}
+
+function filterUsageRecords(value: unknown): UsageRecord[] {
+  return Array.isArray(value) ? value.filter(isUsageRecord) : [];
+}
+
+function isNotImplementedError(error: unknown): boolean {
+  return error instanceof MainInstanceError && error.code === 'NOT_IMPLEMENTED';
 }
 
 /**
@@ -202,6 +217,45 @@ export async function activate(
   let leaderPromotionPromise: Promise<void> | undefined;
   let leaderPromotionRetryTimer: ReturnType<typeof setTimeout> | undefined;
   let authManager: AuthManager | undefined;
+
+  const syncUsageSnapshotFromLeader = (): void => {
+    if (mainInstance.isLeader() || !mainInstance.isReady()) {
+      return;
+    }
+    void mainInstance
+      .runInLeaderWhenAvailable<UsageStoreState>(
+        'usage.getState',
+        {},
+        { timeoutMs: 2_000 },
+      )
+      .then((state) => {
+        if (isUsageStoreState(state)) {
+          usageStore.replaceState(state);
+        }
+        usageStore.flushPendingRemoteRecords();
+      })
+      .catch((error) => {
+        if (isNotImplementedError(error)) {
+          void mainInstance
+            .runInLeaderWhenAvailable('usage.getSnapshot', {}, { timeoutMs: 2_000 })
+            .then((records) => {
+              usageStore.replaceRecords(filterUsageRecords(records));
+              usageStore.flushPendingRemoteRecords();
+            })
+            .catch((snapshotError) => {
+              authLog.error(
+                'main-instance',
+                'Failed to sync usage snapshot',
+                snapshotError,
+              );
+              usageStore.flushPendingRemoteRecords();
+            });
+          return;
+        }
+        authLog.error('main-instance', 'Failed to sync usage state', error);
+        usageStore.flushPendingRemoteRecords();
+      });
+  };
 
   const runLeaderStartupMigrations = async (): Promise<void> => {
     if (!mainInstance.isLeader()) {
@@ -322,6 +376,10 @@ export async function activate(
   context.subscriptions.push(
     mainInstance.onDidChangeRole((snapshot) => {
       authLog.verbose('main-instance', 'Observed main-instance role change', snapshot);
+      usageStore.setCanPersist(snapshot.role === 'leader');
+      if (snapshot.role === 'follower' && snapshot.ready) {
+        syncUsageSnapshotFromLeader();
+      }
       if (snapshot.role !== 'leader') {
         leaderStartupReady = false;
         authManager?.setLeaderAuthReady(false);
@@ -373,6 +431,25 @@ export async function activate(
     extensionContext: context,
   });
   context.subscriptions.push(balanceManager);
+  usageStore.initialize({
+    context,
+    canPersist: () => mainInstance.isLeader(),
+    detailRetentionDays: configStore.usageDetailRetentionDays,
+    syncAdapter: {
+      async forwardRecord(record) {
+        await mainInstance.runInLeaderWhenAvailable('usage.record', record, {
+          timeoutMs: 2_000,
+        });
+      },
+      async forwardClear() {
+        await mainInstance.runInLeaderWhenAvailable('usage.clear', {}, {
+          timeoutMs: 2_000,
+        });
+      },
+    },
+  });
+  context.subscriptions.push(usageStore);
+  syncUsageSnapshotFromLeader();
   context.subscriptions.push(webSocketSessionManager);
 
   const chatProvider = new UnifyChatService(
@@ -380,6 +457,7 @@ export async function activate(
     secretStore,
     authManager,
     balanceManager,
+    usageStore,
     canUseChatProvider,
   );
   if (context.extensionMode !== vscode.ExtensionMode.Production) {
@@ -456,6 +534,7 @@ export async function activate(
     authManager,
     balanceManager,
     officialModelsManager,
+    usageStore,
   });
   mainInstanceHandlersRegistered = true;
   authLog.verbose('main-instance', 'Main-instance handlers registered');
@@ -613,6 +692,9 @@ export async function activate(
   context.subscriptions.push(
     registerBalanceStatusBar({ context, store: configStore }),
   );
+  context.subscriptions.push(
+    registerUsageStatusBar({ context, store: configStore }),
+  );
 
   registerSecretStorageMaintenance(context, configStore, secretStore);
 
@@ -620,10 +702,25 @@ export async function activate(
   context.subscriptions.push(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
+      usageStore.setDetailRetentionDays(configStore.usageDetailRetentionDays);
       if (!mainInstance.isLeader() || !mainInstance.isReady()) return;
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });
+    }),
+  );
+
+  context.subscriptions.push(
+    mainInstance.onDidReceiveEvent(({ event, payload }) => {
+      if (event === 'usage.record') {
+        if (isUsageRecord(payload)) {
+          usageStore.acceptRemoteRecord(payload);
+        }
+      } else if (event === 'usage.clear') {
+        void usageStore.clearFromRemote();
+      } else if (event === 'usage.snapshot' && Array.isArray(payload)) {
+        usageStore.replaceRecords(filterUsageRecords(payload));
+      }
     }),
   );
 
@@ -695,6 +792,12 @@ export function registerCommands(
     ),
     vscode.commands.registerCommand('unifyChatProvider.manageBalances', () =>
       manageBalances(configStore, secretStore, uriHandler),
+    ),
+    vscode.commands.registerCommand('unifyChatProvider.showUsageDashboard', () =>
+      showUsageDashboard(context),
+    ),
+    vscode.commands.registerCommand('unifyChatProvider.clearUsageStats', () =>
+      clearUsageStats(),
     ),
     vscode.commands.registerCommand(
       'unifyChatProvider.refreshAllProvidersOfficialModels',

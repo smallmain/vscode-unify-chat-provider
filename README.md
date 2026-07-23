@@ -395,6 +395,16 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Codex Usage`: no extra config required; uses provider credential (API key or Codex auth token).
 - Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balance Information` to force refresh balances for all configured providers.
 
+## Usage Statistics
+
+Usage statistics record token usage from completed chat requests and keep the data locally in VS Code global storage.
+
+- Run `Unify Chat Provider: Show Usage Statistics` to open the visual usage page.
+- The status bar shows today's token total, includes historical total usage in the tooltip, and opens the dashboard when clicked.
+- Run `Unify Chat Provider: Clear Usage Statistics` to remove all stored usage records.
+- Detailed usage records are kept for `usageDetailRetentionDays` days by default (100 days). Older details are folded into historical totals, so total usage remains accurate.
+- The first version tracks requests, prompt/completion/total tokens, latency, outcomes, and cache-token data when providers return it. It does not calculate cost.
+
 ## Adjust Parameters
 
 ### Global Settings
@@ -414,6 +424,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
 | Balance Throttle Window            | `balanceThrottleWindowMs`                      | Throttle window for refreshing balances after a request, in milliseconds. Default: `10000`; minimum: `0`.                                           |
 | Balance Status Bar Icon            | `balanceStatusBarIcon`                         | Theme icon text used for provider balances in the status bar. Default: `$(credit-card)`; use an empty string to hide it.                              |
 | Display Balance in Configuration   | `displayBalanceInConfiguration`                | Whether to show refreshed balance information in the model configuration button area. Default: `false`.                                              |
+| Usage Detail Retention Days        | `usageDetailRetentionDays`                     | Number of days to keep detailed usage records. Default: `100`; minimum: `1`.                                                                         |
 | Enable Balance Warnings            | `balanceWarning.enabled`                       | Whether to show a warning icon beside a model name when its balance approaches a threshold. Default: `true`.                                         |
 | Expiration Warning Threshold       | `balanceWarning.timeThresholdDays`             | Expiration warning threshold in days; decimals are supported. Default: `1`; minimum: `0`.                                                            |
 | Amount Warning Threshold           | `balanceWarning.amountThreshold`               | Balance warning threshold, regardless of currency. Default: `1`; minimum: `0`.                                                                       |
