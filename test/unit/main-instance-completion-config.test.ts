@@ -354,8 +354,8 @@ describe('main-instance completion configuration sync', () => {
     expect(provider.models[0].completion).toEqual({});
   });
 
-  it('uses compatibility version 6 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(6);
+  it('uses compatibility version 7 without changing protocol version 1', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(7);
     expect(PROTOCOL_VERSION).toBe(1);
   });
 

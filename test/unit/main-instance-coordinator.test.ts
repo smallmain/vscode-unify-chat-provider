@@ -39,7 +39,11 @@ vi.mock('vscode', () => {
       Development: 2,
       Test: 3,
     },
-    env: { language: 'en', machineId: 'test-machine' },
+    env: {
+      appRoot: '/test/vscode',
+      language: 'en',
+      machineId: 'test-machine',
+    },
     l10n: { t: (message: string) => message },
   };
 });
@@ -53,6 +57,10 @@ vi.mock('../../src/logger', () => ({
 }));
 
 import { MainInstanceCoordinator } from '../../src/main-instance/coordinator';
+import {
+  getMainInstanceRuntimeNamespace,
+  getMainInstanceSocket,
+} from '../../src/main-instance/socket';
 
 type Deferred = {
   readonly promise: Promise<void>;
@@ -85,6 +93,16 @@ afterEach(async () => {
     }),
   );
   storagePaths.clear();
+
+  const descriptor = getMainInstanceSocket(
+    'test.main-instance-coordinator',
+    'test-machine',
+    getMainInstanceRuntimeNamespace('/test/vscode'),
+  );
+  await rm(descriptor.authTokenPath, { force: true });
+  if (descriptor.kind === 'unix') {
+    await rm(descriptor.filePath, { force: true });
+  }
 });
 
 function createDeferred(): Deferred {
@@ -180,6 +198,26 @@ async function waitUntil(
 }
 
 describe('main-instance leader mutation tenure', () => {
+  it('coordinates across isolated profile storage paths', async () => {
+    const defaultProfileStoragePath = await createStoragePath();
+    const agentsProfileStoragePath = await createStoragePath();
+    const leader = new MainInstanceCoordinator();
+    const agentsWindow = new MainInstanceCoordinator();
+
+    await initializeCoordinator(leader, defaultProfileStoragePath);
+    leader.setReady(true);
+    await initializeCoordinator(agentsWindow, agentsProfileStoragePath);
+
+    expect(leader.isLeader()).toBe(true);
+    expect(agentsWindow.isLeader()).toBe(false);
+    expect(agentsWindow.getSnapshot()).toMatchObject({
+      role: 'follower',
+      leaderId: leader.getSnapshot()?.clientId,
+      socketPath: leader.getSnapshot()?.socketPath,
+      ready: true,
+    });
+  });
+
   it('executes accepted mutations serially in acceptance order', async () => {
     const storagePath = await createStoragePath();
     const coordinator = new MainInstanceCoordinator();

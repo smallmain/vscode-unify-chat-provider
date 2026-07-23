@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const network = vi.hoisted(() => ({
-  welcomeCompatibilityVersion: 6,
+  welcomeCompatibilityVersion: 7,
   welcomeExtensionVersion: 'leader-1.0.0',
   writes: [] as string[],
 }));
@@ -142,7 +142,7 @@ import {
 const coordinators: MainInstanceCoordinator[] = [];
 
 beforeEach(() => {
-  network.welcomeCompatibilityVersion = 6;
+  network.welcomeCompatibilityVersion = 7;
   network.welcomeExtensionVersion = 'leader-1.0.0';
   network.writes = [];
 });
@@ -184,6 +184,7 @@ function configureFollower(
   });
   Reflect.set(coordinator, 'extensionVersion', extensionVersion);
   Reflect.set(coordinator, 'socketPath', '/tmp/main-instance-test.sock');
+  Reflect.set(coordinator, 'authTokenPath', '/tmp/main-instance-test.token');
 }
 
 function createLeaderSocket(): {
@@ -226,7 +227,7 @@ function hello(
 }
 
 describe('main-instance compatibility handshake', () => {
-  it('accepts a differently-versioned v6 follower at a v6 leader', () => {
+  it('accepts a differently-versioned v7 follower at a v7 leader', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
@@ -241,18 +242,18 @@ describe('main-instance compatibility handshake', () => {
     expect(response).toMatchObject({
       type: 'welcome',
       protocolVersion: 1,
-      mainInstanceCompatibilityVersion: 6,
+      mainInstanceCompatibilityVersion: 7,
     });
   });
 
-  it('rejects a v5 follower at a v6 leader', () => {
+  it('rejects a v6 follower at a v7 leader', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
 
     invokePrivate(coordinator, 'handleLeaderSideMessage', [
       peer.socket,
-      hello(5),
+      hello(6),
     ]);
 
     expect(peer.isDestroyed()).toBe(true);
@@ -265,7 +266,7 @@ describe('main-instance compatibility handshake', () => {
     });
   });
 
-  it('connects differently-versioned v6 follower and leader releases', async () => {
+  it('connects differently-versioned v7 follower and leader releases', async () => {
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 
@@ -285,12 +286,12 @@ describe('main-instance compatibility handshake', () => {
     expect(parseMessageLine(network.writes[0] ?? '')).toMatchObject({
       type: 'hello',
       extensionVersion: 'follower-9.9.9',
-      mainInstanceCompatibilityVersion: 6,
+      mainInstanceCompatibilityVersion: 7,
     });
   });
 
-  it('rejects a v5 leader at a v6 follower', async () => {
-    network.welcomeCompatibilityVersion = 5;
+  it('rejects a v6 leader at a v7 follower', async () => {
+    network.welcomeCompatibilityVersion = 6;
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 

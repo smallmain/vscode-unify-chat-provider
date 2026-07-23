@@ -22,7 +22,10 @@ import {
   type ResponseMessage,
   type WelcomeMessage,
 } from './protocol';
-import { getMainInstanceSocket } from './socket';
+import {
+  getMainInstanceRuntimeNamespace,
+  getMainInstanceSocket,
+} from './socket';
 
 type Role = 'leader' | 'follower';
 
@@ -78,7 +81,6 @@ type FollowerHandshakeIncompatibleResult = {
 
 type FollowerConnectResult = 'connected' | 'incompatible' | 'failed';
 
-const AUTH_TOKEN_FILENAME = 'main-instance-auth-token.txt';
 const INTERNAL_READY_EVENT = '__main.ready';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -153,18 +155,16 @@ async function safeUnlink(filePath: string): Promise<void> {
 }
 
 async function writeAuthTokenFile(
-  globalStoragePath: string,
+  filePath: string,
   token: string,
 ): Promise<void> {
-  await fs.mkdir(globalStoragePath, { recursive: true });
-  const filePath = path.join(globalStoragePath, AUTH_TOKEN_FILENAME);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, token, { mode: 0o600 });
 }
 
 async function readAuthTokenFile(
-  globalStoragePath: string,
+  filePath: string,
 ): Promise<string | undefined> {
-  const filePath = path.join(globalStoragePath, AUTH_TOKEN_FILENAME);
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     const token = raw.trim();
@@ -225,6 +225,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   private role?: Role;
   private leaderId?: string;
   private socketPath?: string;
+  private authTokenPath?: string;
   private authToken?: string;
   private extensionVersion?: string;
   private ready = false;
@@ -335,9 +336,10 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     const descriptor = getMainInstanceSocket(
       context.extension.id,
       vscode.env.machineId,
-      context.globalStorageUri.fsPath,
+      getMainInstanceRuntimeNamespace(vscode.env.appRoot),
     );
     this.socketPath = descriptor.path;
+    this.authTokenPath = descriptor.authTokenPath;
 
     if (shouldBypassMainInstanceCoordination(context)) {
       this.stopReconnectLoop();
@@ -540,7 +542,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       throw new Error('Extension context not initialized');
     }
     try {
-      await writeAuthTokenFile(this.context.globalStorageUri.fsPath, this.authToken);
+      await writeAuthTokenFile(descriptor.authTokenPath, this.authToken);
     } catch (error) {
       await this.disposeLeaderServer();
       throw error;
@@ -574,8 +576,10 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       const descriptor = getMainInstanceSocket(
         context.extension.id,
         vscode.env.machineId,
-        context.globalStorageUri.fsPath,
+        getMainInstanceRuntimeNamespace(vscode.env.appRoot),
       );
+      this.socketPath = descriptor.path;
+      this.authTokenPath = descriptor.authTokenPath;
       void this.elect(descriptor).catch((error) => {
         authLog.error('main-instance', 'Re-election failed', error);
         this.scheduleReconnect();
@@ -613,7 +617,8 @@ export class MainInstanceCoordinator implements vscode.Disposable {
 
     const context = this.context;
     const socketPath = this.socketPath;
-    if (!context || !socketPath) {
+    const authTokenPath = this.authTokenPath;
+    if (!context || !socketPath || !authTokenPath) {
       return 'failed';
     }
 
@@ -624,12 +629,10 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       if (this.disposed) {
         return 'failed';
       }
-      const token = await readAuthTokenFile(context.globalStorageUri.fsPath).catch(
-        (error) => {
-          authLog.error('main-instance', 'Failed to read auth token file', error);
-          return undefined;
-        },
-      );
+      const token = await readAuthTokenFile(authTokenPath).catch((error) => {
+        authLog.error('main-instance', 'Failed to read auth token file', error);
+        return undefined;
+      });
 
       if (!token) {
         await delay(retryDelayMs);
