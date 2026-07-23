@@ -803,13 +803,13 @@ If you are a developer for an LLM provider, you can add a link like the followin
 
 Extension configs are stored in `settings.json`, so they work with VS Code Settings Sync.
 
-However, sensitive information is stored in VS Code Secret Storage by default, which currently does not sync.
+Session-based authentication settings include a non-secret binding ID in `settings.json`, while OAuth tokens, client secrets, account/project context, and Zed organization/privacy state are stored in a versioned envelope in VS Code Secret Storage. Secret Storage does not sync.
 
-So after syncing to another device, you may be prompted to re-enter keys or re-authorize.
+Each device therefore authorizes and refreshes its own session. Syncing, renaming, or changing the account on one device cannot replace another device's token or account context. A newly synced device will ask you to authorize locally.
 
-If you want to sync sync-safe sensitive data (e.g., API keys), enable [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings).
+If you want to sync suitable sensitive data such as API keys, enable [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings).
 
-OAuth credentials are always kept in Secret Storage to avoid multi-device token refresh conflicts.
+OAuth and Zed credentials are always kept in Secret Storage to avoid multi-device refresh and account-context conflicts. Explicitly exporting and importing sensitive data can still place the same upstream credential on multiple devices.
 
 This can increase the risk of user data leakage, so evaluate the risk before enabling.
 
@@ -1172,3 +1172,4 @@ Prerequisite: Node.js 24.12 or later.
 ## Acknowledgements
 
 - [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli)
+- [LINUX.DO](https://linux.do/)

@@ -36,6 +36,7 @@ const state = vi.hoisted(() => ({
   workspaceConstructions: 0,
   workspaceDisposals: 0,
   nesCatalogChanges: 0,
+  nesAuthChanges: 0,
   nesDisposals: 0,
   nesIgnored: 0,
   nesShown: 0,
@@ -329,6 +330,10 @@ vi.mock("../../src/completion/copilot/nes-provider", () => ({
       state.nesCatalogChanges += 1;
     }
 
+    handleAuthChange(): void {
+      state.nesAuthChanges += 1;
+    }
+
     getState() {
       return { cacheSize: 3, inFlight: 1 };
     }
@@ -544,6 +549,39 @@ describe("CopilotRuntime behavior config startup validation", () => {
     expect(state.nesCatalogChanges).toBe(2);
     expect(state.workspaceDisposals).toBe(0);
     expect(state.nesDisposals).toBe(0);
+    runtime.dispose();
+  });
+
+  it("forwards only auth environment changes to the NES generation", () => {
+    const context: CompletionAlgorithmContext = {
+      entry: { id: "copilot-auth", algorithm: "copilot-replica" },
+      options: {},
+      modelResolver: {
+        async resolveCompletionModel() {
+          throw new Error("not reached");
+        },
+      },
+      reportConfigurationError() {},
+    };
+    const runtime = new CopilotRuntime(context, {
+      enableFIM: false,
+      enableNES: true,
+      n: 1,
+      nesModel: { vendor: "test", id: "controlled" },
+    });
+    const changes: string[] = [];
+    const subscription = runtime.onDidChange((change) => {
+      if (change) changes.push(change.reason);
+    });
+    const authChangesBefore = state.nesAuthChanges;
+
+    runtime.handleEnvironmentChange("provider-changed");
+    runtime.handleEnvironmentChange("settings-changed");
+    runtime.handleEnvironmentChange("auth-changed");
+
+    expect(state.nesAuthChanges).toBe(authChangesBefore + 1);
+    expect(changes).toEqual(["auth-changed"]);
+    subscription.dispose();
     runtime.dispose();
   });
 

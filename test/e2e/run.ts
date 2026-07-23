@@ -13,6 +13,218 @@ import * as path from "node:path";
 import { runTests } from "@vscode/test-electron";
 
 const MINIMUM_SUPPORTED_VSCODE_VERSION = "1.115.0";
+const AUTH_E2E_BINDING = "00000000-0000-4000-8000-000000000901";
+const AUTH_E2E_ENVELOPE_KEY =
+  `ucp:state:auth-session-v1.${AUTH_E2E_BINDING}`;
+const SHA256_REGEX = /^[0-9a-f]{64}$/;
+const AUTH_ISOLATION_RESULT_KEYS: readonly string[] = [
+  "phase",
+  "processId",
+  "method",
+  "bindingId",
+  "revision",
+  "credentialDigest",
+  "accountDigest",
+  "sessionDigest",
+];
+
+type AuthIsolationPhase =
+  | "device-a-login"
+  | "device-b-login"
+  | "device-a-verify";
+
+interface AuthIsolationResult {
+  readonly phase: AuthIsolationPhase;
+  readonly processId: number;
+  readonly method: "openai-codex";
+  readonly bindingId: string;
+  readonly revision: number;
+  readonly credentialDigest: string;
+  readonly accountDigest: string;
+  readonly sessionDigest: string;
+}
+
+interface AuthSecretSummary {
+  readonly revision: number;
+  readonly credentialDigest: string;
+  readonly refreshDigest: string;
+  readonly accountDigest: string;
+  readonly sessionDigest: string;
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseJson(contents: string, description: string): unknown {
+  try {
+    return JSON.parse(contents);
+  } catch {
+    throw new Error(`Invalid ${description} JSON.`);
+  }
+}
+
+function requireDigest(value: unknown, description: string): string {
+  if (typeof value !== "string" || !SHA256_REGEX.test(value)) {
+    throw new Error(`Invalid ${description} digest.`);
+  }
+  return value;
+}
+
+function parseAuthIsolationResult(
+  value: unknown,
+  expectedPhase: AuthIsolationPhase,
+): AuthIsolationResult {
+  if (!isRecord(value)) {
+    throw new Error("Invalid auth isolation result.");
+  }
+  if (
+    !Object.keys(value).every((key) =>
+      AUTH_ISOLATION_RESULT_KEYS.includes(key),
+    ) ||
+    Object.keys(value).length !== AUTH_ISOLATION_RESULT_KEYS.length
+  ) {
+    throw new Error("Invalid auth isolation result fields.");
+  }
+  const processId = value["processId"];
+  const revision = value["revision"];
+  if (
+    value["phase"] !== expectedPhase ||
+    value["method"] !== "openai-codex" ||
+    value["bindingId"] !== AUTH_E2E_BINDING ||
+    typeof processId !== "number" ||
+    !Number.isSafeInteger(processId) ||
+    processId <= 0 ||
+    typeof revision !== "number" ||
+    !Number.isSafeInteger(revision) ||
+    revision < 1
+  ) {
+    throw new Error("Invalid auth isolation result.");
+  }
+  return {
+    phase: expectedPhase,
+    processId,
+    method: "openai-codex",
+    bindingId: AUTH_E2E_BINDING,
+    revision,
+    credentialDigest: requireDigest(
+      value["credentialDigest"],
+      "credential",
+    ),
+    accountDigest: requireDigest(value["accountDigest"], "account"),
+    sessionDigest: requireDigest(value["sessionDigest"], "session"),
+  };
+}
+
+async function readAuthIsolationResult(
+  file: string,
+  phase: AuthIsolationPhase,
+): Promise<AuthIsolationResult> {
+  const contents = await readFile(file, "utf8");
+  return parseAuthIsolationResult(
+    parseJson(contents, "auth isolation result"),
+    phase,
+  );
+}
+
+async function inspectAuthSecretFile(
+  file: string,
+  expected: AuthIsolationResult,
+  expectedDevice: "a" | "b",
+): Promise<AuthSecretSummary> {
+  const stored = parseJson(
+    await readFile(file, "utf8"),
+    "auth isolation SecretStorage",
+  );
+  if (!isRecord(stored)) {
+    throw new Error("Invalid auth isolation SecretStorage structure.");
+  }
+  for (const value of Object.values(stored)) {
+    if (typeof value !== "string") {
+      throw new Error("Invalid auth isolation SecretStorage structure.");
+    }
+  }
+
+  const envelopeRaw = stored[AUTH_E2E_ENVELOPE_KEY];
+  if (typeof envelopeRaw !== "string") {
+    throw new Error("Missing auth isolation SecretStorage state.");
+  }
+  const envelope = parseJson(envelopeRaw, "local auth envelope");
+  if (
+    !isRecord(envelope) ||
+    envelope["version"] !== 1 ||
+    envelope["bindingId"] !== AUTH_E2E_BINDING ||
+    envelope["revision"] !== expected.revision ||
+    !Array.isArray(envelope["snapshots"]) ||
+    envelope["snapshots"].length < 1
+  ) {
+    throw new Error("Invalid auth isolation SecretStorage state.");
+  }
+
+  const snapshot = envelope["snapshots"].find(
+    (candidate: unknown) =>
+      isRecord(candidate) &&
+      candidate["method"] === "openai-codex" &&
+      typeof candidate["staticConfigFingerprint"] === "string" &&
+      SHA256_REGEX.test(candidate["staticConfigFingerprint"]),
+  );
+  if (!isRecord(snapshot)) {
+    throw new Error("Missing auth isolation session snapshot.");
+  }
+  const token = snapshot["token"];
+  const context = snapshot["authContext"];
+  const sessionId = snapshot["sessionId"];
+  if (
+    !isRecord(token) ||
+    typeof token["accessToken"] !== "string" ||
+    typeof token["refreshToken"] !== "string" ||
+    token["tokenType"] !== "Bearer" ||
+    !isRecord(context) ||
+    context["method"] !== "openai-codex" ||
+    context["bindingId"] !== AUTH_E2E_BINDING ||
+    context["revision"] !== expected.revision ||
+    typeof context["accountId"] !== "string" ||
+    typeof context["sessionId"] !== "string" ||
+    typeof sessionId !== "string" ||
+    context["sessionId"] !== sessionId
+  ) {
+    throw new Error("Invalid auth isolation session snapshot.");
+  }
+
+  const summary = {
+    revision: expected.revision,
+    credentialDigest: createHash("sha256")
+      .update(token["accessToken"])
+      .digest("hex"),
+    refreshDigest: createHash("sha256")
+      .update(token["refreshToken"])
+      .digest("hex"),
+    accountDigest: createHash("sha256")
+      .update(context["accountId"])
+      .digest("hex"),
+    sessionDigest: createHash("sha256").update(sessionId).digest("hex"),
+  };
+  const expectedCredentialDigest = createHash("sha256")
+    .update(`device-${expectedDevice}-access-token`)
+    .digest("hex");
+  const expectedRefreshDigest = createHash("sha256")
+    .update(`device-${expectedDevice}-refresh-token`)
+    .digest("hex");
+  const expectedAccountDigest = createHash("sha256")
+    .update(`account-${expectedDevice}`)
+    .digest("hex");
+  if (
+    summary.credentialDigest !== expected.credentialDigest ||
+    summary.credentialDigest !== expectedCredentialDigest ||
+    summary.refreshDigest !== expectedRefreshDigest ||
+    summary.accountDigest !== expected.accountDigest ||
+    summary.accountDigest !== expectedAccountDigest ||
+    summary.sessionDigest !== expected.sessionDigest
+  ) {
+    throw new Error("Auth isolation SecretStorage digest mismatch.");
+  }
+  return summary;
+}
 
 async function hashDirectory(root: string): Promise<string> {
   const hash = createHash("sha256");
@@ -321,8 +533,151 @@ async function main(): Promise<void> {
       });
     };
 
-    await runMode("enabled");
-    await runMode("disabled");
+    const runAuthIsolation = async (): Promise<void> => {
+      // Keep macOS IPC socket paths below the 104-byte sockaddr_un limit.
+      const authRoot = path.join(isolationRoot, "a");
+      const fixtureWorkspace = path.join(authRoot, "w");
+      const deviceAUserData = path.join(authRoot, "d1", "u");
+      const deviceBUserData = path.join(authRoot, "d2", "u");
+      const deviceASecretFile = path.join(authRoot, "d1", "secrets.json");
+      const deviceBSecretFile = path.join(authRoot, "d2", "secrets.json");
+      await cp(fixtureWorkspaceSource, fixtureWorkspace, { recursive: true });
+
+      const runPhase = async (
+        phase: AuthIsolationPhase,
+        userDataDir: string,
+        secretFile: string,
+      ): Promise<AuthIsolationResult> => {
+        const deviceRoot = path.dirname(userDataDir);
+        const resultFile = path.join(authRoot, `${phase}.result.json`);
+        await runTests({
+          extensionDevelopmentPath: sourceExtensionPath,
+          extensionTestsPath,
+          extensionTestsEnv: {
+            UCP_E2E_AUTH_ISOLATION_PHASE: phase,
+            UCP_E2E_AUTH_ISOLATION_RESULT_FILE: resultFile,
+            UCP_E2E_SECRET_STORAGE_FILE: secretFile,
+          },
+          launchArgs: [
+            fixtureWorkspace,
+            `--user-data-dir=${userDataDir}`,
+            `--extensions-dir=${path.join(deviceRoot, "extensions")}`,
+            "--disable-extensions",
+            "--enable-proposed-api=SmallMain.vscode-unify-chat-provider",
+            "--skip-welcome",
+            "--skip-release-notes",
+          ],
+        });
+        return await readAuthIsolationResult(resultFile, phase);
+      };
+
+      const deviceASettings = path.join(
+        deviceAUserData,
+        "User",
+        "settings.json",
+      );
+      const deviceBSettings = path.join(
+        deviceBUserData,
+        "User",
+        "settings.json",
+      );
+
+      await mkdir(path.dirname(deviceASettings), { recursive: true });
+      await writeFile(
+        deviceASettings,
+        `${JSON.stringify(
+          {
+            "unifyChatProvider.endpoints": [
+              {
+                type: "openai-responses",
+                name: "auth-isolation-e2e",
+                baseUrl: "https://api.openai.com/v1",
+                auth: {
+                  method: "openai-codex",
+                  bindingId: "00000000-0000-4000-8000-000000000901",
+                },
+                models: [{ id: "gpt-5" }],
+              },
+            ],
+          },
+          undefined,
+          2,
+        )}\n`,
+      );
+
+      const deviceALogin = await runPhase(
+        "device-a-login",
+        deviceAUserData,
+        deviceASecretFile,
+      );
+      const deviceASecretAfterLogin = await inspectAuthSecretFile(
+        deviceASecretFile,
+        deviceALogin,
+        "a",
+      );
+      await mkdir(path.dirname(deviceBSettings), { recursive: true });
+      await cp(deviceASettings, deviceBSettings);
+      const synchronizedSettings = await readFile(deviceASettings);
+
+      const deviceBLogin = await runPhase(
+        "device-b-login",
+        deviceBUserData,
+        deviceBSecretFile,
+      );
+      await inspectAuthSecretFile(deviceBSecretFile, deviceBLogin, "b");
+      const deviceBSettingsAfterLogin = await readFile(deviceBSettings);
+      if (!synchronizedSettings.equals(deviceBSettingsAfterLogin)) {
+        throw new Error(
+          "Device-local authentication unexpectedly changed synchronized settings.",
+        );
+      }
+      if (deviceALogin.sessionDigest === deviceBLogin.sessionDigest) {
+        throw new Error("Independent devices unexpectedly share an auth session.");
+      }
+
+      await cp(deviceBSettings, deviceASettings);
+      const deviceAVerify = await runPhase(
+        "device-a-verify",
+        deviceAUserData,
+        deviceASecretFile,
+      );
+      const deviceASecretAfterRestart = await inspectAuthSecretFile(
+        deviceASecretFile,
+        deviceAVerify,
+        "a",
+      );
+      if (
+        deviceAVerify.revision !== deviceALogin.revision ||
+        deviceAVerify.sessionDigest !== deviceALogin.sessionDigest ||
+        deviceAVerify.credentialDigest !== deviceALogin.credentialDigest ||
+        deviceAVerify.accountDigest !== deviceALogin.accountDigest ||
+        deviceASecretAfterRestart.revision !==
+          deviceASecretAfterLogin.revision ||
+        deviceASecretAfterRestart.sessionDigest !==
+          deviceASecretAfterLogin.sessionDigest ||
+        deviceASecretAfterRestart.credentialDigest !==
+          deviceASecretAfterLogin.credentialDigest ||
+        deviceASecretAfterRestart.accountDigest !==
+          deviceASecretAfterLogin.accountDigest
+      ) {
+        throw new Error("Device A auth session did not survive restart.");
+      }
+      if (
+        new Set([
+          deviceALogin.processId,
+          deviceBLogin.processId,
+          deviceAVerify.processId,
+        ]).size !== 3
+      ) {
+        throw new Error("Auth isolation phases did not use distinct processes.");
+      }
+    };
+
+    if (process.env["UCP_E2E_AUTH_ISOLATION_ONLY"] !== "1") {
+      await runMode("enabled");
+      await runMode("disabled");
+    }
+    await runAuthIsolation();
   } finally {
     const fixtureHashAfter = await hashDirectory(fixtureWorkspaceSource);
     await rm(isolationRoot, { recursive: true, force: true });

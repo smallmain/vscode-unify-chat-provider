@@ -211,7 +211,12 @@ function token(): vscode.CancellationToken {
 }
 
 class ZedOnlyCompletionModel implements CompletionModel {
-  constructor(private readonly response: ZedAlgorithmResponse) {}
+  constructor(
+    private readonly response:
+      | ZedAlgorithmResponse
+      | Promise<ZedAlgorithmResponse>,
+    private readonly onComplete: () => void = () => undefined,
+  ) {}
 
   getCapabilities() {
     return Promise.resolve({ supportsNextCursorLinePrediction: false });
@@ -252,7 +257,73 @@ class ZedOnlyCompletionModel implements CompletionModel {
     if (request.kind !== 'zed') {
       throw new Error(`Unexpected request kind: ${request.kind}`);
     }
-    return this.response;
+    this.onComplete();
+    return await this.response;
+  }
+}
+
+type TestEditResponse = InceptionAlgorithmResponse | MistralAlgorithmResponse;
+
+class QueuedEditCompletionModel implements CompletionModel {
+  private requestCountValue = 0;
+
+  constructor(
+    private readonly kind: 'inception' | 'mistral',
+    private readonly responses: readonly (
+      | TestEditResponse
+      | Promise<TestEditResponse>
+    )[],
+  ) {}
+
+  get requestCount(): number {
+    return this.requestCountValue;
+  }
+
+  getCapabilities() {
+    return Promise.resolve({ supportsNextCursorLinePrediction: false });
+  }
+
+  complete(
+    request: SimpleAlgorithmRequest,
+    token: vscode.CancellationToken,
+  ): Promise<SimpleAlgorithmResponse>;
+  complete(
+    request: CopilotReplicaAlgorithmFimRequest,
+    token: vscode.CancellationToken,
+  ): Promise<CopilotReplicaAlgorithmFimResponse>;
+  complete(
+    request: CopilotReplicaAlgorithmNesRequest,
+    token: vscode.CancellationToken,
+  ): Promise<CopilotReplicaAlgorithmNesResponse>;
+  complete(
+    request: CopilotReplicaAlgorithmCursorPredictionRequest,
+    token: vscode.CancellationToken,
+  ): Promise<CopilotReplicaAlgorithmCursorPredictionResponse>;
+  complete(
+    request: ZedAlgorithmRequest,
+    token: vscode.CancellationToken,
+  ): Promise<ZedAlgorithmResponse>;
+  complete(
+    request: InceptionAlgorithmRequest,
+    token: vscode.CancellationToken,
+  ): Promise<InceptionAlgorithmResponse>;
+  complete(
+    request: MistralAlgorithmRequest,
+    token: vscode.CancellationToken,
+  ): Promise<MistralAlgorithmResponse>;
+  async complete(
+    request: AlgorithmRequest,
+    _token: vscode.CancellationToken,
+  ): Promise<AlgorithmResponse> {
+    if (request.kind !== this.kind) {
+      throw new Error(`Unexpected request kind: ${request.kind}`);
+    }
+    const response = this.responses[this.requestCountValue];
+    this.requestCountValue += 1;
+    if (!response) {
+      throw new Error(`Missing response ${this.requestCountValue}.`);
+    }
+    return await response;
   }
 }
 
@@ -334,6 +405,177 @@ describe('EditPredictionAlgorithm feedback ownership', () => {
     );
     zed.dispose();
   });
+
+  it('lets an in-flight Zed result finish after the auth environment changes', async () => {
+    const mutable = mutableDocument('const x = ;');
+    mock.activeDocument = mutable.document;
+    const insertionOffset = mutable.document.getText().indexOf(';');
+    let resolveResponse: (response: ZedAlgorithmResponse) => void = () => undefined;
+    const response = new Promise<ZedAlgorithmResponse>((resolve) => {
+      resolveResponse = resolve;
+    });
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const model = new ZedOnlyCompletionModel(response, markStarted);
+    const algorithm = new EditPredictionAlgorithm(
+      'zed',
+      {
+        entry: { id: 'zed-auth-change', algorithm: 'zed' },
+        options: { model: { vendor: 'test', id: 'zeta-cloud' } },
+        modelResolver: {
+          evaluateModelForRequest: async () => ({ eligible: true }),
+          resolveCompletionModel: async () => model,
+        },
+        reportConfigurationError: () => undefined,
+      },
+      { model: { vendor: 'test', id: 'zeta-cloud' }, maxTokens: 64 },
+      new ZedEditPredictionLifecycle(),
+    );
+    const pending = algorithm.provideInlineCompletions(
+      {
+        document: mutable.document,
+        position: mutable.document.positionAt(insertionOffset),
+        context: {
+          triggerKind: vscode.InlineCompletionTriggerKind.Automatic,
+        } as vscode.InlineCompletionContext,
+      },
+      token(),
+    );
+    await started;
+
+    algorithm.handleEnvironmentChange('auth-changed');
+    resolveResponse({
+      kind: 'zed',
+      text: 'answer',
+      edit: {
+        targetUri: mutable.document.uri.toString(),
+        startOffset: insertionOffset,
+        endOffset: insertionOffset,
+      },
+    });
+
+    await expect(pending).resolves.toBeDefined();
+    algorithm.dispose();
+  });
+
+  it('preserves Zed invalidation for a changed provider configuration', async () => {
+    const mutable = mutableDocument('const x = ;');
+    mock.activeDocument = mutable.document;
+    const insertionOffset = mutable.document.getText().indexOf(';');
+    let resolveResponse: (response: ZedAlgorithmResponse) => void = () => undefined;
+    const response = new Promise<ZedAlgorithmResponse>((resolve) => {
+      resolveResponse = resolve;
+    });
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolve) => {
+      markStarted = resolve;
+    });
+    const algorithm = new EditPredictionAlgorithm(
+      'zed',
+      {
+        entry: { id: 'zed-provider-change', algorithm: 'zed' },
+        options: { model: { vendor: 'test', id: 'zeta-cloud' } },
+        modelResolver: {
+          evaluateModelForRequest: async () => ({ eligible: true }),
+          resolveCompletionModel: async () =>
+            new ZedOnlyCompletionModel(response, markStarted),
+        },
+        reportConfigurationError: () => undefined,
+      },
+      { model: { vendor: 'test', id: 'zeta-cloud' }, maxTokens: 64 },
+      new ZedEditPredictionLifecycle(),
+    );
+    const pending = algorithm.provideInlineCompletions(
+      {
+        document: mutable.document,
+        position: mutable.document.positionAt(insertionOffset),
+        context: {
+          triggerKind: vscode.InlineCompletionTriggerKind.Automatic,
+        } as vscode.InlineCompletionContext,
+      },
+      token(),
+    );
+    await started;
+
+    algorithm.handleEnvironmentChange('provider-changed');
+    resolveResponse({
+      kind: 'zed',
+      text: 'answer',
+      edit: {
+        targetUri: mutable.document.uri.toString(),
+        startOffset: insertionOffset,
+        endOffset: insertionOffset,
+      },
+    });
+
+    await expect(pending).resolves.toBeUndefined();
+    algorithm.dispose();
+  });
+
+  it.each(['inception', 'mistral'] as const)(
+    'isolates cached and in-flight %s predictions across auth generations',
+    async (kind) => {
+      const mutable = mutableDocument('const x = ;');
+      mock.activeDocument = mutable.document;
+      const insertionOffset = mutable.document.getText().indexOf(';');
+      let resolveLate: (response: TestEditResponse) => void = () => undefined;
+      const lateResponse = new Promise<TestEditResponse>((resolve) => {
+        resolveLate = resolve;
+      });
+      const response = (value: string): TestEditResponse =>
+        kind === 'inception'
+          ? { kind, text: `const x = ${value};` }
+          : { kind, text: value };
+      const model = new QueuedEditCompletionModel(kind, [
+        response('cached'),
+        lateResponse,
+        response('fresh'),
+      ]);
+      const modelReference = { vendor: 'test', id: `${kind}-model` };
+      const algorithm = new EditPredictionAlgorithm(
+        kind,
+        {
+          entry: { id: `${kind}-auth-change`, algorithm: kind },
+          options: { model: modelReference },
+          modelResolver: {
+            evaluateModelForRequest: async () => ({ eligible: true }),
+            resolveCompletionModel: async () => model,
+          },
+          reportConfigurationError: () => undefined,
+        },
+        kind === 'mistral'
+          ? { model: modelReference, maxTokens: 64 }
+          : { model: modelReference },
+      );
+      const input = (): CompletionAlgorithmInput => ({
+        document: mutable.document,
+        position: mutable.document.positionAt(insertionOffset),
+        context: {
+          triggerKind: vscode.InlineCompletionTriggerKind.Automatic,
+        } as vscode.InlineCompletionContext,
+      });
+
+      await expect(
+        algorithm.provideInlineCompletions(input(), token()),
+      ).resolves.toBeDefined();
+      expect(model.requestCount).toBe(1);
+
+      algorithm.handleEnvironmentChange('auth-changed');
+      const pending = algorithm.provideInlineCompletions(input(), token());
+      await vi.waitFor(() => expect(model.requestCount).toBe(2));
+
+      algorithm.handleEnvironmentChange('auth-changed');
+      resolveLate(response('late'));
+      await expect(pending).resolves.toBeDefined();
+
+      const current = await algorithm.provideInlineCompletions(input(), token());
+      expect(model.requestCount).toBe(3);
+      expect(current?.items[0]?.insertText).toBe('fresh');
+      algorithm.dispose();
+    },
+  );
 
   it('transfers a cached request terminal to the latest interpolated item', async () => {
     const mutable = mutableDocument('const x = ;');

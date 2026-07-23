@@ -1,9 +1,13 @@
 import * as vscode from 'vscode';
 import { t } from '../i18n';
 import type { SecretStore } from '../secret';
-import type { ProviderConfig } from '../types';
 import type { BalanceConfig } from './types';
 import { getBalanceMethodDefinition } from './definitions';
+
+interface ProviderBalanceTransferContainer {
+  name: string;
+  balanceProvider?: BalanceConfig;
+}
 
 async function resolveBalanceForExport(options: {
   secretStore: SecretStore;
@@ -51,12 +55,14 @@ export async function resolveBalanceForExportOrShowError(
   }
 }
 
-export async function resolveProviderBalanceForExportOrShowError(options: {
+export async function resolveProviderBalanceForExportOrShowError<
+  T extends ProviderBalanceTransferContainer,
+>(options: {
   secretStore: SecretStore;
-  provider: ProviderConfig;
+  provider: T;
   includeSensitive: boolean;
   message?: string;
-}): Promise<ProviderConfig | undefined> {
+}): Promise<T | undefined> {
   const balanceProvider = options.provider.balanceProvider;
   if (!balanceProvider || balanceProvider.method === 'none') {
     return { ...options.provider };
@@ -82,13 +88,15 @@ export async function resolveProviderBalanceForExportOrShowError(options: {
   }
 }
 
-export async function resolveProvidersBalanceForExportOrShowError(options: {
+export async function resolveProvidersBalanceForExportOrShowError<
+  T extends ProviderBalanceTransferContainer,
+>(options: {
   secretStore: SecretStore;
-  providers: readonly ProviderConfig[];
+  providers: readonly T[];
   includeSensitive: boolean;
   message?: string;
-}): Promise<ProviderConfig[] | undefined> {
-  const resolvedProviders: ProviderConfig[] = [];
+}): Promise<T[] | undefined> {
+  const resolvedProviders: T[] = [];
   const missing: string[] = [];
 
   for (const provider of options.providers) {

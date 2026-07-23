@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import type { AuthCredential, AuthTokenInfo } from '../auth/types';
+import { toAuthTokenInfo, type AuthTokenInfo } from '../auth/types';
 import type { AuthManager } from '../auth';
 import type { ConfigStore } from '../config-store';
 import type { SecretStore } from '../secret';
@@ -464,6 +464,17 @@ export class BalanceManager implements vscode.Disposable {
     await this.refreshProvider(provider, 'manual', true);
   }
 
+  async handleAuthStateChange(providerName: string): Promise<void> {
+    this.clearProviderState(providerName);
+    if (!this.isLeader()) return;
+
+    const previousRefresh = this.refreshInFlight.get(providerName);
+    if (previousRefresh) await previousRefresh;
+    const provider = this.configStore?.getProvider(providerName);
+    if (!provider || !this.hasConfiguredBalanceProvider(provider)) return;
+    await this.refreshProvider(provider, 'manual', true);
+  }
+
   async forceRefreshAll(providers?: ProviderConfig[]): Promise<number> {
     if (!this.isLeader()) {
       const result = await mainInstance.runInLeaderWhenAvailable<unknown>(
@@ -622,29 +633,27 @@ export class BalanceManager implements vscode.Disposable {
     provider: ProviderConfig,
     _reason: RefreshReason,
   ): Promise<void> {
-    const balanceProvider = this.createProvider(provider);
     const state = this.ensureState(provider.name);
+    let balanceProvider: ReturnType<typeof createBalanceProvider> = null;
 
     state.isRefreshing = true;
     state.lastAttemptAt = Date.now();
     this.notifyUpdated(provider.name);
 
-    if (!balanceProvider) {
-      state.isRefreshing = false;
-      state.lastError = 'Balance provider is not available.';
-      this.notifyUpdated(provider.name);
-      return;
-    }
-
     try {
+      const snapshot = await this.resolveRequestSnapshot(provider.name);
+      balanceProvider = this.createProvider(snapshot.provider);
+      if (!balanceProvider) {
+        state.lastError = 'Balance provider is not available.';
+        return;
+      }
       const providerWithResolvedProxy = {
-        ...provider,
-        proxy: this.resolveProviderProxy(provider),
+        ...snapshot.provider,
+        proxy: this.resolveProviderProxy(snapshot.provider),
       };
-      const credential = await this.resolveCredential(provider);
       const result = await balanceProvider.refresh({
         provider: providerWithResolvedProxy,
-        credential,
+        credential: snapshot.credential,
       });
 
       if (result.success && result.snapshot) {
@@ -659,8 +668,33 @@ export class BalanceManager implements vscode.Disposable {
     } finally {
       state.isRefreshing = false;
       this.notifyUpdated(provider.name);
-      balanceProvider.dispose?.();
+      balanceProvider?.dispose?.();
     }
+  }
+
+  private async resolveRequestSnapshot(providerName: string): Promise<{
+    provider: ProviderConfig;
+    credential: AuthTokenInfo | undefined;
+  }> {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const before = this.configStore?.getProvider(providerName);
+      if (!before || !this.hasConfiguredBalanceProvider(before)) {
+        break;
+      }
+      const beforeSignature = this.getProviderConfigSignature(before);
+      const credential = await this.resolveCredential(before);
+      const after = this.configStore?.getProvider(providerName);
+      if (
+        after &&
+        this.hasConfiguredBalanceProvider(after) &&
+        beforeSignature === this.getProviderConfigSignature(after)
+      ) {
+        return { provider: after, credential };
+      }
+    }
+    throw new Error(
+      'Authentication configuration changed while the balance request was starting. Please retry.',
+    );
   }
 
   private resolveProviderProxy(
@@ -699,22 +733,7 @@ export class BalanceManager implements vscode.Disposable {
       provider.name,
       'background',
     );
-    return this.toAuthTokenInfo(credential);
-  }
-
-  private toAuthTokenInfo(
-    credential: AuthCredential | undefined,
-  ): AuthTokenInfo {
-    if (!credential?.value) {
-      return { kind: 'none' };
-    }
-
-    return {
-      kind: 'token',
-      token: credential.value,
-      tokenType: credential.tokenType,
-      expiresAt: credential.expiresAt,
-    };
+    return toAuthTokenInfo(credential);
   }
 
   private createProvider(provider: ProviderConfig) {
@@ -795,6 +814,7 @@ export class BalanceManager implements vscode.Disposable {
     return stableStringify({
       type: provider.type,
       baseUrl: provider.baseUrl,
+      useRawBaseUrl: provider.useRawBaseUrl === true,
       auth: provider.auth,
       balanceProvider: provider.balanceProvider,
     });

@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 const state = vi.hoisted(() => ({
   values: {} as Record<string, unknown>,
   updates: [] as Array<{ key: string; value: unknown; target: number }>,
+  beforeEndpointWrite: undefined as (() => void | Promise<void>) | undefined,
+  configurationListeners: new Set<
+    (event: { affectsConfiguration(section: string): boolean }) => void
+  >(),
 }));
 
 vi.mock('vscode', () => {
@@ -42,11 +46,26 @@ vi.mock('vscode', () => {
       getConfiguration: () => ({
         get: (key: string) => state.values[key],
         update: async (key: string, value: unknown, target: number) => {
+          if (key === 'endpoints') await state.beforeEndpointWrite?.();
           state.updates.push({ key, value, target });
           state.values[key] = value;
+          for (const listener of state.configurationListeners) {
+            listener({
+              affectsConfiguration: (section) =>
+                section === 'unifyChatProvider' ||
+                section === `unifyChatProvider.${key}`,
+            });
+          }
         },
       }),
-      onDidChangeConfiguration: () => new Disposable(),
+      onDidChangeConfiguration: (
+        listener: (event: {
+          affectsConfiguration(section: string): boolean;
+        }) => void,
+      ) => {
+        state.configurationListeners.add(listener);
+        return new Disposable(() => state.configurationListeners.delete(listener));
+      },
     },
   };
 });
@@ -84,16 +103,152 @@ vi.mock('../../src/vscode-model-id-migration', () => ({
 }));
 
 import { ConfigStore } from '../../src/config-store';
+import { stableStringify } from '../../src/config-ops';
 import { parseProviderConfig } from '../../src/main-instance/register-handlers';
+import type { OpenAICodexAuthConfig } from '../../src/auth/types';
 
 const SYNC_METHOD = 'config.syncPersistedProvider';
 
 beforeEach(() => {
   state.values = {};
   state.updates = [];
+  state.beforeEndpointWrite = undefined;
+  state.configurationListeners.clear();
 });
 
 describe('ConfigStore completion configuration', () => {
+  it('restores an endpoints update that arrives after migration comparison', async () => {
+    const initial = [{ name: 'legacy', auth: { method: 'openai-codex' } }];
+    const concurrent = [
+      ...initial,
+      { name: 'synced', preserve: true },
+    ];
+    const migrated = [
+      {
+        name: 'legacy',
+        auth: {
+          method: 'openai-codex',
+          bindingId: '00000000-0000-4000-8000-000000000401',
+        },
+      },
+    ];
+    state.values.endpoints = initial;
+    const store = new ConfigStore();
+    state.beforeEndpointWrite = () => {
+      state.beforeEndpointWrite = undefined;
+      state.values.endpoints = concurrent;
+      for (const listener of state.configurationListeners) {
+        listener({
+          affectsConfiguration: (section) =>
+            section === 'unifyChatProvider' ||
+            section === 'unifyChatProvider.endpoints',
+        });
+      }
+    };
+
+    await expect(
+      store.setRawEndpointsIfUnchanged(
+        stableStringify(initial),
+        migrated,
+      ),
+    ).resolves.toBe(false);
+    expect(state.values.endpoints).toEqual(concurrent);
+    expect(state.updates.map((update) => update.value)).toEqual([
+      migrated,
+      concurrent,
+    ]);
+    store.dispose();
+  });
+
+  it('does not overwrite Settings Sync during a conditional provider upsert', async () => {
+    const initial = [
+      {
+        type: 'openai-chat-completion',
+        name: 'provider',
+        baseUrl: 'https://old.example.test/v1',
+        models: [],
+        auth: {
+          method: 'openai-codex',
+          bindingId: '00000000-0000-4000-8000-000000000401',
+        },
+      },
+    ];
+    const concurrent = [
+      {
+        ...initial[0],
+        baseUrl: 'https://synced.example.test/v1',
+        syncedField: 'preserve',
+      },
+    ];
+    state.values.endpoints = initial;
+    const store = new ConfigStore();
+    state.beforeEndpointWrite = () => {
+      state.beforeEndpointWrite = undefined;
+      state.values.endpoints = concurrent;
+      for (const listener of state.configurationListeners) {
+        listener({
+          affectsConfiguration: (section) =>
+            section === 'unifyChatProvider' ||
+            section === 'unifyChatProvider.endpoints',
+        });
+      }
+    };
+
+    await expect(
+      store.upsertProviderIfUnchanged(
+        {
+          type: 'openai-chat-completion',
+          name: 'provider',
+          baseUrl: 'https://edited.example.test/v1',
+          models: [],
+          auth: {
+            method: 'openai-codex',
+            bindingId: '00000000-0000-4000-8000-000000000401',
+          },
+        },
+        {},
+        () => true,
+      ),
+    ).resolves.toBe(false);
+    expect(state.values.endpoints).toEqual(concurrent);
+    store.dispose();
+  });
+
+  it('never writes device session fields to synchronized endpoints', async () => {
+    const store = new ConfigStore();
+    const auth: OpenAICodexAuthConfig = {
+      method: 'openai-codex',
+      bindingId: '00000000-0000-4000-8000-000000000401',
+      identityId: 'local-session',
+      token: 'local-token',
+      accountId: 'local-account',
+      email: 'local@example.com',
+    };
+    await store.setEndpoints([
+      {
+        type: 'openai-chat-completion',
+        name: 'provider',
+        baseUrl: 'https://api.example.test/v1',
+        models: [],
+        auth,
+      },
+    ]);
+
+    expect(state.updates[0].value).toEqual([
+      {
+        type: 'openai-chat-completion',
+        name: 'provider',
+        baseUrl: 'https://api.example.test/v1',
+        models: [],
+        auth: {
+          method: 'openai-codex',
+          bindingId: '00000000-0000-4000-8000-000000000401',
+        },
+      },
+    ]);
+    store.dispose();
+  });
+
   it('keeps invalid raw diagnostics while exposing only normalized values', () => {
     state.values.endpoints = [
       {

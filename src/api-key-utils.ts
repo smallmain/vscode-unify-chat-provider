@@ -117,31 +117,3 @@ export async function resolveProvidersForExportOrShowError(options: {
 
   return resolvedProviders;
 }
-
-export async function deleteProviderApiKeySecretIfUnused(options: {
-  secretStore: SecretStore;
-  providers: readonly ProviderConfig[];
-  providerName: string;
-}): Promise<void> {
-  const provider = options.providers.find((p) => p.name === options.providerName);
-  const rawApiKey = getApiKeyFromAuth(provider?.auth)?.trim();
-  if (!rawApiKey) {
-    return;
-  }
-
-  const status = await options.secretStore.getApiKeyStatus(rawApiKey);
-  if (status.kind !== 'secret' && status.kind !== 'missing-secret') {
-    return;
-  }
-
-  const stillUsed = options.providers.some((p) => {
-    if (p.name === options.providerName) return false;
-    return getApiKeyFromAuth(p.auth)?.trim() === rawApiKey;
-  });
-
-  if (stillUsed) {
-    return;
-  }
-
-  await options.secretStore.deleteApiKey(rawApiKey);
-}

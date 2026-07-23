@@ -27,7 +27,7 @@ import {
   ModelConfig,
   ProviderConfig,
 } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import type { ProviderHttpLogger } from '../../logger';
 import {
@@ -1359,7 +1359,11 @@ export class GoogleAIStudioProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1374,6 +1378,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
         async () => {
           return client.models.list({
             config: {
+              abortSignal: signal,
               httpOptions: {
                 headers: this.buildHeaders(credential),
                 extraBody: this.buildExtraBody(),

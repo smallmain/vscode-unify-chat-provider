@@ -17,6 +17,7 @@
   "Invalid configuration. Must be a valid JSON, Base64-encoded JSON, or URL pointing to a configuration.": "无效的配置。必须是有效的 JSON、Base64 编码的 JSON，或指向配置的 URL。",
   "Invalid provider configuration array.": "无效的供应商配置数组。",
   "Invalid provider configuration.": "无效的供应商配置。",
+  "Invalid authentication token data.": "无效的认证令牌数据。",
   "API Key ({0})": "API Key（{0}）",
   "Enter the API key for \"{0}\"": "请输入 \"{0}\" 的 API Key",
   "No providers have auto-fetch official models enabled.": "没有任何供应商启用了自动拉取官方模型。",
@@ -1313,5 +1314,16 @@
   "VS Code product.json changed during the operation, so it was not overwritten. Try again after the update or other modification finishes.": "操作期间 VS Code product.json 发生了变化，因此未覆盖该文件。请等待更新或其他修改结束后重试。",
   "VS Code product.json could not be updated. No successful change was recorded.": "无法更新 VS Code product.json，未记录成功更改。",
   "Automatic Proposed API enablement is supported only on Windows, macOS, and Linux desktop installations.": "自动启用 Proposed API 仅支持 Windows、macOS 和 Linux 桌面安装。",
-  "When disabled, the commit-message button moves to the Source Control title bar.": "禁用后，提交消息按钮将移至源代码管理标题栏。"
+  "When disabled, the commit-message button moves to the Source Control title bar.": "禁用后，提交消息按钮将移至源代码管理标题栏。",
+  "Clear local tokens": "清除本地令牌",
+  "Remote revocation is not available.": "无法撤销远程授权。",
+  "Revoke remote authorization...": "撤销远程授权...",
+  "Revoke the grant and clear local tokens": "撤销授权并清除本地令牌",
+  "Choose the account previously authorized on this device": "选择此前在此设备上授权的账户",
+  "Local authorization recovered.": "已恢复本地授权。",
+  "Recover local authorization": "恢复本地授权",
+  "Recover local authorization...": "恢复本地授权...",
+  "{0} local authorization candidates": "{0} 个本地授权候选",
+  "Authentication changed on this device while this operation was in progress. Please try again.": "操作期间此设备上的认证状态已发生变化，请重试。",
+  "Authentication configuration changed while the request was starting. Please retry.": "请求启动期间认证配置发生了变化，请重试。"
 }

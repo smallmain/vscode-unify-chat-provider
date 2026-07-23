@@ -803,13 +803,13 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 
 扩展配置存储在 `settings.json` 文件中，支持 VS Code 自带的设置云同步功能。
 
-但敏感信息默认通过 VS Code 的 Secret Storage 存储，当前还不支持云同步。
+会话型认证会在 `settings.json` 中保存一个非敏感绑定 ID；OAuth token、client secret、账户/项目上下文以及 Zed 组织和隐私状态则保存在 VS Code Secret Storage 的版本化信封中。Secret Storage 不参与同步。
 
-所以当配置同步到其它设备后，可能会要求你重新输入密钥或重新授权。
+因此每台设备会独立授权和刷新会话。在一台设备上同步配置、重命名供应商或切换账户，都不会替换另一台设备的 token 或账户上下文。新同步的设备会要求在本机授权。
 
-如果你希望同步支持多设备同步的敏感数据（例如 API Key），可以在设置中启用 [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings)。
+如果你希望同步适合多设备共享的敏感数据（例如 API Key），可以在设置中启用 [`storeApiKeyInSettings`](vscode://settings/unifyChatProvider.storeApiKeyInSettings)。
 
-为避免多设备同步导致 token 刷新冲突，OAuth 凭证将始终保存在 Secret Storage 中。
+为避免多设备刷新和账户上下文冲突，OAuth 和 Zed 凭证始终保存在 Secret Storage 中。用户显式进行敏感导出和导入时，仍可能把同一个上游凭证放到多台设备。
 
 这会有用户数据泄露风险，你需要自行评估并决定是否启用该选项。
 
@@ -1172,3 +1172,4 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 ## 致谢
 
 - [Awesome Codex CLI](https://github.com/RoggeOhta/awesome-codex-cli)
+- [LINUX.DO](https://linux.do/)

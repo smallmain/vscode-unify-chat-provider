@@ -43,7 +43,7 @@ export function createZedProviderIdentity(
     provider.auth?.method === 'zed' ? provider.auth.baseUrl?.trim() : undefined;
   const baseUrl = resolveZedBaseUrls(authBaseUrl || provider.baseUrl).web;
   const authIdentityId =
-    provider.auth?.method === 'zed' ? provider.auth.identityId : undefined;
+    provider.auth?.method === 'zed' ? provider.auth.bindingId : undefined;
   const source = JSON.stringify({
     providerName: provider.name,
     baseUrl,

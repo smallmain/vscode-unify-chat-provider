@@ -21,7 +21,7 @@ import { performAuthorization } from './screens/authorize-screen';
 import { t } from '../../../i18n';
 import { OAuth2Error } from './errors';
 import { withRetry, withTimeout } from './retry';
-import { createSecretRef, isSecretRef, type SecretStore } from '../../../secret';
+import { isSessionSecretRef, type SecretStore } from '../../../secret';
 import { authLog } from '../../../logger';
 
 /**
@@ -40,7 +40,7 @@ export class OAuth2AuthProvider implements AuthProvider {
         return { ...oauth, clientSecret: undefined };
       }
       if (oauth.grantType === 'client_credentials') {
-        return { ...oauth, clientSecret: '' };
+        return { ...oauth, clientSecret: undefined };
       }
       return oauth;
     })();
@@ -79,7 +79,7 @@ export class OAuth2AuthProvider implements AuthProvider {
       throw new Error('Missing OAuth2 token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -95,7 +95,7 @@ export class OAuth2AuthProvider implements AuthProvider {
         if (!clientSecretRaw) {
           return { ...oauth, clientSecret: undefined };
         }
-        if (isSecretRef(clientSecretRaw)) {
+        if (isSessionSecretRef(clientSecretRaw)) {
           const stored = await secretStore.getOAuth2ClientSecret(clientSecretRaw);
           if (!stored) {
             throw new Error('Missing OAuth2 client secret');
@@ -106,11 +106,11 @@ export class OAuth2AuthProvider implements AuthProvider {
       }
 
       if (oauth.grantType === 'client_credentials') {
-        const clientSecretRaw = oauth.clientSecret.trim();
+        const clientSecretRaw = oauth.clientSecret?.trim();
         if (!clientSecretRaw) {
           throw new Error('Missing OAuth2 client secret');
         }
-        if (isSecretRef(clientSecretRaw)) {
+        if (isSessionSecretRef(clientSecretRaw)) {
           const stored = await secretStore.getOAuth2ClientSecret(clientSecretRaw);
           if (!stored) {
             throw new Error('Missing OAuth2 client secret');
@@ -147,14 +147,14 @@ export class OAuth2AuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(tokenRaw)) {
+        if (!isSessionSecretRef(tokenRaw)) {
           return tokenRaw;
         }
         const stored = await secretStore.getOAuth2Token(tokenRaw);
         return stored ? JSON.stringify(stored) : tokenRaw;
       }
 
-      if (isSecretRef(tokenRaw)) {
+      if (isSessionSecretRef(tokenRaw)) {
         return tokenRaw;
       }
 
@@ -164,10 +164,11 @@ export class OAuth2AuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
@@ -180,14 +181,14 @@ export class OAuth2AuthProvider implements AuthProvider {
         }
 
         if (options.storeSecretsInSettings) {
-          if (!isSecretRef(raw)) {
+          if (!isSessionSecretRef(raw)) {
             return oauth;
           }
           const stored = await secretStore.getOAuth2ClientSecret(raw);
           return stored ? { ...oauth, clientSecret: stored } : oauth;
         }
 
-        if (isSecretRef(raw)) {
+        if (isSessionSecretRef(raw)) {
           return oauth;
         }
 
@@ -195,38 +196,47 @@ export class OAuth2AuthProvider implements AuthProvider {
         const existingRef =
           existingOAuth?.grantType === 'authorization_code' &&
           existingOAuth.clientSecret &&
-          isSecretRef(existingOAuth.clientSecret)
+          isSessionSecretRef(existingOAuth.clientSecret)
             ? existingOAuth.clientSecret
             : undefined;
 
-        const ref = existingRef ?? secretStore.createRef();
+        const ref =
+          existingRef ??
+          secretStore.createTransientOAuth2ClientSecretRef();
         await secretStore.setOAuth2ClientSecret(ref, raw);
         return { ...oauth, clientSecret: ref };
       }
 
       if (oauth.grantType === 'client_credentials') {
-        const raw = oauth.clientSecret.trim();
+        const raw = oauth.clientSecret?.trim();
+
+        if (!raw) {
+          return { ...oauth, clientSecret: undefined };
+        }
 
         if (options.storeSecretsInSettings) {
-          if (!isSecretRef(raw)) {
+          if (!isSessionSecretRef(raw)) {
             return oauth;
           }
           const stored = await secretStore.getOAuth2ClientSecret(raw);
           return stored ? { ...oauth, clientSecret: stored } : oauth;
         }
 
-        if (isSecretRef(raw)) {
+        if (isSessionSecretRef(raw)) {
           return oauth;
         }
 
         const existingOAuth = options.existing?.oauth;
         const existingRef =
           existingOAuth?.grantType === 'client_credentials' &&
-          isSecretRef(existingOAuth.clientSecret)
+          existingOAuth.clientSecret !== undefined &&
+          isSessionSecretRef(existingOAuth.clientSecret)
             ? existingOAuth.clientSecret
             : undefined;
 
-        const ref = existingRef ?? secretStore.createRef();
+        const ref =
+          existingRef ??
+          secretStore.createTransientOAuth2ClientSecretRef();
         await secretStore.setOAuth2ClientSecret(ref, raw);
         return { ...oauth, clientSecret: ref };
       }
@@ -236,8 +246,17 @@ export class OAuth2AuthProvider implements AuthProvider {
 
     const token = await normalizeToken();
     const oauth = await normalizeClientSecret(auth.oauth);
+    const importsToken =
+      typeof auth.token === 'string' &&
+      auth.token.trim() !== '' &&
+      !isSessionSecretRef(auth.token.trim());
 
-    return { ...auth, token, oauth };
+    return {
+      ...auth,
+      identityId: importsToken ? randomUUID() : auth.identityId,
+      token,
+      oauth,
+    };
   }
 
   static async prepareForDuplicate(
@@ -298,44 +317,46 @@ export class OAuth2AuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
     return this.parseTokenData(raw);
   }
 
-  private async persistConfig(next: OAuth2AuthConfig): Promise<void> {
+  private async persistConfig(
+    next: OAuth2AuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     this.config = next;
-    await this.context.persistAuthConfig?.(next);
   }
 
-  private async storeTokenData(token: OAuth2TokenData): Promise<void> {
+  private async storeTokenData(
+    token: OAuth2TokenData,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
     if (!this.config) {
       return;
     }
 
-    const raw = this.config.token?.trim();
-
-    if (raw && isSecretRef(raw)) {
-      await this.context.secretStore.setOAuth2Token(raw, token);
-      return;
-    }
-
-    await this.persistConfig({ ...this.config, token: JSON.stringify(token) });
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
+    await this.context.secretStore.setOAuth2Token(tokenRef, token);
+    await this.persistConfig({ ...this.config, token: tokenRef }, guard);
   }
 
-  private async clearTokenData(): Promise<void> {
+  private async clearTokenData(
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
     if (!this.config) {
       return;
     }
 
-    const raw = this.config.token?.trim();
-    if (raw && isSecretRef(raw)) {
-      await this.context.secretStore.deleteOAuth2Token(raw);
+    const oldTokenRef = this.config.token?.trim();
+    await this.persistConfig({ ...this.config, token: undefined }, guard);
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
     }
-
-    await this.persistConfig({ ...this.config, token: undefined });
   }
 
   private async resolveOAuthConfig(): Promise<OAuth2Config | undefined> {
@@ -346,7 +367,7 @@ export class OAuth2AuthProvider implements AuthProvider {
 
     if (oauth.grantType === 'authorization_code') {
       const secret = oauth.clientSecret?.trim();
-      if (secret && isSecretRef(secret)) {
+      if (secret && isSessionSecretRef(secret)) {
         const stored = await this.context.secretStore.getOAuth2ClientSecret(secret);
         if (!stored) {
           return undefined;
@@ -357,8 +378,11 @@ export class OAuth2AuthProvider implements AuthProvider {
     }
 
     if (oauth.grantType === 'client_credentials') {
-      const secret = oauth.clientSecret.trim();
-      if (isSecretRef(secret)) {
+      const secret = oauth.clientSecret?.trim();
+      if (!secret) {
+        return undefined;
+      }
+      if (isSessionSecretRef(secret)) {
         const stored = await this.context.secretStore.getOAuth2ClientSecret(secret);
         if (!stored) {
           return undefined;
@@ -418,7 +442,7 @@ export class OAuth2AuthProvider implements AuthProvider {
 
     let token: OAuth2TokenData | null = null;
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       token = await this.context.secretStore.getOAuth2Token(raw);
       if (!token) {
         return { kind: 'missing-secret', message: t('OAuth token is missing') };
@@ -542,7 +566,7 @@ export class OAuth2AuthProvider implements AuthProvider {
 
     items.push({
       label: `$(sign-out) ${t('Sign out')}`,
-      description: t('Revoke and clear local tokens'),
+      description: t('Clear local tokens'),
       action: {
         kind: 'inline',
         run: async () => {
@@ -550,6 +574,20 @@ export class OAuth2AuthProvider implements AuthProvider {
         },
       },
     });
+
+    const oauth = await this.resolveOAuthConfig();
+    if (snapshot.kind === 'valid' && oauth?.revocationUrl) {
+      items.push({
+        label: `$(trash) ${t('Revoke remote authorization...')}`,
+        description: t('Revoke the grant and clear local tokens'),
+        action: {
+          kind: 'inline',
+          run: async () => {
+            await this.revokeRemote();
+          },
+        },
+      });
+    }
 
     return items;
   }
@@ -640,9 +678,23 @@ export class OAuth2AuthProvider implements AuthProvider {
    * Configure OAuth 2.0
    */
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(`${this.context.providerId}:oauth2`, 'Starting OAuth2 configuration');
+    const resolvedExistingOAuth = await this.resolveOAuthConfig();
+    const configuredOAuth = this.config?.oauth;
+    const safeExistingOAuth = (() => {
+      if (
+        !configuredOAuth ||
+        configuredOAuth.grantType === 'device_code' ||
+        !configuredOAuth.clientSecret ||
+        !isSessionSecretRef(configuredOAuth.clientSecret)
+      ) {
+        return configuredOAuth;
+      }
+      return { ...configuredOAuth, clientSecret: undefined };
+    })();
     const oauthConfig: OAuth2Config | undefined = await showOAuth2ConfigScreen(
-      this.config?.oauth,
+      resolvedExistingOAuth ?? safeExistingOAuth,
     );
 
     if (!oauthConfig) {
@@ -665,7 +717,7 @@ export class OAuth2AuthProvider implements AuthProvider {
     }
 
     authLog.verbose(`${this.context.providerId}:oauth2`, 'Authorization successful, storing token');
-    const tokenRef = createSecretRef();
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
     await this.context.secretStore.setOAuth2Token(tokenRef, token);
 
     let storedOAuthConfig: OAuth2Config = oauthConfig;
@@ -674,22 +726,31 @@ export class OAuth2AuthProvider implements AuthProvider {
       const clientSecret = oauthConfig.clientSecret?.trim() || undefined;
       if (clientSecret) {
         authLog.verbose(`${this.context.providerId}:oauth2`, 'Storing client secret');
-        const ref = createSecretRef();
+        const ref =
+          this.context.secretStore.createTransientOAuth2ClientSecretRef();
         await this.context.secretStore.setOAuth2ClientSecret(ref, clientSecret);
         storedOAuthConfig = { ...oauthConfig, clientSecret: ref };
       } else {
         storedOAuthConfig = { ...oauthConfig, clientSecret: undefined };
       }
     } else if (oauthConfig.grantType === 'client_credentials') {
-      const clientSecret = oauthConfig.clientSecret.trim();
+      const clientSecret = oauthConfig.clientSecret?.trim();
+      if (!clientSecret) {
+        return {
+          success: false,
+          error: t('OAuth client secret is missing'),
+        };
+      }
       authLog.verbose(`${this.context.providerId}:oauth2`, 'Storing client secret for client_credentials');
-      const ref = createSecretRef();
+      const ref =
+        this.context.secretStore.createTransientOAuth2ClientSecretRef();
       await this.context.secretStore.setOAuth2ClientSecret(ref, clientSecret);
       storedOAuthConfig = { ...oauthConfig, clientSecret: ref };
     }
 
     const nextConfig: OAuth2AuthConfig = {
       method: 'oauth2',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: randomUUID(),
@@ -697,7 +758,7 @@ export class OAuth2AuthProvider implements AuthProvider {
       oauth: storedOAuthConfig,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
     this._onDidChangeStatus.fire({ status: 'valid' });
 
     authLog.verbose(`${this.context.providerId}:oauth2`, 'OAuth2 configured successfully');
@@ -711,6 +772,7 @@ export class OAuth2AuthProvider implements AuthProvider {
    * Refresh the access token with retry and exponential backoff
    */
   async refresh(): Promise<boolean> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(`${this.context.providerId}:oauth2`, 'Starting token refresh');
     try {
       const oauth = await this.resolveOAuthConfig();
@@ -738,7 +800,7 @@ export class OAuth2AuthProvider implements AuthProvider {
         if (!newToken.refreshToken) {
           newToken.refreshToken = storedRefreshToken;
         }
-        await this.storeTokenData(newToken);
+        await this.storeTokenData(newToken, commitGuard);
         this._onDidChangeStatus.fire({ status: 'valid' });
         authLog.verbose(`${this.context.providerId}:oauth2`, 'Token refresh successful (authorization_code)');
         return true;
@@ -750,7 +812,7 @@ export class OAuth2AuthProvider implements AuthProvider {
           (signal) => getClientCredentialsToken(oauth, signal),
           shouldRetry,
         );
-        await this.storeTokenData(newToken);
+        await this.storeTokenData(newToken, commitGuard);
         this._onDidChangeStatus.fire({ status: 'valid' });
         authLog.verbose(`${this.context.providerId}:oauth2`, 'Token refresh successful (client_credentials)');
         return true;
@@ -771,50 +833,30 @@ export class OAuth2AuthProvider implements AuthProvider {
     }
   }
 
-  /**
-   * Revoke/clear OAuth tokens
-   */
-  async revoke(): Promise<void> {
-    authLog.verbose(`${this.context.providerId}:oauth2`, 'Revoking OAuth tokens');
+  private async revokeRemote(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
+    authLog.verbose(`${this.context.providerId}:oauth2`, 'Revoking remote OAuth grant');
     const token = await this.resolveTokenData();
     const oauth = await this.resolveOAuthConfig();
-
-    if (token && oauth?.revocationUrl) {
-      authLog.verbose(`${this.context.providerId}:oauth2`, 'Attempting remote token revocation');
-      // Best-effort remote revocation before clearing local tokens.
-      const attempt = async (
-        tokenValue: string,
-        hint: 'access_token' | 'refresh_token',
-      ): Promise<void> => {
-        await withTimeout(
-          (signal) => revokeToken(oauth, tokenValue, hint, signal),
-          10_000,
-        );
-      };
-
-      if (token.refreshToken) {
-        try {
-          authLog.verbose(`${this.context.providerId}:oauth2`, 'Revoking refresh token');
-          await attempt(token.refreshToken, 'refresh_token');
-        } catch (error) {
-          authLog.error(`${this.context.providerId}:oauth2`, 'Failed to revoke refresh token (ignored)', error);
-        }
-      }
-
-      if (token.accessToken) {
-        try {
-          authLog.verbose(`${this.context.providerId}:oauth2`, 'Revoking access token');
-          await attempt(token.accessToken, 'access_token');
-        } catch (error) {
-          authLog.error(`${this.context.providerId}:oauth2`, 'Failed to revoke access token (ignored)', error);
-        }
-      }
+    if (!token || !oauth?.revocationUrl) {
+      throw new Error(t('Remote revocation is not available.'));
     }
-
-    authLog.verbose(`${this.context.providerId}:oauth2`, 'Clearing local token data');
-    await this.clearTokenData();
+    const tokenValue = token.refreshToken ?? token.accessToken;
+    const hint = token.refreshToken ? 'refresh_token' : 'access_token';
+    await withTimeout(
+      (signal) => revokeToken(oauth, tokenValue, hint, signal),
+      10_000,
+    );
+    await this.clearTokenData(commitGuard);
     this._onDidChangeStatus.fire({ status: 'revoked' });
-    authLog.verbose(`${this.context.providerId}:oauth2`, 'OAuth tokens revoked successfully');
+  }
+
+  /** Clear only this device's OAuth session. */
+  async revoke(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
+    authLog.verbose(`${this.context.providerId}:oauth2`, 'Clearing local OAuth tokens');
+    await this.clearTokenData(commitGuard);
+    this._onDidChangeStatus.fire({ status: 'revoked' });
   }
 
   dispose(): void {

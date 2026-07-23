@@ -9,6 +9,8 @@ import type {
   CompletionModelReference,
   CompletionModelResolver,
 } from "../../src/completion/types";
+import { INTERNAL_COMPLETION_VENDOR } from "../../src/completion/types";
+import { createVsCodeModelId } from "../../src/model-id-utils";
 
 const mock = vi.hoisted(() => ({
   configuration: {
@@ -359,6 +361,7 @@ function definition(
     options: unknown,
   ) => readonly CompletionModelReference[],
   supportsCatalogChanges = false,
+  supportsEnvironmentChanges = false,
 ): CompletionAlgorithmDefinition {
   return {
     id: "simple",
@@ -366,7 +369,11 @@ function definition(
     ...(getModelReferences ? { getModelReferences } : {}),
     normalizeOptions: (raw) => ({ ok: true, value: raw ?? {} }),
     create: (context) => {
-      const algorithm = new FakeAlgorithm(context, supportsCatalogChanges);
+      const algorithm = new FakeAlgorithm(
+        context,
+        supportsCatalogChanges,
+        supportsEnvironmentChanges,
+      );
       instances.push(algorithm);
       return algorithm;
     },
@@ -832,6 +839,43 @@ describe("CompletionManager runtime registry", () => {
     expect(manager.getState().runtimeInstances.two).not.toBe(firstTwoId);
     expect(instances).toHaveLength(4);
     expect(instances[1].disposed).toBe(true);
+    manager.dispose();
+  });
+
+  it("refreshes only runtimes that reference the changed auth provider", () => {
+    const instances: FakeAlgorithm[] = [];
+    const registry = new CompletionAlgorithmRegistry([
+      definition(instances, modelReferences, false, true),
+    ]);
+    mock.configuration.providers = [
+      {
+        id: "one",
+        algorithm: "simple",
+        options: {
+          model: {
+            vendor: INTERNAL_COMPLETION_VENDOR,
+            id: createVsCodeModelId("provider-a", "model"),
+          },
+        },
+      },
+      {
+        id: "two",
+        algorithm: "simple",
+        options: {
+          model: {
+            vendor: INTERNAL_COMPLETION_VENDOR,
+            id: createVsCodeModelId("provider-b", "model"),
+          },
+        },
+      },
+    ];
+    const manager = new CompletionManager(resolver, registry);
+
+    manager.handleAuthStateChange("provider-a");
+    manager.handleAuthStateChange("unrelated");
+
+    expect(instances[0].environmentChanges).toEqual(["auth-changed"]);
+    expect(instances[1].environmentChanges).toEqual([]);
     manager.dispose();
   });
 

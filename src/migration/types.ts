@@ -1,7 +1,14 @@
 import type { ProviderConfig } from '../types';
+import type { AuthRuntimeConfig } from '../auth/types';
+
+export type ProviderMigrationConfig = Partial<
+  Omit<ProviderConfig, 'auth'>
+> & {
+  auth?: AuthRuntimeConfig;
+};
 
 export interface ProviderMigrationCandidate {
-  provider: Partial<ProviderConfig>;
+  provider: ProviderMigrationConfig;
 }
 
 export interface ProviderMigrationSource {
@@ -20,4 +27,3 @@ export interface ProviderMigrationSource {
     content: string,
   ): Promise<readonly ProviderMigrationCandidate[]>;
 }
-

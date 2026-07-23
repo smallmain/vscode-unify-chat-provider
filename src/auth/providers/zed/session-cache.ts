@@ -44,7 +44,10 @@ export class ZedAuthSessionCache {
   private accountLoadedAt = 0;
   private serverOrganizationSynced = false;
   private llmToken?: { organizationId: string; value: string };
-  private llmTokenPromise?: Promise<string>;
+  private readonly llmTokenPromises = new Map<
+    string,
+    { generation: number; promise: Promise<string> }
+  >();
   private llmTokenGeneration = 0;
 
   constructor(
@@ -162,9 +165,12 @@ export class ZedAuthSessionCache {
     if (this.llmToken?.organizationId === organizationId) {
       return this.llmToken.value;
     }
-    if (!signal && this.llmTokenPromise) return this.llmTokenPromise;
 
     const generation = this.llmTokenGeneration;
+    const existing = this.llmTokenPromises.get(organizationId);
+    if (!signal && existing?.generation === generation) {
+      return existing.promise;
+    }
     const load = async (): Promise<string> => {
       const value = await this.client.createLlmToken(
         this.credential,
@@ -172,7 +178,11 @@ export class ZedAuthSessionCache {
         this.systemId,
         signal,
       );
-      if (generation === this.llmTokenGeneration) {
+      if (
+        generation === this.llmTokenGeneration &&
+        (this.organization === undefined ||
+          this.organization.id === organizationId)
+      ) {
         this.llmToken = { organizationId, value };
       }
       return value;
@@ -181,9 +191,15 @@ export class ZedAuthSessionCache {
 
     let pending: Promise<string>;
     pending = load().finally(() => {
-      if (this.llmTokenPromise === pending) this.llmTokenPromise = undefined;
+      const current = this.llmTokenPromises.get(organizationId);
+      if (
+        current?.generation === generation &&
+        current.promise === pending
+      ) {
+        this.llmTokenPromises.delete(organizationId);
+      }
     });
-    this.llmTokenPromise = pending;
+    this.llmTokenPromises.set(organizationId, { generation, promise: pending });
     return pending;
   }
 
@@ -198,7 +214,7 @@ export class ZedAuthSessionCache {
   invalidateLlmToken(): void {
     this.llmTokenGeneration += 1;
     this.llmToken = undefined;
-    this.llmTokenPromise = undefined;
+    this.llmTokenPromises.clear();
   }
 
   clear(): void {

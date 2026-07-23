@@ -1,4 +1,5 @@
 import { promises as fs } from 'fs';
+import { randomUUID } from 'node:crypto';
 import * as os from 'os';
 import * as path from 'path';
 import * as toml from '@iarna/toml';
@@ -20,7 +21,10 @@ import { t } from '../i18n';
 import type { ModelConfig, ProviderConfig } from '../types';
 import { migrationLog } from '../logger';
 import { CodexOAuthDetectedError } from './errors';
-import type { OAuth2TokenData } from '../auth/types';
+import type {
+  OAuth2TokenData,
+  OpenAICodexAuthConfig,
+} from '../auth/types';
 import {
   OPENAI_CODEX_API_ENDPOINT,
   OPENAI_CODEX_SCOPE,
@@ -30,10 +34,6 @@ import {
   OpenAICodexIdTokenClaims,
   parseJwtClaims,
 } from '../auth/providers/openai-codex/oauth-client';
-
-type OpenAICodexAccessTokenClaims = OpenAICodexIdTokenClaims & {
-  exp?: unknown;
-};
 
 function normalizeBaseUrlForCompare(value: string): string {
   return value.replace(/\/+$/, '');
@@ -150,8 +150,8 @@ function getOpenAICodexClaims(
 
 function getOpenAICodexAccessClaims(
   token: string,
-): OpenAICodexAccessTokenClaims | undefined {
-  return parseJwtClaims(token) as OpenAICodexAccessTokenClaims | undefined;
+): OpenAICodexIdTokenClaims | undefined {
+  return parseJwtClaims(token);
 }
 
 function extractCodexAccountId(
@@ -169,8 +169,8 @@ function extractCodexAccountId(
 async function buildCodexOAuthProviderFromAuthJson(
   modelId: string | undefined,
 ): Promise<ProviderMigrationCandidate | undefined> {
-  const auth = await readAuthJson();
-  const tokens = getRecord(auth?.['tokens']);
+  const authJson = await readAuthJson();
+  const tokens = getRecord(authJson?.['tokens']);
   const accessToken = getClaimString(tokens?.access_token);
   const refreshToken = getClaimString(tokens?.refresh_token);
   if (!accessToken || !refreshToken) return undefined;
@@ -209,14 +209,16 @@ async function buildCodexOAuthProviderFromAuthJson(
     ...wellKnownProviderConfig
   } = wellKnownCodexProvider;
 
-  const provider: Partial<ProviderConfig> = {
+  const auth: OpenAICodexAuthConfig = {
+    method: codexAuthMethod,
+    bindingId: randomUUID(),
+    token: JSON.stringify(tokenData),
+    ...(accountId ? { accountId } : {}),
+    ...(email ? { email } : {}),
+  };
+  const provider: ProviderMigrationCandidate['provider'] = {
     ...wellKnownProviderConfig,
-    auth: {
-      method: codexAuthMethod,
-      token: JSON.stringify(tokenData),
-      ...(accountId ? { accountId } : {}),
-      ...(email ? { email } : {}),
-    },
+    auth,
     models: modelId ? [{ id: modelId }] : [],
     autoFetchOfficialModels: true,
   };

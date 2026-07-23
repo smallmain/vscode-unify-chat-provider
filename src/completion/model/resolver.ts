@@ -1,5 +1,9 @@
 import * as vscode from 'vscode';
-import type { AuthCredential, AuthTokenInfo } from '../../auth/types';
+import {
+  toAuthTokenInfo,
+  type AuthCredential,
+  type AuthTokenInfo,
+} from '../../auth/types';
 import {
   stableStringify,
   toComparableProviderConfig,
@@ -32,6 +36,7 @@ import {
 import { ConfiguredCompletionModel } from './completion-model';
 import { CompletionConfigurationError } from './errors';
 import type { AlgorithmRequestKind } from './requests';
+import { computeCompletionRequestTargetSignature } from '../provider-target';
 
 export { INTERNAL_COMPLETION_VENDOR } from '../types';
 
@@ -58,19 +63,10 @@ type CompletionProviderModelCatalog = (
   provider: ProviderConfig,
 ) => readonly ModelConfig[];
 
-function toAuthTokenInfo(
-  credential:
-    | { value: string; tokenType?: string; expiresAt?: number }
-    | undefined,
-): AuthTokenInfo {
-  return credential?.value
-    ? {
-        kind: 'token',
-        token: credential.value,
-        tokenType: credential.tokenType,
-        expiresAt: credential.expiresAt,
-      }
-    : { kind: 'none' };
+function credentialConfigurationChangedError(): Error {
+  return new Error(
+    'Authentication configuration changed while the completion request was starting. Please retry.',
+  );
 }
 
 function configurationError(
@@ -279,38 +275,69 @@ export class ConfiguredCompletionModelResolver
         provider,
         model,
         completion: resolved.value,
-        resolveCredential: async () => {
-          const credential =
-            !provider.auth || provider.auth.method === 'none'
-              ? undefined
-              : await this.authManager.getCredential(
-                  provider.name,
-                  'background',
-                );
-          return toAuthTokenInfo(credential);
-        },
+        resolveCredential: () =>
+          this.resolveCredentialForProviderSnapshot(
+            provider,
+            model.id,
+            (current) =>
+              !current.auth || current.auth.method === 'none'
+                ? Promise.resolve(undefined)
+                : this.authManager.getCredential(current.name, 'background'),
+          ),
         resolveProvider: () =>
           this.configStore.getProvider(provider.name) ?? provider,
         ...(this.authManager.retryRefresh
           ? {
-              refreshCredential: async () => {
-                const refreshed = await this.authManager.retryRefresh?.(
-                  provider.name,
-                );
-                if (!refreshed) return { kind: 'none' as const };
-                return toAuthTokenInfo(
-                  await this.authManager.getCredential(
-                    provider.name,
-                    'background',
-                  ),
-                );
-              },
+              refreshCredential: () =>
+                this.resolveCredentialForProviderSnapshot(
+                  provider,
+                  model.id,
+                  async (current) => {
+                    const refreshed = await this.authManager.retryRefresh?.(
+                      current.name,
+                    );
+                    if (!refreshed) return undefined;
+                    return await this.authManager.getCredential(
+                      current.name,
+                      'background',
+                    );
+                  },
+                ),
             }
           : {}),
       }),
       undefined,
       provider.type,
     );
+  }
+
+  private async resolveCredentialForProviderSnapshot(
+    provider: ProviderConfig,
+    modelId: string,
+    resolve: (current: ProviderConfig) => Promise<AuthCredential | undefined>,
+  ): Promise<AuthTokenInfo> {
+    const expectedSignature = computeCompletionRequestTargetSignature(provider, {
+      modelId,
+    });
+    const before = this.configStore.getProvider(provider.name);
+    if (
+      !before ||
+      computeCompletionRequestTargetSignature(before, { modelId }) !==
+        expectedSignature
+    ) {
+      throw credentialConfigurationChangedError();
+    }
+
+    const credential = await resolve(before);
+    const after = this.configStore.getProvider(provider.name);
+    if (
+      !after ||
+      computeCompletionRequestTargetSignature(after, { modelId }) !==
+        expectedSignature
+    ) {
+      throw credentialConfigurationChangedError();
+    }
+    return toAuthTokenInfo(credential);
   }
 
   private findProviderModel(

@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { saveProviderDraft } from '../provider-ops';
+import {
+  captureDraftAuthCommitGuard,
+  saveProviderDraft,
+} from '../provider-ops';
 import type {
   UiContext,
   UiNavAction,
@@ -241,6 +244,8 @@ export async function runWellKnownProviderAuthScreen(
   const providerContext = {
     providerId,
     providerLabel,
+    providerType: route.draft.type,
+    baseUrl: route.draft.baseUrl,
     secretStore: ctx.secretStore,
     uriHandler: ctx.uriHandler,
   };
@@ -274,12 +279,23 @@ export async function runWellKnownProviderAuthScreen(
     return { kind: 'push', route: modelListRoute };
   }
 
+  const configAtStart = authProvider.getConfig();
+  if (configAtStart) {
+    captureDraftAuthCommitGuard(route.draft, ctx.secretStore, {
+      auth: configAtStart,
+      force: true,
+    });
+  }
+
   try {
     const result = await authProvider.configure();
     if (!result.success) {
       return { kind: 'pop' };
     }
     if (result.config) {
+      captureDraftAuthCommitGuard(route.draft, ctx.secretStore, {
+        auth: result.config,
+      });
       route.draft.auth =
         normalizeAuthForProvider(result.config, {
           providerType: route.draft.type,

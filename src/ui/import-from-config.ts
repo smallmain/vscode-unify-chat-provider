@@ -5,6 +5,7 @@ import { promptForConfigValue, type ConfigValue } from './base64-config';
 import {
   isProviderConfigInput,
   parseModelConfigArray,
+  parseProviderConfigInput,
   parseProviderConfigArray,
 } from './import-config';
 
@@ -26,7 +27,7 @@ export async function promptForProviderImportConfig(options?: {
           ? null
           : t('Invalid provider configuration array.');
       }
-      return isProviderConfigInput(value)
+      return parseProviderConfigInput(value)
         ? null
         : t('Invalid provider configuration.');
     },
@@ -39,8 +40,8 @@ export async function promptForProviderImportConfig(options?: {
     return { kind: 'multiple', configs };
   }
 
-  if (!isProviderConfigInput(config)) return undefined;
-  return { kind: 'single', config };
+  const parsed = parseProviderConfigInput(config);
+  return parsed ? { kind: 'single', config: parsed } : undefined;
 }
 
 export type ModelImportConfig =

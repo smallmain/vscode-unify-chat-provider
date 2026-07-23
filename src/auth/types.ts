@@ -12,13 +12,79 @@ export type AuthMethod =
   | 'github-copilot'
   | 'zed';
 
+export type SessionAuthMethod = Exclude<
+  AuthMethod,
+  'none' | 'api-key' | 'google-vertex-ai-auth'
+>;
+
+interface AuthContextBase<M extends SessionAuthMethod> {
+  readonly method: M;
+  readonly bindingId: string;
+  readonly sessionId: string;
+  readonly revision: number;
+}
+
+export interface OAuth2AuthContext extends AuthContextBase<'oauth2'> {}
+
+export interface AntigravityAuthContext
+  extends AuthContextBase<'antigravity-oauth'> {
+  readonly projectId?: string;
+  readonly managedProjectId?: string;
+  readonly tier?: 'free' | 'paid';
+  readonly tierId?: string;
+  readonly email?: string;
+}
+
+export interface GeminiAuthContext
+  extends AuthContextBase<'google-gemini-oauth'> {
+  readonly projectId?: string;
+  readonly managedProjectId?: string;
+  readonly tier?: 'free' | 'paid';
+  readonly tierId?: string;
+  readonly email?: string;
+}
+
+export interface CodexAuthContext extends AuthContextBase<'openai-codex'> {
+  readonly accountId?: string;
+  readonly email?: string;
+}
+
+export interface ClaudeAuthContext extends AuthContextBase<'claude-code'> {
+  readonly email?: string;
+}
+
+export interface XaiAuthContext extends AuthContextBase<'xai-grok-oauth'> {
+  readonly email?: string;
+}
+
+export interface CopilotAuthContext
+  extends AuthContextBase<'github-copilot'> {}
+
+export interface ZedAuthContext extends AuthContextBase<'zed'> {
+  readonly organizationId: string;
+  readonly dataCollection: boolean;
+  readonly dataCollectionAllowed: boolean;
+  readonly email?: string;
+}
+
+export type AuthContext =
+  | OAuth2AuthContext
+  | AntigravityAuthContext
+  | GeminiAuthContext
+  | CodexAuthContext
+  | ClaudeAuthContext
+  | XaiAuthContext
+  | CopilotAuthContext
+  | ZedAuthContext;
+
 export type AuthTokenInfo =
-  | { kind: 'none' }
+  | { readonly kind: 'none' }
   | {
-      kind: 'token';
-      token: string;
-      tokenType?: string;
-      expiresAt?: number;
+      readonly kind: 'token';
+      readonly token: string;
+      readonly tokenType?: string;
+      readonly expiresAt?: number;
+      readonly authContext?: AuthContext;
     };
 
 export type AuthTokenRefresh = () => Promise<AuthTokenInfo>;
@@ -41,6 +107,15 @@ interface OAuth2ConfigBase {
   revocationUrl?: string;
   /** OAuth scopes */
   scopes?: string[];
+}
+
+interface SessionAuthConfigBase {
+  /** Stable, non-secret identifier shared through Settings Sync. */
+  bindingId: string;
+  /** Display label for UI */
+  label?: string;
+  /** Display description for UI */
+  description?: string;
 }
 
 /**
@@ -67,8 +142,8 @@ export interface OAuth2ClientCredentialsConfig extends OAuth2ConfigBase {
   grantType: 'client_credentials';
   /** Client ID */
   clientId: string;
-  /** Client secret reference (stored in SecretStorage) */
-  clientSecret: string;
+  /** Client secret or local SecretStorage reference; omitted from settings. */
+  clientSecret?: string;
 }
 
 /**
@@ -88,6 +163,11 @@ export interface OAuth2DeviceCodeConfig extends OAuth2ConfigBase {
 export type OAuth2Config =
   | OAuth2AuthCodeConfig
   | OAuth2ClientCredentialsConfig
+  | OAuth2DeviceCodeConfig;
+
+export type OAuth2StaticConfig =
+  | Omit<OAuth2AuthCodeConfig, 'clientSecret'>
+  | Omit<OAuth2ClientCredentialsConfig, 'clientSecret'>
   | OAuth2DeviceCodeConfig;
 
 /**
@@ -117,23 +197,69 @@ export interface ApiKeyAuthConfig {
 /**
  * OAuth 2.0 authentication configuration
  */
-export interface OAuth2AuthConfig {
+export interface PersistedOAuth2AuthConfig extends SessionAuthConfigBase {
   method: 'oauth2';
-  /** Display label for UI */
-  label?: string;
-  /** Display description for UI */
-  description?: string;
-  identityId?: string;
-  token?: string;
-  oauth: OAuth2Config;
+  oauth: OAuth2StaticConfig;
 }
 
-export interface AntigravityOAuthConfig {
+export interface PersistedAntigravityOAuthConfig
+  extends SessionAuthConfigBase {
   method: 'antigravity-oauth';
-  label?: string;
-  description?: string;
+}
+
+export interface PersistedGeminiCliOAuthConfig
+  extends SessionAuthConfigBase {
+  method: 'google-gemini-oauth';
+  /** Gemini OAuth account type. Defaults to Code Assist. */
+  oauthType?: 'code_assist' | 'ai_studio' | 'google_one';
+}
+
+export interface PersistedOpenAICodexAuthConfig
+  extends SessionAuthConfigBase {
+  method: 'openai-codex';
+}
+
+export interface PersistedClaudeCodeAuthConfig extends SessionAuthConfigBase {
+  method: 'claude-code';
+}
+
+export interface PersistedXaiGrokOAuthConfig extends SessionAuthConfigBase {
+  method: 'xai-grok-oauth';
+}
+
+export interface PersistedGitHubCopilotAuthConfig
+  extends SessionAuthConfigBase {
+  method: 'github-copilot';
+  /**
+   * Enterprise domain (hostname, optional port), e.g. `github.mycompany.com`.
+   * When unset, defaults to `github.com`.
+   */
+  enterpriseUrl?: string;
+}
+
+/** Zed native-app configuration synchronized between devices. */
+export interface PersistedZedAuthConfig extends SessionAuthConfigBase {
+  method: 'zed';
+  /** Zed site used for native sign-in and cloud requests. */
+  baseUrl?: string;
+}
+
+interface SessionAuthRuntimeFields {
   identityId?: string;
   token?: string;
+}
+
+export type OAuth2AuthConfig = Omit<
+  PersistedOAuth2AuthConfig,
+  'oauth'
+> &
+  SessionAuthRuntimeFields & {
+    oauth: OAuth2Config;
+  };
+
+export interface AntigravityOAuthConfig
+  extends PersistedAntigravityOAuthConfig,
+    SessionAuthRuntimeFields {
   /** Optional user-provided project id (duetProject) */
   projectId?: string;
   /** Cloud Code Assist managed project id (cloudaicompanionProject) */
@@ -148,16 +274,11 @@ export interface AntigravityOAuthConfig {
  * Gemini CLI OAuth authentication configuration.
  * Uses the official Google Gemini CLI OAuth credentials.
  */
-export interface GeminiCliOAuthConfig {
-  method: 'google-gemini-oauth';
-  label?: string;
-  description?: string;
-  identityId?: string;
-  token?: string;
+export interface GeminiCliOAuthConfig
+  extends PersistedGeminiCliOAuthConfig,
+    SessionAuthRuntimeFields {
   /** Optional user-provided project id (duetProject). Used as fallback when managedProjectId is unavailable. */
   projectId?: string;
-  /** Gemini OAuth account type. Defaults to Code Assist. */
-  oauthType?: 'code_assist' | 'ai_studio' | 'google_one';
   /** Cloud Code Assist managed project id (cloudaicompanionProject) */
   managedProjectId?: string;
   tier?: 'free' | 'paid';
@@ -166,59 +287,34 @@ export interface GeminiCliOAuthConfig {
   email?: string;
 }
 
-export interface OpenAICodexAuthConfig {
-  method: 'openai-codex';
-  label?: string;
-  description?: string;
-  identityId?: string;
-  token?: string;
+export interface OpenAICodexAuthConfig
+  extends PersistedOpenAICodexAuthConfig,
+    SessionAuthRuntimeFields {
   /** ChatGPT organization/subscription account ID (for ChatGPT-Account-Id header) */
   accountId?: string;
   email?: string;
 }
 
-export interface ClaudeCodeAuthConfig {
-  method: 'claude-code';
-  label?: string;
-  description?: string;
-  identityId?: string;
-  token?: string;
+export interface ClaudeCodeAuthConfig
+  extends PersistedClaudeCodeAuthConfig,
+    SessionAuthRuntimeFields {
   email?: string;
 }
 
-export interface XaiGrokOAuthConfig {
-  method: 'xai-grok-oauth';
-  label?: string;
-  description?: string;
-  identityId?: string;
-  token?: string;
+export interface XaiGrokOAuthConfig
+  extends PersistedXaiGrokOAuthConfig,
+    SessionAuthRuntimeFields {
   email?: string;
 }
 
-export interface GitHubCopilotAuthConfig {
-  method: 'github-copilot';
-  label?: string;
-  description?: string;
-  identityId?: string;
-  token?: string;
-  /**
-   * Enterprise domain (hostname, optional port), e.g. `github.mycompany.com`.
-   * When unset, defaults to `github.com`.
-   */
-  enterpriseUrl?: string;
-}
+export interface GitHubCopilotAuthConfig
+  extends PersistedGitHubCopilotAuthConfig,
+    SessionAuthRuntimeFields {}
 
 /** Zed native-app sign-in configuration. */
-export interface ZedAuthConfig {
-  method: 'zed';
-  label?: string;
-  description?: string;
-  /**
-   * Zed site used for native sign-in and cloud requests.
-   * Mirrors provider.baseUrl at configure time (same pattern as
-   * GitHub Copilot `enterpriseUrl`).
-   */
-  baseUrl?: string;
+export interface ZedAuthConfig
+  extends PersistedZedAuthConfig,
+    SessionAuthRuntimeFields {
   /** Stable identity used to partition provider-scoped cached state. */
   identityId?: string;
   /** SecretStorage reference containing the long-lived Zed credential. */
@@ -293,6 +389,19 @@ export type GoogleVertexAIAuthConfig =
 export type AuthConfig =
   | NoAuthConfig
   | ApiKeyAuthConfig
+  | PersistedOAuth2AuthConfig
+  | PersistedAntigravityOAuthConfig
+  | PersistedGeminiCliOAuthConfig
+  | PersistedOpenAICodexAuthConfig
+  | PersistedClaudeCodeAuthConfig
+  | PersistedXaiGrokOAuthConfig
+  | PersistedGitHubCopilotAuthConfig
+  | PersistedZedAuthConfig
+  | GoogleVertexAIAuthConfig;
+
+export type AuthRuntimeConfig =
+  | NoAuthConfig
+  | ApiKeyAuthConfig
   | OAuth2AuthConfig
   | AntigravityOAuthConfig
   | GeminiCliOAuthConfig
@@ -303,14 +412,90 @@ export type AuthConfig =
   | ZedAuthConfig
   | GoogleVertexAIAuthConfig;
 
+export interface AuthConfigByMethod {
+  none: NoAuthConfig;
+  'api-key': ApiKeyAuthConfig;
+  oauth2: PersistedOAuth2AuthConfig;
+  'antigravity-oauth': PersistedAntigravityOAuthConfig;
+  'google-gemini-oauth': PersistedGeminiCliOAuthConfig;
+  'google-vertex-ai-auth': GoogleVertexAIAuthConfig;
+  'claude-code': PersistedClaudeCodeAuthConfig;
+  'openai-codex': PersistedOpenAICodexAuthConfig;
+  'xai-grok-oauth': PersistedXaiGrokOAuthConfig;
+  'github-copilot': PersistedGitHubCopilotAuthConfig;
+  zed: PersistedZedAuthConfig;
+}
+
+export interface AuthRuntimeConfigByMethod {
+  none: NoAuthConfig;
+  'api-key': ApiKeyAuthConfig;
+  oauth2: OAuth2AuthConfig;
+  'antigravity-oauth': AntigravityOAuthConfig;
+  'google-gemini-oauth': GeminiCliOAuthConfig;
+  'google-vertex-ai-auth': GoogleVertexAIAuthConfig;
+  'claude-code': ClaudeCodeAuthConfig;
+  'openai-codex': OpenAICodexAuthConfig;
+  'xai-grok-oauth': XaiGrokOAuthConfig;
+  'github-copilot': GitHubCopilotAuthConfig;
+  zed: ZedAuthConfig;
+}
+
+export type SessionAuthConfig = AuthConfigByMethod[SessionAuthMethod];
+export type SessionAuthRuntimeConfig =
+  AuthRuntimeConfigByMethod[SessionAuthMethod];
+
+type DeviceSessionField =
+  | 'identityId'
+  | 'token'
+  | 'projectId'
+  | 'managedProjectId'
+  | 'tier'
+  | 'tierId'
+  | 'accountId'
+  | 'email'
+  | 'organizationId'
+  | 'dataCollection'
+  | 'dataCollectionAllowed';
+type PersistedSessionFieldLeak = {
+  [M in SessionAuthMethod]: Extract<
+    keyof AuthConfigByMethod[M],
+    DeviceSessionField
+  >;
+}[SessionAuthMethod];
+type PersistedOAuthClientSecretLeak = Extract<
+  keyof Extract<
+    PersistedOAuth2AuthConfig['oauth'],
+    { grantType: 'authorization_code' | 'client_credentials' }
+  >,
+  'clientSecret'
+>;
+type AssertNever<T extends never> = T;
+export type _AssertPersistedAuthContainsNoDeviceSessionState = AssertNever<
+  PersistedSessionFieldLeak | PersistedOAuthClientSecretLeak
+>;
+
 /**
  * Resolved authentication credential.
  * - `expiresAt` is milliseconds since epoch.
  */
 export interface AuthCredential {
-  value: string;
-  tokenType?: string;
-  expiresAt?: number;
+  readonly value: string;
+  readonly tokenType?: string;
+  readonly expiresAt?: number;
+  readonly authContext?: AuthContext;
+}
+
+export function toAuthTokenInfo(
+  credential: AuthCredential | undefined,
+): AuthTokenInfo {
+  if (!credential?.value) return { kind: 'none' };
+  return {
+    kind: 'token',
+    token: credential.value,
+    tokenType: credential.tokenType,
+    expiresAt: credential.expiresAt,
+    authContext: credential.authContext,
+  };
 }
 
 /**

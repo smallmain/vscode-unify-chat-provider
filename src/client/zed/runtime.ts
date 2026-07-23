@@ -1,6 +1,7 @@
 import type {
   AuthTokenInfo,
   AuthTokenRefresh,
+  ZedAuthContext,
 } from '../../auth/types';
 import type { ProviderConfig } from '../../types';
 import { resolveChatNetwork } from '../../utils';
@@ -28,7 +29,10 @@ function requireToken(credential: AuthTokenInfo): string {
   return credential.token;
 }
 
-export function assertZedProviderAuth(provider: ProviderConfig): string {
+export function requireZedAuthContext(
+  provider: ProviderConfig,
+  credential: AuthTokenInfo,
+): ZedAuthContext {
   if (String(provider.type) !== 'zed') {
     throw new Error('Zed transport requires provider type "zed".');
   }
@@ -44,11 +48,23 @@ export function assertZedProviderAuth(provider: ProviderConfig): string {
       'The Zed provider URL changed after authentication. Sign in again before sending requests.',
     );
   }
-  const organizationId = provider.auth.organizationId?.trim();
-  if (!organizationId) {
+  const context =
+    credential.kind === 'token' ? credential.authContext : undefined;
+  if (
+    context?.method !== 'zed' ||
+    context.bindingId !== provider.auth.bindingId ||
+    !context.organizationId.trim()
+  ) {
     throw new Error('Select a Zed organization before sending requests.');
   }
-  return organizationId;
+  return context;
+}
+
+export function assertZedProviderAuth(
+  provider: ProviderConfig,
+  credential: AuthTokenInfo,
+): string {
+  return requireZedAuthContext(provider, credential).organizationId;
 }
 
 export function createZedCloudClient(provider: ProviderConfig): ZedCloudClient {
@@ -68,6 +84,7 @@ export function createZedLlmTokenSource(
   refreshCredential?: AuthTokenRefresh,
 ): ZedLlmTokenSource {
   let token = requireToken(credential);
+  const initialContext = requireZedTokenContext(credential);
   return {
     cached: async (signal) => {
       throwIfAborted(signal);
@@ -78,9 +95,27 @@ export function createZedLlmTokenSource(
       if (!refreshCredential) {
         throw new Error('The Zed LLM token expired and could not be refreshed.');
       }
-      token = requireToken(await refreshCredential());
+      const refreshed = await refreshCredential();
+      const refreshedContext = requireZedTokenContext(refreshed);
+      if (
+        refreshedContext.bindingId !== initialContext.bindingId ||
+        refreshedContext.sessionId !== initialContext.sessionId ||
+        refreshedContext.organizationId !== initialContext.organizationId
+      ) {
+        throw new Error('Zed authentication context changed during the request.');
+      }
+      token = requireToken(refreshed);
       throwIfAborted(signal);
       return token;
     },
   };
+}
+
+function requireZedTokenContext(credential: AuthTokenInfo): ZedAuthContext {
+  const context =
+    credential.kind === 'token' ? credential.authContext : undefined;
+  if (context?.method !== 'zed') {
+    throw new Error('Zed authentication context is required.');
+  }
+  return context;
 }

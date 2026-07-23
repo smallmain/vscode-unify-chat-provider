@@ -402,6 +402,7 @@ export class EditPredictionAlgorithm implements CompletionAlgorithm {
     TrackedFeedbackItem
   >();
   private readonly predictions = new Map<string, CachedPrediction>();
+  private authGeneration = 0;
   private readonly documentChangeSubscription: vscode.Disposable | undefined;
   private readonly historySubscription: vscode.Disposable | undefined;
 
@@ -426,7 +427,17 @@ export class EditPredictionAlgorithm implements CompletionAlgorithm {
   }
 
   handleEnvironmentChange(reason: CompletionEnvironmentChangeReason): void {
+    if (reason === 'auth-changed') {
+      this.authGeneration += 1;
+      this.predictions.clear();
+      this.changeEmitter.fire({ reason });
+      return;
+    }
     if (this.lifecycle?.shouldRefreshOnEnvironmentChange?.(reason)) {
+      for (const [uri, generation] of this.generations) {
+        this.generations.set(uri, generation + 1);
+      }
+      this.predictions.clear();
       this.changeEmitter.fire({ reason });
     }
   }
@@ -438,6 +449,7 @@ export class EditPredictionAlgorithm implements CompletionAlgorithm {
     const uriKey = input.document.uri.toString();
     const generation = (this.generations.get(uriKey) ?? 0) + 1;
     this.generations.set(uriKey, generation);
+    const authGeneration = this.authGeneration;
 
     if (resolveEditPredictionTrigger(input) === 'buffer_edit') {
       const cached = this.predictions.get(uriKey);
@@ -520,7 +532,7 @@ export class EditPredictionAlgorithm implements CompletionAlgorithm {
       return undefined;
     }
     const result = await this.toResult(input, document, response);
-    if (result) {
+    if (result && authGeneration === this.authGeneration) {
       this.predictions.set(uriKey, { document, response });
     }
     return result;

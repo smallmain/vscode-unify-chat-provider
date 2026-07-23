@@ -1,5 +1,5 @@
 import { createAuthProvider } from '../auth';
-import type { AuthTokenInfo } from '../auth/types';
+import { toAuthTokenInfo, type AuthTokenInfo } from '../auth/types';
 import {
   balanceManager,
   createBalanceProvider,
@@ -133,21 +133,6 @@ function formatStateDetail(state: BalanceProviderState | undefined): string {
   return formatDetailLines(state).join(' | ');
 }
 
-function toAuthTokenInfo(
-  credential: { value: string; tokenType?: string; expiresAt?: number } | undefined,
-): AuthTokenInfo {
-  if (!credential?.value) {
-    return { kind: 'none' };
-  }
-
-  return {
-    kind: 'token',
-    token: credential.value,
-    tokenType: credential.tokenType,
-    expiresAt: credential.expiresAt,
-  };
-}
-
 async function resolveDraftCredential(options: {
   draft: ProviderFormDraft;
   secretStore: SecretStore;
@@ -166,6 +151,8 @@ async function resolveDraftCredential(options: {
     {
       providerId,
       providerLabel,
+      providerType: options.draft.type,
+      baseUrl: options.draft.baseUrl,
       secretStore: options.secretStore,
       uriHandler: options.uriHandler,
     },

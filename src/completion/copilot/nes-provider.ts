@@ -140,6 +140,7 @@ export interface NesCursorPredictionDebugState {
 }
 
 interface SpeculativeSeed {
+  readonly generation: NesRequestGeneration;
   readonly targetBeforeEdit: NesDocumentContext;
   readonly edit: NesTextEdit;
   readonly strategy: NesPromptStrategy;
@@ -167,6 +168,11 @@ interface ConsumerRequestLifecycle {
   transportStarted: boolean;
 }
 
+interface NesRequestGeneration {
+  readonly id: number;
+  readonly cache: NextEditCache;
+}
+
 const DETACHED_REQUEST_CANCELLATION_GRACE_MS = 1_000;
 
 interface NesRequestEditTracking {
@@ -181,6 +187,7 @@ interface NesRequestEditTracking {
 }
 
 interface InFlightRequest extends ConsumerAttachedRequest {
+  readonly generation: NesRequestGeneration;
   readonly documentUri: string;
   readonly documentText: string;
   readonly requestId: string;
@@ -252,6 +259,7 @@ type StreamedCandidateResult =
   | { readonly done: true; readonly value: NesParsedResponse | undefined };
 
 interface PendingSpeculativeOperation extends ConsumerAttachedRequest {
+  readonly generation: NesRequestGeneration;
   readonly source: vscode.CancellationTokenSource;
   readonly operation: Promise<NesFetchOperation>;
   readonly editWindow: {
@@ -478,9 +486,14 @@ function stringEditForDocumentChange(
 }
 
 export class OfficialNextEditProvider implements vscode.Disposable {
-  private readonly cache: NextEditCache;
   private readonly diagnostics: DiagnosticsNextEditProvider;
+  private generation: NesRequestGeneration;
   private inFlight: InFlightRequest | undefined;
+  private readonly detachedInFlight = new Set<InFlightRequest>();
+  private readonly suggestionGenerations = new WeakMap<
+    NesBranchSuggestion,
+    NesRequestGeneration
+  >();
   private lastShownSuggestionId: string | undefined;
   private lastShownTime = 0;
   private readonly speculativeState = new NesSpeculativeState<
@@ -522,17 +535,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       aggressivenessSetting,
       { now: this.now },
     );
-    this.cache = new NextEditCache(
-      config.nextEdit.maxCacheEntries,
-      {
-        absorbSubsequenceTyping: config.nextEdit.absorbSubsequenceTyping,
-        reverseAgreement: config.nextEdit.reverseAgreement,
-        maxImperfectAgreementLength:
-          config.nextEdit.maxImperfectAgreementLength,
-      },
-      config.nextEdit.cacheCursorDistanceCheck,
-      config.nextEdit.triggerOnEditorChangeAfterSeconds >= 0,
-    );
+    this.generation = { id: 0, cache: this.createCache() };
     this.diagnostics = new DiagnosticsNextEditProvider(
       config.nextEdit.diagnosticsStartDelayMs,
       this.now,
@@ -542,7 +545,11 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       (event) => {
         const edit = stringEditForDocumentChange(event);
         const uri = event.document.uri.toString();
-        this.cache.handleDocumentEdit(uri, edit, event.document.getText());
+        this.generation.cache.handleDocumentEdit(
+          uri,
+          edit,
+          event.document.getText(),
+        );
         if (!this.config.nextEdit.asyncCompletions) {
           const request = this.inFlight;
           if (
@@ -561,6 +568,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     token: vscode.CancellationToken,
     enforceCacheDelay: boolean,
   ): Promise<NesBranchSuggestion | undefined> {
+    const generation = this.generation;
     if (this.disposed || token.isCancellationRequested) {
       return undefined;
     }
@@ -575,7 +583,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     this.triggerState.recordProviderTrigger();
     const diagnosticsSource = new LinkedCancellationTokenSource(token);
     try {
-      const llmPromise = this.provideLlm(input, token, enforceCacheDelay);
+      const llmPromise = this.provideLlm(
+        input,
+        token,
+        enforceCacheDelay,
+        generation,
+      );
       const diagnosticsPromise = this.diagnostics
         .provide(input.document, input.position, diagnosticsSource.token)
         .then<NesBranchSuggestion | undefined>((suggestion) =>
@@ -625,7 +638,9 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         throw race.error;
       }
       if (race.kind !== "winner" || token.isCancellationRequested) {
-        this.lastProvidedSuggestion = undefined;
+        if (generation === this.generation) {
+          this.lastProvidedSuggestion = undefined;
+        }
         return undefined;
       }
       const suggestion =
@@ -633,7 +648,9 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         !this.isSuggestionCurrent(race.value)
           ? undefined
           : race.value;
-      this.lastProvidedSuggestion = suggestion;
+      if (generation === this.generation) {
+        this.lastProvidedSuggestion = suggestion;
+      }
       return suggestion;
     } finally {
       diagnosticsSource.dispose();
@@ -644,12 +661,15 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     if (suggestion.source === "diagnostics") {
       return;
     }
-    this.speculativeState.clearScheduled();
+    const generation = this.generationForSuggestion(suggestion);
+    if (generation === this.generation) {
+      this.speculativeState.clearScheduled();
+    }
     this.triggerState.recordShown();
     this.lastOutcome = undefined;
     this.lastShownSuggestionId = suggestion.requestId;
     this.lastShownTime = this.now();
-    this.cache.markShown(
+    generation.cache.markShown(
       suggestion.sourceRequestId,
       renderedInline,
       suggestion.cacheEntry,
@@ -657,6 +677,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     if (
       this.config.nextEdit.speculativeRequests === "on" &&
       suggestion.seed &&
+      generation === this.generation &&
       suggestion.edit
     ) {
       this.scheduleSpeculative(suggestion);
@@ -676,6 +697,28 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     this.cursorPredictionDisabled = false;
   }
 
+  handleAuthChange(): void {
+    if (this.disposed) {
+      return;
+    }
+    const previous = this.generation;
+    this.generation = {
+      id: previous.id + 1,
+      cache: this.createCache(),
+    };
+    const request = this.inFlight;
+    if (request) {
+      this.inFlight = undefined;
+      this.detachedInFlight.add(request);
+    }
+    this.speculativeState.clearScheduled();
+    this.speculativeState.clearPending();
+    this.lastProvidedSuggestion = undefined;
+    this.lastCursorPrediction = undefined;
+    this.shouldExpandEditWindow = false;
+    this.handleDidChangeChatModels();
+  }
+
   handleAccepted(suggestion: NesBranchSuggestion): void {
     if (suggestion.source === "diagnostics") {
       if (suggestion.diagnosticsSuggestion) {
@@ -692,10 +735,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     ) {
       this.shouldExpandEditWindow = true;
     }
+    const generation = this.generationForSuggestion(suggestion);
+    const cache = generation.cache;
     if (suggestion.cacheEntry) {
-      this.cache.markAccepted(suggestion.cacheEntry);
+      cache.markAccepted(suggestion.cacheEntry);
     } else {
-      this.cache.createSubsequent(suggestion.sourceRequestId);
+      cache.createSubsequent(suggestion.sourceRequestId);
     }
   }
 
@@ -714,21 +759,25 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     const shownDocumentText = shownEdit
       ? this.findOpenDocument(shownEdit.uri)?.getText()
       : undefined;
+    const generation = this.generationForSuggestion(suggestion);
+    const cache = generation.cache;
     if (this.now() - this.lastShownTime > 1_000) {
       if (shownEdit && shownDocumentText !== undefined) {
-        this.cache.recordPersistentRejection(
+        cache.recordPersistentRejection(
           shownEdit.uri,
           shownDocumentText,
           shownEdit,
         );
       }
-      this.cache.markRejected(
+      cache.markRejected(
         suggestion.sourceRequestId,
         shownEdit,
         shownDocumentText,
       );
     }
-    this.speculativeState.cancelAll("rejected");
+    if (generation === this.generation) {
+      this.speculativeState.cancelAll("rejected");
+    }
   }
 
   handleIgnored(
@@ -743,15 +792,18 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     }
     this.lastOutcome = "ignored";
     this.triggerState.recordOutcome("ignored");
+    const generation = this.generationForSuggestion(suggestion);
     const wasShown = this.lastShownSuggestionId === suggestion.requestId;
     if (shouldRecordNesIgnored(wasShown, supersededBy !== undefined)) {
       this.userInteractionMonitor.handleIgnored();
-      this.speculativeState.cancelAll("ignoredDismissed");
+      if (generation === this.generation) {
+        this.speculativeState.cancelAll("ignoredDismissed");
+      }
     }
   }
 
   removeDocument(uri: string): void {
-    this.cache.removeDocument(uri);
+    this.generation.cache.removeDocument(uri);
     this.diagnostics.removeDocument(uri);
     this.speculativeState.onDocumentClosed(uri);
   }
@@ -775,7 +827,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
   } {
     const speculative = this.speculativeState.getState();
     return {
-      cacheSize: this.cache.size,
+      cacheSize: this.generation.cache.size,
       inFlight: this.inFlight ? 1 : 0,
       hasSpeculativeRequest: speculative.pending || speculative.scheduled,
       speculative,
@@ -801,6 +853,11 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       request.source.dispose();
     }
     this.inFlight = undefined;
+    for (const detached of this.detachedInFlight) {
+      this.cancelAttachedRequest(detached);
+      detached.source.dispose();
+    }
+    this.detachedInFlight.clear();
     this.speculativeState.cancelAll("disposed");
     for (const source of this.speculativeSources) {
       source.cancel();
@@ -808,7 +865,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     }
     this.speculativeSources.clear();
     this.documentChangeSubscription.dispose();
-    this.cache.clear();
+    this.generation.cache.clear();
     this.diagnostics.dispose();
   }
 
@@ -816,21 +873,24 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     input: CompletionAlgorithmInput,
     token: vscode.CancellationToken,
     enforceCacheDelay: boolean,
+    generation: NesRequestGeneration,
   ): Promise<NesBranchSuggestion | undefined> {
-    return this.provideLlmCore(input, token, enforceCacheDelay);
+    return this.provideLlmCore(input, token, enforceCacheDelay, generation);
   }
 
   private async provideLlmCore(
     input: CompletionAlgorithmInput,
     token: vscode.CancellationToken,
     enforceCacheDelay: boolean,
+    generation: NesRequestGeneration,
     afterFailedRebase = false,
   ): Promise<NesBranchSuggestion | undefined> {
     const current = this.workspace.snapshot(input.document);
     const shouldExpandEditWindow = this.shouldExpandEditWindow;
     const cursorOffset = input.document.offsetAt(input.position);
     if (afterFailedRebase) {
-      const replacementRequest = this.inFlight;
+      const replacementRequest =
+        this.inFlight?.generation === generation ? this.inFlight : undefined;
       if (
         replacementRequest &&
         replacementRequest.documentText === current.text &&
@@ -846,12 +906,16 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       }
       if (replacementRequest) {
         this.cancelAttachedRequest(replacementRequest);
-        this.inFlight = undefined;
+        if (this.inFlight === replacementRequest) {
+          this.inFlight = undefined;
+        }
         this.speculativeState.clearScheduled();
       }
-      this.speculativeState.cancelIfMismatch(current.uri, current.text);
+      if (generation === this.generation) {
+        this.speculativeState.cancelIfMismatch(current.uri, current.text);
+      }
     } else {
-      const cached = this.cache.lookup(
+      const cached = generation.cache.lookup(
         current.uri,
         current.text,
         cursorOffset,
@@ -864,7 +928,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         if (cached.edit) {
           const targetText = this.findOpenDocument(cached.edit.uri)?.getText();
           if (targetText !== undefined) {
-            this.cache.recordPersistentRejection(
+            generation.cache.recordPersistentRejection(
               cached.edit.uri,
               targetText,
               cached.edit,
@@ -884,27 +948,31 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         if (!guards) {
           return undefined;
         }
-        const suggestion: NesBranchSuggestion = {
-          branch: "nes",
-          source: "llm",
-          requestId: input.context.requestUuid || randomUUID(),
-          sourceRequestId: cached.entry.requestId,
-          edit: cachedEdit,
-          cacheEntry: cached.entry,
-          fromCache: true,
-          rebased: cached.rebased,
-          subsequent: cached.subsequent,
-          speculative: cached.speculative,
-          sourceIsSpeculative: cached.entry.speculative,
-          createdAt: this.now(),
-          documentGuards: guards,
-          ...this.speculativeSeedForCachedSuggestion(
-            current,
-            cachedEdit,
-            cached.entry,
-          ),
-        };
-        if (this.isSuggestionRejected(suggestion)) {
+        const suggestion = this.trackSuggestion(
+          {
+            branch: "nes",
+            source: "llm",
+            requestId: input.context.requestUuid || randomUUID(),
+            sourceRequestId: cached.entry.requestId,
+            edit: cachedEdit,
+            cacheEntry: cached.entry,
+            fromCache: true,
+            rebased: cached.rebased,
+            subsequent: cached.subsequent,
+            speculative: cached.speculative,
+            sourceIsSpeculative: cached.entry.speculative,
+            createdAt: this.now(),
+            documentGuards: guards,
+            ...this.speculativeSeedForCachedSuggestion(
+              current,
+              cachedEdit,
+              cached.entry,
+              generation,
+            ),
+          },
+          generation,
+        );
+        if (this.isSuggestionRejected(suggestion, generation.cache)) {
           return undefined;
         }
         return (await this.enforceMinimumDelay(
@@ -917,9 +985,13 @@ export class OfficialNextEditProvider implements vscode.Disposable {
           : undefined;
       }
 
-      const pending = this.speculativeState.pending;
+      const pending =
+        generation === this.generation
+          ? this.speculativeState.pending
+          : undefined;
       if (
         pending &&
+        pending.value.generation === generation &&
         canReuseNesPendingSpeculative({
           documentUri: current.uri,
           documentText: current.text,
@@ -944,7 +1016,8 @@ export class OfficialNextEditProvider implements vscode.Disposable {
           enforceCacheDelay,
         );
       }
-      const activeRequest = this.inFlight;
+      const activeRequest =
+        this.inFlight?.generation === generation ? this.inFlight : undefined;
       const activeEditWindow = activeRequest?.metadata.editWindow;
       const originalActiveEditWindow =
         activeRequest?.metadata.originalEditWindow;
@@ -978,6 +1051,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
             input,
             token,
             enforceCacheDelay,
+            generation,
             true,
           );
         }
@@ -992,10 +1066,14 @@ export class OfficialNextEditProvider implements vscode.Disposable {
 
       if (activeRequest) {
         this.cancelAttachedRequest(activeRequest);
-        this.inFlight = undefined;
+        if (this.inFlight === activeRequest) {
+          this.inFlight = undefined;
+        }
         this.speculativeState.clearScheduled();
       }
-      this.speculativeState.cancelIfMismatch(current.uri, current.text);
+      if (generation === this.generation) {
+        this.speculativeState.cancelIfMismatch(current.uri, current.text);
+      }
     }
     if (!this.workspace.hasEditHistory()) {
       return undefined;
@@ -1028,6 +1106,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       metadata,
       editTracking,
       lifecycle,
+      generation,
     );
     const completion = operation.then(async (result) => {
       await result?.completion;
@@ -1037,6 +1116,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       return result?.originStream?.activeDocumentEditSeen ?? false;
     });
     const created: InFlightRequest = {
+      generation,
       documentUri: current.uri,
       documentText: current.text,
       requestId,
@@ -1052,12 +1132,17 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       dependents: 0,
       settled: false,
     };
-    this.inFlight = created;
+    if (generation === this.generation) {
+      this.inFlight = created;
+    } else {
+      this.detachedInFlight.add(created);
+    }
     const cleanup = (): void => {
       created.settled = true;
       if (this.inFlight === created) {
         this.inFlight = undefined;
       }
+      this.detachedInFlight.delete(created);
       created.source.dispose();
       this.disposeEditTracking(created.editTracking);
     };
@@ -1081,6 +1166,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     metadata: InFlightRequest["metadata"],
     editTracking: NesRequestEditTracking,
     lifecycle: ConsumerRequestLifecycle,
+    generation: NesRequestGeneration,
   ): Promise<NesFetchOperation | undefined> {
     const delaySession = this.userInteractionMonitor.createDelaySession(
       this.config.nextEdit.debounceUseCoreRequestTime
@@ -1134,10 +1220,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       !this.documentsAreCurrent([current]) &&
       !sourceTrackedThroughPreparation
     ) {
-      this.lastCursorPrediction = {
-        outcome: "document-changed",
-        reason: "during-context-gathering",
-      };
+      if (generation === this.generation) {
+        this.lastCursorPrediction = {
+          outcome: "document-changed",
+          reason: "during-context-gathering",
+        };
+      }
       return undefined;
     }
     let prompt: NesPromptBuildResult;
@@ -1182,6 +1270,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       metadata,
       undefined,
       lifecycle,
+      generation,
     );
   }
 
@@ -1236,17 +1325,20 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     if (!edit) return undefined;
     if (token.isCancellationRequested) return undefined;
     const callerRequestId = input.context.requestUuid || randomUUID();
-    const suggestion: NesBranchSuggestion = {
-      ...operation.suggestion,
-      requestId: callerRequestId,
-      sourceRequestId: callerRequestId,
-      edit,
-      fromCache: false,
-      speculative: true,
-      sourceIsSpeculative: false,
-      documentGuards: [current],
-    };
-    if (this.isSuggestionRejected(suggestion)) {
+    const suggestion = this.trackSuggestion(
+      {
+        ...operation.suggestion,
+        requestId: callerRequestId,
+        sourceRequestId: callerRequestId,
+        edit,
+        fromCache: false,
+        speculative: true,
+        sourceIsSpeculative: false,
+        documentGuards: [current],
+      },
+      request.generation,
+    );
+    if (this.isSuggestionRejected(suggestion, request.generation.cache)) {
       return undefined;
     }
     return (await this.enforceMinimumDelay(
@@ -1370,12 +1462,17 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       return undefined;
     }
     const callerRequestId = input.context.requestUuid || randomUUID();
-    const callerSuggestion: NesBranchSuggestion = {
-      ...suggestion,
-      requestId: callerRequestId,
-      sourceRequestId: callerRequestId,
-    };
-    if (this.isSuggestionRejected(callerSuggestion)) {
+    const callerSuggestion = this.trackSuggestion(
+      {
+        ...suggestion,
+        requestId: callerRequestId,
+        sourceRequestId: callerRequestId,
+      },
+      request.generation,
+    );
+    if (
+      this.isSuggestionRejected(callerSuggestion, request.generation.cache)
+    ) {
       return undefined;
     }
     return (await this.enforceMinimumDelay(
@@ -1465,15 +1562,18 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     const edit = rebased.kind === "success" ? rebased.edits[0] : undefined;
     if (!edit) return undefined;
     const callerRequestId = input.context.requestUuid || randomUUID();
-    const suggestion: NesBranchSuggestion = {
-      ...sourceSuggestion,
-      requestId: callerRequestId,
-      sourceRequestId: callerRequestId,
-      edit,
-      rebased: sourceSuggestion.rebased || !userEdit.isEmpty(),
-      documentGuards: [this.workspace.snapshot(targetDocument)],
-    };
-    if (this.isSuggestionRejected(suggestion)) {
+    const suggestion = this.trackSuggestion(
+      {
+        ...sourceSuggestion,
+        requestId: callerRequestId,
+        sourceRequestId: callerRequestId,
+        edit,
+        rebased: sourceSuggestion.rebased || !userEdit.isEmpty(),
+        documentGuards: [this.workspace.snapshot(targetDocument)],
+      },
+      request.generation,
+    );
+    if (this.isSuggestionRejected(suggestion, request.generation.cache)) {
       return undefined;
     }
     return (await this.enforceMinimumDelay(
@@ -1504,15 +1604,20 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     requestMetadata?: InFlightRequest["metadata"],
     activeCacheContext?: NesActiveCacheContext,
     lifecycle?: ConsumerRequestLifecycle,
+    generation: NesRequestGeneration = this.generation,
   ): Promise<NesFetchOperation> {
-    if (allowCursorPrediction && !speculative) {
+    if (
+      allowCursorPrediction &&
+      !speculative &&
+      generation === this.generation
+    ) {
       this.lastCursorPrediction = undefined;
     }
     if (!skipDebounce) {
       const delayMs = delaySession.getDebounceTime();
       if (!(await delay(delayMs, token))) {
         return this.completedOperation(
-          this.emptySuggestion(requestId, speculative),
+          this.emptySuggestion(requestId, speculative, generation),
         );
       }
     }
@@ -1525,6 +1630,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       });
     const cacheNoSuggestionsForRequest = (): void =>
       this.cacheNoSuggestions(
+        generation.cache,
         promptContext,
         prompt,
         requestId,
@@ -1544,7 +1650,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
           eligibility.message ?? t("The selected NES model is unavailable."),
         );
         return this.completedOperation(
-          this.emptySuggestion(requestId, speculative, prompt),
+          this.emptySuggestion(requestId, speculative, generation, prompt),
         );
       }
       model = await this.algorithmContext.modelResolver.resolveCompletionModel(
@@ -1557,12 +1663,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         error instanceof Error ? error.message : String(error),
       );
       return this.completedOperation(
-        this.emptySuggestion(requestId, speculative, prompt),
+        this.emptySuggestion(requestId, speculative, generation, prompt),
       );
     }
     if (token.isCancellationRequested) {
       return this.completedOperation(
-        this.emptySuggestion(requestId, speculative, prompt),
+        this.emptySuggestion(requestId, speculative, generation, prompt),
       );
     }
     const transportSource = new LinkedCancellationTokenSource(token);
@@ -1773,10 +1879,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         yieldedModelCandidate = true;
         const candidateN = providerCandidateCount;
         if (providerCandidateCount > 0) {
-          this.speculativeState.clearScheduled(requestId);
+          if (generation === this.generation) {
+            this.speculativeState.clearScheduled(requestId);
+          }
         }
         providerCandidateCount += 1;
-        if (!speculative) {
+        if (!speculative && generation === this.generation) {
           this.shouldExpandEditWindow = false;
         }
         const sequential = toSequentialModelEdit(next.value);
@@ -1817,7 +1925,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       disposeTransport();
       if (transportSource.token.isCancellationRequested) {
         return this.completedOperation(
-          this.emptySuggestion(requestId, speculative, prompt),
+          this.emptySuggestion(requestId, speculative, generation, prompt),
         );
       }
       throw error;
@@ -1828,7 +1936,9 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       editTracking.currentSourceText !== editTracking.sourceText;
     const completionResult = first.done ? first.value : undefined;
     const recordNoSuggestions = (): void => {
-      this.shouldExpandEditWindow = false;
+      if (generation === this.generation) {
+        this.shouldExpandEditWindow = false;
+      }
     };
     if (
       first.done ||
@@ -1836,13 +1946,21 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       !staticGuardsAreCurrent()
     ) {
       disposeTransport();
-      if (editTracking.documentChangeReason) {
+      if (
+        editTracking.documentChangeReason &&
+        generation === this.generation
+      ) {
         this.lastCursorPrediction = {
           outcome: "document-changed",
           reason: editTracking.documentChangeReason,
         };
       }
-      const suggestion = this.emptySuggestion(requestId, speculative, prompt);
+      const suggestion = this.emptySuggestion(
+        requestId,
+        speculative,
+        generation,
+        prompt,
+      );
       if (completionResult?.editIntentFilteredOut === true) {
         return this.completedOperation(suggestion);
       }
@@ -1877,6 +1995,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         delaySession,
         editTracking,
         requestMetadata,
+        generation,
       );
       if (retry.kind === "operation") {
         if (
@@ -1930,7 +2049,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       candidate: StreamedCandidate,
       bundledEntry?: NesCacheEntry,
     ) => {
-      const result = this.cache.putStreamedEdit(streamedCacheContext(), {
+      const result = generation.cache.putStreamedEdit(streamedCacheContext(), {
         edit: candidate.original,
         documentBeforeEdit: candidate.documentBeforeEdit,
         currentTargetDocumentText: this.findOpenDocument(
@@ -1977,7 +2096,10 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         } finally {
           originStream.done = true;
           disposeTransport();
-          const scheduled = this.speculativeState.consumeScheduled(requestId);
+          const scheduled =
+            generation === this.generation
+              ? this.speculativeState.consumeScheduled(requestId)
+              : undefined;
           if (scheduled) {
             this.triggerSpeculative(scheduled.suggestion);
           }
@@ -1985,7 +2107,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       })();
     if (!first.value) {
       return {
-        suggestion: this.emptySuggestion(requestId, speculative, prompt),
+        suggestion: this.emptySuggestion(
+          requestId,
+          speculative,
+          generation,
+          prompt,
+        ),
         completion: completeStream(),
         originStream,
       };
@@ -1998,7 +2125,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         originStream.done = true;
         disposeTransport();
         return {
-          suggestion: this.emptySuggestion(requestId, true, prompt),
+          suggestion: this.emptySuggestion(requestId, true, generation, prompt),
           completion: Promise.resolve(),
           originStream,
         };
@@ -2010,7 +2137,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     const entry = firstCacheResult.targetEntry;
     if (!entry) {
       return {
-        suggestion: this.emptySuggestion(requestId, speculative, prompt),
+        suggestion: this.emptySuggestion(
+          requestId,
+          speculative,
+          generation,
+          prompt,
+        ),
         completion: completeStream(firstCacheResult.bundledEntry),
         originStream,
       };
@@ -2049,7 +2181,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         : trackedSourceDocument
           ? [this.workspace.snapshot(trackedSourceDocument)]
           : [promptContext.current];
-    const suggestion: NesBranchSuggestion = {
+    const suggestion = this.trackSuggestion({
       branch: "nes",
       source: "llm",
       requestId: entry.requestId,
@@ -2069,6 +2201,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       ...(speculativeTarget
         ? {
             seed: {
+              generation,
               targetBeforeEdit: speculativeTarget,
               edit,
               strategy,
@@ -2077,7 +2210,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
             },
           }
         : {}),
-    };
+    }, generation);
     const completion = completeStream(bundledEntry);
     return { suggestion, completion, originStream };
   }
@@ -2093,12 +2226,16 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     delaySession: NesDelaySession,
     editTracking: NesRequestEditTracking,
     requestMetadata?: InFlightRequest["metadata"],
+    generation: NesRequestGeneration = this.generation,
   ): Promise<NesCursorRetryResult> {
     const cursorModelGeneration = this.cursorPredictionModelGeneration;
     const recordCursorPrediction = (
       state: NesCursorPredictionDebugState,
     ): void => {
-      if (cursorModelGeneration === this.cursorPredictionModelGeneration) {
+      if (
+        cursorModelGeneration === this.cursorPredictionModelGeneration &&
+        generation === this.generation
+      ) {
         this.lastCursorPrediction = state;
       }
     };
@@ -2296,11 +2433,21 @@ export class OfficialNextEditProvider implements vscode.Disposable {
           return {
             value: {
               kind: "operation",
-              operation: this.completedOperation({
-                ...this.emptySuggestion(requestId, false, sourcePrompt),
-                cursorJump,
-                documentGuards,
-              }),
+              operation: this.completedOperation(
+                this.trackSuggestion(
+                  {
+                    ...this.emptySuggestion(
+                      requestId,
+                      false,
+                      generation,
+                      sourcePrompt,
+                    ),
+                    cursorJump,
+                    documentGuards,
+                  },
+                  generation,
+                ),
+              ),
             },
           };
         },
@@ -2447,6 +2594,8 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         cursorOffset: sourceContext.cursorOffset,
         editTracking,
       },
+      undefined,
+      generation,
     );
     const cursorJump: NesCursorJumpSource = {
       kind: parsed.prediction.kind,
@@ -2631,7 +2780,10 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     return [current, this.workspace.snapshot(target)];
   }
 
-  private isSuggestionRejected(suggestion: NesBranchSuggestion): boolean {
+  private isSuggestionRejected(
+    suggestion: NesBranchSuggestion,
+    cache: NextEditCache,
+  ): boolean {
     const edit = suggestion.edit;
     if (!edit) return false;
     if (suggestion.cacheEntry?.rejected) return true;
@@ -2643,7 +2795,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     const targetText = liveTargetText ?? cachedTargetText;
     return (
       targetText !== undefined &&
-      this.cache.isRejected(edit.uri, targetText, edit)
+      cache.isRejected(edit.uri, targetText, edit)
     );
   }
 
@@ -2698,6 +2850,34 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     return { suggestion, completion: Promise.resolve() };
   }
 
+  private createCache(): NextEditCache {
+    return new NextEditCache(
+      this.config.nextEdit.maxCacheEntries,
+      {
+        absorbSubsequenceTyping: this.config.nextEdit.absorbSubsequenceTyping,
+        reverseAgreement: this.config.nextEdit.reverseAgreement,
+        maxImperfectAgreementLength:
+          this.config.nextEdit.maxImperfectAgreementLength,
+      },
+      this.config.nextEdit.cacheCursorDistanceCheck,
+      this.config.nextEdit.triggerOnEditorChangeAfterSeconds >= 0,
+    );
+  }
+
+  private trackSuggestion(
+    suggestion: NesBranchSuggestion,
+    generation: NesRequestGeneration,
+  ): NesBranchSuggestion {
+    this.suggestionGenerations.set(suggestion, generation);
+    return suggestion;
+  }
+
+  private generationForSuggestion(
+    suggestion: NesBranchSuggestion,
+  ): NesRequestGeneration {
+    return this.suggestionGenerations.get(suggestion) ?? this.generation;
+  }
+
   private documentTextForEdit(
     context: NesPromptContext,
     edit: NesTextEdit,
@@ -2714,9 +2894,10 @@ export class OfficialNextEditProvider implements vscode.Disposable {
   private emptySuggestion(
     requestId: string,
     speculative: boolean,
+    generation: NesRequestGeneration,
     prompt?: NesPromptBuildResult,
   ): NesBranchSuggestion {
-    return {
+    return this.trackSuggestion({
       branch: "nes",
       source: "llm",
       requestId,
@@ -2728,7 +2909,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       speculative,
       sourceIsSpeculative: speculative,
       createdAt: this.now(),
-    };
+    }, generation);
   }
 
   private cursorOffsetForDocument(
@@ -2744,6 +2925,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
   }
 
   private cacheNoSuggestions(
+    cache: NextEditCache,
     context: NesPromptContext,
     prompt: NesPromptBuildResult,
     requestId: string,
@@ -2761,7 +2943,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       },
       cursorOffset,
     );
-    this.cache.put({
+    cache.put({
       documentUri,
       documentText: context.current.text,
       editWindow,
@@ -2806,6 +2988,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     current: NesDocumentContext,
     edit: NesTextEdit,
     entry: NesCacheEntry,
+    generation: NesRequestGeneration,
   ): { readonly seed?: SpeculativeSeed } {
     const targetDocument =
       edit.uri === current.uri ? undefined : this.findOpenDocument(edit.uri);
@@ -2818,6 +3001,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
     if (!targetBeforeEdit) return {};
     return {
       seed: {
+        generation,
         targetBeforeEdit,
         edit,
         strategy: this.strategy,
@@ -2833,13 +3017,14 @@ export class OfficialNextEditProvider implements vscode.Disposable {
 
   private scheduleSpeculative(suggestion: NesBranchSuggestion): void {
     const seed = suggestion.seed;
-    if (!seed) {
+    if (!seed || seed.generation !== this.generation) {
       return;
     }
     this.speculativeState.clearScheduled();
     if (
       !seed.originStream.done &&
-      this.inFlight?.requestId === suggestion.sourceRequestId
+      this.inFlight?.generation === seed.generation &&
+      this.inFlight.requestId === suggestion.sourceRequestId
     ) {
       this.speculativeState.schedule({
         originRequestId: suggestion.sourceRequestId,
@@ -2853,12 +3038,12 @@ export class OfficialNextEditProvider implements vscode.Disposable {
 
   private triggerSpeculative(suggestion: NesBranchSuggestion): void {
     const seed = suggestion.seed;
-    if (!seed) return;
+    if (!seed || seed.generation !== this.generation) return;
     const targetBeforeEdit = seed.targetBeforeEdit;
     const nextText = applyEdit(targetBeforeEdit.text, seed.edit);
     const exactEdit = preciseEdit(targetBeforeEdit.text, seed.edit);
     let cursorOffset = exactEdit.startOffset + exactEdit.newText.length;
-    let cached = this.cache.lookup(
+    let cached = seed.generation.cache.lookup(
       targetBeforeEdit.uri,
       nextText,
       cursorOffset,
@@ -2875,7 +3060,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
         nextText,
         cached.entry.editWindow.endOffset,
       );
-      cached = this.cache.lookup(
+      cached = seed.generation.cache.lookup(
         targetBeforeEdit.uri,
         nextText,
         cursorOffset,
@@ -2888,8 +3073,10 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       return;
     }
     if (
-      this.inFlight?.documentText === nextText ||
-      (this.speculativeState.pending?.documentUri === targetBeforeEdit.uri &&
+      (this.inFlight?.generation === seed.generation &&
+        this.inFlight.documentText === nextText) ||
+      (this.speculativeState.pending?.value.generation === seed.generation &&
+        this.speculativeState.pending.documentUri === targetBeforeEdit.uri &&
         this.speculativeState.pending.postEditContent === nextText)
     ) {
       return;
@@ -2936,6 +3123,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       ),
     );
     const pending: PendingSpeculativeOperation = {
+      generation: seed.generation,
       source,
       operation,
       attachmentCompletion: operation,
@@ -3003,7 +3191,9 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       },
     );
     if (token.isCancellationRequested || workspaceContext.ignored) {
-      return this.completedOperation(this.emptySuggestion(requestId, true));
+      return this.completedOperation(
+        this.emptySuggestion(requestId, true, seed.generation),
+      );
     }
     const freshContext = toPromptContext(
       {
@@ -3055,7 +3245,9 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       );
     } catch (error) {
       if (error instanceof NesPromptTooLargeError) {
-        return this.completedOperation(this.emptySuggestion(requestId, true));
+        return this.completedOperation(
+          this.emptySuggestion(requestId, true, seed.generation),
+        );
       }
       throw error;
     }
@@ -3077,6 +3269,7 @@ export class OfficialNextEditProvider implements vscode.Disposable {
       undefined,
       undefined,
       lifecycle,
+      seed.generation,
     );
   }
 }

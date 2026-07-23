@@ -412,7 +412,11 @@ async function handleImportCandidates(
 
   return {
     kind: 'replace',
-    route: { kind: 'providerForm', initialConfig },
+    route: {
+      kind: 'providerForm',
+      initialConfig,
+      initialConfigValidated: true,
+    },
   };
 }
 

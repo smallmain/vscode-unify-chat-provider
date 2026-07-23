@@ -1,11 +1,17 @@
 import * as vscode from 'vscode';
-import type { ConfigStore } from '../config-store';
+import type { ProviderConfig } from '../types';
+import type { ProviderCompletionPersistenceHints } from '../config-store';
 import {
   AuthProvider,
   AuthProviderContext,
   AuthErrorType,
 } from './auth-provider';
-import { AuthConfig, AuthCredential, AuthMethod } from './types';
+import {
+  AuthConfig,
+  AuthCredential,
+  AuthMethod,
+  AuthRuntimeConfig,
+} from './types';
 import { createAuthProvider } from './create-auth-provider';
 import type { EventedUriHandler } from '../uri-handler';
 import type { SecretStore } from '../secret';
@@ -13,6 +19,34 @@ import { authLog } from '../logger';
 import { mainInstance } from '../main-instance';
 import { MainInstanceError } from '../main-instance/errors';
 import { normalizeAuthForProvider } from './definitions';
+import {
+  assertValidInlineSessionAuthToken,
+  computeStaticAuthFingerprint,
+  isSessionAuthConfig,
+  isSessionAuthMethod,
+  isValidAuthBindingId,
+  parseAuthContext,
+  stripSessionAuthState,
+} from './local-auth-state';
+import {
+  LocalAuthStateConflictError,
+  type LocalAuthCommitGuard,
+  type LocalAuthStateChange,
+  type LocalAuthStateChangeReason,
+} from '../secret';
+import {
+  captureProviderSourceGuard,
+  isProviderSourceGuardCurrent,
+  type ProviderSourceGuard,
+} from './provider-source-guard';
+/*
+ * Local provider writes emit through SecretStore before the provider updates
+ * its in-memory config. Track the exact expected revision so that event is not
+ * mistaken for an external account switch.
+ */
+type LocalPersistRevision = { cacheKeyValue: string; revision: number };
+
+const AUTH_STATE_CHANGED_EVENT = 'auth.state.changed';
 
 /**
  * Stored error information for a provider
@@ -22,12 +56,32 @@ export interface AuthErrorInfo {
   errorType: AuthErrorType;
 }
 
+export interface AuthManagerConfigStore {
+  getProvider(name: string): ProviderConfig | undefined;
+  upsertProvider(provider: ProviderConfig): Promise<void>;
+  upsertProviderIfUnchanged(
+    provider: ProviderConfig,
+    hints: ProviderCompletionPersistenceHints,
+    isSourceCurrent: () => boolean,
+  ): Promise<boolean>;
+}
+
+export interface PreparedProviderPersistence {
+  provider: ProviderConfig;
+  commit(): void;
+  rollback(): Promise<void>;
+}
+
 /**
  * Authentication manager - unified management for all provider authentication states
  */
 export class AuthManager implements vscode.Disposable {
   private readonly providers = new Map<string, AuthProvider>();
   private readonly providerConfigSignatures = new Map<string, string>();
+  private readonly cacheOwners = new Map<
+    string,
+    { providerName: string; method: AuthMethod }
+  >();
   private readonly providerStatusSubscriptions = new Map<
     string,
     vscode.Disposable
@@ -43,23 +97,46 @@ export class AuthManager implements vscode.Disposable {
   private lastKnownRole: 'leader' | 'follower';
   /** Stores the last error for each provider (for silent error handling) */
   private readonly lastErrors = new Map<string, AuthErrorInfo>();
+  private readonly lastAuthStateRevisions = new Map<string, number>();
+  private readonly localPersistRevisions = new Map<string, number>();
+  private leaderAuthReady: boolean;
+  private disposed = false;
 
   private readonly _onAuthRequired = new vscode.EventEmitter<string>();
+  private readonly _onDidChangeAuthState =
+    new vscode.EventEmitter<LocalAuthStateChange>();
   /**
    * @deprecated This event is no longer fired for passive refresh failures.
    * Use getLastError() to check for errors when actively requesting credentials.
    */
   readonly onAuthRequired = this._onAuthRequired.event;
+  readonly onDidChangeAuthState = this._onDidChangeAuthState.event;
 
   constructor(
-    private readonly configStore: ConfigStore,
+    private readonly configStore: AuthManagerConfigStore,
     private readonly secretStore: SecretStore,
     private readonly uriHandler?: EventedUriHandler,
+    leaderAuthReady = true,
   ) {
-    this.disposables.push(this._onAuthRequired);
+    this.leaderAuthReady = leaderAuthReady;
+    this.disposables.push(this._onAuthRequired, this._onDidChangeAuthState);
     this.lastKnownRole = mainInstance.isLeader() ? 'leader' : 'follower';
 
     this.disposables.push(
+      this.secretStore.onDidChangeLocalAuthState((change) => {
+        this.emitAuthStateChange(change);
+        if (this.isLeader()) {
+          mainInstance.broadcast(AUTH_STATE_CHANGED_EVENT, change);
+        }
+      }),
+      mainInstance.onDidReceiveEvent(({ event, payload }) => {
+        if (event !== AUTH_STATE_CHANGED_EVENT) return;
+        const change = parseLocalAuthStateChange(payload);
+        if (!change) return;
+        void this.secretStore
+          .reloadLocalAuthState(change.bindingId)
+          .then(() => this.emitAuthStateChange(change));
+      }),
       mainInstance.onDidChangeRole(({ role }) => {
         const previousRole = this.lastKnownRole;
         this.lastKnownRole = role;
@@ -68,6 +145,7 @@ export class AuthManager implements vscode.Disposable {
           `AuthManager observed role change: ${previousRole} -> ${role}`,
         );
         if (role !== 'leader') {
+          this.leaderAuthReady = false;
           authLog.verbose(
             'main-instance',
             'Cancelling scheduled auth refreshes after leader demotion',
@@ -75,19 +153,62 @@ export class AuthManager implements vscode.Disposable {
           this.cancelAllScheduledRefresh();
           return;
         }
-        if (previousRole !== 'leader') {
+        if (previousRole !== 'leader' && !this.leaderAuthReady) {
           authLog.verbose(
             'main-instance',
-            'Restoring scheduled auth refreshes after leader promotion',
+            'Deferring scheduled auth refreshes until leader migration completes',
           );
-          this.restoreScheduledRefreshesFromCachedProviders();
         }
       }),
     );
   }
 
   private isLeader(): boolean {
-    return mainInstance.isLeader();
+    return mainInstance.isLeader() && this.leaderAuthReady;
+  }
+
+  setLeaderAuthReady(ready: boolean): void {
+    if (!mainInstance.isLeader()) {
+      this.leaderAuthReady = false;
+      return;
+    }
+    if (this.leaderAuthReady === ready) return;
+    this.leaderAuthReady = ready;
+    if (ready) {
+      authLog.verbose(
+        'main-instance',
+        'Restoring scheduled auth refreshes after leader migration',
+      );
+      this.restoreScheduledRefreshesFromCachedProviders();
+    } else {
+      this.cancelAllScheduledRefresh();
+    }
+  }
+
+  private emitAuthStateChange(change: LocalAuthStateChange): void {
+    const envelope = this.secretStore.getLocalAuthEnvelope(change.bindingId);
+    if (
+      envelope?.revision !== change.revision ||
+      !envelope.snapshots.some((snapshot) => snapshot.method === change.method)
+    ) {
+      return;
+    }
+    const previous = this.lastAuthStateRevisions.get(change.bindingId) ?? -1;
+    if (change.revision === previous) return;
+    this.lastAuthStateRevisions.set(change.bindingId, change.revision);
+    const cacheKeyValue = `binding:${change.bindingId}:${change.method}`;
+    const localPersistRevision = localPersistRevisionKey({
+      cacheKeyValue,
+      revision: change.revision,
+    });
+    if (
+      change.reason !== 'refresh' &&
+      change.reason !== 'migration' &&
+      !this.localPersistRevisions.has(localPersistRevision)
+    ) {
+      this.disposeProviderByCacheKey(cacheKeyValue);
+    }
+    this._onDidChangeAuthState.fire(change);
   }
 
   private cancelAllScheduledRefresh(): void {
@@ -104,12 +225,8 @@ export class AuthManager implements vscode.Disposable {
     }
 
     const providerNames = new Set<string>();
-    for (const cacheKeyValue of this.providers.keys()) {
-      const parsed = parseCacheKey(cacheKeyValue);
-      if (!parsed) {
-        continue;
-      }
-      providerNames.add(parsed.providerName);
+    for (const owner of this.cacheOwners.values()) {
+      providerNames.add(owner.providerName);
     }
 
     for (const providerName of providerNames) {
@@ -125,26 +242,38 @@ export class AuthManager implements vscode.Disposable {
       }
 
       this.scheduleRefreshFromProvider(
-        cacheKey(providerName, auth.method),
+        authCacheKey(providerName, auth),
         providerName,
         provider,
       );
     }
   }
 
-  private resolveCurrentAuth(providerName: string): AuthConfig | undefined {
+  private resolveCurrentAuth(
+    providerName: string,
+  ): AuthRuntimeConfig | undefined {
     const provider = this.configStore.getProvider(providerName);
     if (!provider) return undefined;
-    return normalizeAuthForProvider(provider.auth, {
+    const normalized = normalizeAuthForProvider(provider.auth, {
       providerType: provider.type,
       baseUrl: provider.baseUrl,
     });
+    return normalized && isSessionAuthConfig(normalized)
+      ? this.secretStore.hydrateSessionAuth(
+          {
+            providerName: provider.name,
+            providerType: provider.type,
+            baseUrl: provider.baseUrl,
+            useRawBaseUrl: provider.useRawBaseUrl,
+          },
+          normalized,
+        )
+      : normalized;
   }
 
   private clearProviderErrors(providerName: string): void {
     for (const key of Array.from(this.lastErrors.keys())) {
-      const parsed = parseCacheKey(key);
-      if (parsed?.providerName === providerName) {
+      if (this.cacheOwners.get(key)?.providerName === providerName) {
         this.lastErrors.delete(key);
       }
     }
@@ -154,45 +283,215 @@ export class AuthManager implements vscode.Disposable {
     cacheKeyValue: string;
     expectedGeneration: number;
   }): boolean {
-    return this.getRefreshGeneration(options.cacheKeyValue) === options.expectedGeneration;
+    return (
+      !this.disposed &&
+      this.getRefreshGeneration(options.cacheKeyValue) ===
+        options.expectedGeneration
+    );
   }
 
   async syncPersistedAuthConfig(
     providerName: string,
-    auth: AuthConfig,
-  ): Promise<void> {
-    const provider = this.configStore.getProvider(providerName);
+    auth: AuthRuntimeConfig,
+    options: {
+      reloadLocalState?: boolean;
+      guard?: LocalAuthCommitGuard;
+      sourceGuard?: ProviderSourceGuard;
+    } = {},
+  ): Promise<AuthConfig> {
+    if (this.disposed) {
+      throw new MainInstanceError('CANCELLED', 'Authentication manager disposed');
+    }
+    return await mainInstance.runLeaderMutation(async () =>
+      this.syncPersistedAuthConfigWithinLeaderMutation(
+        providerName,
+        auth,
+        options,
+      ),
+    );
+  }
+
+  private async syncPersistedAuthConfigWithinLeaderMutation(
+    providerName: string,
+    auth: AuthRuntimeConfig,
+    options: {
+      reloadLocalState?: boolean;
+      guard?: LocalAuthCommitGuard;
+      sourceGuard?: ProviderSourceGuard;
+    },
+  ): Promise<AuthConfig> {
+    if (isSessionAuthConfig(auth)) {
+      this.assertProviderSourceCurrent(options.sourceGuard);
+    }
+    let provider = this.configStore.getProvider(providerName);
     if (!provider) {
-      return;
+      return isSessionAuthConfig(auth) ? stripSessionAuthState(auth) : auth;
     }
 
-    const changed = stableStringify(provider.auth) !== stableStringify(auth);
-    if (changed) {
-      await this.configStore.upsertProvider({ ...provider, auth });
-      this.clearProvider(providerName);
+    let persistedAuth: AuthConfig = isSessionAuthConfig(auth)
+      ? stripSessionAuthState(auth)
+      : auth;
+    if (isSessionAuthConfig(auth)) {
+      assertValidInlineSessionAuthToken(auth);
+      if (options.reloadLocalState) {
+        await this.secretStore.reloadLocalAuthState(auth.bindingId);
+      }
+      const descriptor = {
+        providerName: provider.name,
+        providerType: provider.type,
+        baseUrl: provider.baseUrl,
+        useRawBaseUrl: provider.useRawBaseUrl,
+      };
+      const transaction = await this.secretStore.prepareSessionAuthTransaction(
+        descriptor,
+        auth,
+        {
+          reason: auth.token ? 'context' : 'logout',
+          emptyToken: 'clear',
+          binding: 'existing-or-random',
+          guard: options.guard,
+          assertSourceCurrent: () =>
+            this.assertProviderSourceCurrent(options.sourceGuard),
+        },
+      );
+      persistedAuth = transaction.auth;
+
+      try {
+        this.assertProviderSourceCurrent(options.sourceGuard);
+        provider = this.configStore.getProvider(providerName);
+        if (!provider) throw new LocalAuthStateConflictError();
+        const changed =
+          stableStringify(provider.auth) !== stableStringify(persistedAuth);
+        if (changed) {
+          const updated = await this.configStore.upsertProviderIfUnchanged(
+            { ...provider, auth: persistedAuth },
+            {},
+            () => this.hasCurrentProviderSource(options.sourceGuard),
+          );
+          if (!updated) throw new LocalAuthStateConflictError();
+        }
+        transaction.commit();
+      } catch (error) {
+        await transaction.rollback();
+        throw error;
+      }
+    } else if (
+      stableStringify(provider.auth) !== stableStringify(persistedAuth)
+    ) {
+      await this.configStore.upsertProvider({ ...provider, auth: persistedAuth });
     }
 
     this.clearProviderErrors(providerName);
+    return persistedAuth;
+  }
+
+  private assertProviderSourceCurrent(
+    guard: ProviderSourceGuard | undefined,
+  ): void {
+    if (!this.hasCurrentProviderSource(guard)) {
+      throw new LocalAuthStateConflictError();
+    }
+  }
+
+  private hasCurrentProviderSource(
+    guard: ProviderSourceGuard | undefined,
+  ): boolean {
+    return (
+      guard !== undefined &&
+      isProviderSourceGuardCurrent(guard, (providerName) =>
+        this.configStore.getProvider(providerName),
+      )
+    );
+  }
+
+  async prepareProviderForPersistence(
+    provider: ProviderConfig,
+    guard?: LocalAuthCommitGuard,
+    sourceGuard?: ProviderSourceGuard,
+  ): Promise<PreparedProviderPersistence> {
+    const auth = provider.auth;
+    if (!auth || !isSessionAuthConfig(auth)) {
+      return {
+        provider,
+        commit: () => undefined,
+        rollback: async () => undefined,
+      };
+    }
+    assertValidInlineSessionAuthToken(auth);
+    this.assertProviderSourceCurrent(sourceGuard);
+    const descriptor = {
+      providerName: provider.name,
+      providerType: provider.type,
+      baseUrl: provider.baseUrl,
+      useRawBaseUrl: provider.useRawBaseUrl,
+    };
+    const transaction = await this.secretStore.prepareSessionAuthTransaction(
+      descriptor,
+      auth,
+      {
+        reason: 'import',
+        emptyToken: 'preserve',
+        binding: 'existing-or-random',
+        guard,
+        assertSourceCurrent: () =>
+          this.assertProviderSourceCurrent(sourceGuard),
+      },
+    );
+    try {
+      this.assertProviderSourceCurrent(sourceGuard);
+    } catch (error) {
+      await transaction.rollback();
+      throw error;
+    }
+    return {
+      provider: { ...provider, auth: transaction.auth },
+      commit: transaction.commit,
+      rollback: transaction.rollback,
+    };
   }
 
   private async persistAuthConfig(
     providerName: string,
-    auth: AuthConfig,
+    auth: AuthRuntimeConfig,
+    guard?: LocalAuthCommitGuard,
+    sourceGuard?: ProviderSourceGuard,
   ): Promise<void> {
-    await this.syncPersistedAuthConfig(providerName, auth);
-
     if (this.isLeader()) {
+      await this.syncPersistedAuthConfig(providerName, auth, {
+        guard,
+        sourceGuard,
+      });
       return;
     }
+
+    const configured = this.configStore.getProvider(providerName);
+    const descriptor = configured
+      ? {
+          providerName: configured.name,
+          providerType: configured.type,
+          baseUrl: configured.baseUrl,
+          useRawBaseUrl: configured.useRawBaseUrl,
+        }
+      : undefined;
+    const intent =
+      descriptor && isSessionAuthConfig(auth)
+        ? await this.secretStore.prepareSessionAuthCommitIntent(descriptor, auth)
+        : auth;
 
     try {
       await mainInstance.runInLeaderWhenAvailable(
         'auth.syncPersistedAuthConfig',
         {
           providerName,
-          authConfig: auth,
+          authConfig: intent,
+          ...(guard ? { guard } : {}),
+          ...(sourceGuard ? { sourceGuard } : {}),
         },
       );
+      if (descriptor && isSessionAuthConfig(auth)) {
+        await this.secretStore.reloadLocalAuthState(auth.bindingId);
+        this.secretStore.clearPendingSessionAuth(descriptor, auth);
+      }
     } catch (error) {
       if (
         error instanceof MainInstanceError &&
@@ -200,11 +499,21 @@ export class AuthManager implements vscode.Disposable {
           error.code === 'LEADER_GONE' ||
           error.code === 'INCOMPATIBLE_VERSION')
       ) {
+        if (this.isLeader()) {
+          await this.syncPersistedAuthConfig(providerName, intent, {
+            guard,
+            sourceGuard,
+          });
+          if (descriptor && isSessionAuthConfig(auth)) {
+            await this.secretStore.reloadLocalAuthState(auth.bindingId);
+            this.secretStore.clearPendingSessionAuth(descriptor, auth);
+          }
+          return;
+        }
         authLog.warn(
           `${providerName}:${auth.method}`,
-          `Leader unavailable while syncing persisted auth config (${error.code}); relying on shared configuration propagation`,
+          `Leader unavailable while committing auth state (${error.code})`,
         );
-        return;
       }
       throw error;
     }
@@ -212,40 +521,114 @@ export class AuthManager implements vscode.Disposable {
 
   private createPersistBoundContext(options: {
     providerName: string;
+    providerType: string;
+    baseUrl: string;
+    useRawBaseUrl?: boolean;
     cacheKeyValue: string;
     expectedGeneration: number;
+    auth: AuthRuntimeConfig;
   }): AuthProviderContext {
+    let currentAuth = options.auth;
+    const descriptor = {
+      providerName: options.providerName,
+      providerType: options.providerType,
+      baseUrl: options.baseUrl,
+      useRawBaseUrl: options.useRawBaseUrl,
+    };
+    let sourceGuard = captureProviderSourceGuard([
+      {
+        providerName: options.providerName,
+        provider: this.configStore.getProvider(options.providerName),
+      },
+    ]);
+    const captureAuthCommitGuard = (): LocalAuthCommitGuard | undefined =>
+      isSessionAuthConfig(currentAuth)
+        ? this.secretStore.getLocalAuthCommitGuard(descriptor, currentAuth)
+        : undefined;
     return {
       providerId: options.providerName,
       providerLabel: options.providerName,
+      providerType: options.providerType,
+      baseUrl: options.baseUrl,
+      useRawBaseUrl: options.useRawBaseUrl,
       secretStore: this.secretStore,
       uriHandler: this.uriHandler,
-      persistAuthConfig: async (auth) => {
+      captureAuthCommitGuard,
+      persistAuthConfig: async (auth, operationGuard) => {
         if (!this.isPersistContextCurrent(options)) {
-          authLog.verbose(
-            options.cacheKeyValue,
-            'Ignoring auth persistence from stale provider instance',
-          );
-          return;
+          throw new LocalAuthStateConflictError();
         }
-        await this.persistAuthConfig(options.providerName, auth);
+        const capturedGuard = operationGuard ?? captureAuthCommitGuard();
+        const guard = capturedGuard ? { ...capturedGuard } : undefined;
+        const localRevision = guard
+          ? localPersistRevisionKey({
+              cacheKeyValue: options.cacheKeyValue,
+              revision: guard.revision + 1,
+            })
+          : undefined;
+        if (localRevision) {
+          this.localPersistRevisions.set(
+            localRevision,
+            (this.localPersistRevisions.get(localRevision) ?? 0) + 1,
+          );
+        }
+        try {
+          await this.persistAuthConfig(
+            options.providerName,
+            auth,
+            guard,
+            sourceGuard,
+          );
+        } catch (error) {
+          if (isSessionAuthConfig(auth)) {
+            this.secretStore.discardPendingSessionAuth(
+              {
+                providerName: options.providerName,
+                providerType: options.providerType,
+                baseUrl: options.baseUrl,
+                useRawBaseUrl: options.useRawBaseUrl,
+              },
+              auth,
+            );
+          }
+          throw error;
+        } finally {
+          if (localRevision) {
+            const remaining =
+              (this.localPersistRevisions.get(localRevision) ?? 1) - 1;
+            if (remaining === 0) this.localPersistRevisions.delete(localRevision);
+            else this.localPersistRevisions.set(localRevision, remaining);
+          }
+        }
+        currentAuth = auth;
+        const configured = this.configStore.getProvider(options.providerName);
+        sourceGuard = captureProviderSourceGuard([
+          {
+            providerName: options.providerName,
+            provider: configured
+              ? {
+                  ...configured,
+                  auth: isSessionAuthConfig(auth)
+                    ? stripSessionAuthState(auth)
+                    : auth,
+                }
+              : undefined,
+          },
+        ]);
       },
     };
   }
 
-  private clearOtherMethods(
+  private clearOtherAuthBindings(
     providerName: string,
-    keepMethod: AuthMethod,
+    keepCacheKey: string,
   ): void {
     for (const key of Array.from(this.providers.keys())) {
-      const parsed = parseCacheKey(key);
-      if (!parsed) {
+      const owner = this.cacheOwners.get(key);
+      if (owner?.providerName !== providerName) {
         continue;
       }
-      if (parsed.providerName !== providerName) {
-        continue;
-      }
-      if (parsed.method === keepMethod) {
+      if (key === keepCacheKey) {
         continue;
       }
       this.disposeProviderByCacheKey(key);
@@ -270,6 +653,7 @@ export class AuthManager implements vscode.Disposable {
     this.cancelRefreshByCacheKey(cacheKeyValue);
     this.lastErrors.delete(cacheKeyValue);
     this.providerConfigSignatures.delete(cacheKeyValue);
+    this.cacheOwners.delete(cacheKeyValue);
 
     if (!this.refreshInFlight.has(cacheKeyValue)) {
       this.refreshGeneration.delete(cacheKeyValue);
@@ -287,7 +671,7 @@ export class AuthManager implements vscode.Disposable {
 
   private getProviderWithAuth(
     providerName: string,
-    auth: AuthConfig,
+    auth: AuthRuntimeConfig,
   ): AuthProvider | undefined {
     if (auth.method === 'none') {
       authLog.verbose(
@@ -297,14 +681,19 @@ export class AuthManager implements vscode.Disposable {
       return undefined;
     }
 
-    this.clearOtherMethods(providerName, auth.method);
-
-    const cacheKeyValue = cacheKey(providerName, auth.method);
-    const signature = stableStringify(auth);
+    const cacheKeyValue = authCacheKey(providerName, auth);
+    this.clearOtherAuthBindings(providerName, cacheKeyValue);
+    const configuredProvider = this.configStore.getProvider(providerName);
+    const signature = authProviderConfigSignature(configuredProvider, auth);
 
     const existing = this.providers.get(cacheKeyValue);
+    const existingOwner = this.cacheOwners.get(cacheKeyValue);
     const existingSignature = this.providerConfigSignatures.get(cacheKeyValue);
-    if (existing && existingSignature !== signature) {
+    if (
+      existing &&
+      (existingSignature !== signature ||
+        existingOwner?.providerName !== providerName)
+    ) {
       authLog.verbose(
         `${providerName}:${auth.method}`,
         'Config changed, recreating provider',
@@ -320,10 +709,18 @@ export class AuthManager implements vscode.Disposable {
         'Creating new auth provider',
       );
       const expectedGeneration = this.getRefreshGeneration(cacheKeyValue);
+      this.cacheOwners.set(cacheKeyValue, {
+        providerName,
+        method: auth.method,
+      });
       const context = this.createPersistBoundContext({
         providerName,
+        providerType: configuredProvider?.type ?? 'unknown',
+        baseUrl: configuredProvider?.baseUrl ?? '',
+        useRawBaseUrl: configuredProvider?.useRawBaseUrl,
         cacheKeyValue,
         expectedGeneration,
+        auth,
       });
       const created = createAuthProvider(context, auth);
       if (created) {
@@ -389,6 +786,7 @@ export class AuthManager implements vscode.Disposable {
         });
         this.providerStatusSubscriptions.set(cacheKeyValue, subscription);
       } else {
+        this.cacheOwners.delete(cacheKeyValue);
         authLog.error(
           `${providerName}:${auth.method}`,
           'Failed to create auth provider',
@@ -420,6 +818,7 @@ export class AuthManager implements vscode.Disposable {
   async getCredential(
     providerName: string,
     reason: 'user' | 'background' = 'user',
+    authChangeRetry = 0,
   ): Promise<AuthCredential | undefined> {
     const auth = this.resolveCurrentAuth(providerName);
     if (!auth || auth.method === 'none') {
@@ -429,9 +828,34 @@ export class AuthManager implements vscode.Disposable {
       );
       return undefined;
     }
+    const requestSignature = authRequestSignature(
+      this.configStore.getProvider(providerName),
+      auth,
+    );
 
     if (!this.isLeader()) {
-      return await this.getCredentialFromLeader(providerName, auth.method, reason);
+      const credential = await this.getCredentialFromLeader(
+        providerName,
+        auth,
+        reason,
+      );
+      if (
+        !this.isCredentialRequestCurrent(
+          providerName,
+          auth,
+          requestSignature,
+          credential,
+        )
+      ) {
+        return authChangeRetry < 2
+          ? await this.getCredential(
+              providerName,
+              reason,
+              authChangeRetry + 1,
+            )
+          : undefined;
+      }
+      return credential;
     }
 
     const provider = this.getProviderWithAuth(providerName, auth);
@@ -443,11 +867,28 @@ export class AuthManager implements vscode.Disposable {
       return undefined;
     }
 
-    const cacheKeyValue = cacheKey(providerName, auth.method);
+    const cacheKeyValue = authCacheKey(providerName, auth);
 
     const inFlight = this.credentialInFlight.get(cacheKeyValue);
     if (inFlight) {
       const credential = await inFlight;
+      if (
+        this.providers.get(cacheKeyValue) !== provider ||
+        !this.isCredentialRequestCurrent(
+          providerName,
+          auth,
+          requestSignature,
+          credential,
+        )
+      ) {
+        return authChangeRetry < 2
+          ? await this.getCredential(
+              providerName,
+              reason,
+              authChangeRetry + 1,
+            )
+          : undefined;
+      }
       authLog.verbose(
         `${providerName}:${auth.method}`,
         `getCredential result: ${
@@ -473,6 +914,23 @@ export class AuthManager implements vscode.Disposable {
 
     this.credentialInFlight.set(cacheKeyValue, promise);
     const credential = await promise;
+    if (
+      this.providers.get(cacheKeyValue) !== provider ||
+      !this.isCredentialRequestCurrent(
+        providerName,
+        auth,
+        requestSignature,
+        credential,
+      )
+    ) {
+      return authChangeRetry < 2
+        ? await this.getCredential(
+            providerName,
+            reason,
+            authChangeRetry + 1,
+          )
+        : undefined;
+    }
     authLog.verbose(
       `${providerName}:${auth.method}`,
       `getCredential result: ${
@@ -488,12 +946,49 @@ export class AuthManager implements vscode.Disposable {
     return credential;
   }
 
+  private isCredentialRequestCurrent(
+    providerName: string,
+    requestedAuth: AuthRuntimeConfig,
+    requestSignature: string,
+    credential: AuthCredential | undefined,
+  ): boolean {
+    const configured = this.configStore.getProvider(providerName);
+    const currentAuth = this.resolveCurrentAuth(providerName);
+    if (
+      !configured ||
+      !currentAuth ||
+      authRequestSignature(
+        configured,
+        currentAuth,
+      ) !== requestSignature
+    ) {
+      return false;
+    }
+    if (!isSessionAuthConfig(requestedAuth)) return true;
+    if (!isSessionAuthConfig(currentAuth)) return false;
+    const expectedContext = this.secretStore.getLocalAuthContext(
+      {
+        providerName: configured.name,
+        providerType: configured.type,
+        baseUrl: configured.baseUrl,
+        useRawBaseUrl: configured.useRawBaseUrl,
+      },
+      currentAuth,
+    );
+    if (!credential) return expectedContext === undefined;
+    return (
+      expectedContext !== undefined &&
+      credential.authContext !== undefined &&
+      stableStringify(credential.authContext) === stableStringify(expectedContext)
+    );
+  }
+
   private async getCredentialFromLeader(
     providerName: string,
-    method: AuthMethod,
+    auth: AuthRuntimeConfig,
     reason: 'user' | 'background',
   ): Promise<AuthCredential | undefined> {
-    const cacheKeyValue = cacheKey(providerName, method);
+    const cacheKeyValue = authCacheKey(providerName, auth);
 
     const inFlight = this.credentialInFlight.get(cacheKeyValue);
     if (inFlight) {
@@ -553,7 +1048,7 @@ export class AuthManager implements vscode.Disposable {
       return undefined;
     }
 
-    const cacheKeyValue = cacheKey(providerName, auth.method);
+    const cacheKeyValue = authCacheKey(providerName, auth);
     return await this.doGetCredential(cacheKeyValue, providerName, provider);
   }
 
@@ -594,10 +1089,28 @@ export class AuthManager implements vscode.Disposable {
       }
       const tokenType = c['tokenType'];
       const expiresAt = c['expiresAt'];
+      const authContextValue = c['authContext'];
+      const parsedAuthContext =
+        authContextValue === undefined
+          ? undefined
+          : parseAuthContext(authContextValue);
+      if (
+        (tokenType !== undefined && typeof tokenType !== 'string') ||
+        (expiresAt !== undefined &&
+          (typeof expiresAt !== 'number' || !Number.isFinite(expiresAt))) ||
+        (authContextValue !== undefined && !parsedAuthContext)
+      ) {
+        throw new MainInstanceError(
+          'BAD_REQUEST',
+          `${method}: invalid credential`,
+        );
+      }
+      const authContext = parsedAuthContext ?? undefined;
       return {
         value: v,
-        tokenType: typeof tokenType === 'string' ? tokenType : undefined,
-        expiresAt: typeof expiresAt === 'number' ? expiresAt : undefined,
+        tokenType,
+        expiresAt,
+        authContext,
       } satisfies AuthCredential;
     })();
 
@@ -614,10 +1127,11 @@ export class AuthManager implements vscode.Disposable {
       if (typeof message !== 'string' || message.trim() === '') {
         return undefined;
       }
-      if (typeof errorType !== 'string' || errorType.trim() === '') {
+      const parsedErrorType = parseAuthErrorType(errorType);
+      if (!parsedErrorType) {
         return undefined;
       }
-      return { message, errorType: errorType as AuthErrorType };
+      return { message, errorType: parsedErrorType };
     })();
 
     return { credential, lastError };
@@ -633,6 +1147,9 @@ export class AuthManager implements vscode.Disposable {
     if (!credential) {
       return undefined;
     }
+    if (this.providers.get(cacheKeyValue) !== provider) {
+      return undefined;
+    }
     this.lastErrors.delete(cacheKeyValue);
 
     if (credential.expiresAt !== undefined) {
@@ -646,7 +1163,28 @@ export class AuthManager implements vscode.Disposable {
       this.cancelRefreshByCacheKey(cacheKeyValue);
     }
 
-    return credential;
+    const configured = this.configStore.getProvider(providerName);
+    const auth = configured?.auth;
+    if (!configured || !auth || !isSessionAuthConfig(auth)) {
+      return credential;
+    }
+    const authContext = this.secretStore.getLocalAuthContext(
+      {
+        providerName: configured.name,
+        providerType: configured.type,
+        baseUrl: configured.baseUrl,
+        useRawBaseUrl: configured.useRawBaseUrl,
+      },
+      auth,
+    );
+    if (!authContext) return undefined;
+    if (
+      credential.authContext &&
+      stableStringify(credential.authContext) !== stableStringify(authContext)
+    ) {
+      return undefined;
+    }
+    return { ...credential, authContext };
   }
 
   private scheduleRefreshFromProvider(
@@ -704,8 +1242,7 @@ export class AuthManager implements vscode.Disposable {
       return;
     }
 
-    const parsed = parseCacheKey(cacheKeyValue);
-    const method = parsed?.method ?? 'unknown';
+    const method = this.cacheOwners.get(cacheKeyValue)?.method ?? 'unknown';
 
     if (!provider.refresh) {
       authLog.verbose(
@@ -755,22 +1292,19 @@ export class AuthManager implements vscode.Disposable {
     const keys = new Set<string>();
 
     for (const key of this.providers.keys()) {
-      const parsed = parseCacheKey(key);
-      if (parsed?.providerName === providerName) {
+      if (this.cacheOwners.get(key)?.providerName === providerName) {
         keys.add(key);
       }
     }
 
     for (const key of this.refreshTimers.keys()) {
-      const parsed = parseCacheKey(key);
-      if (parsed?.providerName === providerName) {
+      if (this.cacheOwners.get(key)?.providerName === providerName) {
         keys.add(key);
       }
     }
 
     for (const key of this.refreshInFlight) {
-      const parsed = parseCacheKey(key);
-      if (parsed?.providerName === providerName) {
+      if (this.cacheOwners.get(key)?.providerName === providerName) {
         keys.add(key);
       }
     }
@@ -801,8 +1335,7 @@ export class AuthManager implements vscode.Disposable {
     if (!this.isLeader()) {
       return;
     }
-    const parsed = parseCacheKey(cacheKeyValue);
-    const method = parsed?.method ?? 'unknown';
+    const method = this.cacheOwners.get(cacheKeyValue)?.method ?? 'unknown';
 
     if (!provider.refresh) {
       return;
@@ -903,7 +1436,7 @@ export class AuthManager implements vscode.Disposable {
     if (!auth || auth.method === 'none') {
       return undefined;
     }
-    return this.lastErrors.get(cacheKey(providerName, auth.method));
+    return this.lastErrors.get(authCacheKey(providerName, auth));
   }
 
   /**
@@ -914,7 +1447,7 @@ export class AuthManager implements vscode.Disposable {
     if (!auth || auth.method === 'none') {
       return;
     }
-    this.lastErrors.delete(cacheKey(providerName, auth.method));
+    this.lastErrors.delete(authCacheKey(providerName, auth));
   }
 
   /**
@@ -932,7 +1465,7 @@ export class AuthManager implements vscode.Disposable {
 
     if (!this.isLeader()) {
       try {
-        return await this.retryRefreshInLeader(providerName, auth.method);
+        return await this.retryRefreshInLeader(providerName, auth);
       } catch (error) {
         if (
           error instanceof MainInstanceError &&
@@ -958,7 +1491,7 @@ export class AuthManager implements vscode.Disposable {
       return false;
     }
 
-    const cacheKeyValue = cacheKey(providerName, auth.method);
+    const cacheKeyValue = authCacheKey(providerName, auth);
     try {
       authLog.verbose(
         `${providerName}:${auth.method}`,
@@ -1002,9 +1535,9 @@ export class AuthManager implements vscode.Disposable {
 
   private async retryRefreshInLeader(
     providerName: string,
-    method: AuthMethod,
+    auth: AuthRuntimeConfig,
   ): Promise<boolean> {
-    const cacheKeyValue = cacheKey(providerName, method);
+    const cacheKeyValue = authCacheKey(providerName, auth);
     const response = await mainInstance.runInLeaderWhenAvailable<unknown>(
       'auth.retryRefresh',
       { providerName },
@@ -1040,13 +1573,14 @@ export class AuthManager implements vscode.Disposable {
     const e = lastErrorValue as Record<string, unknown>;
     const message = e['message'];
     const errorType = e['errorType'];
-    if (typeof message !== 'string' || typeof errorType !== 'string') {
+    const parsedErrorType = parseAuthErrorType(errorType);
+    if (typeof message !== 'string' || !parsedErrorType) {
       return ok;
     }
 
     this.lastErrors.set(cacheKeyValue, {
       error: new Error(message),
-      errorType: errorType as AuthErrorType,
+      errorType: parsedErrorType,
     });
     return ok;
   }
@@ -1056,8 +1590,7 @@ export class AuthManager implements vscode.Disposable {
    */
   clearProvider(providerName: string): void {
     for (const key of Array.from(this.providers.keys())) {
-      const parsed = parseCacheKey(key);
-      if (parsed?.providerName !== providerName) {
+      if (this.cacheOwners.get(key)?.providerName !== providerName) {
         continue;
       }
       this.disposeProviderByCacheKey(key);
@@ -1084,11 +1617,15 @@ export class AuthManager implements vscode.Disposable {
     this.providerStatusSubscriptions.clear();
 
     this.providerConfigSignatures.clear();
+    this.cacheOwners.clear();
     this.lastErrors.clear();
     this.refreshGeneration.clear();
+    this.localPersistRevisions.clear();
   }
 
   dispose(): void {
+    if (this.disposed) return;
+    this.disposed = true;
     this.clearAll();
     for (const disposable of this.disposables) {
       disposable.dispose();
@@ -1097,25 +1634,93 @@ export class AuthManager implements vscode.Disposable {
   }
 }
 
-function cacheKey(providerName: string, method: AuthMethod): string {
-  return `${providerName}:${method}`;
+function localPersistRevisionKey(value: LocalPersistRevision): string {
+  return `${value.cacheKeyValue}:${value.revision}`;
 }
 
-function parseCacheKey(
-  key: string,
-): { providerName: string; method: AuthMethod } | null {
-  const index = key.lastIndexOf(':');
-  if (index <= 0 || index === key.length - 1) {
+function parseAuthErrorType(value: unknown): AuthErrorType | undefined {
+  switch (value) {
+    case 'auth_error':
+    case 'transient_error':
+    case 'unknown_error':
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function authCacheKey(providerName: string, auth: AuthRuntimeConfig): string {
+  return isSessionAuthConfig(auth)
+    ? `binding:${auth.bindingId}:${auth.method}`
+    : `provider:${auth.method}:${providerName}`;
+}
+
+function authRequestSignature(
+  provider: ProviderConfig | undefined,
+  auth: AuthRuntimeConfig,
+): string {
+  if (!isSessionAuthConfig(auth)) return stableStringify(auth);
+  if (!provider) return 'missing-provider';
+  return stableStringify({
+    method: auth.method,
+    bindingId: auth.bindingId,
+    staticConfigFingerprint: computeStaticAuthFingerprint(
+      {
+        providerType: provider.type,
+        baseUrl: provider.baseUrl,
+        useRawBaseUrl: provider.useRawBaseUrl,
+      },
+      auth,
+    ),
+  });
+}
+
+function authProviderConfigSignature(
+  provider: ProviderConfig | undefined,
+  auth: AuthRuntimeConfig,
+): string {
+  return isSessionAuthConfig(auth)
+    ? stableStringify({
+        request: authRequestSignature(provider, auth),
+        runtime: auth,
+      })
+    : stableStringify(auth);
+}
+
+function parseLocalAuthStateChange(value: unknown): LocalAuthStateChange | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const record = value as Record<string, unknown>;
+  const providerName = record['providerName'];
+  const bindingId = record['bindingId'];
+  const method = record['method'];
+  const revision = record['revision'];
+  const reason = record['reason'];
+  const validReason: LocalAuthStateChangeReason | undefined = (() => {
+    switch (reason) {
+      case 'login':
+      case 'refresh':
+      case 'context':
+      case 'logout':
+      case 'import':
+      case 'migration':
+        return reason;
+      default:
+        return undefined;
+    }
+  })();
+  if (
+    typeof providerName !== 'string' ||
+    providerName.trim() === '' ||
+    !isValidAuthBindingId(bindingId) ||
+    !isSessionAuthMethod(method) ||
+    typeof revision !== 'number' ||
+    !Number.isSafeInteger(revision) ||
+    revision < 0 ||
+    !validReason
+  ) {
     return null;
   }
-
-  const providerName = key.slice(0, index);
-  const methodRaw = key.slice(index + 1);
-
-  return {
-    providerName,
-    method: methodRaw as AuthMethod,
-  };
+  return { providerName, bindingId, method, revision, reason: validReason };
 }
 
 function stableStringify(value: unknown): string {

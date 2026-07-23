@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
-import { AuthConfig, AuthCredential } from './types';
+import { AuthCredential, AuthRuntimeConfig } from './types';
 import type { EventedUriHandler } from '../uri-handler';
-import type { SecretStore } from '../secret';
+import type { LocalAuthCommitGuard, SecretStore } from '../secret';
 
 /**
  * Authentication provider definition - used for registration and display
@@ -21,8 +21,8 @@ export interface AuthProviderDefinition {
 export interface AuthConfigureResult {
   /** Whether configuration was successful */
   success: boolean;
-  /** The resulting AuthConfig (to be saved to ProviderConfig) */
-  config?: AuthConfig;
+  /** Runtime config; the persistence boundary strips all device session fields. */
+  config?: AuthRuntimeConfig;
   /** Error message if failed */
   error?: string;
 }
@@ -50,11 +50,21 @@ export interface AuthProviderContext {
   providerId: string;
   /** Display name for UI prompts */
   providerLabel: string;
+  /** Provider type used by the local auth-state fingerprint. */
+  providerType?: string;
+  /** Provider base URL used by the local auth-state fingerprint. */
+  baseUrl?: string;
+  /** Whether the base URL is used exactly as configured. */
+  useRawBaseUrl?: boolean;
   /** SecretStore instance */
   secretStore: SecretStore;
   /** URI handler for OAuth callbacks */
   uriHandler?: EventedUriHandler;
-  persistAuthConfig?: (auth: AuthConfig) => Promise<void>;
+  captureAuthCommitGuard?: () => LocalAuthCommitGuard | undefined;
+  persistAuthConfig?: (
+    auth: AuthRuntimeConfig,
+    guard?: LocalAuthCommitGuard,
+  ) => Promise<void>;
 }
 
 export type AuthUiStatusSnapshot =
@@ -82,7 +92,7 @@ export interface AuthProvider {
   /** Provider definition information */
   readonly definition: AuthProviderDefinition;
 
-  getConfig(): AuthConfig | undefined;
+  getConfig(): AuthRuntimeConfig | undefined;
 
   getSummaryDetail?(): Promise<string | undefined>;
 

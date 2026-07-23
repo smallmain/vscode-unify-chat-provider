@@ -8,8 +8,6 @@ import {
 } from '../component';
 import { getAllModelsForProviderData } from '../../utils';
 import { ModelConfig, ProviderConfig } from '../../types';
-import { SecretStore } from '../../secret';
-import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import { t } from '../../i18n';
 
 type RemoveProviderItem = vscode.QuickPickItem & { providerName: string };
@@ -91,7 +89,6 @@ async function loadProviderItems(
 
 export async function runRemoveProviderScreen(
   store: ConfigStore,
-  secretStore: SecretStore,
 ): Promise<void> {
   const endpoints = store.endpoints;
   if (endpoints.length === 0) {
@@ -112,12 +109,6 @@ export async function runRemoveProviderScreen(
 
   const confirmed = await confirmRemove(selection.providerName, 'provider');
   if (!confirmed) return;
-
-  await deleteProviderApiKeySecretIfUnused({
-    secretStore,
-    providers: store.endpoints,
-    providerName: selection.providerName,
-  });
 
   await store.removeProvider(selection.providerName);
   showRemovedMessage(selection.providerName, 'Provider');

@@ -719,6 +719,124 @@ afterEach(async () => {
 });
 
 describe('native Completion API HTTP transport', () => {
+  it('rejects a changed completion target before dispatching credentials', async () => {
+    const oldServer = await startStubServer((_request, response) => {
+      respondJson(response, { choices: [{ text: 'old-target' }] });
+    });
+    const newServer = await startStubServer((_request, response) => {
+      respondJson(response, { choices: [{ text: 'new-target' }] });
+    });
+    const model = createModel();
+    const bindingId = '00000000-0000-4000-8000-000000000201';
+    const oldProvider = createProvider(
+      'openai-chat-completion',
+      model,
+      'https://api.example.test/v1',
+      {
+        auth: { method: 'openai-codex', bindingId },
+        completion: { baseUrl: oldServer.baseUrl },
+      },
+    );
+    const newProvider = {
+      ...oldProvider,
+      completion: { baseUrl: newServer.baseUrl },
+    };
+    let currentProvider: ProviderConfig = oldProvider;
+    const resolveCredential = vi.fn(async () => {
+      currentProvider = newProvider;
+      return {
+        kind: 'token' as const,
+        token: 'new-target-token',
+        tokenType: 'Bearer',
+        authContext: {
+          method: 'openai-codex' as const,
+          bindingId,
+          sessionId: '00000000-0000-4000-8000-000000000202',
+          revision: 2,
+        },
+      };
+    });
+    const operation = createOpenAICompletionsApiProvider({
+      ...nativeContext(oldProvider, model, oldServer.baseUrl),
+      resolveCredential,
+      resolveProvider: () => currentProvider,
+    }).operations.fim;
+    if (operation === undefined) {
+      throw new Error('Missing OpenAI FIM operation.');
+    }
+
+    await expect(
+      operation.execute(fimRequest, cancellationToken()),
+    ).rejects.toMatchObject({
+      code: 'completion-request-failed',
+      cause: {
+        message:
+          'Authentication configuration changed while the completion request was starting. Please retry.',
+      },
+    });
+
+    expect(resolveCredential).toHaveBeenCalledTimes(1);
+    expect(oldServer.requests).toHaveLength(0);
+    expect(newServer.requests).toHaveLength(0);
+  });
+
+  it('keeps the original request snapshot when unrelated provider fields change', async () => {
+    const server = await startStubServer((_request, response) => {
+      respondJson(response, { choices: [{ text: 'old-snapshot' }] });
+    });
+    const model = createModel();
+    const bindingId = '00000000-0000-4000-8000-000000000203';
+    const originalProvider = createProvider(
+      'openai-chat-completion',
+      model,
+      'https://api.example.test/v1',
+      {
+        auth: { method: 'openai-codex', bindingId },
+        completion: { baseUrl: server.baseUrl },
+      },
+    );
+    const updatedProvider: ProviderConfig = {
+      ...originalProvider,
+      models: [...originalProvider.models, { id: 'unrelated-model' }],
+      autoFetchOfficialModels: true,
+      extraBody: { arrivedFromSync: true },
+    };
+    let currentProvider = originalProvider;
+    const resolveCredential = vi.fn(async () => {
+      currentProvider = updatedProvider;
+      return {
+        kind: 'token' as const,
+        token: 'snapshot-token',
+        tokenType: 'Bearer',
+        authContext: {
+          method: 'openai-codex' as const,
+          bindingId,
+          sessionId: '00000000-0000-4000-8000-000000000204',
+          revision: 2,
+        },
+      };
+    });
+    const operation = createOpenAICompletionsApiProvider({
+      ...nativeContext(originalProvider, model, server.baseUrl),
+      resolveCredential,
+      resolveProvider: () => currentProvider,
+    }).operations.fim;
+    if (operation === undefined) {
+      throw new Error('Missing OpenAI FIM operation.');
+    }
+
+    await expect(
+      operation.execute(fimRequest, cancellationToken()),
+    ).resolves.toMatchObject({ choices: [{ text: 'old-snapshot' }] });
+
+    expect(resolveCredential).toHaveBeenCalledOnce();
+    expect(server.requests).toHaveLength(1);
+    expect(server.requests[0]?.headers.authorization).toBe(
+      'Bearer snapshot-token',
+    );
+    expect(server.requests[0]?.body).not.toHaveProperty('arrivedFromSync');
+  });
+
   it('combines relative completion roots with template-selected endpoints', async () => {
     const server = await startStubServer((_request, response) => {
       respondJson(response, {

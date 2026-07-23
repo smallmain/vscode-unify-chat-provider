@@ -17,6 +17,7 @@
   "Invalid configuration. Must be a valid JSON, Base64-encoded JSON, or URL pointing to a configuration.": "Invalid configuration. Must be a valid JSON, Base64-encoded JSON, or URL pointing to a configuration.",
   "Invalid provider configuration array.": "Invalid provider configuration array.",
   "Invalid provider configuration.": "Invalid provider configuration.",
+  "Invalid authentication token data.": "Invalid authentication token data.",
   "API Key ({0})": "API Key ({0})",
   "Enter the API key for \"{0}\"": "Enter the API key for \"{0}\"",
   "No providers have auto-fetch official models enabled.": "No providers have auto-fetch official models enabled.",
@@ -1313,5 +1314,16 @@
   "VS Code product.json changed during the operation, so it was not overwritten. Try again after the update or other modification finishes.": "VS Code product.json changed during the operation, so it was not overwritten. Try again after the update or other modification finishes.",
   "VS Code product.json could not be updated. No successful change was recorded.": "VS Code product.json could not be updated. No successful change was recorded.",
   "Automatic Proposed API enablement is supported only on Windows, macOS, and Linux desktop installations.": "Automatic Proposed API enablement is supported only on Windows, macOS, and Linux desktop installations.",
-  "When disabled, the commit-message button moves to the Source Control title bar.": "When disabled, the commit-message button moves to the Source Control title bar."
+  "When disabled, the commit-message button moves to the Source Control title bar.": "When disabled, the commit-message button moves to the Source Control title bar.",
+  "Clear local tokens": "Clear local tokens",
+  "Remote revocation is not available.": "Remote revocation is not available.",
+  "Revoke remote authorization...": "Revoke remote authorization...",
+  "Revoke the grant and clear local tokens": "Revoke the grant and clear local tokens",
+  "Choose the account previously authorized on this device": "Choose the account previously authorized on this device",
+  "Local authorization recovered.": "Local authorization recovered.",
+  "Recover local authorization": "Recover local authorization",
+  "Recover local authorization...": "Recover local authorization...",
+  "{0} local authorization candidates": "{0} local authorization candidates",
+  "Authentication changed on this device while this operation was in progress. Please try again.": "Authentication changed on this device while this operation was in progress. Please try again.",
+  "Authentication configuration changed while the request was starting. Please retry.": "Authentication configuration changed while the request was starting. Please retry."
 }

@@ -1,10 +1,37 @@
 import type * as vscode from 'vscode';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-vi.mock('vscode', () => ({
-  env: { language: 'en' },
-  l10n: { t: (message: string) => message },
-}));
+vi.mock('vscode', () => {
+  class Disposable {
+    constructor(private readonly callback: () => void = () => undefined) {}
+    dispose(): void {
+      this.callback();
+    }
+  }
+  class EventEmitter<T> {
+    private readonly listeners = new Set<(value: T) => void>();
+    readonly event = (listener: (value: T) => void): Disposable => {
+      this.listeners.add(listener);
+      return new Disposable(() => this.listeners.delete(listener));
+    };
+    fire(value: T): void {
+      for (const listener of this.listeners) listener(value);
+    }
+    dispose(): void {
+      this.listeners.clear();
+    }
+  }
+  class ThemeIcon {
+    constructor(readonly id: string) {}
+  }
+  return {
+    Disposable,
+    EventEmitter,
+    ThemeIcon,
+    env: { language: 'en' },
+    l10n: { t: (message: string) => message },
+  };
+});
 
 vi.mock('../../src/logger', () => ({
   authLog: {
@@ -19,6 +46,8 @@ import {
   getZedSystemId,
   ZedAuthSessionCache,
 } from '../../src/auth/providers/zed/session-cache';
+import { ZedAuthProvider } from '../../src/auth/providers/zed';
+import { serializeZedCredential } from '../../src/client/zed/codecs';
 import type { ZedFetch } from '../../src/client/zed/types';
 
 interface Deferred<T> {
@@ -97,6 +126,70 @@ class MemorySecretStorage implements vscode.SecretStorage {
 afterEach(() => vi.unstubAllGlobals());
 
 describe('Zed auth session cache', () => {
+  it('returns a credential with context for a staged login', async () => {
+    const fetcher: ZedFetch = async (input, init) => {
+      const url = new URL(input.toString());
+      if (url.pathname === '/client/users/me') return accountResponse();
+      if (url.pathname === '/client/system_settings') {
+        return new Response('{}', { status: 200 });
+      }
+      if (url.pathname === '/client/llm_tokens') {
+        const body = JSON.parse(String(init?.body)) as {
+          organization_id: string;
+        };
+        return new Response(
+          JSON.stringify({ token: `${body.organization_id}-llm-token` }),
+          { status: 200 },
+        );
+      }
+      throw new Error(`Unexpected Zed request: ${url.pathname}`);
+    };
+    vi.stubGlobal('fetch', fetcher);
+
+    const store = new SecretStore(new MemorySecretStorage());
+    const tokenRef = store.createTransientOAuth2TokenRef();
+    await store.setOAuth2Token(tokenRef, {
+      accessToken: serializeZedCredential({
+        userId: 'user-id',
+        accessToken: 'long-lived-secret',
+      }),
+      tokenType: 'Zed',
+    });
+    const provider = new ZedAuthProvider(
+      {
+        providerId: 'Zed',
+        providerLabel: 'Zed',
+        providerType: 'zed',
+        baseUrl: 'https://zed.dev',
+        secretStore: store,
+      },
+      {
+        method: 'zed',
+        bindingId: '00000000-0000-4000-8000-000000000120',
+        baseUrl: 'https://zed.dev',
+        identityId: 'staged-session',
+        token: tokenRef,
+        organizationId: 'org-a',
+        dataCollection: false,
+        dataCollectionAllowed: true,
+        email: 'zed@example.com',
+      },
+    );
+
+    await expect(provider.getCredential()).resolves.toMatchObject({
+      value: 'org-a-llm-token',
+      authContext: {
+        method: 'zed',
+        bindingId: '00000000-0000-4000-8000-000000000120',
+        sessionId: 'staged-session',
+        organizationId: 'org-a',
+        dataCollection: false,
+        dataCollectionAllowed: true,
+      },
+    });
+    provider.dispose();
+  });
+
   it('selects the default organization and invalidates its LLM token on switch', async () => {
     const accountRequests: string[] = [];
     const tokenRequests: string[] = [];
@@ -212,6 +305,49 @@ describe('Zed auth session cache', () => {
     );
     expect(await stale).toBe('org-a-token');
     expect(await cache.getLlmToken('org-b')).toBe('org-b-token');
+  });
+
+  it('does not share a stale organization request started after invalidation', async () => {
+    const staleToken = deferred<Response>();
+    const tokenRequests: string[] = [];
+    const fetcher: ZedFetch = async (input, init) => {
+      const url = new URL(input.toString());
+      if (url.pathname === '/client/users/me') return accountResponse();
+      if (url.pathname === '/client/system_settings') {
+        return new Response('{}', { status: 200 });
+      }
+      if (url.pathname === '/client/llm_tokens') {
+        const body = JSON.parse(String(init?.body)) as {
+          organization_id: string;
+        };
+        tokenRequests.push(body.organization_id);
+        if (body.organization_id === 'org-a') return staleToken.promise;
+        return new Response(JSON.stringify({ token: 'org-b-token' }), {
+          status: 200,
+        });
+      }
+      throw new Error(`Unexpected Zed request: ${url.pathname}`);
+    };
+    vi.stubGlobal('fetch', fetcher);
+
+    const cache = new ZedAuthSessionCache(
+      'https://zed.dev',
+      { userId: 'user-id', accessToken: 'long-lived-secret' },
+      'system-id',
+    );
+    await cache.ensureAccount('org-a');
+    await cache.selectOrganization('org-b', 'org-a');
+
+    const stale = cache.getLlmToken('org-a');
+    const current = cache.getLlmToken('org-b');
+    staleToken.resolve(
+      new Response(JSON.stringify({ token: 'org-a-token' }), { status: 200 }),
+    );
+
+    await expect(stale).resolves.toBe('org-a-token');
+    await expect(current).resolves.toBe('org-b-token');
+    expect(await cache.getLlmToken('org-b')).toBe('org-b-token');
+    expect(tokenRequests).toEqual(['org-a', 'org-b']);
   });
 
   it('persists one stable system id in device SecretStorage', async () => {

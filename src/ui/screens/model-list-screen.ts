@@ -20,10 +20,10 @@ import type {
 } from '../router/types';
 import { ModelConfig, ProviderConfig } from '../../types';
 import {
+  discardDraftAuthState,
   duplicateProvider,
   exportProviderConfigFromDraft,
 } from '../provider-ops';
-import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import {
   officialModelsManager,
   OfficialModelsDraftInput,
@@ -31,6 +31,7 @@ import {
 } from '../../official-models-manager';
 import { t } from '../../i18n';
 import { cleanupUnusedSecrets } from '../../secret';
+import { mainInstance } from '../../main-instance';
 import {
   isRawBaseUrlEnabled,
   normalizeBaseUrlInput,
@@ -239,8 +240,13 @@ export async function runModelListScreen(
       if (decision === 'discard') {
         // Clean up draft session when discarding changes
         officialModelsManager.clearDraftSession(sessionId);
+        discardDraftAuthState(route.draft, ctx.secretStore, route.existing);
 
-        await cleanupUnusedSecrets(ctx.secretStore);
+        if (mainInstance.isLeader() && mainInstance.isReady()) {
+          await mainInstance.runLeaderMutation(async () =>
+            cleanupUnusedSecrets(ctx.secretStore),
+          );
+        }
         return route.invocation === 'addFromWellKnownProvider'
           ? { kind: 'popToRoot' }
           : { kind: 'pop' };
@@ -308,11 +314,6 @@ export async function runModelListScreen(
     if (!route.existing || !route.originalName) return { kind: 'stay' };
     const confirmed = await confirmDelete(route.originalName, 'provider');
     if (!confirmed) return { kind: 'stay' };
-    await deleteProviderApiKeySecretIfUnused({
-      secretStore: ctx.secretStore,
-      providers: ctx.store.endpoints,
-      providerName: route.originalName,
-    });
     await ctx.store.removeProvider(route.originalName);
     showDeletedMessage(route.originalName, 'Provider');
     return { kind: 'pop' };

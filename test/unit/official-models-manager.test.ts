@@ -62,11 +62,10 @@ vi.mock('../../src/utils', () => ({
 
 vi.mock('../../src/auth', () => ({
   createAuthProvider: vi.fn(),
-  getAuthMethodCtor: () => ({
-    redactForExport: (auth: Record<string, unknown>) => ({
-      ...auth,
-      token: undefined,
-    }),
+  normalizeAuthForProvider: (auth: unknown) => auth,
+  redactAuthForExport: (auth: Record<string, unknown>) => ({
+    ...auth,
+    token: undefined,
   }),
 }));
 
@@ -79,6 +78,8 @@ import {
 } from '../../src/official-models-manager';
 import { SecretStore } from '../../src/secret/secret-store';
 import type { ProviderConfig } from '../../src/types';
+
+const ZED_BINDING_ID = '00000000-0000-4000-8000-000000000103';
 
 class MemoryMemento implements vscode.Memento {
   constructor(private readonly values: Map<string, unknown>) {}
@@ -119,10 +120,8 @@ function provider(): ProviderConfig {
     baseUrl: 'https://zed.dev',
     auth: {
       method: 'zed',
+      bindingId: ZED_BINDING_ID,
       baseUrl: 'https://zed.dev',
-      identityId: 'identity',
-      token: '$UCPSECRET:test$',
-      organizationId: 'org-a',
     },
     models: [],
     autoFetchOfficialModels: true,
@@ -137,10 +136,27 @@ function configStore(config: ProviderConfig): OfficialModelsConfigStore {
   };
 }
 
-function authManager(hasCredential = true): OfficialModelsAuthManager {
+function authManager(
+  hasCredential = true,
+  getOrganizationId: () => string = () => 'org-a',
+): OfficialModelsAuthManager {
   return {
     getCredential: async () =>
-      hasCredential ? { value: 'llm-token', tokenType: 'Bearer' } : undefined,
+      hasCredential
+        ? {
+            value: 'llm-token',
+            tokenType: 'Bearer',
+            authContext: {
+              method: 'zed',
+              bindingId: ZED_BINDING_ID,
+              sessionId: 'identity',
+              revision: 1,
+              organizationId: getOrganizationId(),
+              dataCollection: false,
+              dataCollectionAllowed: false,
+            },
+          }
+        : undefined,
   };
 }
 
@@ -212,19 +228,24 @@ describe('official model manager provider boundary', () => {
     expect(providerClient.getAvailableModels).toHaveBeenCalledWith(
       { kind: 'none' },
       undefined,
+      expect.any(AbortSignal),
     );
     manager.dispose();
   });
 
-  it('prevents an obsolete provider fetch from overwriting newer config', async () => {
+  it('prevents an obsolete provider fetch from overwriting a newer local auth context', async () => {
     const config = provider();
+    let organizationId = 'org-a';
     let releaseFirst: ((models: Array<{ id: string }>) => void) | undefined;
+    let firstSignal: AbortSignal | undefined;
     providerClient.getAvailableModels
       .mockImplementationOnce(
-        () =>
-          new Promise<Array<{ id: string }>>((resolve) => {
+        (_credential, _refreshCredential, signal: AbortSignal | undefined) => {
+          firstSignal = signal;
+          return new Promise<Array<{ id: string }>>((resolve) => {
             releaseFirst = resolve;
-          }),
+          });
+        },
       )
       .mockResolvedValueOnce([{ id: 'new-organization-model' }]);
     const manager = new OfficialModelsManager();
@@ -232,16 +253,16 @@ describe('official model manager provider boundary', () => {
       context(new Map()),
       configStore(config),
       secretStore(),
-      authManager(),
+      authManager(true, () => organizationId),
     );
 
     const first = manager.getOfficialModels(config, true);
     await vi.waitFor(() => {
       expect(providerClient.getAvailableModels).toHaveBeenCalledOnce();
     });
-    if (config.auth?.method === 'zed') {
-      config.auth.organizationId = 'org-b';
-    }
+    organizationId = 'org-b';
+    await manager.clearProviderState(config.name);
+    expect(firstSignal?.aborted).toBe(true);
     await manager.getOfficialModels(config, true);
     releaseFirst?.([{ id: 'old-organization-model' }]);
     await first;
@@ -252,19 +273,15 @@ describe('official model manager provider boundary', () => {
     manager.dispose();
   });
 
-  it('invalidates cached models when provider configuration changes', async () => {
+  it('invalidates cached models when the local auth state changes', async () => {
     providerClient.getAvailableModels
       .mockResolvedValueOnce([{ id: 'old-organization-model' }])
       .mockRejectedValue(new Error('Authentication revoked'));
     const config = provider();
-    let notifyConfigChanged: (() => void) | undefined;
     const store: OfficialModelsConfigStore = {
       endpoints: [config],
       getProvider: (name) => (name === config.name ? config : undefined),
-      onDidChange: (listener) => {
-        notifyConfigChanged = listener;
-        return { dispose: () => undefined };
-      },
+      onDidChange: () => ({ dispose: () => undefined }),
     };
     const manager = new OfficialModelsManager();
     await manager.initialize(
@@ -275,10 +292,7 @@ describe('official model manager provider boundary', () => {
     );
     await manager.getOfficialModels(config, true);
 
-    if (config.auth?.method === 'zed') {
-      config.auth.organizationId = 'org-b';
-    }
-    notifyConfigChanged?.();
+    await manager.clearProviderState(config.name);
 
     await vi.waitFor(() => {
       expect(

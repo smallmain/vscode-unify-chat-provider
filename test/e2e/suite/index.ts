@@ -1,4 +1,6 @@
 import * as assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import * as vscode from "vscode";
 
 const EXTENSION_ID = "SmallMain.vscode-unify-chat-provider";
@@ -22,6 +24,62 @@ interface ProposedApiTestState {
   canUse: Record<string, boolean>;
   completionAvailable: boolean;
   scmInputBoxMenuAvailable: boolean;
+}
+
+type AuthIsolationPhase =
+  | "device-a-login"
+  | "device-b-login"
+  | "device-a-verify";
+
+interface AuthStateDigest {
+  method: "openai-codex";
+  bindingId: string;
+  revision: number;
+  hasCredential: boolean;
+  credentialDigest?: string;
+  accountDigest?: string;
+  sessionDigest?: string;
+}
+
+interface AuthIsolationResult {
+  readonly phase: AuthIsolationPhase;
+  readonly processId: number;
+  readonly method: "openai-codex";
+  readonly bindingId: string;
+  readonly revision: number;
+  readonly credentialDigest: string;
+  readonly accountDigest: string;
+  readonly sessionDigest: string;
+}
+
+const AUTH_E2E_PROVIDER = "auth-isolation-e2e";
+const AUTH_E2E_BINDING = "00000000-0000-4000-8000-000000000901";
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function requireSha256Digest(
+  value: string | undefined,
+  description: string,
+): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    assert.fail(`Missing or invalid ${description} digest`);
+  }
+  return value;
+}
+
+function parseAuthIsolationPhase(value: string | undefined):
+  | AuthIsolationPhase
+  | undefined {
+  switch (value) {
+    case "device-a-login":
+    case "device-b-login":
+    case "device-a-verify":
+      return value;
+    default:
+      return undefined;
+  }
 }
 
 interface UnavailableCompletionState extends CompletionManagerState {
@@ -2918,7 +2976,103 @@ async function runDisabledProposedApiE2E(): Promise<void> {
   console.log("Extension Host disabled Proposed API fallback E2E passed");
 }
 
+async function runAuthIsolationE2E(phase: AuthIsolationPhase): Promise<void> {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
+  await extension.activate();
+
+  const commands = await vscode.commands.getCommands(true);
+  assert.ok(commands.includes("unifyChatProvider.auth.test.setCodexSession"));
+  assert.ok(commands.includes("unifyChatProvider.auth.test.getStateDigest"));
+
+  const configuration = vscode.workspace.getConfiguration("unifyChatProvider");
+  const endpoints = configuration.get<unknown[]>("endpoints");
+  assert.ok(
+    Array.isArray(endpoints) && endpoints.length === 1,
+    `Expected one auth isolation endpoint during ${phase}: ${JSON.stringify({
+      endpoints,
+      inspection: configuration.inspect("endpoints"),
+    })}`,
+  );
+  const serializedSettings = JSON.stringify(endpoints);
+  assert.ok(serializedSettings.includes(AUTH_E2E_BINDING));
+  assert.ok(!serializedSettings.includes("accessToken"));
+  assert.ok(!serializedSettings.includes("refreshToken"));
+  assert.ok(!serializedSettings.includes("account-a"));
+  assert.ok(!serializedSettings.includes("account-b"));
+
+  if (phase === "device-b-login") {
+    const before = await vscode.commands.executeCommand<AuthStateDigest>(
+      "unifyChatProvider.auth.test.getStateDigest",
+      AUTH_E2E_PROVIDER,
+    );
+    assert.equal(before.bindingId, AUTH_E2E_BINDING);
+    assert.equal(before.hasCredential, false);
+    assert.equal(before.revision, 0);
+  }
+
+  const expectedDevice = phase === "device-b-login" ? "b" : "a";
+  const accessToken = `device-${expectedDevice}-access-token`;
+  const accountId = `account-${expectedDevice}`;
+  const state =
+    phase === "device-a-verify"
+      ? await vscode.commands.executeCommand<AuthStateDigest>(
+          "unifyChatProvider.auth.test.getStateDigest",
+          AUTH_E2E_PROVIDER,
+        )
+      : await vscode.commands.executeCommand<AuthStateDigest>(
+          "unifyChatProvider.auth.test.setCodexSession",
+          {
+            providerName: AUTH_E2E_PROVIDER,
+            accessToken,
+            refreshToken: `device-${expectedDevice}-refresh-token`,
+            accountId,
+            email: `${accountId}@example.test`,
+          },
+        );
+
+  assert.equal(state.method, "openai-codex");
+  assert.equal(state.bindingId, AUTH_E2E_BINDING);
+  assert.equal(state.hasCredential, true);
+  assert.ok(state.revision >= 1);
+  assert.equal(state.credentialDigest, sha256(accessToken));
+  assert.equal(state.accountDigest, sha256(accountId));
+  const credentialDigest = requireSha256Digest(
+    state.credentialDigest,
+    "credential",
+  );
+  const accountDigest = requireSha256Digest(state.accountDigest, "account");
+  const sessionDigest = requireSha256Digest(state.sessionDigest, "session");
+
+  const resultFile = process.env["UCP_E2E_AUTH_ISOLATION_RESULT_FILE"];
+  assert.ok(resultFile, "Missing auth isolation result path");
+  const result: AuthIsolationResult = {
+    phase,
+    processId: process.pid,
+    method: state.method,
+    bindingId: state.bindingId,
+    revision: state.revision,
+    credentialDigest,
+    accountDigest,
+    sessionDigest,
+  };
+  await writeFile(resultFile, `${JSON.stringify(result)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+
+  console.log(`Extension Host auth isolation ${phase} E2E passed`);
+}
+
 export async function run(): Promise<void> {
+  const authIsolationPhase = parseAuthIsolationPhase(
+    process.env["UCP_E2E_AUTH_ISOLATION_PHASE"],
+  );
+  if (authIsolationPhase) {
+    await runAuthIsolationE2E(authIsolationPhase);
+    return;
+  }
+
   if (process.env["UCP_E2E_PROPOSED_MODE"] === "disabled") {
     await runDisabledProposedApiE2E();
     return;

@@ -11,8 +11,7 @@ import {
 } from '../../auth-provider';
 import { t } from '../../../i18n';
 import {
-  createSecretRef,
-  isSecretRef,
+  isSessionSecretRef,
   type SecretStore,
 } from '../../../secret';
 import type {
@@ -23,6 +22,8 @@ import type {
 import {
   authorizeOpenAICodex,
   exchangeOpenAICodexCode,
+  extractAccountIdFromClaims,
+  parseJwtClaims,
   refreshOpenAICodexToken,
 } from './oauth-client';
 import { performOpenAICodexAuthorization } from './screens/authorize-screen';
@@ -33,6 +34,7 @@ function toPersistableConfig(
 ): OpenAICodexAuthConfig {
   return {
     method: 'openai-codex',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     identityId: config?.identityId,
@@ -84,7 +86,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       throw new Error('Missing token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -112,14 +114,14 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(raw)) {
+        if (!isSessionSecretRef(raw)) {
           return raw;
         }
         const stored = await secretStore.getOAuth2Token(raw);
         return stored ? JSON.stringify(stored) : raw;
       }
 
-      if (isSecretRef(raw)) {
+      if (isSessionSecretRef(raw)) {
         return raw;
       }
 
@@ -129,17 +131,25 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
 
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
 
     const token = await normalizeToken();
-    return { ...toPersistableConfig(auth), token };
+    return {
+      ...toPersistableConfig(auth),
+      identityId:
+        auth.token?.trim() && !isSessionSecretRef(auth.token.trim())
+          ? randomUUID()
+          : auth.identityId,
+      token,
+    };
   }
 
   static async prepareForDuplicate(
@@ -170,7 +180,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const tokenRaw = auth.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
+    if (tokenRaw && isSessionSecretRef(tokenRaw)) {
       await secretStore.deleteOAuth2Token(tokenRaw);
     }
   }
@@ -198,9 +208,12 @@ export class OpenAICodexAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(next: OpenAICodexAuthConfig): Promise<void> {
+  private async persistConfig(
+    next: OpenAICodexAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     this.config = next;
-    await this.context.persistAuthConfig?.(next);
   }
 
   private async resolveTokenData(): Promise<OAuth2TokenData | null> {
@@ -209,7 +222,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
@@ -291,6 +304,65 @@ export class OpenAICodexAuthProvider implements AuthProvider {
           },
         },
       });
+    }
+
+    if (snapshot.kind === 'not-authorized') {
+      const recoveryCandidates = (
+        await this.context.secretStore.listLegacyOAuth2TokenCandidates()
+      ).flatMap((candidate) => {
+        const claims = parseJwtClaims(candidate.token.accessToken);
+        const accountId = claims
+          ? extractAccountIdFromClaims(claims)?.trim()
+          : undefined;
+        if (!accountId) return [];
+        const email = claims?.email?.trim() || undefined;
+        return [{ ...candidate, accountId, email }];
+      });
+      if (recoveryCandidates.length > 0) {
+        items.push({
+          label: `$(history) ${t('Recover local authorization...')}`,
+          description: t(
+            '{0} local authorization candidates',
+            recoveryCandidates.length,
+          ),
+          action: {
+            kind: 'close',
+            run: async () => {
+              const commitGuard = this.context.captureAuthCommitGuard?.();
+              const selected = await vscode.window.showQuickPick(
+                recoveryCandidates.map((candidate) => ({
+                  label: `$(account) ${candidate.email ?? candidate.accountId}`,
+                  description:
+                    candidate.email === undefined
+                      ? undefined
+                      : candidate.accountId,
+                  candidate,
+                })),
+                {
+                  title: t('Recover local authorization'),
+                  placeHolder: t(
+                    'Choose the account previously authorized on this device',
+                  ),
+                  ignoreFocusOut: true,
+                },
+              );
+              if (!selected) return;
+              const nextConfig: OpenAICodexAuthConfig = {
+                ...toPersistableConfig(this.config),
+                identityId: randomUUID(),
+                token: selected.candidate.ref,
+                accountId: selected.candidate.accountId,
+                email: selected.candidate.email,
+              };
+              await this.persistConfig(nextConfig, commitGuard);
+              this._onDidChangeStatus.fire({ status: 'valid' });
+              vscode.window.showInformationMessage(
+                t('Local authorization recovered.'),
+              );
+            },
+          },
+        });
+      }
     }
 
     items.push({
@@ -401,6 +473,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:openai-codex`,
       'Starting OpenAI Codex OAuth configuration',
@@ -469,7 +542,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       `${this.context.providerId}:openai-codex`,
       'Token exchange successful, storing tokens',
     );
-    const tokenRef = createSecretRef();
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
     await this.context.secretStore.setOAuth2Token(tokenRef, {
       accessToken: exchanged.accessToken,
       refreshToken: exchanged.refreshToken,
@@ -479,6 +552,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
 
     const nextConfig: OpenAICodexAuthConfig = {
       method: 'openai-codex',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: randomUUID(),
@@ -487,7 +561,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       email: exchanged.email,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
     this._onDidChangeStatus.fire({ status: 'valid' });
 
     authLog.verbose(
@@ -498,6 +572,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
   }
 
   async refresh(): Promise<boolean> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:openai-codex`,
       'Starting token refresh',
@@ -547,35 +622,21 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       expiresAt: refreshed.expiresAt,
     };
 
-    if (isSecretRef(raw)) {
-      authLog.verbose(
-        `${this.context.providerId}:openai-codex`,
-        'Storing refreshed token in secret storage',
-      );
-      await this.context.secretStore.setOAuth2Token(raw, nextToken);
-    } else {
-      authLog.verbose(
-        `${this.context.providerId}:openai-codex`,
-        'Storing refreshed token in config',
-      );
-      await this.persistConfig({
-        ...toPersistableConfig(this.config),
-        token: JSON.stringify(nextToken),
-      });
-    }
-
     const currentAccountId = this.config?.accountId?.trim() || undefined;
     const currentEmail = this.config?.email?.trim() || undefined;
     const mergedAccountId = refreshed.accountId ?? currentAccountId;
     const mergedEmail = refreshed.email ?? currentEmail;
-
-    if (mergedAccountId !== currentAccountId || mergedEmail !== currentEmail) {
-      await this.persistConfig({
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
+    await this.context.secretStore.setOAuth2Token(tokenRef, nextToken);
+    await this.persistConfig(
+      {
         ...toPersistableConfig(this.config),
+        token: tokenRef,
         accountId: mergedAccountId,
         email: mergedEmail,
-      });
-    }
+      },
+      commitGuard,
+    );
 
     this._onDidChangeStatus.fire({ status: 'valid' });
     authLog.verbose(
@@ -586,6 +647,7 @@ export class OpenAICodexAuthProvider implements AuthProvider {
   }
 
   async revoke(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:openai-codex`,
       'Revoking tokens',
@@ -598,21 +660,19 @@ export class OpenAICodexAuthProvider implements AuthProvider {
       return;
     }
 
-    const tokenRaw = this.config.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
-      authLog.verbose(
-        `${this.context.providerId}:openai-codex`,
-        'Deleting token from secret storage',
-      );
-      await this.context.secretStore.deleteOAuth2Token(tokenRaw);
+    const oldTokenRef = this.config.token?.trim();
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        token: undefined,
+        accountId: undefined,
+        email: undefined,
+      },
+      commitGuard,
+    );
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
     }
-
-    await this.persistConfig({
-      ...toPersistableConfig(this.config),
-      token: undefined,
-      accountId: undefined,
-      email: undefined,
-    });
 
     this._onDidChangeStatus.fire({ status: 'revoked' });
     authLog.verbose(

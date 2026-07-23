@@ -1,7 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const network = vi.hoisted(() => ({
-  welcomeCompatibilityVersion: 5,
+  welcomeCompatibilityVersion: 6,
   welcomeExtensionVersion: 'leader-1.0.0',
   writes: [] as string[],
 }));
@@ -142,7 +142,7 @@ import {
 const coordinators: MainInstanceCoordinator[] = [];
 
 beforeEach(() => {
-  network.welcomeCompatibilityVersion = 5;
+  network.welcomeCompatibilityVersion = 6;
   network.welcomeExtensionVersion = 'leader-1.0.0';
   network.writes = [];
 });
@@ -226,7 +226,7 @@ function hello(
 }
 
 describe('main-instance compatibility handshake', () => {
-  it('accepts a differently-versioned v5 follower at a v5 leader', () => {
+  it('accepts a differently-versioned v6 follower at a v6 leader', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
@@ -241,18 +241,18 @@ describe('main-instance compatibility handshake', () => {
     expect(response).toMatchObject({
       type: 'welcome',
       protocolVersion: 1,
-      mainInstanceCompatibilityVersion: 5,
+      mainInstanceCompatibilityVersion: 6,
     });
   });
 
-  it('rejects a v4 follower at a v5 leader', () => {
+  it('rejects a v5 follower at a v6 leader', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
 
     invokePrivate(coordinator, 'handleLeaderSideMessage', [
       peer.socket,
-      hello(4),
+      hello(5),
     ]);
 
     expect(peer.isDestroyed()).toBe(true);
@@ -265,7 +265,7 @@ describe('main-instance compatibility handshake', () => {
     });
   });
 
-  it('connects differently-versioned v5 follower and leader releases', async () => {
+  it('connects differently-versioned v6 follower and leader releases', async () => {
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 
@@ -285,12 +285,12 @@ describe('main-instance compatibility handshake', () => {
     expect(parseMessageLine(network.writes[0] ?? '')).toMatchObject({
       type: 'hello',
       extensionVersion: 'follower-9.9.9',
-      mainInstanceCompatibilityVersion: 5,
+      mainInstanceCompatibilityVersion: 6,
     });
   });
 
-  it('rejects a v4 leader at a v5 follower', async () => {
-    network.welcomeCompatibilityVersion = 4;
+  it('rejects a v5 leader at a v6 follower', async () => {
+    network.welcomeCompatibilityVersion = 5;
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 

@@ -75,7 +75,7 @@ import {
   getUnifiedUserAgent,
   setUserAgentHeader,
 } from '../utils';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 
 type AnthropicMarkerData = {
   raw: BetaMessage;
@@ -1749,7 +1749,11 @@ export class AnthropicProvider implements ApiProvider {
    * Get available models from the Anthropic API
    * Uses the ListModels endpoint with pagination support
    */
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1770,7 +1774,7 @@ export class AnthropicProvider implements ApiProvider {
       do {
         const page = await client.models.list(
           { after_id: afterId },
-          { headers: this.buildHeaders(credential) },
+          { headers: this.buildHeaders(credential), signal },
         );
 
         for (const model of page.data) {

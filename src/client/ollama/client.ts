@@ -17,7 +17,7 @@ import {
   ModelConfig,
   ProviderConfig,
 } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import { Ollama } from 'ollama';
 import type {
   AbortableAsyncIterator,
@@ -899,7 +899,11 @@ export class OllamaProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -910,7 +914,7 @@ export class OllamaProvider implements ApiProvider {
       headers,
       logger,
       false,
-      undefined,
+      signal,
       'normal',
     );
 

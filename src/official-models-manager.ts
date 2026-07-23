@@ -11,16 +11,16 @@ import {
   normalizeUseRawBaseUrl,
 } from './utils';
 import { t } from './i18n';
-import type {
-  AuthConfig,
-  AuthCredential,
-  AuthTokenInfo,
-  AuthTokenRefresh,
+import {
+  toAuthTokenInfo,
+  type AuthConfig,
+  type AuthTokenInfo,
+  type AuthTokenRefresh,
 } from './auth/types';
 import {
   createAuthProvider,
-  getAuthMethodCtor,
   normalizeAuthForProvider,
+  redactAuthForExport,
   type AuthManager,
 } from './auth';
 import { mainInstance } from './main-instance';
@@ -536,6 +536,21 @@ export class OfficialModelsManager {
     );
   }
 
+  private async isConfiguredProviderFetchCurrent(
+    providerName: string,
+    signature: FetchConfigSignature,
+    context: ProviderFetchContext,
+  ): Promise<boolean> {
+    if (!this.isProviderFetchCurrent(providerName, context)) return false;
+    const provider = this.resolveConfiguredProvider(providerName);
+    if (!provider) return false;
+    const currentSignature = await this.computeConfigSignature(provider);
+    return (
+      this.isProviderFetchCurrent(providerName, context) &&
+      this.signaturesEqual(signature, currentSignature)
+    );
+  }
+
   private invalidateProviderFetch(providerName: string): void {
     this.fetchGenerations.set(
       providerName,
@@ -1043,7 +1058,13 @@ export class OfficialModelsManager {
       credentialAccess = await this.resolveCredentialAccessForPersistedProvider(
         provider,
       );
-      if (!this.isProviderFetchCurrent(providerName, fetchContext)) {
+      if (
+        !(await this.isConfiguredProviderFetchCurrent(
+          providerName,
+          signature,
+          fetchContext,
+        ))
+      ) {
         return state.models;
       }
       if (!credentialAccess) {
@@ -1067,13 +1088,20 @@ export class OfficialModelsManager {
       const rawModels = await client.getAvailableModels(
         credentialAccess.credential,
         credentialAccess.refreshCredential,
+        fetchContext.controller.signal,
       );
       const models = mergeWithWellKnownModels(rawModels, provider);
       const modelsHash = this.hashModels(models);
 
       const isIdentical = state.modelsHash === modelsHash;
       const now = Date.now();
-      if (!this.isProviderFetchCurrent(providerName, fetchContext)) {
+      if (
+        !(await this.isConfiguredProviderFetchCurrent(
+          providerName,
+          signature,
+          fetchContext,
+        ))
+      ) {
         return state.models;
       }
 
@@ -1153,7 +1181,7 @@ export class OfficialModelsManager {
     }
 
     return this.hashString(
-      stableStringify(getAuthMethodCtor(auth.method)?.redactForExport(auth)),
+      stableStringify(redactAuthForExport(auth)),
     );
   }
 
@@ -1243,21 +1271,6 @@ export class OfficialModelsManager {
     return { kind: 'ok', provider };
   }
 
-  private toAuthTokenInfo(
-    credential: AuthCredential | undefined,
-  ): AuthTokenInfo {
-    if (!credential?.value) {
-      return { kind: 'none' };
-    }
-
-    return {
-      kind: 'token',
-      token: credential.value,
-      tokenType: credential.tokenType,
-      expiresAt: credential.expiresAt,
-    };
-  }
-
   private async resolveCredentialAccessForPersistedProvider(
     provider: ProviderConfig,
   ): Promise<OfficialModelsCredentialAccess | undefined> {
@@ -1273,7 +1286,7 @@ export class OfficialModelsManager {
       return undefined;
     }
 
-    const credential = this.toAuthTokenInfo(
+    const credential = toAuthTokenInfo(
       await this.authManager.getCredential(provider.name, 'background'),
     );
     const refreshCredential: AuthTokenRefresh | undefined = this.authManager
@@ -1281,7 +1294,7 @@ export class OfficialModelsManager {
       ? async () => {
           const refreshed = await this.authManager?.retryRefresh?.(provider.name);
           if (!refreshed) return { kind: 'none' };
-          return this.toAuthTokenInfo(
+          return toAuthTokenInfo(
             await this.authManager?.getCredential(provider.name, 'background'),
           );
         }
@@ -1312,6 +1325,8 @@ export class OfficialModelsManager {
       {
         providerId: provider.name,
         providerLabel: provider.name,
+        providerType: provider.type,
+        baseUrl: provider.baseUrl,
         secretStore: this.secretStore,
         uriHandler: this.uriHandler,
       },
@@ -1322,14 +1337,14 @@ export class OfficialModelsManager {
       return undefined;
     }
 
-    const credential = this.toAuthTokenInfo(
+    const credential = toAuthTokenInfo(
       await authProvider.getCredential(),
     );
     const refreshCredential: AuthTokenRefresh | undefined = authProvider.refresh
       ? async () => {
           const refreshed = await authProvider.refresh?.();
           if (!refreshed) return { kind: 'none' };
-          return this.toAuthTokenInfo(await authProvider.getCredential());
+          return toAuthTokenInfo(await authProvider.getCredential());
         }
       : undefined;
     return {
@@ -1745,6 +1760,7 @@ export class OfficialModelsManager {
       const rawModels = await client.getAvailableModels(
         credentialAccess.credential,
         credentialAccess.refreshCredential,
+        fetchContext.controller.signal,
       );
       const models = mergeWithWellKnownModels(rawModels, provider);
       const now = Date.now();

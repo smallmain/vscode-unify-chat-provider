@@ -96,11 +96,69 @@ import {
 } from '../../src/client/zed/provider';
 import {
   clearAllZedModelRoutes,
+  clearZedModelRoutes,
+  rememberZedModelRoutes,
   resolveCachedZedModelRoute,
 } from '../../src/client/zed/route-cache';
+import { createZedLlmTokenSource } from '../../src/client/zed/runtime';
 import type { ZedFetch } from '../../src/client/zed/types';
 
-function configuredProvider(): ProviderConfig {
+const BINDING_ID = '00000000-0000-4000-8000-000000000108';
+const SESSION_ID = '00000000-0000-4000-8000-000000000109';
+
+function zedCredential(token = 'llm-token', bindingId = BINDING_ID) {
+  return {
+    kind: 'token' as const,
+    token,
+    authContext: {
+      method: 'zed' as const,
+      bindingId,
+      sessionId: SESSION_ID,
+      revision: 1,
+      organizationId: 'org',
+      dataCollection: false,
+      dataCollectionAllowed: false,
+    },
+  };
+}
+
+describe('Zed LLM token source', () => {
+  it('updates only the token when the authentication context is unchanged', async () => {
+    const source = createZedLlmTokenSource(
+      zedCredential('stale-token'),
+      async () => zedCredential('fresh-token'),
+    );
+
+    await expect(source.refresh()).resolves.toBe('fresh-token');
+    await expect(source.cached()).resolves.toBe('fresh-token');
+  });
+
+  it('rejects refreshes that change binding, session, or organization', async () => {
+    const initial = zedCredential('stale-token');
+    const changedContexts = [
+      {
+        ...initial.authContext,
+        bindingId: '00000000-0000-4000-8000-000000000110',
+      },
+      { ...initial.authContext, sessionId: 'other-session' },
+      { ...initial.authContext, organizationId: 'other-organization' },
+    ];
+
+    for (const authContext of changedContexts) {
+      const source = createZedLlmTokenSource(initial, async () => ({
+        kind: 'token',
+        token: 'fresh-token',
+        authContext,
+      }));
+      await expect(source.refresh()).rejects.toThrow(
+        'Zed authentication context changed during the request.',
+      );
+      await expect(source.cached()).resolves.toBe('stale-token');
+    }
+  });
+});
+
+function configuredProvider(bindingId = BINDING_ID): ProviderConfig {
   return {
     type: 'zed',
     name: 'Zed',
@@ -108,9 +166,8 @@ function configuredProvider(): ProviderConfig {
     models: [],
     auth: {
       method: 'zed',
+      bindingId,
       baseUrl: 'https://zed.dev',
-      identityId: 'identity',
-      organizationId: 'org',
     },
   };
 }
@@ -250,18 +307,46 @@ describe('Zed Chat adapters', () => {
     };
     const provider = configuredProvider();
 
-    const models = await new ZedProvider(provider).getAvailableModels({
-      kind: 'token',
-      token: 'llm-token',
-    });
+    const credential = zedCredential();
+    const models = await new ZedProvider(provider).getAvailableModels(
+      credential,
+    );
 
     expect(models.map((item) => item.id)).toEqual([
       'zeta-cloud',
       'cloud-model',
     ]);
     expect(
-      resolveCachedZedModelRoute(provider, 'org', 'cloud-model'),
+      resolveCachedZedModelRoute(provider, credential, 'cloud-model'),
     ).toMatchObject({ upstreamProvider: 'open_ai' });
+  });
+
+  it('clears routes only for the changed auth binding', () => {
+    const otherBindingId = '00000000-0000-4000-8000-000000000118';
+    const provider = configuredProvider();
+    const credential = zedCredential();
+    const otherProvider = configuredProvider(otherBindingId);
+    const otherCredential = zedCredential('other-token', otherBindingId);
+    const route = {
+      organizationId: 'org',
+      modelId: 'cloud-model',
+      upstreamProvider: 'open_ai' as const,
+    };
+    rememberZedModelRoutes(provider, credential, [route]);
+    rememberZedModelRoutes(otherProvider, otherCredential, [route]);
+
+    clearZedModelRoutes(BINDING_ID);
+
+    expect(
+      resolveCachedZedModelRoute(provider, credential, 'cloud-model'),
+    ).toBeUndefined();
+    expect(
+      resolveCachedZedModelRoute(
+        otherProvider,
+        otherCredential,
+        'cloud-model',
+      ),
+    ).toEqual(route);
   });
 
   it('builds distinct Anthropic, Responses, Google and xAI request contracts', () => {
@@ -1001,10 +1086,7 @@ describe('Zed Chat adapters', () => {
         trace(),
         cancellationToken(),
         requestLogger.instance,
-        {
-          kind: 'token',
-          token: 'llm-token',
-        },
+        zedCredential(),
       ),
     );
     expect(parts).toHaveLength(1);
@@ -1064,10 +1146,7 @@ describe('Zed Chat adapters', () => {
       }
       throw new Error(`Unexpected request: ${url.pathname}`);
     };
-    const refreshCredential = vi.fn(async () => ({
-      kind: 'token' as const,
-      token: 'fresh-token',
-    }));
+    const refreshCredential = vi.fn(async () => zedCredential('fresh-token'));
 
     const parts = await collect(
       new ZedProvider(configuredProvider()).streamChat(
@@ -1078,7 +1157,7 @@ describe('Zed Chat adapters', () => {
         trace(),
         cancellationToken(),
         logger().instance,
-        { kind: 'token', token: 'stale-token' },
+        zedCredential('stale-token'),
         refreshCredential,
       ),
     );
@@ -1169,10 +1248,7 @@ describe('Zed Chat adapters', () => {
     };
     network.fetcher = fetcher;
     const provider = new ZedProvider(configuredProvider());
-    const credential = {
-      kind: 'token' as const,
-      token: 'llm-token',
-    };
+    const credential = zedCredential();
     await expect(
       collect(
         provider.streamChat(

@@ -35,6 +35,7 @@ vi.mock('vscode', () => {
 });
 
 vi.mock('../../src/ui/provider-ops', () => ({
+  captureDraftAuthCommitGuard: vi.fn(),
   saveProviderDraft: vi.fn(),
 }));
 
@@ -63,6 +64,7 @@ vi.mock('../../src/auth', () => ({
       method: string,
       config?: { method?: string; baseUrl?: string },
     ) => ({
+      getConfig: () => config,
       configure: async () => {
         harness.authConfig = config ?? { method };
         return {

@@ -303,7 +303,11 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
       // OAuth path: Originator + Chatgpt-Account-Id (not set for API-key auth).
       headers['Originator'] = CODEX_ORIGINATOR;
 
-      const accountId = auth.accountId?.trim();
+      const accountId =
+        credential?.kind === 'token' &&
+        credential.authContext?.method === 'openai-codex'
+          ? credential.authContext.accountId?.trim()
+          : undefined;
       if (accountId) {
         headers['Chatgpt-Account-Id'] = accountId;
       }

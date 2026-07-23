@@ -1,4 +1,5 @@
 import type * as vscode from 'vscode';
+import type { AuthTokenInfo } from '../../auth/types';
 import type { NativeCompletionApiContext } from '../api/provider';
 import type {
   ZedAcceptEditPredictionBody,
@@ -10,11 +11,13 @@ import type {
 } from '../../client/zed/types';
 import type { ZedDataCollectionPolicy } from './privacy';
 import {
-  assertZedProviderAuth,
   createZedCloudClient,
   createZedLlmTokenSource,
+  requireZedAuthContext,
 } from '../../client/zed/runtime';
-import { createZedProviderIdentity } from '../../client/zed/urls';
+import type { ProviderConfig } from '../../types';
+import { resolveZedBaseUrls } from '../../client/zed/urls';
+import { computeCompletionRequestTargetSignature } from '../provider-target';
 
 export interface ZedFeedbackTransport {
   accept(body: ZedAcceptEditPredictionBody): Promise<void>;
@@ -33,23 +36,25 @@ export interface ZedCompletionPolicySnapshot
   readonly backoffKey: string;
 }
 
-export interface ZedCompletionSessionPort {
-  getPolicySnapshot(
-    context: NativeCompletionApiContext,
-    token: vscode.CancellationToken,
-  ): Promise<ZedCompletionPolicySnapshot>;
+export interface ZedCompletionRequestSession {
+  readonly policy: ZedCompletionPolicySnapshot;
   predictV3(
-    context: NativeCompletionApiContext,
     body: Record<string, unknown>,
     options: ZedPredictEditsRequestOptions,
     token: vscode.CancellationToken,
   ): Promise<ZedPredictionTransportResult<ZedPredictEditsV3Response>>;
   predictV4(
-    context: NativeCompletionApiContext,
     body: Record<string, unknown>,
     options: ZedPredictEditsRequestOptions,
     token: vscode.CancellationToken,
   ): Promise<ZedPredictionTransportResult<ZedPredictEditsV4Response>>;
+}
+
+export interface ZedCompletionSessionPort {
+  openSession(
+    context: NativeCompletionApiContext,
+    token: vscode.CancellationToken,
+  ): Promise<ZedCompletionRequestSession>;
 }
 
 function phasedCancellation(token: vscode.CancellationToken): {
@@ -90,130 +95,189 @@ function throwIfCanceled(
   throw error;
 }
 
+function providerSnapshotSignature(provider: ProviderConfig): string {
+  return computeCompletionRequestTargetSignature(provider, {
+    requestTarget: resolveZedBaseUrls(provider.baseUrl).cloud,
+    includeCompletionBaseUrls: false,
+  });
+}
+
+async function resolveProviderCredentialSnapshot(
+  context: NativeCompletionApiContext,
+  token: vscode.CancellationToken,
+  signal: AbortSignal,
+): Promise<{ provider: ProviderConfig; credential: AuthTokenInfo }> {
+  const expectedSignature = providerSnapshotSignature(context.provider);
+  throwIfCanceled(token, signal);
+  const before = context.resolveProvider?.() ?? context.provider;
+  if (providerSnapshotSignature(before) !== expectedSignature) {
+    throw new Error(
+      'Authentication configuration changed while the Zed completion request was starting. Please retry.',
+    );
+  }
+  const credential = await context.resolveCredential();
+  throwIfCanceled(token, signal);
+  const after = context.resolveProvider?.() ?? context.provider;
+  if (providerSnapshotSignature(after) !== expectedSignature) {
+    throw new Error(
+      'Authentication configuration changed while the Zed completion request was starting. Please retry.',
+    );
+  }
+  return { provider: context.provider, credential };
+}
+
+function createSnapshotRefresh(
+  context: NativeCompletionApiContext,
+  provider: ProviderConfig,
+): (() => Promise<AuthTokenInfo>) | undefined {
+  const refreshCredential = context.refreshCredential;
+  if (!refreshCredential) return undefined;
+  const expectedSignature = providerSnapshotSignature(provider);
+  return async () => {
+    const before = context.resolveProvider?.() ?? context.provider;
+    if (providerSnapshotSignature(before) !== expectedSignature) {
+      throw new Error(
+        'Zed authentication configuration changed during the request.',
+      );
+    }
+    const credential = await refreshCredential();
+    const after = context.resolveProvider?.() ?? context.provider;
+    if (providerSnapshotSignature(after) !== expectedSignature) {
+      throw new Error(
+        'Zed authentication configuration changed during the request.',
+      );
+    }
+    return credential;
+  };
+}
+
 async function resolveTransport(
   context: NativeCompletionApiContext,
   token: vscode.CancellationToken,
   signal: AbortSignal,
 ) {
-  throwIfCanceled(token, signal);
-  const credential = await context.resolveCredential();
-  throwIfCanceled(token, signal);
-  const provider = context.resolveProvider?.() ?? context.provider;
-  const organizationId = assertZedProviderAuth(provider);
+  const snapshot = await resolveProviderCredentialSnapshot(
+    context,
+    token,
+    signal,
+  );
+  const resolvedCredential = snapshot.credential;
+  const resolvedProvider = snapshot.provider;
+  const provider = Object.freeze({
+    ...resolvedProvider,
+    ...(resolvedProvider.extraHeaders === undefined
+      ? {}
+      : { extraHeaders: { ...resolvedProvider.extraHeaders } }),
+  });
+  if (resolvedCredential.kind !== 'token') {
+    throw new Error('Zed authentication is required.');
+  }
+  const authContext = Object.freeze({
+    ...requireZedAuthContext(provider, resolvedCredential),
+  });
+  const credential = Object.freeze({
+    ...resolvedCredential,
+    authContext,
+  });
+  const organizationId = authContext.organizationId;
   const tokens = createZedLlmTokenSource(
     credential,
-    context.refreshCredential,
+    createSnapshotRefresh(context, provider),
   );
   throwIfCanceled(token, signal);
   const client = createZedCloudClient(provider);
-  return { client, tokens, organizationId, provider };
-}
-
-async function resolvePredictionSession(
-  context: NativeCompletionApiContext,
-  token: vscode.CancellationToken,
-  signal: AbortSignal,
-) {
-  const resolved = await resolveTransport(context, token, signal);
-  throwIfCanceled(token, signal);
-  const modelHeaders =
-    context.model.extraHeaders === undefined
-      ? undefined
-      : { ...context.model.extraHeaders };
-  const feedback: ZedFeedbackTransport = {
-    accept: (body) =>
-      resolved.client.accept(resolved.tokens, body, modelHeaders),
-    reject: (body) =>
-      resolved.client.reject(resolved.tokens, body, modelHeaders),
-    settled: (body) =>
-      resolved.client.settled(resolved.tokens, body, modelHeaders),
-  };
-  return { ...resolved, feedback };
+  return { client, tokens, organizationId, authContext };
 }
 
 const defaultPort: ZedCompletionSessionPort = {
-  async getPolicySnapshot(context, token) {
-    const cancellation = phasedCancellation(token);
+  async openSession(context, token) {
+    const opening = phasedCancellation(token);
     try {
       const resolved = await resolveTransport(
         context,
         token,
-        cancellation.signal,
+        opening.signal,
       );
-      throwIfCanceled(token, cancellation.signal);
-      const auth = resolved.provider.auth;
+      throwIfCanceled(token, opening.signal);
+      const modelHeaders =
+        context.model.extraHeaders === undefined
+          ? undefined
+          : { ...context.model.extraHeaders };
+      const feedback: ZedFeedbackTransport = {
+        accept: (body) =>
+          resolved.client.accept(resolved.tokens, body, modelHeaders),
+        reject: (body) =>
+          resolved.client.reject(resolved.tokens, body, modelHeaders),
+        settled: (body) =>
+          resolved.client.settled(resolved.tokens, body, modelHeaders),
+      };
       const dataCollectionAllowed =
-        auth?.method === 'zed' && auth.dataCollectionAllowed === true;
-      return {
+        resolved.authContext.dataCollectionAllowed === true;
+      const policy: ZedCompletionPolicySnapshot = Object.freeze({
         dataCollectionEnabled:
-          auth?.method === 'zed' &&
-          auth.dataCollection === true &&
+          resolved.authContext.dataCollection === true &&
           dataCollectionAllowed,
         dataCollectionAllowed,
-        backoffKey: `${createZedProviderIdentity(resolved.provider).key}:${resolved.organizationId}`,
-      };
-    } finally {
-      cancellation.dispose();
-    }
-  },
-  async predictV3(context, body, options, token) {
-    const cancellation = phasedCancellation(token);
-    try {
-      const resolved = await resolvePredictionSession(
-        context,
-        token,
-        cancellation.signal,
-      );
-      const response = await resolved.client.predictEditsV3(
-        resolved.tokens,
-        body,
-        {
-          ...options,
-          signal: cancellation.signal,
-          extraHeaders: context.model.extraHeaders,
-          onRequestDispatched: () => {
-            cancellation.markDispatched();
-            options.onRequestDispatched?.();
-          },
+        backoffKey: `${resolved.authContext.bindingId}:${resolved.authContext.sessionId}:${resolved.organizationId}`,
+      });
+      const session: ZedCompletionRequestSession = {
+        policy,
+        async predictV3(body, options, predictionToken) {
+          const cancellation = phasedCancellation(predictionToken);
+          try {
+            throwIfCanceled(predictionToken, cancellation.signal);
+            const response = await resolved.client.predictEditsV3(
+              resolved.tokens,
+              body,
+              {
+                ...options,
+                signal: cancellation.signal,
+                extraHeaders: modelHeaders,
+                onRequestDispatched: () => {
+                  cancellation.markDispatched();
+                  options.onRequestDispatched?.();
+                },
+              },
+            );
+            return {
+              response,
+              feedback,
+              canceledAfterDispatch: cancellation.wasCanceledAfterDispatch(),
+            };
+          } finally {
+            cancellation.dispose();
+          }
         },
-      );
-      return {
-        response,
-        feedback: resolved.feedback,
-        canceledAfterDispatch: cancellation.wasCanceledAfterDispatch(),
-      };
-    } finally {
-      cancellation.dispose();
-    }
-  },
-  async predictV4(context, body, options, token) {
-    const cancellation = phasedCancellation(token);
-    try {
-      const resolved = await resolvePredictionSession(
-        context,
-        token,
-        cancellation.signal,
-      );
-      const response = await resolved.client.predictEditsV4(
-        resolved.tokens,
-        body,
-        {
-          ...options,
-          signal: cancellation.signal,
-          extraHeaders: context.model.extraHeaders,
-          onRequestDispatched: () => {
-            cancellation.markDispatched();
-            options.onRequestDispatched?.();
-          },
+        async predictV4(body, options, predictionToken) {
+          const cancellation = phasedCancellation(predictionToken);
+          try {
+            throwIfCanceled(predictionToken, cancellation.signal);
+            const response = await resolved.client.predictEditsV4(
+              resolved.tokens,
+              body,
+              {
+                ...options,
+                signal: cancellation.signal,
+                extraHeaders: modelHeaders,
+                onRequestDispatched: () => {
+                  cancellation.markDispatched();
+                  options.onRequestDispatched?.();
+                },
+              },
+            );
+            return {
+              response,
+              feedback,
+              canceledAfterDispatch: cancellation.wasCanceledAfterDispatch(),
+            };
+          } finally {
+            cancellation.dispose();
+          }
         },
-      );
-      return {
-        response,
-        feedback: resolved.feedback,
-        canceledAfterDispatch: cancellation.wasCanceledAfterDispatch(),
       };
+      return Object.freeze(session);
     } finally {
-      cancellation.dispose();
+      opening.dispose();
     }
   },
 };

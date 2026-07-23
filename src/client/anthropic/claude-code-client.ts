@@ -1,5 +1,4 @@
 import type { AuthTokenInfo } from '../../auth/types';
-import type { AuthConfig } from '../../auth/types';
 import type { ModelConfig } from '../../types';
 import type {
   BetaContentBlockParam,
@@ -8,6 +7,7 @@ import type {
   MessageCreateParamsStreaming,
 } from '@anthropic-ai/sdk/resources/beta/messages';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
+import { deriveClaudeCodeIdentitySeed } from './claude-code-identity';
 import { AnthropicProvider } from './client';
 
 const DEFAULT_CLAUDE_CODE_CLI_VERSION = '2.1.161';
@@ -335,31 +335,6 @@ function createSystemCarrierMessage(
   ];
 }
 
-function pickStableAuthIdentifier(auth: AuthConfig | undefined): string | null {
-  if (!auth || auth.method === 'none') {
-    return null;
-  }
-  if (
-    'identityId' in auth &&
-    typeof auth.identityId === 'string' &&
-    auth.identityId.trim() !== ''
-  ) {
-    return auth.identityId.trim();
-  }
-  if ('email' in auth && typeof auth.email === 'string' && auth.email.trim()) {
-    return auth.email.trim();
-  }
-  if (
-    auth.method === 'api-key' &&
-    'apiKey' in auth &&
-    typeof auth.apiKey === 'string' &&
-    auth.apiKey.trim()
-  ) {
-    return auth.apiKey.trim();
-  }
-  return null;
-}
-
 function deterministicUuidFromSeed(seed: string): string {
   const bytes = createHash('sha256').update(seed, 'utf8').digest();
   bytes[6] = (bytes[6] & 0x0f) | 0x40;
@@ -501,12 +476,19 @@ function toTextBlocks(
 export class AnthropicClaudeCodeProvider extends AnthropicProvider {
   private readonly fallbackUserSeed = randomBytes(32).toString('hex');
 
-  private resolveStableUserId(historyUserId?: string): string {
+  private resolveStableUserId(
+    historyUserId?: string,
+    credential?: AuthTokenInfo,
+  ): string {
     if (historyUserId && isValidUserId(historyUserId)) {
       return historyUserId;
     }
     return generateFakeUserId({
-      seed: pickStableAuthIdentifier(this.config.auth) ?? this.fallbackUserSeed,
+      seed:
+        deriveClaudeCodeIdentitySeed(
+          this.config.auth,
+          credential,
+        ) ?? this.fallbackUserSeed,
     });
   }
 
@@ -563,7 +545,8 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     headers['x-client-request-id'] = randomUUID();
 
     const sessionId = extractSessionIdFromUserId(
-      options?.requestState?.userId ?? this.resolveStableUserId(),
+      options?.requestState?.userId ??
+        this.resolveStableUserId(undefined, credential),
     );
     if (sessionId) {
       headers['X-Claude-Code-Session-Id'] = sessionId;
@@ -630,7 +613,10 @@ export class AnthropicClaudeCodeProvider extends AnthropicProvider {
     }
     requestBase.system = mergedSystem;
 
-    const userId = this.resolveStableUserId(options.historyUserId);
+    const userId = this.resolveStableUserId(
+      options.historyUserId,
+      options.credential,
+    );
     options.requestState.userId = userId;
     requestBase.metadata = { user_id: userId };
 

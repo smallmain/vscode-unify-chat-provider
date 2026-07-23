@@ -3,6 +3,7 @@ import {
   mergePartialFromRecordByKeys,
   MODEL_CONFIG_KEYS,
   PROVIDER_CONFIG_KEYS,
+  stableStringify,
   withoutKeys,
 } from './config-ops';
 import {
@@ -27,6 +28,10 @@ import {
   ProxyType,
   ServiceTier,
 } from './types';
+import {
+  isSessionAuthConfig,
+  stripSessionAuthState,
+} from './auth/local-auth-state';
 
 export const CONFIG_NAMESPACE = 'unifyChatProvider';
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
@@ -640,18 +645,35 @@ export class ConfigStore {
     const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
     await config.update(
       'endpoints',
-      this.preserveUnspecifiedCompletionConfigs(endpoints, completionHints),
+      this.prepareEndpointsForPersistence(endpoints, completionHints),
       vscode.ConfigurationTarget.Global,
+    );
+  }
+
+  private prepareEndpointsForPersistence(
+    endpoints: readonly ProviderConfig[],
+    completionHints?: ReadonlyMap<string, ProviderCompletionPersistenceHints>,
+    current: readonly unknown[] = this.rawEndpoints,
+  ): unknown[] {
+    const staticEndpoints = endpoints.map((provider) =>
+      provider.auth && isSessionAuthConfig(provider.auth)
+        ? { ...provider, auth: stripSessionAuthState(provider.auth) }
+        : provider,
+    );
+    return this.preserveUnspecifiedCompletionConfigs(
+      staticEndpoints,
+      completionHints,
+      current,
     );
   }
 
   private preserveUnspecifiedCompletionConfigs(
     endpoints: readonly ProviderConfig[],
     completionHints?: ReadonlyMap<string, ProviderCompletionPersistenceHints>,
+    current: readonly unknown[] = this.rawEndpoints,
   ): unknown[] {
     // Normalized endpoints omit invalid completion values. Treat omission as
     // unchanged; callers can use {} to reset or { templates: [] } to disable.
-    const current = this.rawEndpoints;
     return endpoints.map((provider) => {
       const hints = completionHints?.get(provider.name);
       const sourceProviderName = hints?.originalName ?? provider.name;
@@ -729,6 +751,51 @@ export class ConfigStore {
   }
 
   /**
+   * Save startup-migrated endpoints only while the source snapshot is current.
+   */
+  async setRawEndpointsIfUnchanged(
+    expectedSignature: string,
+    endpoints: unknown[],
+  ): Promise<boolean> {
+    if (stableStringify(this.rawEndpoints) !== expectedSignature) return false;
+
+    const intendedSignature = stableStringify(endpoints);
+    let currentWriteSignature = intendedSignature;
+    let concurrentEndpoints: unknown[] | undefined;
+    let observedConcurrentWrite = false;
+    const subscription = vscode.workspace.onDidChangeConfiguration((event) => {
+      if (!event.affectsConfiguration(`${CONFIG_NAMESPACE}.endpoints`)) return;
+      const observed = this.rawEndpoints;
+      const observedSignature = stableStringify(observed);
+      if (
+        observedSignature !== currentWriteSignature &&
+        observedSignature !== expectedSignature
+      ) {
+        concurrentEndpoints = observed;
+        observedConcurrentWrite = true;
+      }
+    });
+
+    try {
+      await this.setRawEndpoints(endpoints);
+
+      // A Settings Sync update can land after the comparison but before our
+      // write. Restore the latest observed snapshot so the migration can retry
+      // against it instead of silently replacing it.
+      while (concurrentEndpoints) {
+        const restore = concurrentEndpoints;
+        concurrentEndpoints = undefined;
+        currentWriteSignature = stableStringify(restore);
+        await this.setRawEndpoints(restore);
+      }
+      if (observedConcurrentWrite) return false;
+      return stableStringify(this.rawEndpoints) === intendedSignature;
+    } finally {
+      subscription.dispose();
+    }
+  }
+
+  /**
    * Add or update a provider
    */
   async upsertProvider(
@@ -744,6 +811,32 @@ export class ConfigStore {
     await this.setEndpoints(
       endpoints,
       new Map([[provider.name, hints]]),
+    );
+  }
+
+  async upsertProviderIfUnchanged(
+    provider: ProviderConfig,
+    hints: ProviderCompletionPersistenceHints,
+    isSourceCurrent: () => boolean,
+  ): Promise<boolean> {
+    if (!isSourceCurrent()) return false;
+    const currentRaw = this.rawEndpoints;
+    const expectedSignature = stableStringify(currentRaw);
+    const endpoints = this.endpoints.filter(
+      (candidate) =>
+        candidate.name !== provider.name &&
+        candidate.name !== hints.originalName,
+    );
+    endpoints.push(provider);
+    const intended = this.prepareEndpointsForPersistence(
+      endpoints,
+      new Map([[provider.name, hints]]),
+      currentRaw,
+    );
+    if (!isSourceCurrent()) return false;
+    return await this.setRawEndpointsIfUnchanged(
+      expectedSignature,
+      intended,
     );
   }
 
