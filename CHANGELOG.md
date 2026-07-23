@@ -1,5 +1,10 @@
 # Changelog
 
+## v8.0.4 - 2026-07-23
+
+### Features
+- retry stream read errors in withIdleTimeout and consolidate retry logic (6db3576, SmallMain)
+
 ## v8.0.3 - 2026-07-23
 
 ### Features
