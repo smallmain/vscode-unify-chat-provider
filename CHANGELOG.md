@@ -1,5 +1,13 @@
 # Changelog
 
+## v8.0.3 - 2026-07-23
+
+### Features
+- add LM Studio Local provider (d810d7e, SmallMain)
+
+### Docs
+- update Zed setup steps for local deployment in README (217a15e, SmallMain)
+
 ## v8.0.2 - 2026-07-23
 
 ### Fixes
