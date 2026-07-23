@@ -2666,6 +2666,13 @@ function sanitizeMessageForModelSwitch(
   message: vscode.LanguageModelChatRequestMessage,
   imageRetention: SanitizedImagePartRetention,
 ): vscode.LanguageModelChatRequestMessage | undefined {
+  // Tool calls and their sibling assistant content form one response. If the
+  // tool call cannot be replayed, retaining only its text/image parts invents
+  // a standalone assistant turn and can leave history ending in Assistant.
+  if (collectExplicitToolCallIds(message).length > 0) {
+    return undefined;
+  }
+
   // Cross-model history must be provider-neutral. Keep only text and images
   // that the target model can safely consume; drop markers, tools, thinking,
   // usage/cache metadata, and any unknown future part types.
