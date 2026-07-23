@@ -118,6 +118,8 @@ const RESPONSES_CONTEXT_MANAGEMENT_EXCLUDED_BASE_MODELS = new Set([
 ]);
 const RESPONSES_COMPACTION_NOTICE = '[Remote compaction has been triggered.]';
 const RESPONSES_MULTI_AGENT_BETA = 'responses_multi_agent=v1';
+const RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR =
+  'OpenAI Responses API completed without output text, refusal, tool calls, or other consumable output.';
 
 type ResolvedTransportMode = 'sse' | 'auto' | 'websocket';
 
@@ -2622,7 +2624,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
   }
 
-  private async *parseMessage(
+  protected async *parseMessage(
     message: OpenAIResponsesResponse,
     sessionId: string,
     requestTrace: ChatRequestTrace,
@@ -2689,6 +2691,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       (v): v is ResponseReasoningItem =>
         v.type === 'reasoning' && isRootAgentOutput(v),
     );
+    let hasConsumableOutput = false;
 
     yield* this.extractThinkingParts(reasonings);
 
@@ -2699,6 +2702,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
           break;
 
         case 'compaction':
+          hasConsumableOutput = true;
           yield new vscode.LanguageModelTextPart(
             RESPONSES_COMPACTION_NOTICE,
           );
@@ -2712,11 +2716,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
             switch (part.type) {
               case 'output_text':
                 if (part.text) {
+                  hasConsumableOutput = true;
                   yield new vscode.LanguageModelTextPart(part.text);
                 }
                 break;
               case 'refusal':
                 if (part.refusal) {
+                  hasConsumableOutput = true;
                   yield new vscode.LanguageModelTextPart(part.refusal);
                 }
                 break;
@@ -2727,12 +2733,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
         case 'multi_agent_call':
         case 'multi_agent_call_output':
         case 'agent_message':
+          hasConsumableOutput = true;
           yield new vscode.LanguageModelTextPart(
             formatMultiAgentOutputItem(item),
           );
           break;
 
         case 'function_call':
+          hasConsumableOutput = true;
           yield new vscode.LanguageModelToolCallPart(
             item.call_id,
             item.name,
@@ -2746,6 +2754,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             imageGenerationOutputMimeType,
           );
           if (imagePart) {
+            hasConsumableOutput = true;
             yield imagePart;
           }
           break;
@@ -2754,6 +2763,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
         default:
           throw new Error(`Unsupported output item type: ${item.type}`);
       }
+    }
+
+    if (!hasConsumableOutput) {
+      if (message.usage) {
+        this.processUsage(message.usage, requestTrace, logger);
+      }
+      throw new OpenAIResponsesRequestError(
+        RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR,
+        { source: 'generic' },
+      );
     }
 
     const markerData: OpenAIResponsesMarkerData = {
@@ -2971,7 +2990,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return resolvedOutput;
   }
 
-  private async *parseMessageStream(
+  protected async *parseMessageStream(
     stream: AsyncIterable<OpenAIResponsesStreamEvent>,
     sessionId: string,
     token: vscode.CancellationToken,
@@ -2991,9 +3010,97 @@ export class OpenAIResponsesProvider implements ApiProvider {
       OpenAIResponsesOutputItem
     >();
     const emittedMultiAgentItems = new Set<string>();
+    const emittedMessageContent = new Map<string, string>();
+    let hasConsumableOutput = false;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingOutputState: ResponseThinkingOutputState = {};
+
+    const messageContentKey = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+    ): string => `${outputIndex}:${contentIndex}:${contentType}`;
+
+    const emitMessageContentDelta = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+      delta: string,
+    ): vscode.LanguageModelTextPart | undefined => {
+      if (!delta) {
+        return undefined;
+      }
+
+      const key = messageContentKey(
+        outputIndex,
+        contentIndex,
+        contentType,
+      );
+      emittedMessageContent.set(
+        key,
+        (emittedMessageContent.get(key) ?? '') + delta,
+      );
+      hasConsumableOutput = true;
+      return new vscode.LanguageModelTextPart(delta);
+    };
+
+    const emitFinalMessageContent = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+      text: string,
+    ): vscode.LanguageModelTextPart | undefined => {
+      if (!text) {
+        return undefined;
+      }
+
+      const key = messageContentKey(
+        outputIndex,
+        contentIndex,
+        contentType,
+      );
+      const emittedText = emittedMessageContent.get(key) ?? '';
+      if (text === emittedText) {
+        return undefined;
+      }
+      if (!text.startsWith(emittedText)) {
+        logger.verbose(
+          `OpenAI Responses final ${contentType} did not match its streamed prefix at output ${outputIndex}, content ${contentIndex}; keeping the streamed content to avoid duplication.`,
+        );
+        return undefined;
+      }
+
+      const missingText = text.slice(emittedText.length);
+      emittedMessageContent.set(key, text);
+      hasConsumableOutput = true;
+      return new vscode.LanguageModelTextPart(missingText);
+    };
+
+    const emitMessageItemParts = (
+      item: OpenAIResponsesOutputItem,
+      outputIndex: number,
+    ): vscode.LanguageModelTextPart[] => {
+      if (item.type !== 'message' || !isRootAgentOutput(item)) {
+        return [];
+      }
+
+      const parts: vscode.LanguageModelTextPart[] = [];
+      for (const [contentIndex, content] of item.content.entries()) {
+        const part = emitFinalMessageContent(
+          outputIndex,
+          contentIndex,
+          content.type,
+          content.type === 'output_text'
+            ? content.text
+            : content.refusal,
+        );
+        if (part) {
+          parts.push(part);
+        }
+      }
+      return parts;
+    };
 
     const emitFunctionCallPart = (
       item: ResponseFunctionToolCall,
@@ -3056,6 +3163,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             if (item.type === 'multi_agent_call') {
               const part = emitMultiAgentItemPart(item, event.output_index);
               if (part) {
+                hasConsumableOutput = true;
                 yield part;
               }
             }
@@ -3077,13 +3185,57 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
         case 'response.output_text.delta':
           if (event.delta && isRootAgentOutput(event)) {
-            yield new vscode.LanguageModelTextPart(event.delta);
+            const part = emitMessageContentDelta(
+              event.output_index,
+              event.content_index,
+              'output_text',
+              event.delta,
+            );
+            if (part) {
+              yield part;
+            }
           }
           break;
 
         case 'response.refusal.delta':
           if (event.delta && isRootAgentOutput(event)) {
-            yield new vscode.LanguageModelTextPart(event.delta);
+            const part = emitMessageContentDelta(
+              event.output_index,
+              event.content_index,
+              'refusal',
+              event.delta,
+            );
+            if (part) {
+              yield part;
+            }
+          }
+          break;
+
+        case 'response.output_text.done':
+          if (event.text && isRootAgentOutput(event)) {
+            const part = emitFinalMessageContent(
+              event.output_index,
+              event.content_index,
+              'output_text',
+              event.text,
+            );
+            if (part) {
+              yield part;
+            }
+          }
+          break;
+
+        case 'response.refusal.done':
+          if (event.refusal && isRootAgentOutput(event)) {
+            const part = emitFinalMessageContent(
+              event.output_index,
+              event.content_index,
+              'refusal',
+              event.refusal,
+            );
+            if (part) {
+              yield part;
+            }
           }
           break;
 
@@ -3117,6 +3269,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
           if (item.type === 'function_call') {
             const part = emitFunctionCallPart(item);
             if (part) {
+              hasConsumableOutput = true;
               yield part;
             }
           }
@@ -3126,8 +3279,15 @@ export class OpenAIResponsesProvider implements ApiProvider {
           ) {
             const part = emitMultiAgentItemPart(item, event.output_index);
             if (part) {
+              hasConsumableOutput = true;
               yield part;
             }
+          }
+          for (const part of emitMessageItemParts(
+            item,
+            event.output_index,
+          )) {
+            yield part;
           }
           break;
         }
@@ -3146,6 +3306,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             if (item.type === 'function_call') {
               const part = emitFunctionCallPart(item);
               if (part) {
+                hasConsumableOutput = true;
                 yield part;
               }
               continue;
@@ -3154,12 +3315,21 @@ export class OpenAIResponsesProvider implements ApiProvider {
             if (isMultiAgentOutputItem(item)) {
               const part = emitMultiAgentItemPart(item, outputIndex);
               if (part) {
+                hasConsumableOutput = true;
+                yield part;
+              }
+              continue;
+            }
+
+            if (item.type === 'message') {
+              for (const part of emitMessageItemParts(item, outputIndex)) {
                 yield part;
               }
               continue;
             }
 
             if (item.type === 'compaction') {
+              hasConsumableOutput = true;
               yield new vscode.LanguageModelTextPart(
                 RESPONSES_COMPACTION_NOTICE,
               );
@@ -3172,10 +3342,23 @@ export class OpenAIResponsesProvider implements ApiProvider {
                 imageGenerationOutputMimeType,
               );
               if (imagePart) {
+                hasConsumableOutput = true;
                 yield imagePart;
               }
             }
           }
+
+          if (!hasConsumableOutput) {
+            if (usage) {
+              this.processUsage(usage, requestTrace, logger);
+              usage = undefined;
+            }
+            throw new OpenAIResponsesRequestError(
+              RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR,
+              { source: 'stream' },
+            );
+          }
+
           const reasonings = completedOutput.filter(
             (v): v is ResponseReasoningItem =>
               v.type === 'reasoning' && isRootAgentOutput(v),

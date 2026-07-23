@@ -551,6 +551,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
+    name: 'LM Studio Local',
+    category: 'General',
+    type: 'openai-responses',
+    baseUrl: 'http://localhost:1234',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'ZhiPu AI',
     category: 'General',
     type: 'openai-chat-completion',

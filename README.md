@@ -160,11 +160,8 @@ Zed uses its own Zeta model family. We recommend adding it in one of two ways:
 
 1. Add the `Zed` provider through [One-Click Configuration](#one-click-configuration) and use your Zed account quota.
 2. Deploy a Zeta model locally and add it.
-
-Assuming you used the first method to add the `Zed` provider, continue with these steps:
-
-1. Add a Zed algorithm through `Code Completion Settings -> Add From Current Provider List -> Zed`, then select the `Zeta Cloud` model.
-2. Click `Save`.
+3. Add a Zed algorithm through `Code Completion Settings -> Add From Current Provider List -> Zed`, then select the model that was just added.
+4. Click `Save`.
 
 ### Inception
 
@@ -913,6 +910,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Xiaomi MIMO (Europe, Token Plan)](https://mimo.xiaomi.com/)                                           | <li>ThinkingParam <li>ReasoningContent                                               |                            |
 | [Ollama Local](https://ollama.com/)                                                                    |                                                                                      |                            |
 | [Ollama Cloud](https://ollama.com/)                                                                    |                                                                                      |                            |
+| [LM Studio Local](https://lmstudio.ai/)                                                           |                                                                                      |                       |
 | [StepFun (China)](https://platform.stepfun.com/)                                                       | <li>ReasoningField                                                                   |                            |
 | [StepFun (International)](https://platform.stepfun.com/)                                               | <li>ReasoningField                                                                   |                            |
 | [ZhiPu AI](https://open.bigmodel.cn/)                                                                  | <li>ThinkingParam <li>ReasoningEffortParam <li>ReasoningContent <li>ClearThinking    | [Details](#zhipu-ai--zai)  |

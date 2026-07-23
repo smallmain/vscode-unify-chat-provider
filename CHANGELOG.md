@@ -1,5 +1,23 @@
 # Changelog
 
+## v8.0.4 - 2026-07-23
+
+### Features
+- retry stream read errors in withIdleTimeout and consolidate retry logic (6db3576, SmallMain)
+
+## v8.0.3 - 2026-07-23
+
+### Features
+- add LM Studio Local provider (d810d7e, SmallMain)
+
+### Docs
+- update Zed setup steps for local deployment in README (217a15e, SmallMain)
+
+## v8.0.2 - 2026-07-23
+
+### Fixes
+- detect empty output in OpenAI Responses API and handle final text/refusal deltas (62f991d, SmallMain)
+
 ## v8.0.1 - 2026-07-23
 
 ### Fixes

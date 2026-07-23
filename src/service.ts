@@ -34,6 +34,7 @@ import {
   isPlaceholderModelId,
   resolveMeaningfulError,
   resolveChatNetwork,
+  shouldRetryStreamReadError,
 } from './utils';
 import { SecretStore } from './secret';
 import { AuthManager } from './auth';
@@ -68,9 +69,6 @@ import { resolveConfiguredEditToolsForVsCode } from './model-capabilities';
 const MODEL_DISPLAY_NAME_PLACEHOLDER_PATTERN =
   /\{(modelId|modelName|modelFamily|providerName|remainingBalance)\}/g;
 const BALANCE_CONFIGURATION_KEY = '__unifyBalance';
-const RETRYABLE_STREAM_READ_ERROR_CODES = new Set([
-  'stream_read_error',
-]);
 
 interface ModelDisplayNameTemplateValues {
   modelId: string;
@@ -90,84 +88,6 @@ interface BalanceConfigurationOption {
   id: string;
   label: string;
   description: string;
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
-}
-
-function readStringField(
-  record: Record<string, unknown>,
-  key: string,
-): string | undefined {
-  const value = record[key];
-  return typeof value === 'string' && value.trim() ? value : undefined;
-}
-
-function getErrorCause(error: unknown): unknown {
-  return isRecord(error) && 'cause' in error ? error.cause : undefined;
-}
-
-function getRetryableStreamReadErrorFields(error: unknown): {
-  code?: string;
-  message?: string;
-} {
-  if (error instanceof Error) {
-    return { message: error.message };
-  }
-
-  if (!isRecord(error)) {
-    return typeof error === 'string' ? { message: error } : {};
-  }
-
-  const nestedError = isRecord(error.error) ? error.error : undefined;
-  return {
-    code:
-      readStringField(error, 'code') ??
-      (nestedError ? readStringField(nestedError, 'code') : undefined),
-    message:
-      readStringField(error, 'message') ??
-      (nestedError ? readStringField(nestedError, 'message') : undefined),
-  };
-}
-
-function isRetryableStreamReadError(error: unknown): boolean {
-  if (isAbortLikeError(error)) {
-    return false;
-  }
-
-  const seen = new Set<unknown>();
-  let current: unknown = error;
-
-  while (current !== undefined && !seen.has(current)) {
-    seen.add(current);
-
-    const { code, message } = getRetryableStreamReadErrorFields(current);
-    if (code && RETRYABLE_STREAM_READ_ERROR_CODES.has(code)) {
-      return true;
-    }
-
-    const normalizedMessage = message?.toLowerCase();
-    if (normalizedMessage) {
-      const isInternalStreamError =
-        (normalizedMessage.includes('internal_server_error') ||
-          normalizedMessage.includes('internal_error')) &&
-        (normalizedMessage.includes('stream error') ||
-          normalizedMessage.includes('stream id') ||
-          normalizedMessage.includes('received from peer'));
-      if (
-        normalizedMessage.includes('stream_read_error') ||
-        normalizedMessage.includes('stream read error') ||
-        isInternalStreamError
-      ) {
-        return true;
-      }
-    }
-
-    current = getErrorCause(current);
-  }
-
-  return false;
 }
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
@@ -881,10 +801,12 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
               // User cancelled the request; treat provider abort errors as expected.
               outcome = 'cancelled';
             } else if (
-              partCount === 0 &&
-              !token.isCancellationRequested &&
-              isRetryableStreamReadError(error) &&
-              streamRetryAttempt < retryConfig.maxRetries
+              shouldRetryStreamReadError(error, {
+                emittedPartCount: partCount,
+                cancellationRequested: token.isCancellationRequested,
+                retryAttempt: streamRetryAttempt,
+                maxRetries: retryConfig.maxRetries,
+              })
             ) {
               const delayMs = calculateBackoffDelay(
                 streamRetryAttempt,

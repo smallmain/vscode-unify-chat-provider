@@ -23,6 +23,7 @@ import {
   isRawBaseUrlEnabled,
   isRetryableNetworkError,
   isRetryableStatusCode,
+  isRetryableStreamReadError,
   resolveChatNetwork,
   sanitizeMessagesForModelSwitch,
   withIdleTimeout,
@@ -2292,6 +2293,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
               emittedPartCount === 0 &&
               !token.isCancellationRequested &&
               !abortController.signal.aborted &&
+              !isRetryableStreamReadError(error) &&
               isRetryableNetworkError(error) &&
               streamRetryAttempt <
                 CODE_ASSIST_PRE_FIRST_PART_STREAM_RETRY_CONFIG.maxRetries
