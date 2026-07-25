@@ -12,7 +12,7 @@ import {
 import { FeatureId } from '../definitions';
 import { ApiProvider } from '../interface';
 import OpenAI from 'openai';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import {
   createImageDataPartFromBase64,
   decodeStatefulMarkerPart,
@@ -30,6 +30,7 @@ import {
   resolveChatNetwork,
   resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitchDetailed,
+  tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
 import {
@@ -51,16 +52,21 @@ import {
 } from '../utils';
 import * as vscode from 'vscode';
 import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
+import {
   EasyInputMessage,
   FunctionTool,
   Response as OpenAIResponse,
   ResponseCompactionItemParam,
   ResponseCompactParams,
   ResponseCreateParamsBase,
+  ResponseCreateParamsNonStreaming,
+  ResponseCreateParamsStreaming,
   ResponsesClientEvent,
   ResponseFunctionCallOutputItem,
   ResponseFunctionToolCall,
-  ResponseInput,
   ResponseInputItem,
   ResponseOutputItem,
   ResponseReasoningItem,
@@ -69,9 +75,24 @@ import {
   ToolChoiceFunction,
   ToolChoiceOptions,
 } from 'openai/resources/responses/responses';
+import type {
+  BetaResponse as OpenAIBetaResponse,
+  BetaResponseInputItem,
+  BetaResponseOutputItem,
+  BetaResponseStreamEvent,
+  BetaResponsesClientEvent,
+  ResponseCreateParamsBase as BetaResponseCreateParamsBase,
+  ResponseCreateParamsNonStreaming as BetaResponseCreateParamsNonStreaming,
+  ResponseCreateParamsStreaming as BetaResponseCreateParamsStreaming,
+} from 'openai/resources/beta/responses/responses';
 import { getBaseModelId } from '../../model-id-utils';
 import { createHash, randomUUID } from 'crypto';
-import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ProviderConfig,
+  ModelConfig,
+} from '../../types';
 import {
   WebSocketSessionError,
   WebSocketSessionRequest,
@@ -95,33 +116,78 @@ const RESPONSES_CONTEXT_MANAGEMENT_EXCLUDED_BASE_MODELS = new Set([
   'gpt-5.2',
 ]);
 const RESPONSES_COMPACTION_NOTICE = '[Remote compaction has been triggered.]';
+const RESPONSES_MULTI_AGENT_BETA = 'responses_multi_agent=v1';
+const RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR =
+  'OpenAI Responses API completed without output text, refusal, tool calls, or other consumable output.';
 
 type ResolvedTransportMode = 'sse' | 'auto' | 'websocket';
 
 type ConvertedMessagesResult = {
-  input: ResponseInput;
+  input: OpenAIResponsesInput;
   sessionId: string;
   previousResponseId?: string;
-  inputAfterPreviousResponse?: ResponseInputItem[];
+  inputAfterPreviousResponse?: OpenAIResponsesInputItem[];
   previousResponseBoundaryIndex?: number;
   previousResponseInputBoundaryIndex?: number;
-  previousResponseUsage?: OpenAIResponsesMarkerUsage;
+  previousResponseUsage?: CopilotUsage;
 };
 
 type ResponseContinuation = {
   previousResponseId: string;
-  inputAfterPreviousResponse: ResponseInputItem[];
+  inputAfterPreviousResponse: OpenAIResponsesInputItem[];
 };
 
-type OpenAIResponsesMarkerUsage = {
-  inputTokens: number;
-  outputTokens: number;
-  totalTokens: number;
-};
+type ResponseMultiAgentInputItem = Extract<
+  BetaResponseInputItem,
+  {
+    type: 'agent_message' | 'multi_agent_call' | 'multi_agent_call_output';
+  }
+>;
+type ResponseMultiAgentOutputItem = Extract<
+  BetaResponseOutputItem,
+  {
+    type: 'agent_message' | 'multi_agent_call' | 'multi_agent_call_output';
+  }
+>;
+type ResponseAgentAttributedInputItem = Extract<
+  BetaResponseInputItem,
+  { type: 'compaction' | 'additional_tools' }
+>;
+type ResponseAgentAttributedOutputItem = Extract<
+  BetaResponseOutputItem,
+  { type: 'compaction' | 'additional_tools' }
+>;
 
-type OpenAIResponsesRequestBody = ResponseCreateParamsBase & {
-  conversation?: unknown;
+type OpenAIResponsesInputItem =
+  | ResponseInputItem
+  | ResponseMultiAgentInputItem
+  | ResponseAgentAttributedInputItem;
+type OpenAIResponsesInput =
+  | string
+  | OpenAIResponsesInputItem[];
+type OpenAIResponsesOutputItem =
+  | ResponseOutputItem
+  | ResponseMultiAgentOutputItem
+  | ResponseAgentAttributedOutputItem;
+type OpenAIResponsesResponse = OpenAIResponse | OpenAIBetaResponse;
+export type OpenAIResponsesClientEvent =
+  | ResponsesClientEvent
+  | BetaResponsesClientEvent;
+export type OpenAIResponsesStreamEvent =
+  | ResponseStreamEvent
+  | BetaResponseStreamEvent;
+
+export type OpenAIResponsesRequestBody = Omit<
+  ResponseCreateParamsBase,
+  'conversation' | 'input' | 'tool_choice'
+> & {
+  betas?: BetaResponseCreateParamsBase['betas'];
+  conversation?: BetaResponseCreateParamsBase['conversation'];
+  input?: OpenAIResponsesInput;
+  max_tool_calls?: BetaResponseCreateParamsBase['max_tool_calls'];
+  multi_agent?: BetaResponseCreateParamsBase['multi_agent'];
   previous_response_id?: string;
+  tool_choice?: ToolChoiceOptions | ToolChoiceFunction;
 };
 
 type ExtractedResponseError = {
@@ -146,6 +212,7 @@ type OpenAIResponsesRequestContext = {
   expectedIdentity: string;
   credential: AuthTokenInfo;
   imageGenerationOutputMimeType: string;
+  multiAgentEnabled: boolean;
 };
 
 type ResponseThinkingContentType = 'encrypted' | 'summary' | 'content';
@@ -155,7 +222,7 @@ type ResponseThinkingOutputState = {
 };
 
 type ResponseImageGenerationCall = Extract<
-  ResponseOutputItem,
+  OpenAIResponsesOutputItem,
   { type: 'image_generation_call' }
 >;
 
@@ -167,8 +234,28 @@ type ResponseImageGenerationTool = Extract<
 >;
 
 type ResponseAdditionalToolsInputItem = Extract<
-  ResponseInputItem,
+  OpenAIResponsesInputItem,
   { type: 'additional_tools' }
+>;
+
+type ResponseAgentMessageOutputItem = Extract<
+  ResponseMultiAgentOutputItem,
+  { type: 'agent_message' }
+>;
+
+type ResponseAgentMessageInputItem = Extract<
+  BetaResponseInputItem,
+  { type: 'agent_message' }
+>;
+
+type ResponseMultiAgentCallOutputItem = Extract<
+  ResponseMultiAgentOutputItem,
+  { type: 'multi_agent_call_output' }
+>;
+
+type ResponseMultiAgentCallOutputInputItem = Extract<
+  ResponseMultiAgentInputItem,
+  { type: 'multi_agent_call_output' }
 >;
 
 type OpenAIResponsesHttpRequestContext = OpenAIResponsesRequestContext & {
@@ -188,52 +275,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function isNonNegativeFiniteNumber(value: unknown): value is number {
-  return (
-    typeof value === 'number' &&
-    Number.isFinite(value) &&
-    Number.isInteger(value) &&
-    value >= 0
-  );
-}
-
-function toOpenAIResponsesMarkerUsage(
-  usage: ResponseUsage,
-): OpenAIResponsesMarkerUsage {
-  return {
-    inputTokens: usage.input_tokens,
-    outputTokens: usage.output_tokens,
-    totalTokens: usage.total_tokens,
-  };
-}
-
-function normalizeOpenAIResponsesMarkerUsage(
-  usage: unknown,
-): OpenAIResponsesMarkerUsage | undefined {
-  if (!isRecord(usage)) {
-    return undefined;
-  }
-
-  const inputTokens = usage['inputTokens'];
-  const outputTokens = usage['outputTokens'];
-  const totalTokens = usage['totalTokens'];
-  if (
-    !isNonNegativeFiniteNumber(inputTokens) ||
-    !isNonNegativeFiniteNumber(outputTokens) ||
-    !isNonNegativeFiniteNumber(totalTokens)
-  ) {
-    return undefined;
-  }
-
-  return {
-    inputTokens,
-    outputTokens,
-    totalTokens,
-  };
-}
-
 function readResponseInputItemType(
-  item: ResponseInputItem,
+  item: OpenAIResponsesInputItem,
 ): string | undefined {
   if (!isRecord(item)) {
     return undefined;
@@ -244,7 +287,7 @@ function readResponseInputItemType(
 }
 
 function readResponseInputItemCallId(
-  item: ResponseInputItem,
+  item: OpenAIResponsesInputItem,
 ): string | undefined {
   if (!isRecord(item)) {
     return undefined;
@@ -291,9 +334,29 @@ function omitFunctionCallsWithoutFollowingOutput(
 }
 
 function isResponseImageGenerationCall(
-  item: ResponseOutputItem,
+  item: OpenAIResponsesOutputItem,
 ): item is ResponseImageGenerationCall {
   return item.type === 'image_generation_call';
+}
+
+function normalizeResponseOutputItem(
+  item: ResponseOutputItem | BetaResponseOutputItem,
+): OpenAIResponsesOutputItem {
+  // The beta union mirrors stable output items and adds these three variants.
+  switch (item.type) {
+    case 'agent_message':
+    case 'multi_agent_call':
+    case 'multi_agent_call_output':
+      return item;
+    default:
+      return item;
+  }
+}
+
+function normalizeResponseOutputItems(
+  items: readonly (ResponseOutputItem | BetaResponseOutputItem)[],
+): OpenAIResponsesOutputItem[] {
+  return items.map((item) => normalizeResponseOutputItem(item));
 }
 
 function isResponseImageGenerationTool(
@@ -303,10 +366,24 @@ function isResponseImageGenerationTool(
 }
 
 function normalizeMarkerOutputItem(
-  item: ResponseOutputItem,
-): ResponseInputItem {
+  item: OpenAIResponsesOutputItem,
+): OpenAIResponsesInputItem {
   switch (item.type) {
     case 'compaction': {
+      const agentName = readAgentName(item);
+      if (agentName !== undefined) {
+        const inputItem: Extract<
+          ResponseAgentAttributedInputItem,
+          { type: 'compaction' }
+        > = {
+          encrypted_content: item.encrypted_content,
+          id: item.id,
+          type: item.type,
+          agent: { agent_name: agentName },
+        };
+        return inputItem;
+      }
+
       const inputItem: ResponseCompactionItemParam = {
         encrypted_content: item.encrypted_content,
         id: item.id,
@@ -322,6 +399,22 @@ function normalizeMarkerOutputItem(
       };
 
     case 'additional_tools':
+      {
+        const agentName = readAgentName(item);
+        if (agentName !== undefined) {
+          const inputItem: Extract<
+            ResponseAgentAttributedInputItem,
+            { type: 'additional_tools' }
+          > = {
+            id: item.id,
+            role: 'developer',
+            tools: item.tools,
+            type: item.type,
+            agent: { agent_name: agentName },
+          };
+          return inputItem;
+        }
+      }
       if (item.role === 'developer') {
         const inputItem: ResponseAdditionalToolsInputItem = {
           id: item.id,
@@ -338,14 +431,79 @@ function normalizeMarkerOutputItem(
         type: item.type,
       };
 
+    case 'agent_message':
+      return normalizeAgentMessageInputItem(item);
+
+    case 'multi_agent_call_output':
+      return normalizeMultiAgentCallOutputInputItem(item);
+
     default:
       return item;
   }
 }
 
+function normalizeMultiAgentCallOutputInputItem(
+  item: ResponseMultiAgentCallOutputItem,
+): ResponseMultiAgentCallOutputInputItem {
+  return {
+    type: 'multi_agent_call_output',
+    id: item.id,
+    action: item.action,
+    call_id: item.call_id,
+    output: item.output.map((part) => ({
+      type: 'output_text',
+      text: part.text,
+    })),
+    ...(item.agent !== undefined ? { agent: item.agent } : {}),
+  };
+}
+
+function normalizeAgentMessageInputItem(
+  item: ResponseAgentMessageOutputItem,
+): ResponseAgentMessageInputItem {
+  const content: ResponseAgentMessageInputItem['content'] = [];
+  for (const part of item.content) {
+    switch (part.type) {
+      case 'input_text':
+      case 'input_image':
+      case 'encrypted_content':
+        content.push(part);
+        break;
+      case 'output_text':
+      case 'text':
+      case 'summary_text':
+      case 'reasoning_text':
+        content.push({ type: 'input_text', text: part.text });
+        break;
+      case 'refusal':
+        content.push({ type: 'input_text', text: part.refusal });
+        break;
+      case 'computer_screenshot':
+        content.push({
+          type: 'input_image',
+          detail: part.detail,
+          file_id: part.file_id,
+          image_url: part.image_url,
+        });
+        break;
+      case 'input_file':
+        break;
+    }
+  }
+
+  return {
+    type: 'agent_message',
+    id: item.id,
+    author: item.author,
+    recipient: item.recipient,
+    content,
+    ...(item.agent !== undefined ? { agent: item.agent } : {}),
+  };
+}
+
 function normalizeMarkerOutputItems(
-  items: readonly ResponseOutputItem[],
-): ResponseInputItem[] {
+  items: readonly OpenAIResponsesOutputItem[],
+): OpenAIResponsesInputItem[] {
   return items.map((item) => normalizeMarkerOutputItem(item));
 }
 
@@ -365,6 +523,117 @@ function readNumberField(
   return typeof value === 'number' && Number.isFinite(value)
     ? value
     : undefined;
+}
+
+function isMultiAgentOutputItem(
+  item: OpenAIResponsesOutputItem,
+): item is ResponseMultiAgentOutputItem {
+  return (
+    item.type === 'multi_agent_call' ||
+    item.type === 'multi_agent_call_output' ||
+    item.type === 'agent_message'
+  );
+}
+
+function isStandardResponseInputItem(
+  item: OpenAIResponsesInputItem,
+): item is ResponseInputItem {
+  const type = readResponseInputItemType(item);
+  return (
+    type !== 'multi_agent_call' &&
+    type !== 'multi_agent_call_output' &&
+    type !== 'agent_message'
+  );
+}
+
+function readAgentName(value: unknown): string | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+
+  const agent = value['agent'];
+  return isRecord(agent) ? readStringField(agent, 'agent_name') : undefined;
+}
+
+function isRootAgentOutput(value: unknown): boolean {
+  const agentName = readAgentName(value);
+  return agentName === undefined || agentName === '/root';
+}
+
+function describeMultiAgentAction(value: unknown): string {
+  if (!isRecord(value)) {
+    return 'performing a multi-agent action';
+  }
+
+  switch (readStringField(value, 'action')) {
+    case 'spawn_agent':
+      return 'starting a subagent';
+    case 'interrupt_agent':
+      return 'interrupting an agent';
+    case 'list_agents':
+      return 'checking agent status';
+    case 'send_message':
+      return 'sending a message';
+    case 'followup_task':
+      return 'assigning follow-up work';
+    case 'wait_agent':
+      return 'waiting for agents';
+    default:
+      return 'performing a multi-agent action';
+  }
+}
+
+function formatMultiAgentOutputItem(
+  item: ResponseMultiAgentOutputItem,
+): string {
+  if (item.type === 'agent_message') {
+    const author = item.author.trim() || '/root';
+    const recipient = item.recipient.trim() || 'an agent';
+    return `[Agent ${author} sent a message to ${recipient}.]`;
+  }
+
+  const agentName = readAgentName(item) ?? '/root';
+  const action = describeMultiAgentAction(item);
+  return item.type === 'multi_agent_call'
+    ? `[Agent ${agentName} is ${action}.]`
+    : `[Agent ${agentName} finished ${action}.]`;
+}
+
+function createResponsesMarkerIdentity(
+  config: ProviderConfig,
+  model: ModelConfig,
+  multiAgentEnabled: boolean,
+): string {
+  const baseIdentity = createStatefulMarkerIdentity(config, model);
+  return multiAgentEnabled
+    ? `${baseIdentity}|responses_multi_agent=true`
+    : baseIdentity;
+}
+
+function updateResponsesMultiAgentBetaHeader(
+  headers: Record<string, string>,
+  enabled: boolean,
+): void {
+  const values: string[] = [];
+  for (const [key, value] of Object.entries(headers)) {
+    if (key.toLowerCase() !== 'openai-beta') {
+      continue;
+    }
+    delete headers[key];
+    values.push(...value.split(',').map((part) => part.trim()));
+  }
+
+  const retainedValues = values.filter(
+    (value) =>
+      value.length > 0 &&
+      value.toLowerCase() !== RESPONSES_MULTI_AGENT_BETA,
+  );
+  if (enabled) {
+    retainedValues.push(RESPONSES_MULTI_AGENT_BETA);
+  }
+  if (retainedValues.length > 0) {
+    headers['OpenAI-Beta'] = Array.from(new Set(retainedValues)).join(', ');
+  }
 }
 
 class OpenAIResponsesRequestError extends Error {
@@ -509,7 +778,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
   protected createWebSocketTransport(
     client: OpenAI,
     headers: Record<string, string>,
-  ): WebSocketSessionTransport<ResponsesClientEvent, ResponseStreamEvent> {
+    multiAgentEnabled: boolean,
+  ): WebSocketSessionTransport<
+    OpenAIResponsesClientEvent,
+    OpenAIResponsesStreamEvent
+  > {
     const webSocketBaseUrl = this.resolveWebSocketBaseUrl(client);
     const transportClient =
       webSocketBaseUrl === client.baseURL
@@ -521,12 +794,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
             timeout: client.timeout,
           });
 
-    return new OpenAIResponsesWebSocketTransport(transportClient, headers);
+    return new OpenAIResponsesWebSocketTransport(
+      transportClient,
+      headers,
+      multiAgentEnabled,
+    );
   }
 
   protected transformWebSocketRequestPayload(
-    payload: ResponsesClientEvent,
-  ): ResponsesClientEvent {
+    payload: OpenAIResponsesClientEvent,
+  ): OpenAIResponsesClientEvent {
     return payload;
   }
 
@@ -556,14 +833,14 @@ export class OpenAIResponsesProvider implements ApiProvider {
     let latestResponseBoundaryIndex: number | undefined;
     let latestResponseBoundaryItem: EasyInputMessage | undefined;
     let latestResponseInputBoundaryIndex: number | undefined;
-    let latestResponseUsage: OpenAIResponsesMarkerUsage | undefined;
-    let outItemsAfterLatestResponse: ResponseInputItem[] = [];
-    const outItems: ResponseInputItem[] = [];
+    let latestResponseUsage: CopilotUsage | undefined;
+    let outItemsAfterLatestResponse: OpenAIResponsesInputItem[] = [];
+    const outItems: OpenAIResponsesInputItem[] = [];
     const rawMap = new Map<
-      ResponseInputItem,
+      OpenAIResponsesInputItem,
       OpenAIResponsesMarkerData['data']
     >();
-    const appendOutItem = (item: ResponseInputItem): void => {
+    const appendOutItem = (item: OpenAIResponsesInputItem): void => {
       outItems.push(item);
       if (latestResponseId !== undefined) {
         outItemsAfterLatestResponse.push(item);
@@ -623,8 +900,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
                   latestResponseBoundaryIndex =
                     messageOriginIndexes?.[messageIndex] ?? messageIndex;
                   latestResponseBoundaryItem = item;
-                  latestResponseUsage =
-                    normalizeOpenAIResponsesMarkerUsage(usage);
+                  latestResponseUsage = tryNormalizeCopilotUsage(usage);
                   outItemsAfterLatestResponse = [];
                 } else {
                   latestResponseId = undefined;
@@ -755,7 +1031,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -916,10 +1192,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
         };
       } else {
         const reasoning: NonNullable<ResponseCreateParamsBase['reasoning']> = {
-          effort: this.normalizeReasoningEffortForOpenAi(thinking.effort),
+          effort: this.normalizeReasoningEffortForOpenAi(model),
         };
         if (thinking.summary !== undefined && thinking.summary !== 'none') {
           reasoning.summary = thinking.summary;
+        }
+        if (thinking.mode !== undefined) {
+          reasoning.mode = thinking.mode;
+        }
+        if (thinking.context !== undefined) {
+          reasoning.context = thinking.context;
         }
         return {
           thinking: { type: thinking.type },
@@ -934,10 +1216,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
         };
       } else {
         const reasoning: NonNullable<ResponseCreateParamsBase['reasoning']> = {
-          effort: this.normalizeReasoningEffortForOpenAi(thinking.effort),
+          effort: this.normalizeReasoningEffortForOpenAi(model),
         };
         if (thinking.summary !== undefined && thinking.summary !== 'none') {
           reasoning.summary = thinking.summary;
+        }
+        if (thinking.mode !== undefined) {
+          reasoning.mode = thinking.mode;
+        }
+        if (thinking.context !== undefined) {
+          reasoning.context = thinking.context;
         }
         return {
           // Defaults to 'medium' effort
@@ -948,14 +1236,22 @@ export class OpenAIResponsesProvider implements ApiProvider {
   }
 
   private normalizeReasoningEffortForOpenAi(
-    effort:
-      | NonNullable<NonNullable<ModelConfig['thinking']>['effort']>
-      | undefined,
-  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
+    model: ModelConfig,
+  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
+    const effort = model.thinking?.effort;
     if (effort === undefined) {
       return 'medium';
     }
-    return effort === 'max' ? 'xhigh' : effort;
+    if (effort !== 'max') {
+      return effort;
+    }
+
+    const baseModelId = getBaseModelId(model.id).toLowerCase();
+    const family = model.family?.trim().toLowerCase();
+    return /^gpt-5\.6(?:-|$)/.test(baseModelId) ||
+      (family !== undefined && /^gpt-5\.6(?:-|$)/.test(family))
+      ? 'max'
+      : 'xhigh';
   }
 
   private resolveExplicitContextCacheTtlSeconds(): number | undefined {
@@ -1028,7 +1324,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
   private applyResponsesContextManagement(
     model: ModelConfig,
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
   ): boolean {
     if (baseBody.context_management !== undefined) {
       return false;
@@ -1077,7 +1373,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
   private applyPromptCacheKey(
     model: ModelConfig,
     sessionId: string,
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
   ): boolean {
     if (!this.shouldEnablePromptCacheKey(model)) {
       return false;
@@ -1101,6 +1397,64 @@ export class OpenAIResponsesProvider implements ApiProvider {
       this.config,
       model,
     );
+  }
+
+  private applyResponsesMultiAgentConfig(
+    model: ModelConfig,
+    baseBody: OpenAIResponsesRequestBody,
+    logger: RequestLogger,
+  ): void {
+    const config = model['multi-agent'];
+    if (config?.enabled !== true) {
+      delete baseBody.multi_agent;
+      return;
+    }
+
+    const maxConcurrentSubagents =
+      typeof config.maxConcurrentSubagents === 'number' &&
+      Number.isFinite(config.maxConcurrentSubagents) &&
+      Number.isInteger(config.maxConcurrentSubagents) &&
+      config.maxConcurrentSubagents > 0
+        ? config.maxConcurrentSubagents
+        : undefined;
+
+    baseBody.multi_agent = {
+      enabled: true,
+      ...(maxConcurrentSubagents !== undefined
+        ? { max_concurrent_subagents: maxConcurrentSubagents }
+        : {}),
+    };
+
+    const reasoning = baseBody.reasoning;
+    const removedReasoningSummary =
+      isRecord(reasoning) &&
+      Object.prototype.hasOwnProperty.call(reasoning, 'summary');
+    if (isRecord(reasoning)) {
+      const { summary: _summary, ...reasoningWithoutSummary } = reasoning;
+      baseBody.reasoning = reasoningWithoutSummary;
+    }
+    const removedMaxToolCalls = Object.prototype.hasOwnProperty.call(
+      baseBody,
+      'max_tool_calls',
+    );
+    delete baseBody.max_tool_calls;
+
+    logger.verbose(
+      `OpenAI Responses multi-agent enabled | model=${getBaseModelId(model.id)} | maxConcurrentSubagents=${maxConcurrentSubagents ?? 'default'} | removedReasoningSummary=${removedReasoningSummary ? 'true' : 'false'} | removedMaxToolCalls=${removedMaxToolCalls ? 'true' : 'false'} | contextManagement=${baseBody.context_management === undefined ? 'absent' : 'preserved'}`,
+    );
+  }
+
+  private applyDisabledResponsesReasoningConfig(
+    model: ModelConfig,
+    baseBody: OpenAIResponsesRequestBody,
+    useThinkingParam2: boolean,
+  ): void {
+    if (model.thinking?.type !== 'disabled' || useThinkingParam2) {
+      return;
+    }
+
+    baseBody.reasoning = { effort: 'none' };
+    delete baseBody.thinking;
   }
 
   private resolveStandaloneResponsesCompactionThreshold(
@@ -1141,16 +1495,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
   }
 
   private estimateStandaloneCompactionInputTokens(
-    input: ResponseInputItem[],
+    input: OpenAIResponsesInputItem[],
     previousResponseInputBoundaryIndex: number,
-    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+    previousResponseUsage: CopilotUsage | undefined,
   ): number | undefined {
     if (previousResponseUsage !== undefined) {
       const suffixTokens = this.estimateResponsesInputTokens(
         input.slice(previousResponseInputBoundaryIndex),
       );
       if (suffixTokens !== undefined) {
-        return previousResponseUsage.totalTokens + suffixTokens;
+        return previousResponseUsage.total_tokens + suffixTokens;
       }
     }
 
@@ -1206,7 +1560,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     model: ModelConfig,
     baseBody: OpenAIResponsesRequestBody,
     previousResponseInputBoundaryIndex: number | undefined,
-    previousResponseUsage: OpenAIResponsesMarkerUsage | undefined,
+    previousResponseUsage: CopilotUsage | undefined,
     headers: Record<string, string>,
     logger: RequestLogger,
     abortSignal: AbortSignal,
@@ -1230,16 +1584,20 @@ export class OpenAIResponsesProvider implements ApiProvider {
     if (!Array.isArray(input)) {
       return false;
     }
+    if (!input.every(isStandardResponseInputItem)) {
+      return false;
+    }
+    const standardInput = input.filter(isStandardResponseInputItem);
     if (
       previousResponseInputBoundaryIndex === undefined ||
       previousResponseInputBoundaryIndex <= 0 ||
-      previousResponseInputBoundaryIndex >= input.length
+      previousResponseInputBoundaryIndex >= standardInput.length
     ) {
       return false;
     }
 
     const estimatedTokens = this.estimateStandaloneCompactionInputTokens(
-      input,
+      standardInput,
       previousResponseInputBoundaryIndex,
       previousResponseUsage,
     );
@@ -1250,8 +1608,13 @@ export class OpenAIResponsesProvider implements ApiProvider {
       return false;
     }
 
-    const compactInput = input.slice(0, previousResponseInputBoundaryIndex);
-    const suffixInput = input.slice(previousResponseInputBoundaryIndex);
+    const compactInput = standardInput.slice(
+      0,
+      previousResponseInputBoundaryIndex,
+    );
+    const suffixInput = standardInput.slice(
+      previousResponseInputBoundaryIndex,
+    );
     const compactBody = this.buildStandaloneResponsesCompactionBody(
       model,
       baseBody,
@@ -1286,7 +1649,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
   private applyVolcContextCaching(
     model: ModelConfig,
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
   ): boolean {
     if (!this.shouldEnableVolcContextCaching(model)) {
       return false;
@@ -1313,7 +1676,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
   protected handleRequest(
     sessionId: string,
-    baseBody: ResponseCreateParamsBase,
+    baseBody: OpenAIResponsesRequestBody,
   ) {}
 
   private resolveTransportMode(streamEnabled: boolean): ResolvedTransportMode {
@@ -1351,7 +1714,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
   private resolveResponseContinuation(
     baseBody: OpenAIResponsesRequestBody,
     previousResponseId: string | undefined,
-    inputAfterPreviousResponse: ResponseInputItem[] | undefined,
+    inputAfterPreviousResponse: OpenAIResponsesInputItem[] | undefined,
     options: {
       allowStoreFalse?: boolean;
     } = {},
@@ -1408,7 +1771,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     fullInput: OpenAIResponsesRequestBody['input'],
     continuation: ResponseContinuation | undefined,
     useContinuation: boolean,
-  ): ResponsesClientEvent {
+  ): OpenAIResponsesClientEvent {
     const body: OpenAIResponsesRequestBody = {
       ...baseBody,
       input: fullInput,
@@ -1416,6 +1779,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     delete body.previous_response_id;
     delete body.stream;
+    delete body.betas;
 
     if (useContinuation && continuation) {
       body.previous_response_id = continuation.previousResponseId;
@@ -1610,7 +1974,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
       return;
     }
 
-    const expectedIdentity = createStatefulMarkerIdentity(this.config, model);
+    const multiAgentEnabled = model['multi-agent']?.enabled === true;
+    const expectedIdentity = createResponsesMarkerIdentity(
+      this.config,
+      model,
+      multiAgentEnabled,
+    );
     const sanitization = sanitizeMessagesForModelSwitchDetailed(messages, {
       modelId: encodedModelId,
       expectedIdentity,
@@ -1693,6 +2062,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     Object.assign(baseBody, this.config.extraBody, model.extraBody);
     this.applyVolcContextCaching(model, baseBody);
+    this.applyDisabledResponsesReasoningConfig(
+      model,
+      baseBody,
+      useThinkingParam2,
+    );
+    this.applyResponsesMultiAgentConfig(model, baseBody, logger);
 
     const headers = this.buildHeaders(
       sessionId,
@@ -1700,23 +2075,27 @@ export class OpenAIResponsesProvider implements ApiProvider {
       model,
       sanitizedMessages,
     );
-    const standaloneCompactionClient = this.createClient(
-      logger,
-      false,
-      credential,
-      abortController.signal,
-    );
-    const usedStandaloneResponsesCompaction =
-      await this.applyStandaloneResponsesCompaction(
-        standaloneCompactionClient,
-        model,
-        baseBody,
-        previousResponseInputBoundaryIndex,
-        previousResponseUsage,
-        headers,
+    updateResponsesMultiAgentBetaHeader(headers, multiAgentEnabled);
+    let usedStandaloneResponsesCompaction = false;
+    if (!multiAgentEnabled) {
+      const standaloneCompactionClient = this.createClient(
         logger,
+        false,
+        credential,
         abortController.signal,
-    );
+      );
+      usedStandaloneResponsesCompaction =
+        await this.applyStandaloneResponsesCompaction(
+          standaloneCompactionClient,
+          model,
+          baseBody,
+          previousResponseInputBoundaryIndex,
+          previousResponseUsage,
+          headers,
+          logger,
+          abortController.signal,
+        );
+    }
     if (usedStandaloneResponsesCompaction) {
       canUsePreviousResponseId = false;
       if (
@@ -1754,6 +2133,10 @@ export class OpenAIResponsesProvider implements ApiProvider {
       model,
       sanitizedMessages,
     );
+    updateResponsesMultiAgentBetaHeader(
+      webSocketHeaders,
+      multiAgentEnabled,
+    );
 
     const baseContext: OpenAIResponsesRequestContext = {
       sessionId,
@@ -1770,6 +2153,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       imageGenerationOutputMimeType: this.resolveImageGenerationOutputMimeType(
         baseBody.tools,
       ),
+      multiAgentEnabled,
     };
     const httpContext: OpenAIResponsesHttpRequestContext = {
       ...baseContext,
@@ -1859,6 +2243,61 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
   }
 
+  private normalizeStandardRequestInput(
+    input: OpenAIResponsesRequestBody['input'],
+  ): ResponseCreateParamsBase['input'] {
+    if (!Array.isArray(input)) {
+      return input;
+    }
+    return input.filter(isStandardResponseInputItem);
+  }
+
+  private buildStandardStreamingRequestBody(
+    requestBody: OpenAIResponsesRequestBody,
+  ): ResponseCreateParamsStreaming {
+    const {
+      betas: _betas,
+      input,
+      multi_agent: _multiAgent,
+      ...body
+    } = requestBody;
+    return {
+      ...body,
+      input: this.normalizeStandardRequestInput(input),
+      stream: true,
+    };
+  }
+
+  private buildStandardNonStreamingRequestBody(
+    requestBody: OpenAIResponsesRequestBody,
+  ): ResponseCreateParamsNonStreaming {
+    const {
+      betas: _betas,
+      input,
+      multi_agent: _multiAgent,
+      ...body
+    } = requestBody;
+    return {
+      ...body,
+      input: this.normalizeStandardRequestInput(input),
+      stream: false,
+    };
+  }
+
+  private buildBetaStreamingRequestBody(
+    requestBody: OpenAIResponsesRequestBody,
+  ): BetaResponseCreateParamsStreaming {
+    const { betas: _betas, ...body } = requestBody;
+    return { ...body, stream: true };
+  }
+
+  private buildBetaNonStreamingRequestBody(
+    requestBody: OpenAIResponsesRequestBody,
+  ): BetaResponseCreateParamsNonStreaming {
+    const { betas: _betas, ...body } = requestBody;
+    return { ...body, stream: false };
+  }
+
   private async *streamChatOverHttp(
     context: OpenAIResponsesHttpRequestContext,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
@@ -1893,13 +2332,20 @@ export class OpenAIResponsesProvider implements ApiProvider {
           const responseTimeoutMs = resolveChatNetwork(this.config).timeout
             .response;
 
-          const stream = await client.responses.create(
-            { ...requestBody, stream: true },
-            {
-              headers: context.headers,
-              signal: context.abortController.signal,
-            },
-          );
+          const requestOptions = {
+            headers: context.headers,
+            signal: context.abortController.signal,
+          };
+          const stream: AsyncIterable<OpenAIResponsesStreamEvent> = context
+            .multiAgentEnabled
+            ? await client.beta.responses.create(
+                this.buildBetaStreamingRequestBody(requestBody),
+                requestOptions,
+              )
+            : await client.responses.create(
+                this.buildStandardStreamingRequestBody(requestBody),
+                requestOptions,
+              );
           const timedStream = withIdleTimeout(
             stream,
             responseTimeoutMs,
@@ -1921,13 +2367,19 @@ export class OpenAIResponsesProvider implements ApiProvider {
             yield part;
           }
         } else {
-          const data = await client.responses.create(
-            { ...requestBody, stream: false },
-            {
-              headers: context.headers,
-              signal: context.abortController.signal,
-            },
-          );
+          const requestOptions = {
+            headers: context.headers,
+            signal: context.abortController.signal,
+          };
+          const data: OpenAIResponsesResponse = context.multiAgentEnabled
+            ? await client.beta.responses.create(
+                this.buildBetaNonStreamingRequestBody(requestBody),
+                requestOptions,
+              )
+            : await client.responses.create(
+                this.buildStandardNonStreamingRequestBody(requestBody),
+                requestOptions,
+              );
           for await (const part of this.parseMessage(
             data,
             context.sessionId,
@@ -1981,7 +2433,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
       attempt += 1;
       context.requestTrace.performance.ttf =
         Date.now() - context.requestTrace.performance.tts;
-      let request: WebSocketSessionRequest<ResponseStreamEvent> | undefined;
+      let request:
+        | WebSocketSessionRequest<OpenAIResponsesStreamEvent>
+        | undefined;
       let responseEstablished = false;
 
       try {
@@ -1993,10 +2447,12 @@ export class OpenAIResponsesProvider implements ApiProvider {
             shouldUseContinuation,
           ),
         );
-        const requestInput =
-          requestPayload.type === 'response.create'
-            ? requestPayload.input
-            : undefined;
+        if (requestPayload.type !== 'response.create') {
+          throw new OpenAIResponsesRequestError(
+            `Unsupported OpenAI Responses WebSocket request event: ${requestPayload.type}`,
+          );
+        }
+        const requestInput = requestPayload.input;
         context.logger.verbose(
           `OpenAI Responses WebSocket attempt ${attempt} | mode=${allowFallback ? 'auto' : 'websocket'} | session=${context.sessionId} | baseUrl=${this.resolveWebSocketBaseUrl(client)} | hotSessionAtStart=${context.hadHotSessionAtStart ? 'true' : 'false'} | continuation=${shouldUseContinuation ? 'previous_response_id' : 'full_input'} | forceNewConnection=${shouldForceNewConnection ? 'true' : 'false'} | inputItems=${this.countInputItems(requestInput)} | store=${requestPayload.store === false ? 'false' : 'default/true'}`,
         );
@@ -2005,7 +2461,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
             sessionKey: context.sessionKey,
             connectionTimeoutMs,
             createTransport: () =>
-              this.createWebSocketTransport(client, context.webSocketHeaders),
+              this.createWebSocketTransport(
+                client,
+                context.webSocketHeaders,
+                context.multiAgentEnabled,
+              ),
           },
           requestPayload,
           {
@@ -2019,7 +2479,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
         shouldForceNewConnection = false;
 
         const stream =
-          (async function* (): AsyncGenerator<ResponseStreamEvent> {
+          (async function* (): AsyncGenerator<OpenAIResponsesStreamEvent> {
             for await (const event of request.stream) {
               if (event.type.startsWith('response.')) {
                 if (!responseEstablished) {
@@ -2133,8 +2593,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
   }
 
-  private async *parseMessage(
-    message: OpenAIResponse,
+  protected async *parseMessage(
+    message: OpenAIResponsesResponse,
     sessionId: string,
     requestTrace: ChatRequestTrace,
     logger: RequestLogger,
@@ -2195,34 +2655,43 @@ export class OpenAIResponsesProvider implements ApiProvider {
       );
     }
 
-    const reasonings = message.output.filter(
-      (v): v is ResponseReasoningItem => v.type === 'reasoning',
+    const output = normalizeResponseOutputItems(message.output);
+    const reasonings = output.filter(
+      (v): v is ResponseReasoningItem =>
+        v.type === 'reasoning' && isRootAgentOutput(v),
     );
+    let hasConsumableOutput = false;
 
     yield* this.extractThinkingParts(reasonings);
 
-    for (const item of message.output) {
+    for (const item of output) {
       switch (item.type) {
         case 'reasoning':
           // hadnle it already.
           break;
 
         case 'compaction':
+          hasConsumableOutput = true;
           yield new vscode.LanguageModelTextPart(
             RESPONSES_COMPACTION_NOTICE,
           );
           break;
 
         case 'message':
+          if (!isRootAgentOutput(item)) {
+            break;
+          }
           for (const part of item.content) {
             switch (part.type) {
               case 'output_text':
                 if (part.text) {
+                  hasConsumableOutput = true;
                   yield new vscode.LanguageModelTextPart(part.text);
                 }
                 break;
               case 'refusal':
                 if (part.refusal) {
+                  hasConsumableOutput = true;
                   yield new vscode.LanguageModelTextPart(part.refusal);
                 }
                 break;
@@ -2230,7 +2699,17 @@ export class OpenAIResponsesProvider implements ApiProvider {
           }
           break;
 
+        case 'multi_agent_call':
+        case 'multi_agent_call_output':
+        case 'agent_message':
+          hasConsumableOutput = true;
+          yield new vscode.LanguageModelTextPart(
+            formatMultiAgentOutputItem(item),
+          );
+          break;
+
         case 'function_call':
+          hasConsumableOutput = true;
           yield new vscode.LanguageModelToolCallPart(
             item.call_id,
             item.name,
@@ -2244,6 +2723,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             imageGenerationOutputMimeType,
           );
           if (imagePart) {
+            hasConsumableOutput = true;
             yield imagePart;
           }
           break;
@@ -2254,15 +2734,29 @@ export class OpenAIResponsesProvider implements ApiProvider {
       }
     }
 
+    if (!hasConsumableOutput) {
+      if (message.usage) {
+        this.processUsage(message.usage, requestTrace, logger);
+      }
+      throw new OpenAIResponsesRequestError(
+        RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR,
+        { source: 'generic' },
+      );
+    }
+
     const markerData: OpenAIResponsesMarkerData = {
-      data: message.output,
+      data: output,
       sessionId,
     };
     if (includeResponseIdInMarker) {
       markerData.responseId = message.id;
     }
     if (message.usage) {
-      markerData.usage = toOpenAIResponsesMarkerUsage(message.usage);
+      markerData.usage = createCopilotUsage(
+        message.usage.input_tokens,
+        message.usage.output_tokens,
+        message.usage.input_tokens_details.cached_tokens,
+      );
     }
     yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
       expectedIdentity,
@@ -2344,7 +2838,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -2409,18 +2903,18 @@ export class OpenAIResponsesProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 
   private resolveCompletedStreamOutputItems(
-    response: OpenAIResponse,
-    addedOutputItems: ReadonlyMap<number, ResponseOutputItem>,
-    completedOutputItems: ReadonlyMap<number, ResponseOutputItem>,
+    response: OpenAIResponsesResponse,
+    addedOutputItems: ReadonlyMap<number, OpenAIResponsesOutputItem>,
+    completedOutputItems: ReadonlyMap<number, OpenAIResponsesOutputItem>,
     logger: RequestLogger,
-  ): ResponseOutputItem[] {
+  ): OpenAIResponsesOutputItem[] {
     const responseOutput = Array.isArray(response.output)
-      ? response.output.slice()
+      ? normalizeResponseOutputItems(response.output)
       : [];
     if (
       responseOutput.length === 0 &&
@@ -2449,7 +2943,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
           responseOutput[index] ??
           addedOutputItems.get(index),
       )
-      .filter((item): item is ResponseOutputItem => item !== undefined);
+      .filter(
+        (item): item is OpenAIResponsesOutputItem => item !== undefined,
+      );
 
     if (
       responseOutput.length !== resolvedOutput.length ||
@@ -2463,8 +2959,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return resolvedOutput;
   }
 
-  private async *parseMessageStream(
-    stream: AsyncIterable<ResponseStreamEvent>,
+  protected async *parseMessageStream(
+    stream: AsyncIterable<OpenAIResponsesStreamEvent>,
     sessionId: string,
     token: vscode.CancellationToken,
     logger: RequestLogger,
@@ -2477,11 +2973,103 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const performanceTrace = requestTrace.performance;
     let usage: ResponseUsage | undefined;
     const emittedFunctionCallIds = new Set<string>();
-    const addedOutputItems = new Map<number, ResponseOutputItem>();
-    const completedOutputItems = new Map<number, ResponseOutputItem>();
+    const addedOutputItems = new Map<number, OpenAIResponsesOutputItem>();
+    const completedOutputItems = new Map<
+      number,
+      OpenAIResponsesOutputItem
+    >();
+    const emittedMultiAgentItems = new Set<string>();
+    const emittedMessageContent = new Map<string, string>();
+    let hasConsumableOutput = false;
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
     const thinkingOutputState: ResponseThinkingOutputState = {};
+
+    const messageContentKey = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+    ): string => `${outputIndex}:${contentIndex}:${contentType}`;
+
+    const emitMessageContentDelta = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+      delta: string,
+    ): vscode.LanguageModelTextPart | undefined => {
+      if (!delta) {
+        return undefined;
+      }
+
+      const key = messageContentKey(
+        outputIndex,
+        contentIndex,
+        contentType,
+      );
+      emittedMessageContent.set(
+        key,
+        (emittedMessageContent.get(key) ?? '') + delta,
+      );
+      hasConsumableOutput = true;
+      return new vscode.LanguageModelTextPart(delta);
+    };
+
+    const emitFinalMessageContent = (
+      outputIndex: number,
+      contentIndex: number,
+      contentType: 'output_text' | 'refusal',
+      text: string,
+    ): vscode.LanguageModelTextPart | undefined => {
+      if (!text) {
+        return undefined;
+      }
+
+      const key = messageContentKey(
+        outputIndex,
+        contentIndex,
+        contentType,
+      );
+      const emittedText = emittedMessageContent.get(key) ?? '';
+      if (text === emittedText) {
+        return undefined;
+      }
+      if (!text.startsWith(emittedText)) {
+        logger.verbose(
+          `OpenAI Responses final ${contentType} did not match its streamed prefix at output ${outputIndex}, content ${contentIndex}; keeping the streamed content to avoid duplication.`,
+        );
+        return undefined;
+      }
+
+      const missingText = text.slice(emittedText.length);
+      emittedMessageContent.set(key, text);
+      hasConsumableOutput = true;
+      return new vscode.LanguageModelTextPart(missingText);
+    };
+
+    const emitMessageItemParts = (
+      item: OpenAIResponsesOutputItem,
+      outputIndex: number,
+    ): vscode.LanguageModelTextPart[] => {
+      if (item.type !== 'message' || !isRootAgentOutput(item)) {
+        return [];
+      }
+
+      const parts: vscode.LanguageModelTextPart[] = [];
+      for (const [contentIndex, content] of item.content.entries()) {
+        const part = emitFinalMessageContent(
+          outputIndex,
+          contentIndex,
+          content.type,
+          content.type === 'output_text'
+            ? content.text
+            : content.refusal,
+        );
+        if (part) {
+          parts.push(part);
+        }
+      }
+      return parts;
+    };
 
     const emitFunctionCallPart = (
       item: ResponseFunctionToolCall,
@@ -2507,6 +3095,24 @@ export class OpenAIResponsesProvider implements ApiProvider {
       );
     };
 
+    const emitMultiAgentItemPart = (
+      item: OpenAIResponsesOutputItem,
+      outputIndex: number,
+    ): vscode.LanguageModelTextPart | undefined => {
+      if (!isMultiAgentOutputItem(item)) {
+        return undefined;
+      }
+
+      const key = `${outputIndex}:${item.type}`;
+      if (emittedMultiAgentItems.has(key)) {
+        return undefined;
+      }
+      emittedMultiAgentItems.add(key);
+      return new vscode.LanguageModelTextPart(
+        formatMultiAgentOutputItem(item),
+      );
+    };
+
     for await (const event of stream) {
       if (token.isCancellationRequested) {
         break;
@@ -2520,32 +3126,90 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
       switch (event.type) {
         case 'response.output_item.added':
-          addedOutputItems.set(event.output_index, event.item);
-          if (event.item.type === 'reasoning' && event.item.encrypted_content) {
-            yield* this.emitThinkingText(
-              'encrypted',
-              event.item.encrypted_content,
-              'content-only',
-              undefined,
-              thinkingOutputState,
-            );
+          {
+            const item = normalizeResponseOutputItem(event.item);
+            addedOutputItems.set(event.output_index, item);
+            if (item.type === 'multi_agent_call') {
+              const part = emitMultiAgentItemPart(item, event.output_index);
+              if (part) {
+                hasConsumableOutput = true;
+                yield part;
+              }
+            }
+            if (
+              item.type === 'reasoning' &&
+              item.encrypted_content &&
+              isRootAgentOutput(item)
+            ) {
+              yield* this.emitThinkingText(
+                'encrypted',
+                item.encrypted_content,
+                'content-only',
+                undefined,
+                thinkingOutputState,
+              );
+            }
           }
           break;
 
         case 'response.output_text.delta':
-          if (event.delta) {
-            yield new vscode.LanguageModelTextPart(event.delta);
+          if (event.delta && isRootAgentOutput(event)) {
+            const part = emitMessageContentDelta(
+              event.output_index,
+              event.content_index,
+              'output_text',
+              event.delta,
+            );
+            if (part) {
+              yield part;
+            }
           }
           break;
 
         case 'response.refusal.delta':
-          if (event.delta) {
-            yield new vscode.LanguageModelTextPart(event.delta);
+          if (event.delta && isRootAgentOutput(event)) {
+            const part = emitMessageContentDelta(
+              event.output_index,
+              event.content_index,
+              'refusal',
+              event.delta,
+            );
+            if (part) {
+              yield part;
+            }
+          }
+          break;
+
+        case 'response.output_text.done':
+          if (event.text && isRootAgentOutput(event)) {
+            const part = emitFinalMessageContent(
+              event.output_index,
+              event.content_index,
+              'output_text',
+              event.text,
+            );
+            if (part) {
+              yield part;
+            }
+          }
+          break;
+
+        case 'response.refusal.done':
+          if (event.refusal && isRootAgentOutput(event)) {
+            const part = emitFinalMessageContent(
+              event.output_index,
+              event.content_index,
+              'refusal',
+              event.refusal,
+            );
+            if (part) {
+              yield part;
+            }
           }
           break;
 
         case 'response.reasoning_text.delta':
-          if (event.delta) {
+          if (event.delta && isRootAgentOutput(event)) {
             yield* this.emitThinkingText(
               'content',
               event.delta,
@@ -2557,7 +3221,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
           break;
 
         case 'response.reasoning_summary_text.delta':
-          if (event.delta) {
+          if (event.delta && isRootAgentOutput(event)) {
             yield* this.emitThinkingText(
               'summary',
               event.delta,
@@ -2569,13 +3233,30 @@ export class OpenAIResponsesProvider implements ApiProvider {
           break;
 
         case 'response.output_item.done': {
-          const item = event.item;
+          const item = normalizeResponseOutputItem(event.item);
           completedOutputItems.set(event.output_index, item);
           if (item.type === 'function_call') {
             const part = emitFunctionCallPart(item);
             if (part) {
+              hasConsumableOutput = true;
               yield part;
             }
+          }
+          if (
+            item.type === 'multi_agent_call_output' ||
+            item.type === 'agent_message'
+          ) {
+            const part = emitMultiAgentItemPart(item, event.output_index);
+            if (part) {
+              hasConsumableOutput = true;
+              yield part;
+            }
+          }
+          for (const part of emitMessageItemParts(
+            item,
+            event.output_index,
+          )) {
+            yield part;
           }
           break;
         }
@@ -2590,16 +3271,34 @@ export class OpenAIResponsesProvider implements ApiProvider {
           );
           usage = response.usage ?? undefined;
 
-          for (const item of completedOutput) {
+          for (const [outputIndex, item] of completedOutput.entries()) {
             if (item.type === 'function_call') {
               const part = emitFunctionCallPart(item);
               if (part) {
+                hasConsumableOutput = true;
+                yield part;
+              }
+              continue;
+            }
+
+            if (isMultiAgentOutputItem(item)) {
+              const part = emitMultiAgentItemPart(item, outputIndex);
+              if (part) {
+                hasConsumableOutput = true;
+                yield part;
+              }
+              continue;
+            }
+
+            if (item.type === 'message') {
+              for (const part of emitMessageItemParts(item, outputIndex)) {
                 yield part;
               }
               continue;
             }
 
             if (item.type === 'compaction') {
+              hasConsumableOutput = true;
               yield new vscode.LanguageModelTextPart(
                 RESPONSES_COMPACTION_NOTICE,
               );
@@ -2612,12 +3311,26 @@ export class OpenAIResponsesProvider implements ApiProvider {
                 imageGenerationOutputMimeType,
               );
               if (imagePart) {
+                hasConsumableOutput = true;
                 yield imagePart;
               }
             }
           }
+
+          if (!hasConsumableOutput) {
+            if (usage) {
+              this.processUsage(usage, requestTrace, logger);
+              usage = undefined;
+            }
+            throw new OpenAIResponsesRequestError(
+              RESPONSES_NO_CONSUMABLE_OUTPUT_ERROR,
+              { source: 'stream' },
+            );
+          }
+
           const reasonings = completedOutput.filter(
-            (v): v is ResponseReasoningItem => v.type === 'reasoning',
+            (v): v is ResponseReasoningItem =>
+              v.type === 'reasoning' && isRootAgentOutput(v),
           );
 
           yield* this.extractThinkingParts(reasonings, 'metadata-only');
@@ -2630,7 +3343,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
             markerData.responseId = response.id;
           }
           if (response.usage) {
-            markerData.usage = toOpenAIResponsesMarkerUsage(response.usage);
+            markerData.usage = createCopilotUsage(
+              response.usage.input_tokens,
+              response.usage.output_tokens,
+              response.usage.input_tokens_details.cached_tokens,
+            );
           }
           yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
             expectedIdentity,
@@ -2718,7 +3435,11 @@ export class OpenAIResponsesProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -2735,6 +3456,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       );
       const page = await client.models.list({
         headers: this.buildHeaders(this.generateSessionId(), credential),
+        signal,
       });
       for await (const model of page) {
         const name = model.name?.trim();
@@ -2753,8 +3475,8 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
 export type OpenAIResponsesMarkerData = {
   /** Raw `response.output` items, preserved verbatim for follow-up requests. */
-  data: ResponseOutputItem[];
+  data: OpenAIResponsesOutputItem[];
   sessionId?: string;
   responseId?: string;
-  usage?: OpenAIResponsesMarkerUsage;
+  usage?: CopilotUsage;
 };

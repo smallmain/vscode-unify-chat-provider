@@ -2,8 +2,10 @@ import { t } from '../i18n';
 import type {
   ModelConfig,
   PresetTemplate,
+  ReasoningContext,
   ServiceTier,
   ThinkingEffort,
+  ThinkingMode,
 } from '../types';
 
 type Verbosity = NonNullable<ModelConfig['verbosity']>;
@@ -140,6 +142,49 @@ export type ServiceTierTemplateOptions = SupportedTemplateOptions<ServiceTier>;
 export interface ThinkingModeTemplateOptions {
   default?: 'auto' | 'enabled' | 'disabled';
   includeAuto?: boolean;
+}
+
+export function reasoningMode(): PresetTemplate {
+  const modes: readonly ThinkingMode[] = ['standard', 'pro'];
+
+  return {
+    name: t('Thinking Mode'),
+    id: 'reasoningMode',
+    presets: modes.map((mode): PresetTemplate['presets'][number] => ({
+      id: mode,
+      name: mode === 'standard' ? t('Standard') : t('Pro'),
+      config: {
+        thinking: { mode },
+      },
+    })),
+    default: 'standard',
+  };
+}
+
+export function reasoningContext(): PresetTemplate {
+  const contexts: readonly ReasoningContext[] = [
+    'auto',
+    'current_turn',
+    'all_turns',
+  ];
+
+  return {
+    name: t('Reasoning Context'),
+    id: 'reasoningContext',
+    presets: contexts.map((context): PresetTemplate['presets'][number] => ({
+      id: context,
+      name:
+        context === 'auto'
+          ? t('Auto')
+          : context === 'current_turn'
+            ? t('Current Turn')
+            : t('All Turns'),
+      config: {
+        thinking: { context },
+      },
+    })),
+    default: 'auto',
+  };
 }
 
 function isReasoningEffortTemplateOptions(

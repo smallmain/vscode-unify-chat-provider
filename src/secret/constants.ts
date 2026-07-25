@@ -6,6 +6,8 @@ import { randomUUID } from 'crypto';
  */
 export const SECRET_REF_PREFIX = '$UCPSECRET:';
 export const SECRET_REF_SUFFIX = '$';
+export const LOCAL_AUTH_REF_PREFIX = '$UCPAUTH:';
+export const LOCAL_AUTH_REF_SUFFIX = '$';
 
 /**
  * SecretStorage key prefix for all extension secrets.
@@ -21,8 +23,13 @@ export const SECRET_KEY_PREFIXES = {
   oauth2ClientSecret: `${SECRET_STORAGE_PREFIX}oauth2-client-secret:`,
 } as const;
 
+export const DEVICE_STATE_STORAGE_PREFIX = `${SECRET_STORAGE_PREFIX}state:`;
+export const ORPHAN_SECRET_RETENTION_MS = 7 * 24 * 60 * 60 * 1_000;
+
 const UUID_V4_LIKE_REGEX =
   /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+const LOCAL_AUTH_TARGET_REGEX =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}(?:\.[0-9a-f]{64})?$/i;
 
 /**
  * Create a new secret reference string.
@@ -35,7 +42,7 @@ export function createSecretRef(): string {
 /**
  * Check if a value is a secret reference.
  */
-export function isSecretRef(value: string): boolean {
+export function isLegacySecretRef(value: string): boolean {
   if (
     !value.startsWith(SECRET_REF_PREFIX) ||
     !value.endsWith(SECRET_REF_SUFFIX)
@@ -50,11 +57,42 @@ export function isSecretRef(value: string): boolean {
 }
 
 /**
+ * Check if a value refers to a device-local auth session envelope.
+ */
+export function isLocalAuthRef(value: string): boolean {
+  if (
+    !value.startsWith(LOCAL_AUTH_REF_PREFIX) ||
+    !value.endsWith(LOCAL_AUTH_REF_SUFFIX)
+  ) {
+    return false;
+  }
+  const inner = value.slice(
+    LOCAL_AUTH_REF_PREFIX.length,
+    -LOCAL_AUTH_REF_SUFFIX.length,
+  );
+  return LOCAL_AUTH_TARGET_REGEX.test(inner);
+}
+
+/**
+ * Check if a value is a persisted legacy secret reference.
+ */
+export function isSecretRef(value: string): boolean {
+  return isLegacySecretRef(value);
+}
+
+/**
+ * Check references accepted by session auth runtime code.
+ */
+export function isSessionSecretRef(value: string): boolean {
+  return isLegacySecretRef(value) || isLocalAuthRef(value);
+}
+
+/**
  * Extract UUID from a secret reference.
  * Returns null if the value is not a valid secret reference.
  */
 export function extractUuidFromRef(ref: string): string | null {
-  if (!isSecretRef(ref)) {
+  if (!isLegacySecretRef(ref)) {
     return null;
   }
   return ref.slice(SECRET_REF_PREFIX.length, -SECRET_REF_SUFFIX.length);

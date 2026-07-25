@@ -6,8 +6,13 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
-import { ChatRequestTrace, ProviderConfig, ModelConfig } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ProviderConfig,
+  ModelConfig,
+} from '../../types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
@@ -28,6 +33,7 @@ import {
   resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitch,
   StreamingThinkingTagParser,
+  tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
 import {
@@ -41,6 +47,7 @@ import {
   getTokenType,
   getUnifiedUserAgent,
   isFeatureSupported,
+  isFeatureSupportedByProvider,
   mergeHeaders,
   normalizeToolInputSchema,
   parseToolArguments,
@@ -49,6 +56,10 @@ import {
   setUserAgentHeader,
 } from '../utils';
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
@@ -73,6 +84,10 @@ import {
   ThinkingBlockMetadata,
 } from '../types';
 import { FeatureId } from '../definitions';
+import {
+  appendMistralContentChunks,
+  parseMistralContentChunks,
+} from './mistral-content';
 
 /**
  * Identifies which provider-specific API shape to use for reasoning/thinking parameters.
@@ -104,6 +119,11 @@ type OpenRouterThinkingOutputState = {
   lastType?: OpenRouterThinkingContentType;
 };
 
+type OpenAIChatCompletionMarkerData = {
+  data: ChatCompletionMessageParam;
+  usage?: CopilotUsage;
+};
+
 type NullableChoices<T extends { choices: unknown }> = Omit<T, 'choices'> & {
   choices: T['choices'] | null;
 };
@@ -133,6 +153,23 @@ function throwIfAbnormalFinish(
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null;
+}
+
+function normalizeChatCompletionMarkerData(
+  decoded: OpenAIChatCompletionMarkerData | ChatCompletionMessageParam,
+): OpenAIChatCompletionMarkerData {
+  if (isRecord(decoded)) {
+    const data = decoded['data'];
+    if (isRecord(data) && typeof data['role'] === 'string') {
+      return {
+        data: data as ChatCompletionMessageParam,
+        usage: tryNormalizeCopilotUsage(decoded['usage']),
+      };
+    }
+  }
+
+  // TODO: Remove legacy bare marker payload compatibility in the next major version.
+  return { data: decoded as ChatCompletionMessageParam };
 }
 
 function hasChoicesArrayOrNull(value: unknown): boolean {
@@ -239,7 +276,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     });
   }
 
-  private convertMessages(
+  protected convertMessages(
     encodedModelId: string,
     messages: readonly vscode.LanguageModelChatRequestMessage[],
     shouldApplyCacheControl: boolean,
@@ -283,12 +320,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
             if (markerParts.length === 1) {
               try {
-                const raw =
-                  decodeStatefulMarkerPart<ChatCompletionMessageParam>(
-                    expectedIdentity,
-                    encodedModelId,
-                    markerParts[0],
-                  );
+                const { data: raw } = normalizeChatCompletionMarkerData(
+                  decodeStatefulMarkerPart<
+                    OpenAIChatCompletionMarkerData | ChatCompletionMessageParam
+                  >(expectedIdentity, encodedModelId, markerParts[0]),
+                );
                 const message: ChatCompletionAssistantMessageParam = {
                   role: 'assistant',
                   content: undefined,
@@ -421,7 +457,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -857,8 +893,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
   private normalizeReasoningEffortForOpenAi(
     effort: NonNullable<NonNullable<ModelConfig['thinking']>['effort']>,
-  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' {
-    return effort === 'max' ? 'xhigh' : effort;
+  ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
+    return effort;
   }
 
   private buildThinkingStrategyParam(
@@ -1222,7 +1258,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       thinkingOutputState,
     );
 
-    if (content) {
+    const handledMistralContent = yield* this.extractMistralContentParts(
+      content,
+    );
+    if (!handledMistralContent && typeof content === 'string' && content) {
       for (const segment of parseThinkingTags(content)) {
         if (segment.type === 'thinking') {
           yield* this.emitThinkingText(
@@ -1254,14 +1293,45 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       }
     }
 
-    yield encodeStatefulMarkerPart<ChatCompletionMessageParam>(
-      expectedIdentity,
-      raw,
-    );
-
+    const markerData: OpenAIChatCompletionMarkerData = { data: raw };
     if (message.usage) {
-      this.processUsage(message.usage, requestTrace, logger);
+      markerData.usage = this.processUsage(message.usage, requestTrace, logger);
     }
+    yield encodeStatefulMarkerPart<OpenAIChatCompletionMarkerData>(
+      expectedIdentity,
+      markerData,
+    );
+  }
+
+  private *extractMistralContentParts(
+    content: unknown,
+  ): Generator<vscode.LanguageModelResponsePart2, boolean> {
+    if (
+      !isFeatureSupportedByProvider(
+        FeatureId.MistralContentChunks,
+        this.config,
+      )
+    ) {
+      return false;
+    }
+
+    const progress = parseMistralContentChunks(content);
+    if (progress === undefined) {
+      return false;
+    }
+
+    for (const part of progress) {
+      if (!part.text) {
+        continue;
+      }
+      if (part.type === 'thinking') {
+        yield* createLanguageModelThinkingParts(part.text);
+      } else {
+        yield new vscode.LanguageModelTextPart(part.text);
+      }
+    }
+
+    return true;
   }
 
   private stringifyArguments(input: unknown): string {
@@ -1330,7 +1400,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -1413,7 +1483,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       metadata &&
       Object.keys(metadata).length > 0
     ) {
-      yield new vscode.LanguageModelThinkingPart('', undefined, metadata);
+      yield* createLanguageModelThinkingParts('', undefined, metadata);
     }
   }
 
@@ -1427,6 +1497,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const performanceTrace = requestTrace.performance;
     let snapshot: ChatCompletionSnapshot | undefined;
     let usage: CompletionUsage | null | undefined;
+    const pendingMarkerData: OpenAIChatCompletionMarkerData[] = [];
     const finalizedChoiceIndexes = new Set();
 
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
@@ -1471,7 +1542,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         );
       }
 
-      if (content) {
+      const handledMistralContent = yield* this.extractMistralContentParts(
+        content,
+      );
+      if (!handledMistralContent && typeof content === 'string' && content) {
         for (const segment of thinkingTagParser.push(content)) {
           if (segment.type === 'thinking') {
             yield* this.emitThinkingText(
@@ -1551,9 +1625,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           }
         }
 
-        yield encodeStatefulMarkerPart<ChatCompletionMessageParam>(
-          expectedIdentity,
-          {
+        pendingMarkerData.push({
+          data: {
             role: 'assistant',
             ...(content ? { content } : {}),
             ...(refusal ? { refusal } : {}),
@@ -1562,7 +1635,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
             ...(reasoning_content !== undefined ? { reasoning_content } : {}),
             ...(reasoning_details ? { reasoning_details } : {}),
           },
-        );
+        });
       }
     }
 
@@ -1585,8 +1658,17 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       return;
     }
 
-    if (usage) {
-      this.processUsage(usage, requestTrace, logger);
+    const normalizedUsage = usage
+      ? this.processUsage(usage, requestTrace, logger)
+      : undefined;
+    for (const markerData of pendingMarkerData) {
+      if (normalizedUsage) {
+        markerData.usage = normalizedUsage;
+      }
+      yield encodeStatefulMarkerPart<OpenAIChatCompletionMarkerData>(
+        expectedIdentity,
+        markerData,
+      );
     }
   }
 
@@ -1664,7 +1746,19 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
       if (role) choice.message.role = role;
 
-      if (content) {
+      const rawContent: unknown = content;
+      if (
+        isFeatureSupportedByProvider(
+          FeatureId.MistralContentChunks,
+          this.config,
+        ) && Array.isArray(rawContent)
+      ) {
+        const messageWithProviderContent: { content?: unknown } = choice.message;
+        messageWithProviderContent.content = appendMistralContentChunks(
+          messageWithProviderContent.content,
+          rawContent,
+        );
+      } else if (typeof content === 'string' && content) {
         choice.message.content = (choice.message.content || '') + content;
       }
 
@@ -1744,24 +1838,33 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return snapshot;
   }
 
-  private processUsage(
-    usage: CompletionUsage,
-    requestTrace: ChatRequestTrace,
-    logger: RequestLogger,
-  ) {
-    const normalizedUsage = createCopilotUsage(
+  private normalizeUsage(usage: CompletionUsage): CopilotUsage {
+    return createCopilotUsage(
       usage.prompt_tokens,
       usage.completion_tokens,
       usage.prompt_tokens_details?.cached_tokens,
     );
+  }
+
+  private processUsage(
+    usage: CompletionUsage,
+    requestTrace: ChatRequestTrace,
+    logger: RequestLogger,
+  ): CopilotUsage {
+    const normalizedUsage = this.normalizeUsage(usage);
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+    return normalizedUsage;
   }
 
   estimateTokenCount(text: string): number {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1778,6 +1881,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       );
       const page = await client.models.list({
         headers: this.buildHeaders(credential),
+        signal,
       });
       for await (const model of page) {
         const name = model.name?.trim();

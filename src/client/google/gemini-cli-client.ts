@@ -1,4 +1,4 @@
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import type { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
 import {
   GEMINI_CLI_API_HEADERS,
@@ -63,17 +63,18 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
     }
   }
 
-  protected override resolveProjectId(): string {
+  protected override resolveProjectId(credential: AuthTokenInfo): string {
     if (this.useAIStudioEndpoint()) {
       return '';
     }
-    const auth = this.config.auth;
-    if (auth?.method === 'google-gemini-oauth') {
-      const managedProjectId = auth.managedProjectId?.trim();
+    const context =
+      credential.kind === 'token' ? credential.authContext : undefined;
+    if (context?.method === 'google-gemini-oauth') {
+      const managedProjectId = context.managedProjectId?.trim();
       if (managedProjectId) {
         return managedProjectId;
       }
-      const projectId = auth.projectId?.trim();
+      const projectId = context.projectId?.trim();
       if (projectId) {
         return projectId;
       }
@@ -173,10 +174,16 @@ export class GoogleGeminiCLIProvider extends GoogleCodeAssistProvider {
 
   override async getAvailableModels(
     credential: AuthTokenInfo,
+    refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
   ): Promise<ModelConfig[]> {
     this.validateAuth();
     if (this.useAIStudioEndpoint()) {
-      return this.aiStudioDelegate.getAvailableModels(credential);
+      return this.aiStudioDelegate.getAvailableModels(
+        credential,
+        refreshCredential,
+        signal,
+      );
     }
     // Sync rule: this list should match local canonical model IDs for Gemini CLI.
     // Do NOT import Antigravity-prefixed or proxy-specific resolver aliases.

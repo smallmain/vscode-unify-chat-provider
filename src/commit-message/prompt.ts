@@ -3,6 +3,7 @@ import type {
   CommitMessageGenerationFormat,
   CommitMessagePromptState,
 } from './types';
+import { createOutgoingLanguageModelMessages } from '../proposed-api/system-message';
 
 const MAX_COMMIT_MESSAGE_LENGTH = 100;
 
@@ -125,19 +126,18 @@ function buildRepositoryHistoryMessage(state: CommitMessagePromptState): string 
 
 export function buildPromptMessages(
   state: CommitMessagePromptState,
+  canUseSystemMessage = true,
 ): vscode.LanguageModelChatMessage[] {
-  const systemMessage = new vscode.LanguageModelChatMessage(
-    vscode.LanguageModelChatMessageRole.System,
-    buildSystemPrompt(state),
+  return createOutgoingLanguageModelMessages(
+    [
+      { role: 'system', content: buildSystemPrompt(state) },
+      { role: 'user', content: buildRepositoryInfoMessage(state) },
+      { role: 'user', content: buildFileSummaryMessage(state) },
+      { role: 'user', content: buildFileHistoryMessage(state) },
+      { role: 'user', content: buildRepositoryHistoryMessage(state) },
+    ],
+    canUseSystemMessage,
   );
-
-  return [
-    systemMessage,
-    vscode.LanguageModelChatMessage.User(buildRepositoryInfoMessage(state)),
-    vscode.LanguageModelChatMessage.User(buildFileSummaryMessage(state)),
-    vscode.LanguageModelChatMessage.User(buildFileHistoryMessage(state)),
-    vscode.LanguageModelChatMessage.User(buildRepositoryHistoryMessage(state)),
-  ];
 }
 
 export function normalizeGeneratedCommitMessage(message: string): string {

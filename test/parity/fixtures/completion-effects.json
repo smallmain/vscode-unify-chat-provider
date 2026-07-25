@@ -1,0 +1,2349 @@
+{
+  "schemaVersion": 1,
+  "upstream": {
+    "repository": "https://github.com/microsoft/vscode.git",
+    "ref": "fc3def6774c76082adf699d366f31a557ce5573f",
+    "commit": "fc3def6774c76082adf699d366f31a557ce5573f"
+  },
+  "effects": {
+    "fim-provider-input": {
+      "itemCount": 3,
+      "insertText": "  return value + STEP;",
+      "range": {
+        "start": {
+          "line": 1,
+          "character": 0
+        },
+        "end": {
+          "line": 1,
+          "character": 14
+        }
+      },
+      "opportunityId": "completion-request",
+      "isCycling": true,
+      "formattingOptions": {
+        "tabSize": 2,
+        "insertSpaces": true
+      },
+      "selectedCompletionForwarded": true
+    },
+    "fim-production-context-adapter": {
+      "context": {
+        "traits": [
+          {
+            "name": "R",
+            "value": "N",
+            "importance": 1
+          },
+          {
+            "name": "F",
+            "value": "V",
+            "importance": 2
+          }
+        ],
+        "codeSnippets": [
+          {
+            "uri": "file:///workspace/p.ts",
+            "path": "p.ts",
+            "value": "value();",
+            "importance": 5
+          }
+        ],
+        "similarFiles": [
+          {
+            "path": "o.ts",
+            "content": "value;"
+          }
+        ],
+        "providerFileDeduplicated": true,
+        "neighborFileDeduplicated": true,
+        "turnOffSimilarFiles": false
+      },
+      "prompt": {
+        "prefix": "export function increment(value: number) {\n  return value",
+        "prefixTokens": 203,
+        "suffix": "}\n",
+        "suffixTokens": 2,
+        "context": [
+          "Path: src/counter.ts\nConsider this related information:\nR: N\nF: V\nCompare this snippet from p.ts:\nvalue();\nCompare this snippet from o.ts:\nvalue;",
+          ""
+        ],
+        "isFimEnabled": true
+      },
+      "componentBudgets": [
+        {
+          "id": "stableContext",
+          "budget": 156.79999999999998,
+          "cost": 146
+        },
+        {
+          "id": "volatileContext",
+          "budget": 77.99999999999999,
+          "cost": 0
+        },
+        {
+          "id": "suffix",
+          "budget": 167.6,
+          "cost": 2
+        },
+        {
+          "id": "prefix",
+          "budget": 300,
+          "cost": 57
+        }
+      ],
+      "tightTraitBudget": {
+        "limit": 11,
+        "leaves": [
+          {
+            "id": "header",
+            "value": "Consider this related information:\n"
+          },
+          {
+            "id": "runtime",
+            "value": "R: N"
+          },
+          {
+            "id": "framework",
+            "value": "F: V"
+          }
+        ],
+        "retainedLeaves": ["framework", "prefix"],
+        "context": ["F: V"],
+        "prefix": "CURSOR",
+        "prefixTokens": 11
+      },
+      "usageFeedback": {
+        "providerStatistics": {
+          "resolution": "full",
+          "usage": "partial",
+          "usageDetails": [
+            {
+              "id": "full-item",
+              "type": "Trait",
+              "usage": "full",
+              "expectedTokens": 8,
+              "actualTokens": 8
+            },
+            {
+              "id": "partial-item",
+              "type": "Trait",
+              "origin": "request",
+              "usage": "partial",
+              "expectedTokens": 8,
+              "actualTokens": 4
+            },
+            {
+              "id": "none-item",
+              "type": "Trait",
+              "usage": "none",
+              "expectedTokens": 8,
+              "actualTokens": 0
+            },
+            {
+              "id": "excluded-item",
+              "type": "CodeSnippet",
+              "usage": "none_content_excluded"
+            },
+            {
+              "id": "missing-item",
+              "type": "DiagnosticBag",
+              "usage": "error"
+            }
+          ]
+        },
+        "previousUsageStatistics": {
+          "resolution": "full",
+          "usage": "partial",
+          "usageDetails": [
+            {
+              "id": "full-item",
+              "type": "Trait",
+              "usage": "full",
+              "expectedTokens": 8,
+              "actualTokens": 8
+            },
+            {
+              "id": "partial-item",
+              "type": "Trait",
+              "origin": "request",
+              "usage": "partial",
+              "expectedTokens": 8,
+              "actualTokens": 4
+            },
+            {
+              "id": "none-item",
+              "type": "Trait",
+              "usage": "none",
+              "expectedTokens": 8,
+              "actualTokens": 0
+            },
+            {
+              "id": "excluded-item",
+              "type": "CodeSnippet",
+              "usage": "none_content_excluded"
+            },
+            {
+              "id": "missing-item",
+              "type": "DiagnosticBag",
+              "usage": "error"
+            }
+          ]
+        },
+        "secondProviderValue": "adapted:partial"
+      },
+      "maxPromptLength": 448
+    },
+    "fim-similar-file-selection": {
+      "options": {
+        "ordinary": {
+          "snippetLength": 60,
+          "threshold": 0,
+          "maxTopSnippets": 4,
+          "maxCharPerFile": 10000,
+          "maxNumberOfFiles": 20,
+          "maxSnippetsPerFile": 1,
+          "useSubsetMatching": false
+        },
+        "cpp": {
+          "snippetLength": 60,
+          "threshold": 0,
+          "maxTopSnippets": 16,
+          "maxCharPerFile": 100000,
+          "maxNumberOfFiles": 200,
+          "maxSnippetsPerFile": 4,
+          "useSubsetMatching": false
+        },
+        "numberOfSnippets": {
+          "ordinary": 4,
+          "cpp": 16
+        }
+      },
+      "caseSensitiveStops": [
+        {
+          "relativePath": "src/stopped.ts",
+          "snippet": "TODO if anchor",
+          "score": 0.3333333333333333,
+          "startLine": 0,
+          "endLine": 1
+        },
+        {
+          "relativePath": "src/retained.ts",
+          "snippet": "todo IF",
+          "score": 0.6666666666666666,
+          "startLine": 0,
+          "endLine": 1
+        }
+      ],
+      "fileLimit": {
+        "candidateCount": 21,
+        "ordinaryPaths": [],
+        "cppPaths": ["src/late.ts"]
+      },
+      "characterLimit": {
+        "sourceLength": 12805,
+        "ordinaryPaths": [],
+        "cppPaths": ["src/oversized.cpp"]
+      },
+      "multipleWindows": {
+        "ordinary": [
+          {
+            "startLine": 0,
+            "endLine": 60,
+            "score": 0.2
+          }
+        ],
+        "cpp": [
+          {
+            "startLine": 0,
+            "endLine": 60,
+            "score": 0.2
+          },
+          {
+            "startLine": 61,
+            "endLine": 121,
+            "score": 0.2
+          },
+          {
+            "startLine": 181,
+            "endLine": 241,
+            "score": 0.2
+          },
+          {
+            "startLine": 301,
+            "endLine": 361,
+            "score": 0.2
+          }
+        ]
+      }
+    },
+    "fim-recent-edits-reducer": {
+      "config": {
+        "maxFiles": 20,
+        "maxEdits": 8,
+        "diffContextLines": 3,
+        "editMergeLineDistance": 1,
+        "maxCharsPerEdit": 2000,
+        "debounceTimeout": 500,
+        "summarizationFormat": "diff",
+        "removeDeletedLines": false,
+        "insertionsBeforeDeletions": true,
+        "appendNoReplyMarker": true,
+        "activeDocDistanceLimitFromCursor": 100,
+        "maxLinesPerEdit": 10
+      },
+      "debounce": {
+        "beforeDeadlineCount": 0,
+        "atDeadlineCount": 1
+      },
+      "merged": {
+        "editCount": 1,
+        "uri": "file:///workspace/src/recent.ts",
+        "path": "src/recent.ts",
+        "summary": "--- a/src/recent.ts\n+++ b/src/recent.ts\n@@ -1,4 +1,4 @@\n const zero = 0;\n+const first = 10;\n+const second = 20;\n-const first = 1; --- IGNORE ---\n-const second = 2; --- IGNORE ---\n const tail = true;\n"
+      },
+      "filters": {
+        "whitespace": null,
+        "tooManyLines": null,
+        "oversizedCharacterEditCount": 0
+      },
+      "ignoredLargeDocument": {
+        "preservedState": true,
+        "currentAfterLarge": "const value = 2;",
+        "editCountAfterLarge": 1,
+        "currentAfterSmall": "const value = 3;",
+        "editCountAfterSmall": 1,
+        "finalSummary": "--- a/src/ignored-large.ts\n+++ b/src/ignored-large.ts\n@@ -1,1 +1,1 @@\n+const value = 3;\n-const value = 1; --- IGNORE ---\n"
+      },
+      "multiRoot": {
+        "edits": [
+          {
+            "uri": "file:///root-a/src/index.ts",
+            "path": "src/index.ts",
+            "summary": "--- a/file:///root-a/src/index.ts\n+++ b/file:///root-a/src/index.ts\n@@ -1,1 +1,1 @@\n+A\n-a --- IGNORE ---\n"
+          },
+          {
+            "uri": "file:///root-b/src/index.ts",
+            "path": "src/index.ts",
+            "summary": "--- a/file:///root-b/src/index.ts\n+++ b/file:///root-b/src/index.ts\n@@ -1,1 +1,1 @@\n+B\n-b --- IGNORE ---\n"
+          }
+        ],
+        "identities": [
+          "file:///root-a/src/index.ts",
+          "file:///root-b/src/index.ts"
+        ],
+        "displayPaths": ["src/index.ts", "src/index.ts"],
+        "promptBytes": "These are recently edited files. Do not suggest code that has been deleted.\nFile: src/index.ts\n--- a/file:///root-a/src/index.ts\n+++ b/file:///root-a/src/index.ts\n@@ -1,1 +1,1 @@\n+A\n-a --- IGNORE ---\nFile: src/index.ts\n--- a/file:///root-b/src/index.ts\n+++ b/file:///root-b/src/index.ts\n@@ -1,1 +1,1 @@\n+B\n-b --- IGNORE ---\nEnd of recent edits"
+      },
+      "proximityBoundary": {
+        "line101Filtered": true,
+        "line102Filtered": false
+      }
+    },
+    "fim-notebook-context": {
+      "prependedText": "const same = 1;\n\n// const alias = <div />;\n// render(alias);\n\n",
+      "virtualText": "const same = 1;\n\n// const alias = <div />;\n// render(alias);\n\nconst active = same + alias;\nactive",
+      "virtualCursorOffset": 97,
+      "virtualPosition": {
+        "line": 6,
+        "character": 6
+      },
+      "activeCellOffset": 62,
+      "activeCellLineOffset": 5,
+      "includedCellIndices": [0, 1],
+      "excludedCellIndices": [2]
+    },
+    "fim-prompt-cascade-budget": {
+      "limits": {
+        "nonEmptySuffix": {
+          "prefixTokenLimit": 28,
+          "suffixTokenLimit": 7
+        },
+        "emptySuffix": {
+          "prefixTokenLimit": 40,
+          "suffixTokenLimit": 0
+        },
+        "reservedForSuffixEncoding": 5
+      },
+      "sharedBudget": {
+        "suffix": "SUFFIX-",
+        "suffixTokens": 7,
+        "prefix": "PREFIX-OLD\nCURSOR",
+        "context": ["", "CTX-HIGH"],
+        "prefixTokens": 26,
+        "blocks": [
+          {
+            "componentPath": "$.Context.Low",
+            "type": "context",
+            "weight": 0.2,
+            "index": 0,
+            "originalValue": "CTX-LOW\n",
+            "originalTokens": 8,
+            "elidedValue": "",
+            "elidedTokens": 0
+          },
+          {
+            "componentPath": "$.Context.High",
+            "type": "context",
+            "weight": 0.99,
+            "index": 1,
+            "originalValue": "CTX-HIGH\n",
+            "originalTokens": 9,
+            "elidedValue": "CTX-HIGH\n",
+            "elidedTokens": 9
+          },
+          {
+            "componentPath": "$.CurrentFile.BeforeCursor",
+            "type": "prefix",
+            "weight": 1,
+            "index": null,
+            "originalValue": "PREFIX-OLD\nCURSOR",
+            "originalTokens": 17,
+            "elidedValue": "PREFIX-OLD\nCURSOR",
+            "elidedTokens": 17
+          }
+        ]
+      },
+      "chunkRemoval": {
+        "suffix": "",
+        "suffixTokens": 0,
+        "prefix": "CURSOR",
+        "context": [""],
+        "prefixTokens": 6,
+        "blocks": [
+          {
+            "componentPath": "$.Chunk.A",
+            "type": "context",
+            "weight": 0.1,
+            "index": 0,
+            "originalValue": "CHUNK-A\n",
+            "originalTokens": 8,
+            "elidedValue": "",
+            "elidedTokens": 0
+          },
+          {
+            "componentPath": "$.Chunk.B",
+            "type": "context",
+            "weight": 0.9,
+            "index": 0,
+            "originalValue": "CHUNK-B\n",
+            "originalTokens": 8,
+            "elidedValue": "",
+            "elidedTokens": 0
+          },
+          {
+            "componentPath": "$.CurrentFile.BeforeCursor",
+            "type": "prefix",
+            "weight": 1,
+            "index": null,
+            "originalValue": "CURSOR",
+            "originalTokens": 6,
+            "elidedValue": "CURSOR",
+            "elidedTokens": 6
+          }
+        ]
+      },
+      "lineElision": {
+        "suffix": "",
+        "suffixTokens": 0,
+        "prefix": "CURSOR",
+        "context": [],
+        "prefixTokens": 6,
+        "blocks": [
+          {
+            "componentPath": "$.CurrentFile.BeforeCursor",
+            "type": "prefix",
+            "weight": 1,
+            "index": null,
+            "originalValue": "line-one\nline-two\nCURSOR",
+            "originalTokens": 24,
+            "elidedValue": "CURSOR",
+            "elidedTokens": 6
+          }
+        ]
+      },
+      "o200kTruncation": {
+        "takeFirst": {
+          "input": "function calculateResult(inputValue) { return inputValue; }",
+          "limit": 1,
+          "text": "fun",
+          "tokens": [18142]
+        },
+        "takeLast": {
+          "input": "abcdefghijklmnopqrstuvwxyz",
+          "limit": 1,
+          "text": "uvwxyz",
+          "tokens": [147472]
+        }
+      }
+    },
+    "fim-current-cache": {
+      "typing": [
+        [
+          {
+            "completionText": " value + 1"
+          },
+          {
+            "completionText": " duplicate"
+          },
+          {
+            "completionText": " cache-only"
+          }
+        ],
+        "TypingAsSuggested"
+      ],
+      "cache": [
+        [
+          {
+            "completionText": " duplicate"
+          },
+          {
+            "completionText": " cache-only"
+          }
+        ],
+        "Cache"
+      ]
+    },
+    "fim-context-postprocess": {
+      "duplicate": null,
+      "closing": {
+        "completionText": "\n  work();",
+        "choiceIndex": 0,
+        "requestId": {
+          "headerRequestId": "network-request"
+        },
+        "tokens": [],
+        "telemetryData": {
+          "properties": {
+            "endpoint": "completions",
+            "uiKind": "ghostText",
+            "n": "1",
+            "stop": "[\"\\n\"]",
+            "logit_bias": "null"
+          }
+        }
+      },
+      "retained": {
+        "completionText": " value + 1",
+        "choiceIndex": 0,
+        "requestId": {
+          "headerRequestId": "network-request"
+        },
+        "tokens": [],
+        "telemetryData": {
+          "properties": {
+            "endpoint": "completions",
+            "uiKind": "ghostText",
+            "n": "1",
+            "stop": "[\"\\n\"]",
+            "logit_bias": "null"
+          }
+        }
+      }
+    },
+    "fim-speculative-request": {
+      "scheduled": {
+        "callbackType": "function",
+        "appliedText": " value"
+      },
+      "queue": {
+        "capacity": 100,
+        "oldestEvicted": true,
+        "newestExecutionCount": 1
+      },
+      "shownTransport": {
+        "callCount": 1,
+        "independentFromCaller": true,
+        "isSpeculative": true,
+        "completionFillsCache": true
+      },
+      "endOfLife": {
+        "itemDoesNotCancel": true,
+        "listDoesNotCancel": true
+      },
+      "asyncCompatibility": {
+        "matching": true,
+        "prefixMismatch": false,
+        "suffixMismatch": false
+      }
+    },
+    "fim-default-block-mode": {
+      "defaultBlockModes": {
+        "typescript": "more-multiline",
+        "javascript": "more-multiline",
+        "go": "more-multiline",
+        "python": "parsing-and-server",
+        "ruby": "parsing",
+        "plaintext": "server"
+      }
+    },
+    "fim-multiline": {
+      "requestMultiline": true,
+      "blockMode": "parsing",
+      "maxTokens": 20,
+      "trimmed": "\n  first();",
+      "defaultBlockModes": {
+        "typescript": "more-multiline",
+        "javascript": "more-multiline",
+        "go": "more-multiline",
+        "python": "parsing-and-server",
+        "ruby": "parsing",
+        "plaintext": "server"
+      },
+      "streamedSplitter": {
+        "lookaheads": {
+          "emptyBlock": 9,
+          "blockEnd": 9,
+          "other": 3
+        },
+        "input": {
+          "languageId": "typescript",
+          "prefix": "const prefix = ",
+          "completion": "first();\nsecond();\nthird();",
+          "choiceIndex": 2
+        },
+        "firstSegment": {
+          "text": "first();\n",
+          "finishOffset": 9,
+          "choiceIndex": 2,
+          "generatedChoiceIndex": null
+        },
+        "cachedSegments": [
+          {
+            "prefixAddition": "first();\n",
+            "completionText": "second();",
+            "choiceIndex": 2,
+            "generatedChoiceIndex": 1
+          },
+          {
+            "prefixAddition": "first();\nsecond();\n",
+            "completionText": "third();",
+            "choiceIndex": 2,
+            "generatedChoiceIndex": 2
+          }
+        ]
+      },
+      "requestStrategies": {
+        "normalSingleline": {
+          "requestMultiline": false,
+          "blockMode": "parsing",
+          "stop": ["\n"],
+          "maxTokens": null
+        },
+        "afterAccept": {
+          "requestMultiline": true,
+          "blockMode": "parsing",
+          "stop": ["\n\n"],
+          "maxTokens": 20
+        },
+        "moreMultiline": {
+          "requestMultiline": true,
+          "blockMode": "more-multiline",
+          "stop": null,
+          "maxTokens": 200
+        },
+        "moreMultilineAfterAccept": {
+          "requestMultiline": true,
+          "blockMode": "more-multiline",
+          "stop": null,
+          "maxTokens": 200
+        }
+      }
+    },
+    "nes-transport-prompt": {
+      "roles": ["system", "user"],
+      "messages": [
+        {
+          "role": "system",
+          "content": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n- Your response should start with the word <EDIT>, <INSERT>, or <NO_CHANGE>.\n- If your are making an edit, start with <EDIT>, then provide the rewritten code window, then </EDIT>.\n- If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position, then </INSERT>.\n- If no changes are necessary, reply only with <NO_CHANGE>.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors."
+        },
+        {
+          "role": "user",
+          "content": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Start your response with <EDIT>, <INSERT>, or <NO_CHANGE>. If you are making an edit, start with <EDIT> and then provide the rewritten code window followed by </EDIT>. If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position followed by </INSERT>. If no changes are necessary, reply only with <NO_CHANGE>. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors."
+        }
+      ],
+      "strategyMessages": {
+        "copilotNesXtab": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest, with line numbers in the form #| to help you understand the edit diff history. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code. Line numbers in the form #| are included to help you understand the edit diff history.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n\n- Provide only the revised code within the tags. If no changes are necessary, simply return the original code from within the <|code_to_edit|> and <|/code_to_edit|> tags.\n- There are line numbers in the form #| in the code displayed to you above, but these are just for your reference. Please do not include the numbers of the form #| in your response.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n```\n// Your revised code goes here\n```\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.\n- Don't include the line numbers of the form #| in your response.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags with the following format, but do not include the tags themselves.\n```\n// Your revised code goes here\n```"
+        },
+        "xtab275": {
+          "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+        },
+        "xtabUnifiedModel": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n- Your response should start with the word <EDIT>, <INSERT>, or <NO_CHANGE>.\n- If your are making an edit, start with <EDIT>, then provide the rewritten code window, then </EDIT>.\n- If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position, then </INSERT>.\n- If no changes are necessary, reply only with <NO_CHANGE>.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Start your response with <EDIT>, <INSERT>, or <NO_CHANGE>. If you are making an edit, start with <EDIT> and then provide the rewritten code window followed by </EDIT>. If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position followed by </INSERT>. If no changes are necessary, reply only with <NO_CHANGE>. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors."
+        }
+      },
+      "adaptivePromptMessages": {
+        "xtabAggressiveness": {
+          "low": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\n<|aggressive|>low<|/aggressive|>"
+          },
+          "medium": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\n<|aggressive|>medium<|/aggressive|>"
+          },
+          "high": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\n<|aggressive|>high<|/aggressive|>"
+          }
+        },
+        "xtab275Aggressiveness": {
+          "low": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.\n<|aggressive|>low<|/aggressive|>"
+          },
+          "medium": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.\n<|aggressive|>medium<|/aggressive|>"
+          },
+          "high": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.\n<|aggressive|>high<|/aggressive|>"
+          }
+        },
+        "xtab275AggressivenessHighLow": {
+          "low": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.\n<|aggressive|>low<|/aggressive|>"
+          },
+          "medium": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          },
+          "high": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.\n<|aggressive|>high<|/aggressive|>"
+          }
+        },
+        "xtab275EditIntent": {
+          "low": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          },
+          "medium": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          },
+          "high": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          }
+        },
+        "xtab275EditIntentShort": {
+          "low": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          },
+          "medium": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          },
+          "high": {
+            "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+            "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+          }
+        }
+      },
+      "adaptiveInteraction": {
+        "windows": {
+          "aggressiveness": [
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "ignored"
+            }
+          ],
+          "timing": [
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            },
+            {
+              "time": 1000,
+              "kind": "accepted"
+            }
+          ],
+          "lastActionWasAcceptance": false
+        },
+        "happiness": {
+          "neutral": 0.5,
+          "accepted": 1,
+          "rejected": 0
+        },
+        "levels": {
+          "neutral": {
+            "aggressivenessLevel": "medium",
+            "userHappinessScore": 0.5
+          },
+          "accepted": {
+            "aggressivenessLevel": "high",
+            "userHappinessScore": 1
+          },
+          "rejected": {
+            "aggressivenessLevel": "low",
+            "userHappinessScore": 0
+          },
+          "explicitLow": {
+            "aggressivenessLevel": "low"
+          }
+        },
+        "timing": {
+          "recentRejection": 150,
+          "decayedRejection": 130.32653298563167,
+          "expiredRejection": 100,
+          "explicitLow": {
+            "debounceMs": 100,
+            "artificialMs": 1500
+          },
+          "explicitLowAfterAcceptance": {
+            "debounceMs": 80,
+            "artificialMs": 80
+          },
+          "explicitMedium": {
+            "debounceMs": 100,
+            "artificialMs": 700
+          },
+          "explicitHigh": {
+            "debounceMs": 0,
+            "artificialMs": 100
+          },
+          "delaySessions": {
+            "base": {
+              "debounceMs": 75,
+              "artificialMs": 0
+            },
+            "adaptive": {
+              "debounceMs": 75,
+              "artificialMs": 125
+            },
+            "elapsed": {
+              "debounceMs": 0,
+              "artificialMs": 0
+            }
+          }
+        }
+      },
+      "editIntent": {
+        "tags": {
+          "valid": {
+            "editIntent": "medium",
+            "parseError": null,
+            "remainingLines": [" first", "second"]
+          },
+          "unknown": {
+            "editIntent": "high",
+            "parseError": "unknownIntentValue:maybe",
+            "remainingLines": ["code"]
+          },
+          "malformed": {
+            "editIntent": "high",
+            "parseError": "malformedTag:startWithoutEnd",
+            "remainingLines": ["<|edit_intent|>low", "code"]
+          },
+          "empty": {
+            "editIntent": "high",
+            "parseError": "emptyResponse",
+            "remainingLines": []
+          }
+        },
+        "short": {
+          "valid": {
+            "editIntent": "low",
+            "parseError": null,
+            "remainingLines": ["code"]
+          },
+          "invalid": {
+            "editIntent": "high",
+            "parseError": "unknownIntentValue:l",
+            "remainingLines": ["l", "code"]
+          }
+        },
+        "matrix": {
+          "no_edit": {
+            "low": false,
+            "medium": false,
+            "high": false
+          },
+          "low": {
+            "low": false,
+            "medium": false,
+            "high": true
+          },
+          "medium": {
+            "low": false,
+            "medium": true,
+            "high": true
+          },
+          "high": {
+            "low": true,
+            "medium": true,
+            "high": true
+          }
+        }
+      },
+      "prediction": "<EDIT>\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n</EDIT>"
+    },
+    "nes-cursor-prediction-prompt": {
+      "lintOptions": {
+        "maxLineDistance": 1000,
+        "maxLints": 5,
+        "showCode": "yesWithSurroundingLines",
+        "tagName": "linter",
+        "warnings": "yesIfNoErrors",
+        "nRecentFiles": 0
+      },
+      "messages": [
+        {
+          "role": "system",
+          "content": "Your task is to predict the line number where the developer is most likely to make their next edit. If you jump in the current file, just output the line number. If you want to jump to another file, output the filepath (relative to workspace root), colon, then line number. If you don't think anywhere is a good next line jump target, just output the current line number of the cursor. Make sure to output no explanation, reasoning, extra spaces, etc."
+        },
+        {
+          "role": "user",
+          "content": "Consider this related information:\nCursor trait: dedicated prompt\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/cursor-prediction.ts\n200| const cursorPredictionLine200 = sharedContext + \"cursor-prediction-context-200\";\n201| const cursorPredictionLine201 = sharedContext + \"cursor-prediction-context-201\";\n202| const cursorPredictionLine202 = sharedContext + \"cursor-prediction-context-202\";\n203| const cursorPredictionLine203 = sharedContext + \"cursor-prediction-context-203\";\n204| const cursorPredictionLine204 = sharedContext + \"cursor-prediction-context-204\";\n205| const cursorPredictionLine205 = sharedContext + \"cursor-prediction-context-205\";\n206| const cursorPredictionLine206 = sharedContext + \"cursor-prediction-context-206\";\n207| const cursorPredictionLine207 = sharedContext + \"cursor-prediction-context-207\";\n208| const cursorPredictionLine208 = sharedContext + \"cursor-prediction-context-208\";\n209| const cursorPredictionLine209 = sharedContext + \"cursor-prediction-context-209\";\n210| const cursorPredictionLine210 = sharedContext + \"cursor-prediction-context-210\";\n211| const cursorPredictionLine211 = sharedContext + \"cursor-prediction-context-211\";\n212| const cursorPredictionLine212 = sharedContext + \"cursor-prediction-context-212\";\n213| const cursorPredictionLine213 = sharedContext + \"cursor-prediction-context-213\";\n214| const cursorPredictionLine214 = sharedContext + \"cursor-prediction-context-214\";\n215| const cursorPredictionLine215 = sharedContext + \"cursor-prediction-context-215\";\n216| const cursorPredictionLine216 = sharedContext + \"cursor-prediction-context-216\";\n217| const cursorPredictionLine217 = sharedContext + \"cursor-prediction-context-217\";\n218| const cursorPredictionLine218 = sharedContext + \"cursor-prediction-context-218\";\n219| const cursorPredictionLine219 = sharedContext + \"cursor-prediction-context-219\";\n220| const cursorPredictionLine220 = sharedContext + \"cursor-prediction-context-220\";\n221| const cursorPredictionLine221 = sharedContext + \"cursor-prediction-context-221\";\n222| const cursorPredictionLine222 = sharedContext + \"cursor-prediction-context-222\";\n223| const cursorPredictionLine223 = sharedContext + \"cursor-prediction-context-223\";\n224| const cursorPredictionLine224 = sharedContext + \"cursor-prediction-context-224\";\n225| const cursorPredictionLine225 = sharedContext + \"cursor-prediction-context-225\";\n226| const cursorPredictionLine226 = sharedContext + \"cursor-prediction-context-226\";\n227| const cursorPredictionLine227 = sharedContext + \"cursor-prediction-context-227\";\n228| const cursorPredictionLine228 = sharedContext + \"cursor-prediction-context-228\";\n229| const cursorPredictionLine229 = sharedContext + \"cursor-prediction-context-229\";\n230| const cursorPredictionLine230 = sharedContext + \"cursor-prediction-context-230\";\n231| const cursorPredictionLine231 = sharedContext + \"cursor-prediction-context-231\";\n232| const cursorPredictionLine232 = sharedContext + \"cursor-prediction-context-232\";\n233| const cursorPredictionLine233 = sharedContext + \"cursor-prediction-context-233\";\n234| const cursorPredictionLine234 = sharedContext + \"cursor-prediction-context-234\";\n235| const cursorPredictionLine235 = sharedContext + \"cursor-prediction-context-235\";\n236| const cursorPredictionLine236 = sharedContext + \"cursor-prediction-context-236\";\n237| const cursorPredictionLine237 = sharedContext + \"cursor-prediction-context-237\";\n238| const cursorPredictionLine238 = sharedContext + \"cursor-prediction-context-238\";\n239| const cursorPredictionLine239 = sharedContext + \"cursor-prediction-context-239\";\n240| const cursorPredictionLine240 = sharedContext + \"cursor-prediction-context-240\";\n241| const cursorPredictionLine241 = sharedContext + \"cursor-prediction-context-241\";\n242| const cursorPredictionLine242 = sharedContext + \"cursor-prediction-context-242\";\n243| const cursorPredictionLine243 = sharedContext + \"cursor-prediction-context-243\";\n244| const cursorPredictionLine244 = sharedContext + \"cursor-prediction-context-244\";\n245| const cursorPredictionLine245 = sharedContext + \"cursor-prediction-context-245\";\n246| const cursorPredictionLine246 = sharedContext + \"cursor-prediction-context-246\";\n247| const cursorPredictionLine247 = sharedContext + \"cursor-prediction-context-247\";\n248| const cursorPredictionLine248 = sharedContext + \"cursor-prediction-context-248\";\n249| const cursorPredictionLine249 = sharedContext + \"cursor-prediction-context-249\";\n250| const cursorPredictionLine250 = sharedContext + \"cursor-prediction-context-250\";\n251| const cursorPredictionLine251 = sharedContext + \"cursor-prediction-context-251\";\n252| const cursorPredictionLine252 = sharedContext + \"cursor-prediction-context-252\";\n253| const cursorPredictionLine253 = sharedContext + \"cursor-prediction-context-253\";\n254| const cursorPredictionLine254 = sharedContext + \"cursor-prediction-context-254\";\n255| const cursorPredictionLine255 = sharedContext + \"cursor-prediction-context-255\";\n256| const cursorPredictionLine256 = sharedContext + \"cursor-prediction-context-256\";\n257| const cursorPredictionLine257 = sharedContext + \"cursor-prediction-context-257\";\n258| const cursorPredictionLine258 = sharedContext + \"cursor-prediction-context-258\";\n259| const cursorPredictionLine259 = sharedContext + \"cursor-prediction-context-259\";\n260| const cursorPredictionLine260 = sharedContext + \"cursor-prediction-context-260\";\n261| const cursorPredictionLine261 = sharedContext + \"cursor-prediction-context-261\";\n262| const cursorPredictionLine262 = sharedContext + \"cursor-prediction-context-262\";\n263| const cursorPredictionLine263 = sharedContext + \"cursor-prediction-context-263\";\n264| const cursorPredictionLine264 = sharedContext + \"cursor-prediction-context-264\";\n265| const cursorPredictionLine265 = sharedContext + \"cursor-prediction-context-265\";\n266| const cursorPredictionLine266 = sharedContext + \"cursor-prediction-context-266\";\n267| const cursorPredictionLine267 = sharedContext + \"cursor-prediction-context-267\";\n268| const cursorPredictionLine268 = sharedContext + \"cursor-prediction-context-268\";\n269| const cursorPredictionLine269 = sharedContext + \"cursor-prediction-context-269\";\n270| const cursorPredictionLine270 = sharedContext + \"cursor-prediction-context-270\";\n271| const cursorPredictionLine271 = sharedContext + \"cursor-prediction-context-271\";\n272| const cursorPredictionLine272 = sharedContext + \"cursor-prediction-context-272\";\n273| const cursorPredictionLine273 = sharedContext + \"cursor-prediction-context-273\";\n274| const cursorPredictionLine274 = sharedContext + \"cursor-prediction-context-274\";\n275| const cursorPredictionLine275 = sharedContext + \"cursor-prediction-context-275\";\n276| const cursorPredictionLine276 = sharedContext + \"cursor-prediction-context-276\";\n277| const cursorPredictionLine277 = sharedContext + \"cursor-prediction-context-277\";\n278| const cursorPredictionLine278 = sharedContext + \"cursor-prediction-context-278\";\n279| const cursorPredictionLine279 = sharedContext + \"cursor-prediction-context-279\";\n280| const cursorPredictionLine280 = sharedContext + \"cursor-prediction-context-280\";\n281| const cursorPredictionLine281 = sharedContext + \"cursor-prediction-context-281\";\n282| const cursorPredictionLine282 = sharedContext + \"cursor-prediction-context-282\";\n283| const cursorPredictionLine283 = sharedContext + \"cursor-prediction-context-283\";\n284| const cursorPredictionLine284 = sharedContext + \"cursor-prediction-context-284\";\n285| const cursorPredictionLine285 = sharedContext + \"cursor-prediction-context-285\";\n286| const cursorPredictionLine286 = sharedContext + \"cursor-prediction-context-286\";\n287| const cursorPredictionLine287 = sharedContext + \"cursor-prediction-context-287\";\n288| const cursorPredictionLine288 = sharedContext + \"cursor-prediction-context-288\";\n289| const cursorPredictionLine289 = sharedContext + \"cursor-prediction-context-289\";\n290| const cursorPredictionLine290 = sharedContext + \"cursor-prediction-context-290\";\n291| const cursorPredictionLine291 = sharedContext + \"cursor-prediction-context-291\";\n292| const cursorPredictionLine292 = sharedContext + \"cursor-prediction-context-292\";\n293| const cursorPredictionLine293 = sharedContext + \"cursor-prediction-context-293\";\n294| const cursorPredictionLine294 = sharedContext + \"cursor-prediction-context-294\";\n295| const cursorPredictionLine295 = sharedContext + \"cursor-prediction-context-295\";\n296| const cursorPredictionLine296 = sharedContext + \"cursor-prediction-context-296\";\n297| const cursorPredictionLine297 = sharedContext + \"cursor-prediction-context-297\";\n298| const cursorPredictionLine298 = sharedContext + \"cursor-prediction-context-298\";\n299| const cursorPredictionLine299 = sharedContext + \"cursor-prediction-context-299\";\n<|/current_file_content|>\n\n<|linter|>\n250:6 - error TSCURSOR001: controlled cursor diagnostic\n249|const cursorPredictionLine249 = sharedContext + \"cursor-prediction-context-249\";\n250|const cursorPredictionLine250 = sharedContext + \"cursor-prediction-context-250\";\n251|const cursorPredictionLine251 = sharedContext + \"cursor-prediction-context-251\";\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\nconst cursorPredictionLine235 = sharedContext + \"cursor-prediction-context-235\";\nconst cursorPredictionLine236 = sharedContext + \"cursor-prediction-context-236\";\nconst cursorPredictionLine237 = sharedContext + \"cursor-prediction-context-237\";\nconst cursorPredictionLine238 = sharedContext + \"cursor-prediction-context-238\";\nconst cursorPredictionLine239 = sharedContext + \"cursor-prediction-context-239\";\nconst cursorPredictionLine240 = sharedContext + \"cursor-prediction-context-240\";\nconst cursorPredictionLine241 = sharedContext + \"cursor-prediction-context-241\";\nconst cursorPredictionLine242 = sharedContext + \"cursor-prediction-context-242\";\nconst cursorPredictionLine243 = sharedContext + \"cursor-prediction-context-243\";\nconst cursorPredictionLine244 = sharedContext + \"cursor-prediction-context-244\";\nconst cursorPredictionLine245 = sharedContext + \"cursor-prediction-context-245\";\nconst cursorPredictionLine246 = sharedContext + \"cursor-prediction-context-246\";\nconst cursorPredictionLine247 = sharedContext + \"cursor-prediction-context-247\";\n<|code_to_edit|>\nconst cursorPredictionLine248 = sharedContext + \"cursor-prediction-context-248\";\nconst cursorPredictionLine249 = sharedContext + \"cursor-prediction-context-249\";\nconst cursor<|cursor|>PredictionLine250 = sharedContext + \"cursor-prediction-context-250\";\nconst cursorPredictionLine251 = sharedContext + \"cursor-prediction-context-251\";\nconst cursorPredictionLine252 = sharedContext + \"cursor-prediction-context-252\";\nconst cursorPredictionLine253 = sharedContext + \"cursor-prediction-context-253\";\nconst cursorPredictionLine254 = sharedContext + \"cursor-prediction-context-254\";\nconst cursorPredictionLine255 = sharedContext + \"cursor-prediction-context-255\";\n<|/code_to_edit|>\nconst cursorPredictionLine256 = sharedContext + \"cursor-prediction-context-256\";\nconst cursorPredictionLine257 = sharedContext + \"cursor-prediction-context-257\";\nconst cursorPredictionLine258 = sharedContext + \"cursor-prediction-context-258\";\nconst cursorPredictionLine259 = sharedContext + \"cursor-prediction-context-259\";\nconst cursorPredictionLine260 = sharedContext + \"cursor-prediction-context-260\";\nconst cursorPredictionLine261 = sharedContext + \"cursor-prediction-context-261\";\nconst cursorPredictionLine262 = sharedContext + \"cursor-prediction-context-262\";\nconst cursorPredictionLine263 = sharedContext + \"cursor-prediction-context-263\";\nconst cursorPredictionLine264 = sharedContext + \"cursor-prediction-context-264\";\nconst cursorPredictionLine265 = sharedContext + \"cursor-prediction-context-265\";\n<|/area_around_code_to_edit|>\n```"
+        }
+      ],
+      "keptRange": {
+        "start": 200,
+        "endExclusive": 300
+      },
+      "currentFile": {
+        "maxTokens": 3000,
+        "sourceLineCount": 500,
+        "clipped": true,
+        "firstNumberedLine": "200| const cursorPredictionLine200 = sharedContext + \"cursor-prediction-context-200\";",
+        "lastNumberedLine": "299| const cursorPredictionLine299 = sharedContext + \"cursor-prediction-context-299\";"
+      },
+      "signals": {
+        "defaultDiagnosticBytes": "<|linter|>\n250:6 - error TSCURSOR001: controlled cursor diagnostic\n249|const cursorPredictionLine249 = sharedContext + \"cursor-prediction-context-249\";\n250|const cursorPredictionLine250 = sharedContext + \"cursor-prediction-context-250\";\n251|const cursorPredictionLine251 = sharedContext + \"cursor-prediction-context-251\";\n<|/linter|>",
+        "hasDefaultDiagnostic": true,
+        "hasRecentSnippet": true,
+        "hasLanguageTrait": true,
+        "hasOrdinaryPostScript": false
+      },
+      "model": {
+        "name": "copilot-suggestions-himalia-001",
+        "chatCompletions": {
+          "max_tokens": 40
+        },
+        "responses": {
+          "max_tokens": 2048
+        }
+      },
+      "crossFileResolution": {
+        "authorityA": "vscode-remote://ssh-remote+host-a/workspace/project/src/target.ts",
+        "authorityB": "vscode-remote://ssh-remote+host-b/workspace/project/src/target.ts",
+        "distinctAuthoritiesRemainDistinct": true
+      }
+    },
+    "nes-diagnostics-context-provider": {
+      "primary": [],
+      "disabledLanguage": [],
+      "enabledTraits": [
+        {
+          "name": "Problems near the user's cursor",
+          "value": "\n\t6:2 - error TS6133: closest\n\t5:1 - warning ESLINTW1: stable-left\n\t7:4 - warning: stable-right"
+        }
+      ],
+      "languageContextOptions": {
+        "enableAll": {
+          "enabled": true,
+          "maxTokens": 2000,
+          "traitPosition": "before"
+        },
+        "explicitFalse": {
+          "enabled": false,
+          "maxTokens": 2000,
+          "traitPosition": "before"
+        }
+      }
+    },
+    "nes-language-context-deadline": {
+      "onlyDiagnostics": {
+        "elapsedMs": 0,
+        "items": [
+          {
+            "value": "diagnostics-fallback",
+            "onTimeout": true
+          }
+        ],
+        "fallbackCalls": 1,
+        "request": {
+          "timeBudget": 40,
+          "timeoutEnd": 1040
+        }
+      },
+      "settledBeforeDeadline": {
+        "elapsedMs": 0,
+        "items": [
+          {
+            "value": "settled-primary",
+            "onTimeout": false
+          },
+          {
+            "value": "settled-fallback",
+            "onTimeout": true
+          }
+        ],
+        "fallbackCalls": 1
+      },
+      "deadline": {
+        "elapsedMs": 40,
+        "itemsAtReturn": [
+          {
+            "value": "deadline-partial",
+            "onTimeout": false
+          },
+          {
+            "value": "deadline-fallback",
+            "onTimeout": true
+          }
+        ],
+        "fallbackCalls": 1,
+        "providerTokenCancelled": false,
+        "latePrimarySideEffect": true,
+        "raceBudgets": [40],
+        "request": {
+          "timeBudget": 40,
+          "timeoutEnd": 3040
+        }
+      },
+      "freshFallback": ["fresh-1", "fresh-2"],
+      "parentCancellation": {
+        "result": null,
+        "tokenCancelled": true,
+        "fallbackCalls": 0
+      }
+    },
+    "nes-system-prompt-strategy": {
+      "prompts": {
+        "copilotNesXtab": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest, with line numbers in the form #| to help you understand the edit diff history. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code. Line numbers in the form #| are included to help you understand the edit diff history.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n\n- Provide only the revised code within the tags. If no changes are necessary, simply return the original code from within the <|code_to_edit|> and <|/code_to_edit|> tags.\n- There are line numbers in the form #| in the code displayed to you above, but these are just for your reference. Please do not include the numbers of the form #| in your response.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n```\n// Your revised code goes here\n```\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.\n- Don't include the line numbers of the form #| in your response.",
+        "xtab275": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+        "xtabUnifiedModel": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n- Your response should start with the word <EDIT>, <INSERT>, or <NO_CHANGE>.\n- If your are making an edit, start with <EDIT>, then provide the rewritten code window, then </EDIT>.\n- If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position, then </INSERT>.\n- If no changes are necessary, reply only with <NO_CHANGE>.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors."
+      }
+    },
+    "nes-system-prompt-bytes": {
+      "sha256": {
+        "copilotNesXtab": "a984d4503f00f6dbc9ce2786ae560138c1169fb53d049203d11f525579c9e283",
+        "xtab275": "b52b5c5de85c2bbe114cfbb2dddbe558b1638265dc487d25b21f483b51251ab9",
+        "xtabUnifiedModel": "b0fa908c0364b14f42050adfa49f63352d73cc718b9ccbbfdd8ff52dca46f344"
+      },
+      "lengths": {
+        "copilotNesXtab": 3594,
+        "xtab275": 199,
+        "xtabUnifiedModel": 3358
+      }
+    },
+    "nes-prompt-message-bytes": {
+      "messages": {
+        "copilotNesXtab": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest, with line numbers in the form #| to help you understand the edit diff history. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code. Line numbers in the form #| are included to help you understand the edit diff history.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n\n- Provide only the revised code within the tags. If no changes are necessary, simply return the original code from within the <|code_to_edit|> and <|/code_to_edit|> tags.\n- There are line numbers in the form #| in the code displayed to you above, but these are just for your reference. Please do not include the numbers of the form #| in your response.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n```\n// Your revised code goes here\n```\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.\n- Don't include the line numbers of the form #| in your response.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags with the following format, but do not include the tags themselves.\n```\n// Your revised code goes here\n```"
+        },
+        "xtab275": {
+          "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy."
+        },
+        "xtabUnifiedModel": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n- Your response should start with the word <EDIT>, <INSERT>, or <NO_CHANGE>.\n- If your are making an edit, start with <EDIT>, then provide the rewritten code window, then </EDIT>.\n- If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position, then </INSERT>.\n- If no changes are necessary, reply only with <NO_CHANGE>.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst alpha = 1;\nconst beta = alpha + 1;\nconsole.log(beta);\n<|/current_file_content|>\n\n<|linter|>\n1:6 - warning TS6133: beta is unused\n0|const alpha = 1;\n1|const beta = alpha + 1;\n2|console.log(beta);\n<|/linter|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\n<|code_to_edit|>\nconst alpha = 1;\nconst beta = <|cursor|>alpha + 1;\nconsole.log(beta);\n<|/code_to_edit|>\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Start your response with <EDIT>, <INSERT>, or <NO_CHANGE>. If you are making an edit, start with <EDIT> and then provide the rewritten code window followed by </EDIT>. If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position followed by </INSERT>. If no changes are necessary, reply only with <NO_CHANGE>. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors."
+        }
+      },
+      "longPrompt": {
+        "copilotNesXtab": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest, with line numbers in the form #| to help you understand the edit diff history. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code. Line numbers in the form #| are included to help you understand the edit diff history.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n\n- Provide only the revised code within the tags. If no changes are necessary, simply return the original code from within the <|code_to_edit|> and <|/code_to_edit|> tags.\n- There are line numbers in the form #| in the code displayed to you above, but these are just for your reference. Please do not include the numbers of the form #| in your response.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n```\n// Your revised code goes here\n```\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.\n- Don't include the line numbers of the form #| in your response.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst longIdentifier100 = sharedValue + 100;\nconst longIdentifier101 = sharedValue + 101;\nconst longIdentifier102 = sharedValue + 102;\nconst longIdentifier103 = sharedValue + 103;\nconst longIdentifier104 = sharedValue + 104;\n<|area_around_code_to_edit|>\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\n<|code_to_edit|>\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longId<|cursor|>entifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\n<|/code_to_edit|>\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\n<|/area_around_code_to_edit|>\nconst longIdentifier136 = sharedValue + 136;\nconst longIdentifier137 = sharedValue + 137;\nconst longIdentifier138 = sharedValue + 138;\nconst longIdentifier139 = sharedValue + 139;\n<|/current_file_content|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\n<|code_to_edit|>\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longId<|cursor|>entifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\n<|/code_to_edit|>\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags with the following format, but do not include the tags themselves.\n```\n// Your revised code goes here\n```",
+          "currentFileLines": [
+            "const longIdentifier100 = sharedValue + 100;",
+            "const longIdentifier101 = sharedValue + 101;",
+            "const longIdentifier102 = sharedValue + 102;",
+            "const longIdentifier103 = sharedValue + 103;",
+            "const longIdentifier104 = sharedValue + 104;",
+            "<|area_around_code_to_edit|>",
+            "const longIdentifier105 = sharedValue + 105;",
+            "const longIdentifier106 = sharedValue + 106;",
+            "const longIdentifier107 = sharedValue + 107;",
+            "const longIdentifier108 = sharedValue + 108;",
+            "const longIdentifier109 = sharedValue + 109;",
+            "const longIdentifier110 = sharedValue + 110;",
+            "const longIdentifier111 = sharedValue + 111;",
+            "const longIdentifier112 = sharedValue + 112;",
+            "const longIdentifier113 = sharedValue + 113;",
+            "const longIdentifier114 = sharedValue + 114;",
+            "const longIdentifier115 = sharedValue + 115;",
+            "const longIdentifier116 = sharedValue + 116;",
+            "const longIdentifier117 = sharedValue + 117;",
+            "<|code_to_edit|>",
+            "const longIdentifier118 = sharedValue + 118;",
+            "const longIdentifier119 = sharedValue + 119;",
+            "const longId<|cursor|>entifier120 = sharedValue + 120;",
+            "const longIdentifier121 = sharedValue + 121;",
+            "const longIdentifier122 = sharedValue + 122;",
+            "const longIdentifier123 = sharedValue + 123;",
+            "const longIdentifier124 = sharedValue + 124;",
+            "const longIdentifier125 = sharedValue + 125;",
+            "<|/code_to_edit|>",
+            "const longIdentifier126 = sharedValue + 126;",
+            "const longIdentifier127 = sharedValue + 127;",
+            "const longIdentifier128 = sharedValue + 128;",
+            "const longIdentifier129 = sharedValue + 129;",
+            "const longIdentifier130 = sharedValue + 130;",
+            "const longIdentifier131 = sharedValue + 131;",
+            "const longIdentifier132 = sharedValue + 132;",
+            "const longIdentifier133 = sharedValue + 133;",
+            "const longIdentifier134 = sharedValue + 134;",
+            "const longIdentifier135 = sharedValue + 135;",
+            "<|/area_around_code_to_edit|>",
+            "const longIdentifier136 = sharedValue + 136;",
+            "const longIdentifier137 = sharedValue + 137;",
+            "const longIdentifier138 = sharedValue + 138;",
+            "const longIdentifier139 = sharedValue + 139;"
+          ]
+        },
+        "xtab275": {
+          "system": "Predict the next code edit based on user context, following Microsoft content policies and avoiding copyright violations. If a request may breach guidelines, reply: \"Sorry, I can't assist with that.\"",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst longIdentifier100 = sharedValue + 100;\nconst longIdentifier101 = sharedValue + 101;\nconst longIdentifier102 = sharedValue + 102;\nconst longIdentifier103 = sharedValue + 103;\nconst longIdentifier104 = sharedValue + 104;\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longIdentifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\nconst longIdentifier136 = sharedValue + 136;\nconst longIdentifier137 = sharedValue + 137;\nconst longIdentifier138 = sharedValue + 138;\nconst longIdentifier139 = sharedValue + 139;\n<|/current_file_content|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\n<|code_to_edit|>\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longId<|cursor|>entifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\n<|/code_to_edit|>\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Provide the revised code that was between the `<|code_to_edit|>` and `<|/code_to_edit|>` tags, but do not include the tags themselves. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors. Don't include the line numbers or the form #| in your response. Do not skip any lines. Do not be lazy.",
+          "currentFileLines": [
+            "const longIdentifier100 = sharedValue + 100;",
+            "const longIdentifier101 = sharedValue + 101;",
+            "const longIdentifier102 = sharedValue + 102;",
+            "const longIdentifier103 = sharedValue + 103;",
+            "const longIdentifier104 = sharedValue + 104;",
+            "const longIdentifier105 = sharedValue + 105;",
+            "const longIdentifier106 = sharedValue + 106;",
+            "const longIdentifier107 = sharedValue + 107;",
+            "const longIdentifier108 = sharedValue + 108;",
+            "const longIdentifier109 = sharedValue + 109;",
+            "const longIdentifier110 = sharedValue + 110;",
+            "const longIdentifier111 = sharedValue + 111;",
+            "const longIdentifier112 = sharedValue + 112;",
+            "const longIdentifier113 = sharedValue + 113;",
+            "const longIdentifier114 = sharedValue + 114;",
+            "const longIdentifier115 = sharedValue + 115;",
+            "const longIdentifier116 = sharedValue + 116;",
+            "const longIdentifier117 = sharedValue + 117;",
+            "const longIdentifier118 = sharedValue + 118;",
+            "const longIdentifier119 = sharedValue + 119;",
+            "const longIdentifier120 = sharedValue + 120;",
+            "const longIdentifier121 = sharedValue + 121;",
+            "const longIdentifier122 = sharedValue + 122;",
+            "const longIdentifier123 = sharedValue + 123;",
+            "const longIdentifier124 = sharedValue + 124;",
+            "const longIdentifier125 = sharedValue + 125;",
+            "const longIdentifier126 = sharedValue + 126;",
+            "const longIdentifier127 = sharedValue + 127;",
+            "const longIdentifier128 = sharedValue + 128;",
+            "const longIdentifier129 = sharedValue + 129;",
+            "const longIdentifier130 = sharedValue + 130;",
+            "const longIdentifier131 = sharedValue + 131;",
+            "const longIdentifier132 = sharedValue + 132;",
+            "const longIdentifier133 = sharedValue + 133;",
+            "const longIdentifier134 = sharedValue + 134;",
+            "const longIdentifier135 = sharedValue + 135;",
+            "const longIdentifier136 = sharedValue + 136;",
+            "const longIdentifier137 = sharedValue + 137;",
+            "const longIdentifier138 = sharedValue + 138;",
+            "const longIdentifier139 = sharedValue + 139;"
+          ]
+        },
+        "xtabUnifiedModel": {
+          "system": "Your role as an AI assistant is to help developers complete their code tasks by assisting in editing specific sections of code marked by the <|code_to_edit|> and <|/code_to_edit|> tags, while adhering to Microsoft's content policies and avoiding the creation of content that violates copyrights.\n\nYou have access to the following information to help you make informed suggestions:\n\n- recently_viewed_code_snippets: These are code snippets that the developer has recently looked at, which might provide context or examples relevant to the current task. They are listed from oldest to newest. It's possible these are entirely irrelevant to the developer's change.\n- current_file_content: The content of the file the developer is currently working on, providing the broader context of the code.\n- edit_diff_history: A record of changes made to the code, helping you understand the evolution of the code and the developer's intentions. These changes are listed from oldest to latest. It's possible a lot of old edit diff history is entirely irrelevant to the developer's change.\n- area_around_code_to_edit: The context showing the code surrounding the section to be edited.\n- cursor position marked as <|cursor|>: Indicates where the developer's cursor is currently located, which can be crucial for understanding what part of the code they are focusing on.\n\nYour task is to predict and complete the changes the developer would have made next in the <|code_to_edit|> section. The developer may have stopped in the middle of typing. Your goal is to keep the developer on the path that you think they're following. Some examples include further implementing a class, method, or variable, or improving the quality of the code. Make sure the developer doesn't get distracted and ensure your suggestion is relevant. Consider what changes need to be made next, if any. If you think changes should be made, ask yourself if this is truly what needs to happen. If you are confident about it, then proceed with the changes.\n\n# Steps\n\n1. **Review Context**: Analyze the context from the resources provided, such as recently viewed snippets, edit history, surrounding code, and cursor location.\n2. **Evaluate Current Code**: Determine if the current code within the tags requires any corrections or enhancements.\n3. **Suggest Edits**: If changes are required, ensure they align with the developer's patterns and improve code quality.\n4. **Maintain Consistency**: Ensure indentation and formatting follow the existing code style.\n\n# Output Format\n- Your response should start with the word <EDIT>, <INSERT>, or <NO_CHANGE>.\n- If your are making an edit, start with <EDIT>, then provide the rewritten code window, then </EDIT>.\n- If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position, then </INSERT>.\n- If no changes are necessary, reply only with <NO_CHANGE>.\n- Ensure that you do not output duplicate code that exists outside of these tags. The output should be the revised code that was between these tags and should not include the <|code_to_edit|> or <|/code_to_edit|> tags.\n\n# Notes\n\n- Apologize with \"Sorry, I can't assist with that.\" for requests that may breach Microsoft content guidelines.\n- Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.",
+          "user": "Consider this related information:\nTest framework: Vitest\n\n```\n<|recently_viewed_code_snippets|>\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/recent.ts\nexport const recent = true;\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/multi.ts\nALPHA\nbeta\nGAMMA\nDELTA\nepsilon\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/types.ts\nexport interface Widget { id: string; }\n<|/recently_viewed_code_snippet|>\n\n<|recently_viewed_code_snippet|>\ncode_snippet_file_path: /workspace/src/neighbor.ts\nexport const neighborValue = alpha;\n<|/recently_viewed_code_snippet|>\n<|/recently_viewed_code_snippets|>\n\n<|current_file_content|>\ncurrent_file_path: src/prompt.ts\nconst longIdentifier100 = sharedValue + 100;\nconst longIdentifier101 = sharedValue + 101;\nconst longIdentifier102 = sharedValue + 102;\nconst longIdentifier103 = sharedValue + 103;\nconst longIdentifier104 = sharedValue + 104;\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longIdentifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\nconst longIdentifier136 = sharedValue + 136;\nconst longIdentifier137 = sharedValue + 137;\nconst longIdentifier138 = sharedValue + 138;\nconst longIdentifier139 = sharedValue + 139;\n<|/current_file_content|>\n\n<|edit_diff_history|>\n--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA\n\n<|/edit_diff_history|>\n\n<|area_around_code_to_edit|>\nconst longIdentifier105 = sharedValue + 105;\nconst longIdentifier106 = sharedValue + 106;\nconst longIdentifier107 = sharedValue + 107;\nconst longIdentifier108 = sharedValue + 108;\nconst longIdentifier109 = sharedValue + 109;\nconst longIdentifier110 = sharedValue + 110;\nconst longIdentifier111 = sharedValue + 111;\nconst longIdentifier112 = sharedValue + 112;\nconst longIdentifier113 = sharedValue + 113;\nconst longIdentifier114 = sharedValue + 114;\nconst longIdentifier115 = sharedValue + 115;\nconst longIdentifier116 = sharedValue + 116;\nconst longIdentifier117 = sharedValue + 117;\n<|code_to_edit|>\nconst longIdentifier118 = sharedValue + 118;\nconst longIdentifier119 = sharedValue + 119;\nconst longId<|cursor|>entifier120 = sharedValue + 120;\nconst longIdentifier121 = sharedValue + 121;\nconst longIdentifier122 = sharedValue + 122;\nconst longIdentifier123 = sharedValue + 123;\nconst longIdentifier124 = sharedValue + 124;\nconst longIdentifier125 = sharedValue + 125;\n<|/code_to_edit|>\nconst longIdentifier126 = sharedValue + 126;\nconst longIdentifier127 = sharedValue + 127;\nconst longIdentifier128 = sharedValue + 128;\nconst longIdentifier129 = sharedValue + 129;\nconst longIdentifier130 = sharedValue + 130;\nconst longIdentifier131 = sharedValue + 131;\nconst longIdentifier132 = sharedValue + 132;\nconst longIdentifier133 = sharedValue + 133;\nconst longIdentifier134 = sharedValue + 134;\nconst longIdentifier135 = sharedValue + 135;\n<|/area_around_code_to_edit|>\n```\n\nThe developer was working on a section of code within the tags `code_to_edit` in the file located at `src/prompt.ts`. Using the given `recently_viewed_code_snippets`, `current_file_content`, `edit_diff_history`, `area_around_code_to_edit`, and the cursor position marked as `<|cursor|>`, please continue the developer's work. Update the `code_to_edit` section by predicting and completing the changes they would have made next. Start your response with <EDIT>, <INSERT>, or <NO_CHANGE>. If you are making an edit, start with <EDIT> and then provide the rewritten code window followed by </EDIT>. If you are inserting new code, start with <INSERT> and then provide only the new code that will be inserted at the cursor position followed by </INSERT>. If no changes are necessary, reply only with <NO_CHANGE>. Avoid undoing or reverting the developer's last change unless there are obvious typos or errors.",
+          "currentFileLines": [
+            "const longIdentifier100 = sharedValue + 100;",
+            "const longIdentifier101 = sharedValue + 101;",
+            "const longIdentifier102 = sharedValue + 102;",
+            "const longIdentifier103 = sharedValue + 103;",
+            "const longIdentifier104 = sharedValue + 104;",
+            "const longIdentifier105 = sharedValue + 105;",
+            "const longIdentifier106 = sharedValue + 106;",
+            "const longIdentifier107 = sharedValue + 107;",
+            "const longIdentifier108 = sharedValue + 108;",
+            "const longIdentifier109 = sharedValue + 109;",
+            "const longIdentifier110 = sharedValue + 110;",
+            "const longIdentifier111 = sharedValue + 111;",
+            "const longIdentifier112 = sharedValue + 112;",
+            "const longIdentifier113 = sharedValue + 113;",
+            "const longIdentifier114 = sharedValue + 114;",
+            "const longIdentifier115 = sharedValue + 115;",
+            "const longIdentifier116 = sharedValue + 116;",
+            "const longIdentifier117 = sharedValue + 117;",
+            "const longIdentifier118 = sharedValue + 118;",
+            "const longIdentifier119 = sharedValue + 119;",
+            "const longIdentifier120 = sharedValue + 120;",
+            "const longIdentifier121 = sharedValue + 121;",
+            "const longIdentifier122 = sharedValue + 122;",
+            "const longIdentifier123 = sharedValue + 123;",
+            "const longIdentifier124 = sharedValue + 124;",
+            "const longIdentifier125 = sharedValue + 125;",
+            "const longIdentifier126 = sharedValue + 126;",
+            "const longIdentifier127 = sharedValue + 127;",
+            "const longIdentifier128 = sharedValue + 128;",
+            "const longIdentifier129 = sharedValue + 129;",
+            "const longIdentifier130 = sharedValue + 130;",
+            "const longIdentifier131 = sharedValue + 131;",
+            "const longIdentifier132 = sharedValue + 132;",
+            "const longIdentifier133 = sharedValue + 133;",
+            "const longIdentifier134 = sharedValue + 134;",
+            "const longIdentifier135 = sharedValue + 135;",
+            "const longIdentifier136 = sharedValue + 136;",
+            "const longIdentifier137 = sharedValue + 137;",
+            "const longIdentifier138 = sharedValue + 138;",
+            "const longIdentifier139 = sharedValue + 139;"
+          ]
+        }
+      },
+      "overBudget": {
+        "copilotNesXtab": {
+          "isError": true,
+          "error": "outOfBudget"
+        },
+        "xtab275": {
+          "isError": true,
+          "error": "outOfBudget"
+        },
+        "xtabUnifiedModel": {
+          "isError": true,
+          "error": "outOfBudget"
+        }
+      },
+      "budgetCascade": {
+        "trace": [
+          {
+            "part": "recentlyViewedDocuments",
+            "allocatedTokens": 20,
+            "consumedTokens": 10,
+            "remainingTokens": 10,
+            "cascadesToNextPart": true
+          },
+          {
+            "part": "languageContext",
+            "allocatedTokens": 30,
+            "consumedTokens": 8,
+            "remainingTokens": 22,
+            "cascadesToNextPart": true
+          },
+          {
+            "part": "neighborFiles",
+            "allocatedTokens": 42,
+            "consumedTokens": 6,
+            "remainingTokens": 36,
+            "cascadesToNextPart": true
+          },
+          {
+            "part": "diffHistory",
+            "allocatedTokens": 56,
+            "consumedTokens": 4,
+            "remainingTokens": 52,
+            "cascadesToNextPart": true
+          }
+        ],
+        "finalSurplus": 52
+      }
+    },
+    "nes-recent-history": {
+      "includeViewedTimeline": [
+        {
+          "docId": "src/c.ts",
+          "kind": "edit",
+          "marker": "c-edit"
+        },
+        {
+          "docId": "src/a.ts",
+          "kind": "visibleRanges",
+          "marker": "a-view"
+        },
+        {
+          "docId": "src/b.ts",
+          "kind": "visibleRanges",
+          "marker": "b-view"
+        }
+      ],
+      "editOnlyTimeline": [
+        {
+          "docId": "src/c.ts",
+          "kind": "edit",
+          "marker": "c-edit"
+        },
+        {
+          "docId": "src/a.ts",
+          "kind": "edit",
+          "marker": "a-edit"
+        }
+      ],
+      "groupedTimeline": [
+        {
+          "docId": "src/c.ts",
+          "markers": ["c-edit"]
+        },
+        {
+          "docId": "src/a.ts",
+          "markers": ["a-view", "a-edit", "a-old"]
+        },
+        {
+          "docId": "src/b.ts",
+          "markers": ["b-view"]
+        }
+      ],
+      "focalRanges": [
+        {
+          "start": 0,
+          "endExclusive": 3
+        },
+        {
+          "start": 5,
+          "endExclusive": 7
+        },
+        {
+          "start": 23,
+          "endExclusive": 25
+        }
+      ],
+      "editEntryCount": 2
+    },
+    "nes-similar-file-selection": {
+      "snippets": [
+        {
+          "relativePath": "src/partial.ts",
+          "snippet": "needle0",
+          "score": 0.016666666666666666,
+          "startLine": 0,
+          "endLine": 1
+        },
+        {
+          "relativePath": "src/exact.ts",
+          "snippet": "needle0\nneedle1\nneedle2\nneedle3\nneedle4\nneedle5\nneedle6\nneedle7\nneedle8\nneedle9\nneedle10\nneedle11\nneedle12\nneedle13\nneedle14\nneedle15\nneedle16\nneedle17\nneedle18\nneedle19\nneedle20\nneedle21\nneedle22\nneedle23\nneedle24\nneedle25\nneedle26\nneedle27\nneedle28\nneedle29\nneedle30\nneedle31\nneedle32\nneedle33\nneedle34\nneedle35\nneedle36\nneedle37\nneedle38\nneedle39\nneedle40\nneedle41\nneedle42\nneedle43\nneedle44\nneedle45\nneedle46\nneedle47\nneedle48\nneedle49\nneedle50\nneedle51\nneedle52\nneedle53\nneedle54\nneedle55\nneedle56\nneedle57\nneedle58\nneedle59",
+          "score": 1,
+          "startLine": 5,
+          "endLine": 65
+        }
+      ]
+    },
+    "nes-diff-history": {
+      "diff": "--- /workspace/src/multi.ts\n+++ /workspace/src/multi.ts\n@@ -0,1 +0,1 @@\n-alpha\n+ALPHA\n@@ -2,2 +2,2 @@\n-gamma\n-delta\n+GAMMA\n+DELTA"
+    },
+    "nes-response-formats": {
+      "insertNewLines": ["  return value + STEP"],
+      "noChangeKind": "NoSuggestions",
+      "invalidKind": "Unexpected",
+      "invalidMessage": "unexpected tag <invalid>"
+    },
+    "nes-rebase-agreement": {
+      "typeThrough": [
+        {
+          "start": 1,
+          "endExclusive": 3,
+          "newText": "hello"
+        }
+      ],
+      "autoClose": {
+        "disabled": null,
+        "enabled": [
+          {
+            "start": 4,
+            "endExclusive": 6,
+            "newText": "(value)"
+          }
+        ]
+      },
+      "reverseAgreement": {
+        "disabled": null,
+        "enabled": []
+      },
+      "full": {
+        "success": [
+          {
+            "rebasedEditIndex": 0,
+            "replacements": [
+              {
+                "start": 1,
+                "endExclusive": 3,
+                "newText": "hello"
+              }
+            ]
+          }
+        ],
+        "outsideEditWindow": "outsideEditWindow",
+        "inconsistentSequentialEdits": "inconsistentEdits"
+      },
+      "consistency": {
+        "matching": true,
+        "inconsistent": false
+      },
+      "sequentialReference": {
+        "lengthDelta": {
+          "kind": "success",
+          "edits": [
+            {
+              "sourceIndex": 0,
+              "start": 0,
+              "endExclusive": 3,
+              "newText": "first"
+            },
+            {
+              "sourceIndex": 1,
+              "start": 4,
+              "endExclusive": 7,
+              "newText": "second"
+            }
+          ],
+          "detailedEdits": [
+            [
+              {
+                "sourceIndex": 0,
+                "start": 0,
+                "endExclusive": 3,
+                "newText": "first"
+              }
+            ],
+            [
+              {
+                "sourceIndex": 1,
+                "start": 6,
+                "endExclusive": 9,
+                "newText": "second"
+              }
+            ]
+          ]
+        },
+        "overlapping": {
+          "kind": "success",
+          "edits": [
+            {
+              "sourceIndex": 1,
+              "start": 1,
+              "endExclusive": 3,
+              "newText": "YZ"
+            }
+          ],
+          "detailedEdits": [
+            [
+              {
+                "sourceIndex": 0,
+                "start": 1,
+                "endExclusive": 3,
+                "newText": "X"
+              }
+            ],
+            [
+              {
+                "sourceIndex": 1,
+                "start": 1,
+                "endExclusive": 2,
+                "newText": "YZ"
+              }
+            ]
+          ]
+        },
+        "coarseDetailed": {
+          "kind": "success",
+          "edits": [
+            {
+              "sourceIndex": 0,
+              "start": 4,
+              "endExclusive": 7,
+              "newText": "dXf"
+            }
+          ],
+          "detailedEdits": [
+            [
+              {
+                "sourceIndex": 0,
+                "start": 4,
+                "endExclusive": 7,
+                "newText": "dXf"
+              }
+            ]
+          ]
+        },
+        "invariantError": {
+          "kind": "error"
+        }
+      },
+      "multiInnerChanges": {
+        "strict": {
+          "kind": "success",
+          "edits": [
+            {
+              "sourceIndex": 0,
+              "start": 0,
+              "endExclusive": 16,
+              "newText": "ONE\nmiddle\nTHREE"
+            }
+          ],
+          "detailedEdits": [
+            [
+              {
+                "sourceIndex": 0,
+                "start": 0,
+                "endExclusive": 3,
+                "newText": "ONE"
+              },
+              {
+                "sourceIndex": 0,
+                "start": 11,
+                "endExclusive": 16,
+                "newText": "THREE"
+              }
+            ]
+          ],
+          "appliedToCurrent": "ONE\nmiddle\nTHREE"
+        },
+        "lenientMiddle": {
+          "kind": "success",
+          "edits": [
+            {
+              "sourceIndex": 0,
+              "start": 0,
+              "endExclusive": 16,
+              "newText": "ONE\nmiXdle\nTHREE"
+            }
+          ],
+          "detailedEdits": [
+            [
+              {
+                "sourceIndex": 0,
+                "start": 0,
+                "endExclusive": 3,
+                "newText": "ONE"
+              },
+              {
+                "sourceIndex": 0,
+                "start": 11,
+                "endExclusive": 16,
+                "newText": "THREE"
+              }
+            ]
+          ],
+          "appliedToCurrent": "ONE\nmiXdle\nTHREE"
+        }
+      }
+    },
+    "nes-cache-lookup": {
+      "exact": {
+        "hit": true,
+        "hasEdit": true,
+        "replacement": [
+          {
+            "start": 1,
+            "endExclusive": 1,
+            "newText": "hello"
+          }
+        ],
+        "rebased": false,
+        "rebasedEditIndex": null,
+        "subsequentN": 0,
+        "patchIndex": 3,
+        "rejected": false,
+        "requestId": "exact-request"
+      },
+      "outsideWindow": {
+        "hit": false
+      },
+      "negativeRepeat": [
+        {
+          "hit": true,
+          "hasEdit": false,
+          "replacement": null,
+          "rebased": false,
+          "rebasedEditIndex": null,
+          "subsequentN": null,
+          "patchIndex": null,
+          "rejected": false,
+          "requestId": "negative-request"
+        },
+        {
+          "hit": true,
+          "hasEdit": false,
+          "replacement": null,
+          "rebased": false,
+          "rebasedEditIndex": null,
+          "subsequentN": null,
+          "patchIndex": null,
+          "rejected": false,
+          "requestId": "negative-request"
+        }
+      ],
+      "rebased": {
+        "hit": true,
+        "hasEdit": true,
+        "replacement": [
+          {
+            "start": 1,
+            "endExclusive": 2,
+            "newText": "XYZ"
+          }
+        ],
+        "rebased": true,
+        "rebasedEditIndex": 0,
+        "subsequentN": 0,
+        "patchIndex": 5,
+        "rejected": false,
+        "requestId": "rebase-request"
+      },
+      "laterEdit": {
+        "hit": true,
+        "hasEdit": true,
+        "replacement": [
+          {
+            "start": 8,
+            "endExclusive": 8,
+            "newText": "!"
+          }
+        ],
+        "rebased": false,
+        "rebasedEditIndex": null,
+        "subsequentN": 1,
+        "patchIndex": 7,
+        "rejected": false,
+        "requestId": "later-request"
+      },
+      "sequentialCoordinates": {
+        "bundled": [
+          [
+            {
+              "start": 0,
+              "endExclusive": 3,
+              "newText": "first"
+            }
+          ],
+          [
+            {
+              "start": 6,
+              "endExclusive": 9,
+              "newText": "second"
+            }
+          ]
+        ],
+        "patchIndices": [4, 7],
+        "acceptedKthExact": {
+          "hit": true,
+          "hasEdit": true,
+          "replacement": [
+            {
+              "start": 6,
+              "endExclusive": 9,
+              "newText": "second"
+            }
+          ],
+          "rebased": false,
+          "rebasedEditIndex": null,
+          "subsequentN": 1,
+          "patchIndex": 7,
+          "rejected": false,
+          "requestId": "sequential-request"
+        }
+      },
+      "rejectionEviction": {
+        "capacityBoundary": 1,
+        "shownEntryAfterEviction": {
+          "hit": false
+        },
+        "lateUnshownAtInsertion": {
+          "rejected": false,
+          "lookup": {
+            "hit": true,
+            "hasEdit": true,
+            "replacement": [
+              {
+                "start": 12,
+                "endExclusive": 12,
+                "newText": "onacci"
+              }
+            ],
+            "rebased": false,
+            "rebasedEditIndex": null,
+            "subsequentN": 1,
+            "patchIndex": null,
+            "rejected": false,
+            "requestId": "shown-request"
+          }
+        }
+      },
+      "crossOwnerInvalidation": {
+        "triggerOnEditorChangeAfterSeconds": 10,
+        "ownerBAfterOwnerAEdit": {
+          "hit": false
+        },
+        "ownerAAfterOwnEdit": {
+          "hit": true,
+          "hasEdit": true,
+          "replacement": [
+            {
+              "start": 1,
+              "endExclusive": 2,
+              "newText": "XYZ"
+            }
+          ],
+          "rebased": true,
+          "rebasedEditIndex": 0,
+          "subsequentN": 0,
+          "patchIndex": 8,
+          "rejected": false,
+          "requestId": "owner-a-request"
+        }
+      },
+      "documentLifecycle": {
+        "exactAfterReopen": {
+          "hit": true,
+          "hasEdit": true,
+          "replacement": [
+            {
+              "start": 9,
+              "endExclusive": 9,
+              "newText": " next"
+            }
+          ],
+          "rebased": false,
+          "rebasedEditIndex": null,
+          "subsequentN": 0,
+          "patchIndex": 11,
+          "rejected": false,
+          "requestId": "lifecycle-request"
+        },
+        "changedAfterReopen": {
+          "hit": false
+        }
+      }
+    },
+    "nes-cross-file-stream-cache": {
+      "callOrder": [
+        {
+          "kind": "target",
+          "ownerUri": "file:///workspace/target-b.ts",
+          "targetUri": "file:///workspace/target-b.ts",
+          "documentBeforeEdit": "target-b-before",
+          "targetSnapshot": null,
+          "edit": "B0",
+          "subsequentN": 0,
+          "editWindow": "10-20",
+          "originalEditWindow": "30-40",
+          "bundled": ["B0", "B2"],
+          "patchIndices": [0, 2],
+          "tracked": true,
+          "cursorOffset": null,
+          "speculative": false
+        },
+        {
+          "kind": "activeAlias",
+          "ownerUri": "file:///workspace/active.ts",
+          "targetUri": "file:///workspace/target-b.ts",
+          "documentBeforeEdit": "active-before",
+          "targetSnapshot": "target-b-before",
+          "edit": "B0",
+          "subsequentN": 0,
+          "editWindow": "10-20",
+          "originalEditWindow": "30-40",
+          "bundled": null,
+          "patchIndices": null,
+          "tracked": false,
+          "cursorOffset": null,
+          "speculative": false
+        },
+        {
+          "kind": "target",
+          "ownerUri": "file:///workspace/target-c.ts",
+          "targetUri": "file:///workspace/target-c.ts",
+          "documentBeforeEdit": "target-c-before",
+          "targetSnapshot": null,
+          "edit": "C1",
+          "subsequentN": 1,
+          "editWindow": null,
+          "originalEditWindow": null,
+          "bundled": null,
+          "patchIndices": null,
+          "tracked": false,
+          "cursorOffset": null,
+          "speculative": false
+        },
+        {
+          "kind": "target",
+          "ownerUri": "file:///workspace/target-b.ts",
+          "targetUri": "file:///workspace/target-b.ts",
+          "documentBeforeEdit": "target-b-after-0",
+          "targetSnapshot": null,
+          "edit": "B2",
+          "subsequentN": 2,
+          "editWindow": null,
+          "originalEditWindow": null,
+          "bundled": null,
+          "patchIndices": null,
+          "tracked": false,
+          "cursorOffset": null,
+          "speculative": false
+        }
+      ],
+      "firstResultOwnerUri": "file:///workspace/target-b.ts",
+      "aliasCreated": true,
+      "finalTargetContents": {
+        "targetB": "target-b-after-2",
+        "targetC": "target-c-after-1"
+      },
+      "unavailableAliasAttempts": {
+        "globalZeroCross": {
+          "handled": true,
+          "setCalls": 1,
+          "entryCreated": false
+        },
+        "globalOneCross": {
+          "handled": false,
+          "setCalls": 0,
+          "entryCreated": false
+        },
+        "globalZeroSameDocument": {
+          "handled": false,
+          "setCalls": 0,
+          "entryCreated": false
+        }
+      }
+    },
+    "nes-cursor-retry-cache-ownership": {
+      "streamedEdit": {
+        "targetOwner": "file:///workspace/target-b.ts",
+        "targetCursorOffset": null,
+        "targetWindow": "10-20",
+        "targetOriginalWindow": "30-40",
+        "aliasOwner": "file:///workspace/active.ts",
+        "aliasTarget": "file:///workspace/target-b.ts",
+        "aliasCursorOffset": null,
+        "aliasWindow": "10-20",
+        "aliasOriginalWindow": "30-40"
+      },
+      "emptyTerminal": {
+        "ownerUri": "file:///workspace/cursor-source.ts",
+        "documentBeforeEdit": "line0\nline1-long\nline2-longer\nline3-longest\nline4-target\nline5-long\nline6",
+        "reducedWindow": "0-56",
+        "matchesOriginalCursorReduction": true,
+        "matchesTargetCursorReduction": false
+      },
+      "userTypedSinceRequestStarted": {
+        "empty": false,
+        "nonEmpty": true,
+        "undefined": true
+      },
+      "crossFileOpen": {
+        "relativeWithoutRoot": {
+          "events": [],
+          "terminal": {
+            "kind": "NoSuggestions",
+            "reason": null,
+            "nextCursorPosition": null,
+            "targetUri": null
+          }
+        },
+        "openFailure": {
+          "events": ["open"],
+          "terminal": {
+            "kind": "NoSuggestions",
+            "reason": null,
+            "nextCursorPosition": "1:1",
+            "targetUri": "file:///workspace/target.ts"
+          }
+        },
+        "cancelledAfterOpen": {
+          "events": ["open", "token"],
+          "terminal": {
+            "kind": "GotCancelled",
+            "reason": "afterCrossFileOpenTextDocument",
+            "nextCursorPosition": null,
+            "targetUri": null
+          }
+        },
+        "typedAfterOpen": {
+          "events": ["open", "token", "typed"],
+          "terminal": {
+            "kind": "GotCancelled",
+            "reason": "afterCrossFileOpenTextDocumentUserTyped",
+            "nextCursorPosition": null,
+            "targetUri": null
+          }
+        },
+        "cleanOpen": {
+          "events": ["open", "token", "typed", "getText", "retry"],
+          "terminal": {
+            "kind": "Retry",
+            "reason": null,
+            "nextCursorPosition": null,
+            "targetUri": null
+          }
+        }
+      }
+    },
+    "nes-rejection-tracking": {
+      "requestScope": {
+        "sameRequestEntriesRejected": [true, true],
+        "differentRequestRejected": false,
+        "persistentCollector": {
+          "shown": true,
+          "unshownSameRequest": false
+        }
+      },
+      "shownIsRejected": true,
+      "overlappingTypeThrough": {
+        "document": "function fib",
+        "candidate": [
+          {
+            "start": 12,
+            "endExclusive": 12,
+            "newText": "onacci"
+          }
+        ],
+        "isRejected": false
+      },
+      "conflictingOverlap": {
+        "document": "function fibx",
+        "isRejected": false
+      },
+      "lateUnshownCacheEntry": {
+        "capacityBoundary": 1,
+        "shownEntryAfterEviction": {
+          "hit": false
+        },
+        "lateUnshownAtInsertion": {
+          "rejected": false,
+          "lookup": {
+            "hit": true,
+            "hasEdit": true,
+            "replacement": [
+              {
+                "start": 12,
+                "endExclusive": 12,
+                "newText": "onacci"
+              }
+            ],
+            "rebased": false,
+            "rebasedEditIndex": null,
+            "subsequentN": 1,
+            "patchIndex": null,
+            "rejected": false,
+            "requestId": "shown-request"
+          }
+        }
+      }
+    },
+    "nes-speculative-lifecycle": {
+      "scheduled": {
+        "wrongStream": null,
+        "consumedHeaderRequestId": "stream-a",
+        "laterEditId": "later-edit",
+        "consumedAgain": null
+      },
+      "replacement": {
+        "firstEvents": [
+          "speculative request cancelled: replaced",
+          "cancel",
+          "dispose"
+        ],
+        "secondPending": true
+      },
+      "trajectory": {
+        "typeThroughPrefix": {
+          "pending": true,
+          "events": []
+        },
+        "divergentForm": {
+          "pending": false,
+          "events": [
+            "speculative request cancelled: divergedFromTrajectoryForm",
+            "cancel",
+            "dispose"
+          ]
+        },
+        "divergentPrefix": {
+          "pending": false,
+          "events": [
+            "speculative request cancelled: divergedFromTrajectoryPrefix",
+            "cancel",
+            "dispose"
+          ]
+        },
+        "divergentSuffix": {
+          "pending": false,
+          "events": [
+            "speculative request cancelled: divergedFromTrajectorySuffix",
+            "cancel",
+            "dispose"
+          ]
+        },
+        "divergentMiddle": {
+          "pending": false,
+          "events": [
+            "speculative request cancelled: divergedFromTrajectoryMiddle",
+            "cancel",
+            "dispose"
+          ]
+        }
+      }
+    },
+    "nes-speculative-provider": {
+      "pendingReuse": {
+        "matched": {
+          "order": ["consumePending", "join"],
+          "source": "speculative-cache",
+          "isFromSpeculativeRequest": true,
+          "pendingDetached": true
+        },
+        "cancelledToken": {
+          "order": ["fresh"],
+          "source": "fresh-request",
+          "isFromSpeculativeRequest": false,
+          "pendingDetached": false
+        },
+        "cursorOutsideRequestWindow": {
+          "order": ["fresh"],
+          "source": "fresh-request",
+          "isFromSpeculativeRequest": false,
+          "pendingDetached": false
+        }
+      },
+      "autoExpand": {
+        "configuredDefaultLines": 10,
+        "configuredDefaultMode": "off",
+        "off": null,
+        "always": 10,
+        "smartCold": null,
+        "smartSpeculative": 10,
+        "smartSubsequent": 10
+      }
+    },
+    "nes-accept-edit-window-expansion": {
+      "acceptance": {
+        "nonLatest": false,
+        "latest": true
+      },
+      "freshRequest": {
+        "cold": null,
+        "afterLatestAcceptance": 10
+      },
+      "reset": {
+        "afterEdit": false,
+        "afterNoSuggestions": false
+      }
+    },
+    "nes-async-completions": {
+      "configuration": {
+        "id": "chat.advanced.inlineEdits.asyncCompletions",
+        "type": "experiment-based",
+        "defaultValue": true,
+        "strategies": {
+          "copilotNesXtab": true,
+          "xtab275": true,
+          "xtabUnifiedModel": true
+        }
+      },
+      "documentChangeCancellation": {
+        "asyncEnabled": false,
+        "asyncDisabled": true
+      },
+      "pendingReuse": {
+        "unchangedAsyncDisabled": {
+          "order": ["join"],
+          "source": "pending-stream"
+        },
+        "changedAsyncDisabled": {
+          "order": ["fresh"],
+          "source": "fresh-request"
+        },
+        "changedAsyncEnabled": {
+          "order": ["join", "rebase"],
+          "source": "rebased-stream"
+        }
+      },
+      "streamRebaseTracking": {
+        "asyncEnabled": {
+          "observerAttached": true,
+          "composeCount": 1,
+          "consistencyChecks": 1,
+          "composedEditRetained": true
+        },
+        "asyncDisabled": {
+          "observerAttached": false,
+          "composeCount": 0,
+          "consistencyChecks": 0,
+          "composedEditRetained": false
+        }
+      }
+    },
+    "nes-cache-rebase-filter": {
+      "rejectedResult": null,
+      "rejectedEditCount": 1,
+      "sourcePatchIndex": {
+        "exact": 2,
+        "rebased": 7,
+        "missingRebaseIndex": null
+      }
+    },
+    "nes-history-context": {
+      "documentPaths": ["src/math.ts", "src/counter.ts"],
+      "budgetCalls": [5, 4]
+    },
+    "nes-trigger-state-machine": {
+      "reasons": ["selectionChange", "selectionChange", "selectionChange"],
+      "debounceMs": 100,
+      "sameLineBlocked": true,
+      "rejectionBlocked": true,
+      "documentSwitch": true,
+      "documentSwitchReasons": ["activeDocumentSwitch"],
+      "storedDocumentSwitches": 1,
+      "ignoredDocumentEvents": {
+        "shouldIgnoreOutput": true,
+        "shouldIgnoreFile": false,
+        "emittedChangeHints": [],
+        "trackedChanges": 0,
+        "lastEditTimestamp": null,
+        "lastSelectionUri": null
+      }
+    },
+    "nes-change-hint": {
+      "hint": {
+        "data": {
+          "uuid": "completion-request",
+          "reason": "selectionChange"
+        }
+      }
+    },
+    "nes-diagnostics-race": {
+      "winner": "diagnostics",
+      "editText": {
+        "edit": "import { STEP } from './math';\n"
+      },
+      "diagnosticsStartDelayMs": 50,
+      "deadlineDelayMs": 1250
+    },
+    "nes-lifecycle": {
+      "outcomes": ["accepted", "rejected", "ignored"],
+      "interactionKinds": ["accepted", "rejected", "ignored"],
+      "lastRejectionTime": 10000,
+      "triggerOutcome": "ignored"
+    },
+    "core-provider-presentation": {
+      "visibleBlocking": {
+        "completions": ["fim-visible"],
+        "inlineEdit": null
+      },
+      "invisibleAndEdits": {
+        "inlineEdit": "nes-edit-2"
+      }
+    },
+    "core-provider-cycling-order": [
+      {
+        "source": "fim",
+        "id": "fim-visible"
+      },
+      {
+        "source": "nes",
+        "id": "nes-menu"
+      }
+    ],
+    "model-unification-routing": {
+      "jointProviderEnabled": false,
+      "unified": {
+        "fimEnabled": false,
+        "nesEnabled": true,
+        "serveAsCompletionsProvider": false
+      },
+      "independent": {
+        "fimEnabled": true,
+        "nesEnabled": true,
+        "serveAsCompletionsProvider": false
+      }
+    },
+    "separate-provider-change-ownership": {
+      "activeAfterFim": "fim",
+      "suppressSeparateNesWhileFimActive": true,
+      "activeAfterNes": "nes",
+      "endingOldFimPreserves": "nes",
+      "suppressJointNesWhileFimInFlight": true,
+      "suppressJointNesWhileIdle": false
+    },
+    "joint-default-and-selection": {
+      "defaultWinner": "fim",
+      "selectionWinner": "nes",
+      "defaultStarts": [
+        {
+          "source": "fim"
+        },
+        {
+          "source": "nes",
+          "enforceCacheDelay": true
+        }
+      ],
+      "selectionStarts": [
+        {
+          "source": "nes",
+          "enforceCacheDelay": true
+        }
+      ]
+    },
+    "joint-cursor-end-of-line": {
+      "endOfLine": "fim",
+      "trailingWhitespace": "fim",
+      "middleOfLine": "nes"
+    },
+    "joint-cache-wait-agreement": {
+      "cacheWaitMs": 10,
+      "fastWinner": "nes",
+      "agreement": true,
+      "cancellationResult": null,
+      "cancellations": ["fim", "nes"],
+      "disposalReasons": [
+        {
+          "kind": "token-cancellation"
+        },
+        {
+          "kind": "token-cancellation"
+        }
+      ]
+    }
+  }
+}

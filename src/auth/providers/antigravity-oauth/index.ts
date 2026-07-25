@@ -11,8 +11,7 @@ import {
 } from '../../auth-provider';
 import { t } from '../../../i18n';
 import {
-  createSecretRef,
-  isSecretRef,
+  isSessionSecretRef,
   type SecretStore,
 } from '../../../secret';
 import type {
@@ -35,6 +34,7 @@ function toPersistableConfig(
 ): AntigravityOAuthConfig {
   return {
     method: 'antigravity-oauth',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     identityId: config?.identityId,
@@ -55,9 +55,8 @@ async function cleanupLegacyClientSecret(
     return;
   }
 
-  const record = config as unknown as Record<string, unknown>;
-  const raw = record['clientSecret'];
-  if (typeof raw === 'string' && isSecretRef(raw)) {
+  const raw: unknown = Reflect.get(config, 'clientSecret');
+  if (typeof raw === 'string' && isSessionSecretRef(raw)) {
     await secretStore.deleteOAuth2ClientSecret(raw);
   }
 }
@@ -82,7 +81,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
       throw new Error('Missing token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -110,14 +109,14 @@ export class AntigravityOAuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(raw)) {
+        if (!isSessionSecretRef(raw)) {
           return raw;
         }
         const stored = await secretStore.getOAuth2Token(raw);
         return stored ? JSON.stringify(stored) : raw;
       }
 
-      if (isSecretRef(raw)) {
+      if (isSessionSecretRef(raw)) {
         return raw;
       }
 
@@ -127,18 +126,26 @@ export class AntigravityOAuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
 
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
 
     const token = await normalizeToken();
     await cleanupLegacyClientSecret(auth, secretStore);
-    return { ...toPersistableConfig(auth), token };
+    return {
+      ...toPersistableConfig(auth),
+      identityId:
+        auth.token?.trim() && !isSessionSecretRef(auth.token.trim())
+          ? randomUUID()
+          : auth.identityId,
+      token,
+    };
   }
 
   static async prepareForDuplicate(
@@ -166,7 +173,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const tokenRaw = auth.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
+    if (tokenRaw && isSessionSecretRef(tokenRaw)) {
       await secretStore.deleteOAuth2Token(tokenRaw);
     }
     await cleanupLegacyClientSecret(auth, secretStore);
@@ -217,9 +224,12 @@ export class AntigravityOAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(next: AntigravityOAuthConfig): Promise<void> {
+  private async persistConfig(
+    next: AntigravityOAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     this.config = next;
-    await this.context.persistAuthConfig?.(next);
   }
 
   private async resolveTokenData(): Promise<OAuth2TokenData | null> {
@@ -228,7 +238,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
@@ -416,6 +426,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:antigravity-oauth`,
       'Starting Antigravity OAuth configuration',
@@ -498,7 +509,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
       `${this.context.providerId}:antigravity-oauth`,
       'Token exchange successful, storing tokens',
     );
-    const tokenRef = createSecretRef();
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
     await this.context.secretStore.setOAuth2Token(tokenRef, {
       accessToken: exchanged.accessToken,
       refreshToken: exchanged.refreshToken,
@@ -508,6 +519,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
 
     const nextConfig: AntigravityOAuthConfig = {
       method: 'antigravity-oauth',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: randomUUID(),
@@ -519,7 +531,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
       email: exchanged.email,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
     this._onDidChangeStatus.fire({ status: 'valid' });
 
     vscode.window.showInformationMessage(t('Authorization successful!'));
@@ -531,6 +543,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
   }
 
   async refresh(): Promise<boolean> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:antigravity-oauth`,
       'Starting token refresh',
@@ -568,7 +581,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
           `${this.context.providerId}:antigravity-oauth`,
           'Refresh token was revoked (invalid_grant); reauthentication required',
         );
-        await this.revoke();
+        await this.revoke(commitGuard);
         this._onDidChangeStatus.fire({ status: 'revoked', errorType: 'auth_error' });
         return false;
       }
@@ -612,23 +625,7 @@ export class AntigravityOAuthProvider implements AuthProvider {
       tokenType: refreshed.tokenType ?? 'Bearer',
       expiresAt: refreshed.expiresAt,
     };
-
-    if (isSecretRef(raw)) {
-      authLog.verbose(
-        `${this.context.providerId}:antigravity-oauth`,
-        'Storing refreshed token in secret storage',
-      );
-      await this.context.secretStore.setOAuth2Token(raw, nextToken);
-    } else {
-      authLog.verbose(
-        `${this.context.providerId}:antigravity-oauth`,
-        'Storing refreshed token in config',
-      );
-      await this.persistConfig({
-        ...toPersistableConfig(this.config),
-        token: JSON.stringify(nextToken),
-      });
-    }
+    const updates: Partial<AntigravityOAuthConfig> = {};
 
     const refreshTokenForParsing =
       nextToken.refreshToken ?? existingRefreshToken;
@@ -650,7 +647,6 @@ export class AntigravityOAuthProvider implements AuthProvider {
         refreshed.accessToken,
         this.config?.projectId ?? cachedParts.projectId,
       );
-      const updates: Partial<AntigravityOAuthConfig> = {};
 
       if (
         !this.config?.managedProjectId?.trim() &&
@@ -666,14 +662,18 @@ export class AntigravityOAuthProvider implements AuthProvider {
       if (!this.config?.tierId || this.config.tierId !== accountInfo.tierId) {
         updates.tierId = accountInfo.tierId;
       }
-
-      if (Object.keys(updates).length > 0) {
-        await this.persistConfig({
-          ...toPersistableConfig(this.config),
-          ...updates,
-        });
-      }
     }
+
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
+    await this.context.secretStore.setOAuth2Token(tokenRef, nextToken);
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        ...updates,
+        token: tokenRef,
+      },
+      commitGuard,
+    );
 
     this._onDidChangeStatus.fire({ status: 'valid' });
     authLog.verbose(
@@ -683,7 +683,9 @@ export class AntigravityOAuthProvider implements AuthProvider {
     return true;
   }
 
-  async revoke(): Promise<void> {
+  async revoke(
+    commitGuard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
     authLog.verbose(
       `${this.context.providerId}:antigravity-oauth`,
       'Revoking tokens',
@@ -696,23 +698,21 @@ export class AntigravityOAuthProvider implements AuthProvider {
       return;
     }
 
-    const tokenRaw = this.config.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
-      authLog.verbose(
-        `${this.context.providerId}:antigravity-oauth`,
-        'Deleting token from secret storage',
-      );
-      await this.context.secretStore.deleteOAuth2Token(tokenRaw);
+    const oldTokenRef = this.config.token?.trim();
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        token: undefined,
+        email: undefined,
+        tier: undefined,
+        tierId: undefined,
+        managedProjectId: undefined,
+      },
+      commitGuard,
+    );
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
     }
-
-    await this.persistConfig({
-      ...toPersistableConfig(this.config),
-      token: undefined,
-      email: undefined,
-      tier: undefined,
-      tierId: undefined,
-      managedProjectId: undefined,
-    });
 
     this._onDidChangeStatus.fire({ status: 'revoked' });
     authLog.verbose(

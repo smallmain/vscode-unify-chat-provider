@@ -5,6 +5,7 @@ import {
   isInternalMarker,
   isUsageMarker,
 } from '../utils';
+import { isLanguageModelThinkingPart } from '../proposed-api/thinking';
 
 /**
  * Default conservative token count estimator.
@@ -54,7 +55,7 @@ function countUnknown(state: CountState, value: unknown): void {
     return;
   }
 
-  if (value instanceof vscode.LanguageModelThinkingPart) {
+  if (isLanguageModelThinkingPart(value)) {
     const contents =
       typeof value.value === 'string' ? [value.value] : value.value;
     addUtf8Bytes(state, contents.join(''));

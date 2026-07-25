@@ -5,7 +5,7 @@ import type {
   ProvideLanguageModelChatResponseOptions,
 } from 'vscode';
 import * as vscode from 'vscode';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import type { RequestLogger } from '../../logger';
 import { getBaseModelId } from '../../model-id-utils';
 import type {
@@ -736,7 +736,11 @@ export class GitHubCopilotProvider implements ApiProvider {
     return this.chatProvider.estimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     this.assertCopilotAuth();
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
@@ -765,7 +769,7 @@ export class GitHubCopilotProvider implements ApiProvider {
     try {
       const response = await fetchWithNetwork(
         `${resolveCopilotApiBaseUrl(this.providerConfig)}/models`,
-        { headers },
+        { headers, signal },
       );
       if (!response.ok) {
         throw new Error(

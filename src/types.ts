@@ -14,6 +14,26 @@ export interface ContextCacheConfig {
 
 export type ProxyType = 'vscode' | 'direct' | 'custom';
 
+export type CompletionTemplate =
+  | 'fim'
+  | 'codegemma'
+  | 'copilot-replica-nes'
+  | 'zeta1'
+  | 'zeta2'
+  | 'zeta2.1'
+  | 'zeta3-internal'
+  | 'mercury-edit-2'
+  | 'codestral';
+
+export type CompletionTemplates = 'all' | readonly CompletionTemplate[];
+
+export interface CompletionConfig {
+  transport?: 'auto' | 'native' | 'compatible';
+  /** Absolute URL or a path relative to the provider API base URL. */
+  baseUrl?: string;
+  templates?: CompletionTemplates;
+}
+
 export interface ProxyConfig {
   /**
    * Proxy mode.
@@ -41,6 +61,8 @@ export type ThinkingEffort =
   | 'medium'
   | 'high'
   | 'xhigh';
+export type ThinkingMode = 'standard' | 'pro';
+export type ReasoningContext = 'auto' | 'current_turn' | 'all_turns';
 export type ModelEditTool =
   | 'find-replace'
   | 'multi-find-replace'
@@ -96,6 +118,8 @@ export interface ProviderConfig {
   autoFetchOfficialModels?: boolean;
   /** Context cache / prompt caching configuration. */
   contextCache?: ContextCacheConfig;
+  /** Default code-completion capability settings for this provider. */
+  completion?: CompletionConfig;
 }
 
 export type DeprecatedProviderConfigKey = 'apiKey';
@@ -176,6 +200,16 @@ export interface ModelConfig {
      * Leave undefined to let the provider decide.
      */
     summary?: 'none' | 'auto' | 'concise' | 'detailed';
+    /** Reasoning mode. Leave undefined to let the provider decide. */
+    mode?: ThinkingMode;
+    /** Amount of prior reasoning context retained by the provider. */
+    context?: ReasoningContext;
+  };
+  /** Native multi-agent execution configuration. */
+  'multi-agent'?: {
+    enabled: boolean;
+    /** Maximum number of subagents that may run concurrently. */
+    maxConcurrentSubagents?: number;
   };
   /**
    * Use native web search tool.
@@ -208,9 +242,11 @@ export interface ModelConfig {
   extraBody?: Record<string, unknown>;
   /** Request-time preset templates exposed to VS Code model configuration UI. */
   presetTemplates?: PresetTemplate[];
+  /** Code-completion capability overrides for this model. */
+  completion?: CompletionConfig;
 }
 
-export type PresetTemplateOverrideConfig = Pick<
+type PresetTemplateReplaceConfig = Pick<
   ModelConfig,
   | 'maxOutputTokens'
   | 'stream'
@@ -222,12 +258,16 @@ export type PresetTemplateOverrideConfig = Pick<
   | 'parallelToolCalling'
   | 'serviceTier'
   | 'verbosity'
-  | 'thinking'
   | 'webSearch'
   | 'memoryTool'
   | 'extraHeaders'
   | 'extraBody'
 >;
+
+export type PresetTemplateOverrideConfig = PresetTemplateReplaceConfig & {
+  /** Thinking children are merged so independent thinking presets compose. */
+  thinking?: Partial<NonNullable<ModelConfig['thinking']>>;
+};
 
 export type PresetTemplateOverrideKey = keyof PresetTemplateOverrideConfig;
 

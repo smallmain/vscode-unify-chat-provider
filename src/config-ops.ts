@@ -29,11 +29,13 @@ export const MODEL_CONFIG_KEYS = [
   'serviceTier',
   'verbosity',
   'thinking',
+  'multi-agent',
   'webSearch',
   'memoryTool',
   'extraHeaders',
   'extraBody',
   'presetTemplates',
+  'completion',
 ] as const satisfies ReadonlyArray<keyof ModelConfig>;
 
 export const BUILT_IN_SYNC_MODEL_CONFIG_KEYS = [
@@ -68,6 +70,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'proxy',
   'autoFetchOfficialModels',
   'contextCache',
+  'completion',
 ] as const satisfies ReadonlyArray<ProviderConfigPersistedKey>;
 
 type AssertNever<T extends never> = T;

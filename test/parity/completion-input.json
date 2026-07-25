@@ -1,0 +1,54 @@
+{
+  "schemaVersion": 1,
+  "clock": {
+    "requestIssuedDateTime": 1735689600000,
+    "earliestShownDateTime": 1735689600125
+  },
+  "document": {
+    "uri": "file:///workspace/src/counter.ts",
+    "languageId": "typescript",
+    "version": 7,
+    "text": "export function increment(value: number) {\n  return value\n}\n",
+    "position": {
+      "line": 1,
+      "character": 14
+    }
+  },
+  "selection": {
+    "anchor": {
+      "line": 1,
+      "character": 14
+    },
+    "active": {
+      "line": 1,
+      "character": 14
+    }
+  },
+  "history": [
+    {
+      "uri": "file:///workspace/src/counter.ts",
+      "before": "export function increment(value: number) {\n}\n",
+      "after": "export function increment(value: number) {\n  return value\n}\n",
+      "timestamp": 1735689599500
+    }
+  ],
+  "contextFiles": [
+    {
+      "uri": "file:///workspace/src/math.ts",
+      "text": "export const STEP = 1;\n"
+    }
+  ],
+  "diagnostics": [
+    {
+      "message": "Operator '+' cannot be applied to types.",
+      "severity": "error",
+      "line": 1
+    }
+  ],
+  "modelOutputs": {
+    "fim": [" + STEP;"],
+    "copilotNesXtab": ["<EDIT>\n", "  return value + STEP\n", "</EDIT>"],
+    "xtab275": ["  return value + STEP"],
+    "xtabUnifiedModel": ["<INSERT>\n", " + STEP", "\n</INSERT>"]
+  }
+}

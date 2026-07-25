@@ -10,7 +10,7 @@ import {
   AuthUiStatusSnapshot,
 } from '../../auth-provider';
 import { t } from '../../../i18n';
-import { createSecretRef, isSecretRef, type SecretStore } from '../../../secret';
+import { isSessionSecretRef, type SecretStore } from '../../../secret';
 import type { AuthCredential, ClaudeCodeAuthConfig, OAuth2TokenData } from '../../types';
 import { authLog } from '../../../logger';
 import { authorizeClaudeCode, exchangeClaudeCodeCode, refreshClaudeCodeToken } from './oauth-client';
@@ -21,6 +21,7 @@ function toPersistableConfig(
 ): ClaudeCodeAuthConfig {
   return {
     method: 'claude-code',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     identityId: config?.identityId,
@@ -69,7 +70,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       throw new Error('Missing token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -97,14 +98,14 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(raw)) {
+        if (!isSessionSecretRef(raw)) {
           return raw;
         }
         const stored = await secretStore.getOAuth2Token(raw);
         return stored ? JSON.stringify(stored) : raw;
       }
 
-      if (isSecretRef(raw)) {
+      if (isSessionSecretRef(raw)) {
         return raw;
       }
 
@@ -114,17 +115,25 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
 
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
 
     const token = await normalizeToken();
-    return { ...toPersistableConfig(auth), token };
+    return {
+      ...toPersistableConfig(auth),
+      identityId:
+        auth.token?.trim() && !isSessionSecretRef(auth.token.trim())
+          ? randomUUID()
+          : auth.identityId,
+      token,
+    };
   }
 
   static async prepareForDuplicate(
@@ -152,7 +161,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const tokenRaw = auth.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
+    if (tokenRaw && isSessionSecretRef(tokenRaw)) {
       await secretStore.deleteOAuth2Token(tokenRaw);
     }
   }
@@ -177,9 +186,12 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(next: ClaudeCodeAuthConfig): Promise<void> {
+  private async persistConfig(
+    next: ClaudeCodeAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     this.config = next;
-    await this.context.persistAuthConfig?.(next);
   }
 
   private async resolveTokenData(): Promise<OAuth2TokenData | null> {
@@ -188,7 +200,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
@@ -366,6 +378,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(`${this.context.providerId}:claude-code`, 'Starting Claude Code OAuth configuration');
 
     const authorization = authorizeClaudeCode();
@@ -413,7 +426,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       return { success: false, error: t('Authorization failed: {0}', exchanged.error) };
     }
 
-    const tokenRef = createSecretRef();
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
     await this.context.secretStore.setOAuth2Token(tokenRef, {
       accessToken: exchanged.accessToken,
       refreshToken: exchanged.refreshToken,
@@ -423,6 +436,7 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
 
     const nextConfig: ClaudeCodeAuthConfig = {
       method: 'claude-code',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: randomUUID(),
@@ -430,13 +444,14 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       email: exchanged.email,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
     this._onDidChangeStatus.fire({ status: 'valid' });
 
     return { success: true, config: nextConfig };
   }
 
   async refresh(): Promise<boolean> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(`${this.context.providerId}:claude-code`, 'Starting token refresh');
 
     const token = await this.resolveTokenData();
@@ -465,42 +480,43 @@ export class ClaudeCodeAuthProvider implements AuthProvider {
       expiresAt: refreshed.expiresAt,
     };
 
-    if (isSecretRef(raw)) {
-      await this.context.secretStore.setOAuth2Token(raw, nextToken);
-    } else {
-      await this.persistConfig({
-        ...toPersistableConfig(this.config),
-        token: JSON.stringify(nextToken),
-      });
-    }
-
     const currentEmail = this.config?.email?.trim() || undefined;
     const mergedEmail = refreshed.email ?? currentEmail;
-    if (mergedEmail !== currentEmail) {
-      await this.persistConfig({ ...toPersistableConfig(this.config), email: mergedEmail });
-    }
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
+    await this.context.secretStore.setOAuth2Token(tokenRef, nextToken);
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        token: tokenRef,
+        email: mergedEmail,
+      },
+      commitGuard,
+    );
 
     this._onDidChangeStatus.fire({ status: 'valid' });
     return true;
   }
 
   async revoke(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(`${this.context.providerId}:claude-code`, 'Revoking tokens');
 
     if (!this.config) {
       return;
     }
 
-    const tokenRaw = this.config.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
-      await this.context.secretStore.deleteOAuth2Token(tokenRaw);
+    const oldTokenRef = this.config.token?.trim();
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        token: undefined,
+        email: undefined,
+      },
+      commitGuard,
+    );
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
     }
-
-    await this.persistConfig({
-      ...toPersistableConfig(this.config),
-      token: undefined,
-      email: undefined,
-    });
 
     this._onDidChangeStatus.fire({ status: 'revoked' });
   }

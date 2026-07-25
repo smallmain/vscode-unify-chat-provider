@@ -1,4 +1,8 @@
 import * as vscode from 'vscode';
+import {
+  createLanguageModelThinkingParts,
+  isLanguageModelThinkingPart,
+} from '../../proposed-api/thinking';
 import Anthropic from '@anthropic-ai/sdk';
 import type {
   BetaContentBlock,
@@ -42,7 +46,12 @@ import {
 } from '../../utils';
 import { getBaseModelId } from '../../model-id-utils';
 import { DEFAULT_MAX_OUTPUT_TOKENS } from '../../defaults';
-import { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../types';
+import {
+  ChatRequestTrace,
+  CopilotUsage,
+  ModelConfig,
+  ProviderConfig,
+} from '../../types';
 import { TracksToolInput } from '@anthropic-ai/sdk/lib/BetaMessageStream';
 import {
   ENCRYPTED_THINKING_PLACEHOLDER,
@@ -66,7 +75,13 @@ import {
   getUnifiedUserAgent,
   setUserAgentHeader,
 } from '../utils';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
+
+type AnthropicMarkerData = {
+  raw: BetaMessage;
+  userId?: string;
+  usage?: CopilotUsage;
+};
 
 /**
  * Client for Anthropic-compatible APIs
@@ -366,10 +381,11 @@ export class AnthropicProvider implements ApiProvider {
 
             if (markerParts.length === 1) {
               try {
-                const decoded = decodeStatefulMarkerPart<{
-                  raw: BetaMessage;
-                  userId?: string;
-                }>(expectedIdentity, encodedModelId, markerParts[0]);
+                const decoded = decodeStatefulMarkerPart<AnthropicMarkerData>(
+                  expectedIdentity,
+                  encodedModelId,
+                  markerParts[0],
+                );
                 const raw = decoded.raw;
                 if (firstHistoryUserId == null && decoded.userId) {
                   firstHistoryUserId = decoded.userId;
@@ -547,7 +563,7 @@ export class AnthropicProvider implements ApiProvider {
       } else {
         return undefined;
       }
-    } else if (part instanceof vscode.LanguageModelThinkingPart) {
+    } else if (isLanguageModelThinkingPart(part)) {
       if (role !== vscode.LanguageModelChatMessageRole.Assistant) {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
@@ -925,6 +941,16 @@ export class AnthropicProvider implements ApiProvider {
     // Build betas array for beta API features
     const betaFeatures = new Set<string>();
 
+    if (
+      isFeatureSupported(
+        FeatureId.AnthropicMidConversationToolChanges,
+        this.config,
+        model,
+      )
+    ) {
+      betaFeatures.add('mid-conversation-tool-changes-2026-07-01');
+    }
+
     if (anthropicInterleavedThinkingEnabled) {
       betaFeatures.add('interleaved-thinking-2025-05-14');
     }
@@ -1150,7 +1176,7 @@ export class AnthropicProvider implements ApiProvider {
       prefix + (type === 'encrypted' ? ENCRYPTED_THINKING_PLACEHOLDER : text);
 
     if (emitMode !== 'metadata-only') {
-      yield new vscode.LanguageModelThinkingPart(output);
+      yield* createLanguageModelThinkingParts(output);
     }
 
     if (metadata) {
@@ -1218,7 +1244,7 @@ export class AnthropicProvider implements ApiProvider {
             undefined,
             thinkingOutputState,
           );
-          yield new vscode.LanguageModelThinkingPart('', undefined, {
+          yield* createLanguageModelThinkingParts('', undefined, {
             signature: block.signature,
             _completeThinking: block.thinking,
           } satisfies ThinkingBlockMetadata);
@@ -1232,7 +1258,7 @@ export class AnthropicProvider implements ApiProvider {
             undefined,
             thinkingOutputState,
           );
-          yield new vscode.LanguageModelThinkingPart('', undefined, {
+          yield* createLanguageModelThinkingParts('', undefined, {
             redactedData: block.data,
           } satisfies ThinkingBlockMetadata);
           break;
@@ -1251,9 +1277,9 @@ export class AnthropicProvider implements ApiProvider {
       }
     }
 
-    if (message.usage) {
-      this.processUsage(message.usage, requestTrace, logger);
-    }
+    const normalizedUsage = message.usage
+      ? this.processUsage(message.usage, requestTrace, logger)
+      : undefined;
 
     this.throwIfAbnormalStop(message);
 
@@ -1261,12 +1287,16 @@ export class AnthropicProvider implements ApiProvider {
     // no parts at all instead of an empty message. The outer service
     // treats Anthropic 0-part responses as valid and does not retry.
     if (message.content.length > 0) {
-      yield encodeStatefulMarkerPart<{ raw: BetaMessage; userId?: string }>(
+      const markerData: AnthropicMarkerData = {
+        raw,
+        userId: state.userId,
+      };
+      if (normalizedUsage) {
+        markerData.usage = normalizedUsage;
+      }
+      yield encodeStatefulMarkerPart<AnthropicMarkerData>(
         expectedIdentity,
-        {
-          raw,
-          userId: state.userId,
-        },
+        markerData,
       );
     }
   }
@@ -1395,14 +1425,14 @@ export class AnthropicProvider implements ApiProvider {
               break;
 
             case 'thinking':
-              yield new vscode.LanguageModelThinkingPart('', undefined, {
+              yield* createLanguageModelThinkingParts('', undefined, {
                 signature: block.signature,
                 _completeThinking: block.thinking,
               } satisfies ThinkingBlockMetadata);
               break;
 
             case 'redacted_thinking':
-              yield new vscode.LanguageModelThinkingPart('', undefined, {
+              yield* createLanguageModelThinkingParts('', undefined, {
                 redactedData: block.data,
               } satisfies ThinkingBlockMetadata);
               break;
@@ -1433,9 +1463,9 @@ export class AnthropicProvider implements ApiProvider {
             }
           }
 
-          if (raw?.usage) {
-            this.processUsage(raw.usage, requestTrace, logger);
-          }
+          const normalizedUsage = raw?.usage
+            ? this.processUsage(raw.usage, requestTrace, logger)
+            : undefined;
 
           this.throwIfAbnormalStop(raw);
 
@@ -1450,13 +1480,17 @@ export class AnthropicProvider implements ApiProvider {
           // `raw.content` is empty, the outer service sees a 0-part
           // response and accepts it as a valid no-op completion.
           if (raw && raw.content.length > 0) {
-            yield encodeStatefulMarkerPart<{
-              raw: BetaMessage;
-              userId?: string;
-            }>(expectedIdentity, {
+            const markerData: AnthropicMarkerData = {
               raw,
               userId: state.userId,
-            });
+            };
+            if (normalizedUsage) {
+              markerData.usage = normalizedUsage;
+            }
+            yield encodeStatefulMarkerPart<AnthropicMarkerData>(
+              expectedIdentity,
+              markerData,
+            );
           }
           break;
         }
@@ -1705,7 +1739,7 @@ export class AnthropicProvider implements ApiProvider {
     usage: BetaUsage,
     requestTrace: ChatRequestTrace,
     logger: RequestLogger,
-  ) {
+  ): CopilotUsage {
     const normalizedUsage = createCopilotUsage(
       (usage.input_tokens ?? 0) +
         (usage.cache_creation_input_tokens ?? 0) +
@@ -1714,6 +1748,7 @@ export class AnthropicProvider implements ApiProvider {
       usage.cache_read_input_tokens,
     );
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+    return normalizedUsage;
   }
 
   estimateTokenCount(text: string): number {
@@ -1724,7 +1759,11 @@ export class AnthropicProvider implements ApiProvider {
    * Get available models from the Anthropic API
    * Uses the ListModels endpoint with pagination support
    */
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1745,7 +1784,7 @@ export class AnthropicProvider implements ApiProvider {
       do {
         const page = await client.models.list(
           { after_id: afterId },
-          { headers: this.buildHeaders(credential) },
+          { headers: this.buildHeaders(credential), signal },
         );
 
         for (const model of page.data) {

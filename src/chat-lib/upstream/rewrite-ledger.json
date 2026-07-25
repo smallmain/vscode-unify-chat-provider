@@ -1,0 +1,801 @@
+{
+  "schemaVersion": 1,
+  "repository": "https://github.com/microsoft/vscode.git",
+  "ref": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "commit": "fc3def6774c76082adf699d366f31a557ce5573f",
+  "mechanicalRewrites": [
+    {
+      "id": "snapshot-path",
+      "operation": "Map extensions/copilot/src/** to src/chat-lib/upstream/**.",
+      "behaviorChange": false
+    },
+    {
+      "id": "line-endings",
+      "operation": "Normalize copied TypeScript/JavaScript source line endings to LF.",
+      "behaviorChange": false
+    },
+    {
+      "id": "provenance-header",
+      "operation": "Prepend copied source with its repository commit and exact source path.",
+      "behaviorChange": false
+    },
+    {
+      "id": "parser-runtime-strict-types",
+      "operation": "For the parser runtime bundle only, replace blockTrimmer.ts host document type imports with equivalent local structural interfaces and add an explicit undefined return to parseBlock.ts.",
+      "behaviorChange": false
+    },
+    {
+      "id": "diff-runtime-strict-types",
+      "operation": "For the diff runtime bundle only, remove unreachable move/text-edit APIs and replace broad host dependencies with equivalent local structural helpers.",
+      "behaviorChange": false
+    }
+  ],
+  "importRewrites": [],
+  "serviceReplacements": [
+    {
+      "id": "configured-model-auth",
+      "upstreamPaths": [
+        "extensions/copilot/src/platform/authentication/",
+        "extensions/copilot/src/platform/endpoint/",
+        "extensions/copilot/src/platform/networking/"
+      ],
+      "replacement": "CompletionModelReference, CompletionModel, and LanguageModelChat adapters.",
+      "rationale": "This extension owns completion model selection and transport.",
+      "behaviorChange": true
+    },
+    {
+      "id": "legacy-completions-auth",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/auth/",
+        "extensions/copilot/src/extension/completions-core/vscode-node/types/src/auth.ts"
+      ],
+      "replacement": "CompletionModelReference credentials supplied by the local model adapter.",
+      "rationale": "Legacy Copilot token acquisition and LSP auth notifications are not used by this extension.",
+      "behaviorChange": true
+    },
+    {
+      "id": "configured-completions-transport",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/openai/fetch.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/networkConfiguration.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/networking.ts"
+      ],
+      "replacement": "CompletionModel and LanguageModelChat streaming adapters.",
+      "rationale": "Request transport, endpoints, and authentication are owned by the configured provider.",
+      "behaviorChange": true
+    },
+    {
+      "id": "configured-completions-model-selection",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/openai/model.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/modelPickerUserSelection.ts"
+      ],
+      "replacement": "CompletionModelReference selected by Unify Chat Provider configuration.",
+      "rationale": "The Copilot model picker and token-driven model manager are host UI concerns.",
+      "behaviorChange": true
+    },
+    {
+      "id": "legacy-snippy-service",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/snippy/"
+      ],
+      "replacement": "No-op citation-network adapter and local completion lifecycle handling.",
+      "rationale": "Legacy Snippy network, connection UI, and telemetry do not generate completion content.",
+      "behaviorChange": true
+    },
+    {
+      "id": "local-behavior-configuration",
+      "upstreamPaths": [
+        "extensions/copilot/src/platform/configuration/common/configurationService.ts",
+        "extensions/copilot/src/platform/telemetry/common/nullExperimentationService.ts"
+      ],
+      "replacement": "Commit-pinned local behavior configuration.",
+      "rationale": "Remote experiments and Copilot settings are outside the allowed architecture boundary.",
+      "behaviorChange": true
+    },
+    {
+      "id": "local-observability",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/bridge/src/completionsTelemetryServiceBridge.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/telemetry/userConfig.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/test/",
+        "extensions/copilot/src/platform/requestLogger/",
+        "extensions/copilot/src/platform/survey/",
+        "extensions/copilot/src/platform/telemetry/"
+      ],
+      "replacement": "Local logger/no-op upload adapters while preserving algorithm state transitions.",
+      "rationale": "Official telemetry upload is excluded, but state-changing callers remain extracted.",
+      "behaviorChange": true
+    },
+    {
+      "id": "host-contribution-wiring",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/common/contributions.ts",
+        "extensions/copilot/src/extension/completions/vscode-node/completionsCoreContribution.ts",
+        "extensions/copilot/src/extension/completions/vscode-node/completionsUnificationContribution.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/completionsServiceBridges.ts"
+      ],
+      "replacement": "CompletionManager and persistent CopilotRuntime registration.",
+      "rationale": "The project intentionally exposes one outer inline completion provider.",
+      "behaviorChange": true
+    },
+    {
+      "id": "debug-and-feedback-ui",
+      "upstreamPaths": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/components/expectedEditCaptureController.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/components/inlineEditDebugComponent.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/components/logContextRecorder.ts"
+      ],
+      "replacement": "No-op debug/feedback UI adapters.",
+      "rationale": "These modules collect diagnostics or UI feedback and do not generate completion content.",
+      "behaviorChange": true
+    }
+  ],
+  "portingManifest": "src/chat-lib/porting-manifest.json",
+  "behaviorPatches": [
+    {
+      "runtimeFile": "src/chat-lib/core/behavior-config.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineEditTriggerer.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabNextCursorPredictor.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+        "extensions/copilot/src/platform/configuration/common/configurationService.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/dataTypes/jointCompletionsProviderOptions.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/dataTypes/xtabPromptOptions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Freezes completion-affecting remote treatment values into commit-versioned local configuration, including the default-disabled joint Provider topology independently from model unification."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/information-delta.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/informationDelta.tsx"
+      ],
+      "status": "ported",
+      "adaptation": "Replaces VS Code StringEdit and OffsetRange with OffsetTextReplacement while preserving exact four-gram extraction, prefix/suffix normalization in both orders, overlap trimming, inserted/deleted set combination, and the greater-than-six and ratio-greater-than-0.7 undo heuristic; also exposes simultaneous descending edit application for replaying history."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/types.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/copilotCompletion.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/resultType.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/inlineCompletion.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Defines a VS Code-independent GhostText data contract while retaining request, result, completion metadata, and the minimal accepted/discarded ownership boundary needed for effective cleanup."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/behavior.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/configBlockMode.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/ghostTextStrategy.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/completionsPromptFactory/completionsPromptFactory.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Freezes non-experimental GhostText prompt, candidate, cache, delay, and multiline defaults at the upstream commit."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/tokenizer.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/tokenization/tokenizer.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Uses the project's o200k tiktoken dependency while preserving the upstream n*4 character prewindow, n+2 token expansion, boundary retokenization, and first/last token truncation operations; exposes a deterministic character tokenizer only for fixtures."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/prompt.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/completionsPromptFactory/cascadingPromptFactory.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/completionsPromptFactory/completionsPromptFactory.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/completionsPromptRenderer.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/elision.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/splitContextPrompt.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/splitContextPromptRenderer.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/codeSnippets.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/diagnostics.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/traits.tsx",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviderStatistics.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/similarFiles.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/suffixMatchCriteria.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the registered split-context renderer to host-supplied context: suffix encoding reserves five tokens before suffix-percent allocation, prefix and context share one WishlistElision budget, component leaves are independently weighted, chunks are removed together, and remaining lines are retained from the cursor backward. Trait and CodeSnippet sources are tracked per text leaf, DiagnosticBag sources are tracked on their header leaf, and the final elision result reports exact expected/actual token counts to the context-provider statistics service. It also preserves stable suffix handling, diagnostics, recent edits, similar-file selection, and the pinned 4.1 characters-per-token long-document preclip."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/state.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/completionsCache.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/current.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/speculativeRequestCache.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports LRU completion cache, first-choice-gated typing-as-suggested state, and speculative request ownership into explicit disposable runtime state."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/multiline.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/multilineModel.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/normalizeIndent.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/streamedCompletionSplitter.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports multiline gating/model features, block-position-specific 9/3 lookahead, and StreamedCompletionSplitter prefix-addition cache segments while directly executing the pinned parser and block trimmer through the strict parser-runtime boundary; the replacement FIM transport remains non-streaming, so splitting runs once the complete response arrives, and unsupported languages explicitly remain untrimmed."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/parser-runtime.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/statementTree.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/fileLoader.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parse.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/parseBlock.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Loads a build-time bundled closure of the exact upstream Tree-sitter parser, block-position classification, and configurable TerseBlockTrimmer through a runtime-validated strict interface, with pinned WASM resources copied beside the bundle."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/model-boundary.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/completionsFromNetwork.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/copilotCompletion.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Replaces Copilot transport with the unified CompletionModel boundary while retaining request ids, choice ordering, cancellation, finish reasons, and usage metadata. The effective candidateCount remains explicit in AlgorithmRequest; CompletionModel performs capability-based single-result downgrade, and request-level temperature is not reproduced."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/postprocess.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/blockTrimmer.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/ghostText.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/normalizeIndent.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/streamedCompletionSplitter.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports duplicate/repetition/no-op filtering, suffix coverage, leading whitespace and indentation normalization, and final range/item conversion."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/recent-edits.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/recentEdits/recentEditsProvider.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/recentEdits/recentEditsReducer.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the pinned FullRecentEditsProvider reducer and summary semantics: exact defaults, 2 MB guard, minimal line-span diffs, adjacent-edit merging, per-file edit rebasing, modified-file trimming, chronological ordering, and unified-diff filtering/formatting. Observable documents and wall-clock timers are replaced by explicit timestamped event ingestion; the host adapter supplies lazy start and currently available document URIs."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/engine.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/asyncCompletions.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/completionsCache.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/current.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/ghostText.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/last.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/speculativeRequestCache.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/ghostText/streamedCompletionSplitter.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Combines prompt, prefix-node completion cache, caller-independent in-flight transport, 100-entry speculative scheduling, progressive-reveal split caching, cycling, delay, post-processing, and owned invalidation cancellation in a persistent host-neutral engine. Shown state remains effective for speculative scheduling and typing-as-suggested ordering; accepted/discarded item finalization and list disposal retain idempotent cleanup without telemetry-only acceptance metadata."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/ghost-text/index.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/ghostText/ghostTextProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Exposes the strict GhostText port and binds it to CompletionModel through FimGhostTextModelBoundary with a stable request/id factory boundary."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/types.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/platform/inlineEdits/common/statelessNextEditProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditResult.ts",
+        "extensions/copilot/src/extension/xtab/common/promptCrafting.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Defines host-neutral document, history, diagnostics, prompt, edit-window, response, and edit contracts for NES."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/string-edit.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/util/vs/editor/common/core/edits/stringEdit.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/edits/edit.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/ranges/offsetRange.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports offset StringReplacement/StringEdit apply, normalize, suffix-then-prefix trimming, post-edit-coordinate compose, structural tryRebase, and offset/range transforms into host-neutral NES types without VS Code editor classes."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/tokenizer.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/common/promptCraftingUtils.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Retains XtabProvider.computeTokens exactly as floor(text.length / 4), plus promptCraftingUtils' per-line +1 newline accounting for paged clipping."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/similar-files.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/experiments/similarFileOptionsProvider.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/experiments/similarFileOptionsProviderCpp.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/cursorContext.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/jaccardMatching.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/selectRelevance.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/similarFiles.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/snippetInclusion/windowDelineations.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the default and C++ limits, cursor-bounded 60-line reference, case-sensitive tokenization and stop words, one-line sliding windows, overlapping-window winner selection, Jaccard scoring, strict file filters, per-file/global limits, and low-to-high result order. Subset matching remains frozen off by the reviewed local treatment."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/prompt.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/common/diffHistoryForPrompt.ts",
+        "extensions/copilot/src/extension/xtab/common/promptCrafting.ts",
+        "extensions/copilot/src/extension/xtab/common/recentFilesForPrompt.ts",
+        "extensions/copilot/src/extension/xtab/common/systemMessages.ts",
+        "extensions/copilot/src/extension/xtab/common/tags.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabUtils.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports edit-window calculation, context cascade/budgets, recent files, history diff, and eight-strategy message construction."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/edit-intent.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/node/editIntent.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/dataTypes/xtabPromptOptions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports first-line tagged and uppercase short-name edit-intent parsing, permissive High fallback with exact parse-error classification, remaining-stream preservation, and the no_edit/low/medium/high by low/medium/high aggressiveness display matrix."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/user-interaction.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/delay.ts",
+        "extensions/copilot/src/extension/inlineEdits/common/userInteractionMonitor.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+        "extensions/copilot/src/extension/xtab/common/inlineSuggestion.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+        "extensions/copilot/src/platform/configuration/common/configurationService.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/dataTypes/xtabPromptOptions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the persistent 30-action interaction window, ignored limiting, position-weighted happiness score, adaptive level resolution, request-relative DelaySession, end-of-line/inline-position debounce selection, explicit eagerness debounce/minimum-response overrides, and shown-and-not-superseded ignored lifecycle. Exponential timing-history and internal trace metadata are omitted because they do not change prompt or completion selection."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/response.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/common/inlineSuggestion.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/importFiltering.ts",
+        "extensions/copilot/src/extension/xtab/node/responseFormatHandlers.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabUtils.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/statelessNextEditProviders.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/responseProcessor.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports line-by-line chunk streaming, official ResponseProcessor convergence, the response formats selected by all eight supported strategies, early divergence, and the production no-op/import/whitespace/undo/marker filter chain into host-neutral edits; DirectEdits bypass artificial delay, while the first raw EditWindowLines candidate delays before filtering."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/stream-compatibility.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/node/cursorLineDivergence.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports original/current line projection through intermediate StringEdit and exact isModelLineCompatible cursor/edit-window early-divergence decisions, including ambiguous in-range edits and CRLF/CR line mapping."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/diff-runtime.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/editRebase.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/abstractText.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffset.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/text/positionToOffsetImpl.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/defaultLinesDiffComputer/defaultLinesDiffComputer.ts",
+        "extensions/copilot/src/util/vs/editor/common/diff/rangeMapping.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Loads a build-time CommonJS bundle of the pinned DefaultLinesDiffComputer and StringText path with the official edit-rebase options. The strict build transform removes move computation and text-edit conversion APIs that are unreachable through the fixed computeMoves=false boundary, preserves the upstream CRLF/subword offset mapping, initializes the PositionOffsetTransformer TextLength dependency explicitly, and validates the narrow synchronous offset-replacement result at runtime."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/edit-rebase.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/editRebase.ts",
+        "extensions/copilot/src/util/vs/editor/common/core/edits/stringEdit.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports edit-indexed detailed replacements, sequential post-edit-coordinate composition, strict and lenient rebasing, type-through agreement, editor auto-close subsequences, reverse agreement, edit-window checks, and final consistency classification while delegating detailed diff generation to the pinned strict diff runtime."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/cache-window.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports computeReducedWindow's exact position/offset arithmetic and the AfterEditWindow selection shift, including cursor-line retention and trailing-empty-line behavior, without StringText/OffsetRange host dependencies."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/cache.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/editRebase.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditCache.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/speculativeRequestManager.ts",
+        "extensions/copilot/src/extension/inlineEdits/common/rejectionCollector.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports exact/rebased/subsequent/speculative lookup, originating-request ownership, cross-file target snapshots, global-zero active aliases and bundles, rejected-edit rebasing, cursor relevance, accepted-edit shifting, late streamed-edit append, close/reopen exact-entry survival, and tracked-state invalidation."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/speculative.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/node/speculativeRequestManager.ts",
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the one-global-pending and speculative pending boundaries, origin-stream scheduling and stream-end firing, replacement cancellation, one-shot consume, close/dispose cancellation, request-id dedupe, post-edit trajectory validation, and Smart edit-window expansion source flags with typed cancellation reasons into host-neutral state."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/triggerer.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineEditTriggerer.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Separates the upstream trigger state machine from VS Code events, preserves global edit timing for untracked documents without creating per-document state, and injects a deterministic clock and UUID factory."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/cursor-predictor.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/xtab/common/promptCrafting.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabNextCursorPredictor.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the exact next-cursor system prompt, numbered 3000-token current-file clipping, think-block/line response parsing, kept-range validation, OnlyWithEdit target decision, synchronous same-file retry, and ordered asynchronous cross-file open continuation into a host-neutral predictor."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/nes/diagnostics-race.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/raceAndAll.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the asymmetric LLM/diagnostics first-result race, request-relative 1250ms diagnostics deadline, parent cancellation, loser cancellation, and error isolation without retaining an internal event/timestamp trace."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/joint/types.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "src/vs/editor/common/languages.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Defines host-neutral FIM/NES branch, cancellation, edit semantics, disposal actions, last-shown NES, and joint/separate-provider result contracts without exposing timing metadata or VS Code's internal provider-group scheduler."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/joint/shared.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "src/vs/editor/contrib/inlineCompletions/browser/model/provideInlineCompletions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports branch observation, cancellation races, no-op filtering, edit application, and the actual disposeWhenSettled/cancel actions while omitting internal trace and disposal-record metadata."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/joint/joint-arbitrator.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Ports the joint Provider's FIM-first behavior, last-shown NES state, 10ms cache wait, suggestion agreement, selection-triggered NES-only flow, enforceCacheDelay, cancellation, and disposal decisions. This internal topology is independent from model unification."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/joint/separate-provider-arbitrator.ts",
+      "upstreamSources": [
+        "src/vs/editor/contrib/inlineCompletions/browser/model/inlineCompletionsModel.ts",
+        "src/vs/editor/contrib/inlineCompletions/browser/model/provideInlineCompletions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Arbitrates FIM and NES behind the extension's single public provider, including request scope, automatic visible-FIM precedence, inline-edit fallback, isolation, cancellation, and disposal. VS Code's multi-provider group, exclusion, and yield scheduler is intentionally outside this boundary."
+    },
+    {
+      "runtimeFile": "src/chat-lib/core/joint/index.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "src/vs/editor/contrib/inlineCompletions/browser/model/provideInlineCompletions.ts"
+      ],
+      "status": "ported",
+      "adaptation": "Exposes the joint arbiter, separate-provider presentation arbiter, and strict host-neutral contracts as one production runtime boundary."
+    }
+  ],
+  "hostAdapters": [
+    {
+      "runtimeFile": "src/completion/manager.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "src/vs/editor/common/languages.ts",
+        "src/vs/editor/contrib/inlineCompletions/browser/model/provideInlineCompletions.ts"
+      ],
+      "replaces": [
+        "Copilot inline-edit eagerness provider option and observable configuration service",
+        "Copilot joint-provider option forwarding",
+        "VS Code multi-provider scheduling, item ownership, and lifecycle routing"
+      ],
+      "adaptation": "Hosts the project's single public inline-completion provider, reads Copilot NES eagerness only from each provider's completion.providers[].options, and passes configuration changes to the existing runtime without declaring a VS Code provider option or discarding interaction, cache, trigger, and in-flight state. It also routes scheduled item/list lifecycle back to the owning algorithm."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/algorithm.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions/vscode-node/completionsCoreContribution.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineEditProviderFeature.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts"
+      ],
+      "replaces": [
+        "Copilot completions/NES contribution registration and provider construction",
+        "Copilot instantiation, authentication, endpoint, and model wiring",
+        "separate-versus-joint provider feature selection"
+      ],
+      "adaptation": "Registers the official-compatible implementation as the project's `copilot` completion algorithm, normalizes its configured model references, and constructs one persistent CopilotRuntime. Invalid local configuration produces an inert algorithm instead of instantiating a partially configured provider."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/default-context-providers.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/completionsServiceBridges.ts",
+        "extensions/copilot/src/extension/diagnosticsContext/vscode/diagnosticsContextProvider.ts",
+        "extensions/copilot/src/extension/git/vscode/scmContextprovider.ts",
+        "extensions/copilot/src/extension/typescriptContext/common/serverProtocol.ts",
+        "extensions/copilot/src/extension/typescriptContext/vscode-node/languageContextService.ts"
+      ],
+      "replaces": [
+        "Copilot default TypeScript, SCM, and diagnostics context-provider contributions",
+        "TypeScript language-context service and tsserver protocol bridge",
+        "Copilot Git, diagnostics, configuration, and language-context DI services"
+      ],
+      "adaptation": "Registers the pinned provider IDs, selectors, and completions/NES targets through the local context registry. TypeScript context activates the built-in TypeScript extension and calls the pinned tsserver protocol, SCM context replaces Copilot Git services with cancellable git CLI reads, and diagnostics remains fixed-off by default. When enabled, diagnostics returns an empty primary result and samples the edit-window-bounded nearest-three Trait during Xtab's unconditional after-settle-or-deadline NES fallback."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/fim-notebook-context.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/completionState.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/prompt.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/similarFiles/neighborFiles.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/languageMarker.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/prompt/src/prompt.ts"
+      ],
+      "replaces": [
+        "Copilot notebook/text-document manager wrappers",
+        "CompletionState notebook-prefix edit and cursor remapping",
+        "prompt-package language normalization and comment-marker services"
+      ],
+      "adaptation": "Builds the FIM virtual document from earlier language-compatible notebook cells, comments alias-compatible cells with the active language's markers when their raw IDs differ, applies the exact blank-line separators, shifts the cursor into the virtual prefix, and maps result lines back to the active cell using immutable VS Code cell snapshots."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/options.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/vscodeInlineCompletionItemProvider.ts",
+        "extensions/copilot/src/extension/completions/vscode-node/completionsUnificationContribution.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineEditProviderFeature.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/parts/documentFilter.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabNextCursorPredictor.ts",
+        "extensions/copilot/src/platform/configuration/common/configurationService.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/dataTypes/xtabPromptOptions.ts",
+        "src/vs/workbench/services/inlineCompletions/common/inlineCompletionsUnification.ts"
+      ],
+      "replaces": [
+        "Copilot distributed configuration and experimentation-backed provider settings",
+        "Copilot authentication/endpoint-selected FIM, NES, and cursor-prediction models",
+        "VS Code provider language, model-unification, and presentation option inputs"
+      ],
+      "adaptation": "Defines and strictly validates the local Copilot algorithm schema while retaining the pinned prompt-strategy and eagerness IDs, independent FIM/NES language override maps, model-unification and presentation switches, selected-completion policy override, and default Himalia cursor-prediction model. Independent mode resolves explicit fimModel and nesModel references; modelUnification resolves only unifiedModel and forces its unified Xtab response protocol. Official endpoint discovery is replaced by explicit project model references, and the local per-provider n option defaults to one independently of the upstream cycling value."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/runtime-routing.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/vscodeInlineCompletionItemProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+        "src/vs/editor/contrib/inlineCompletions/browser/model/provideInlineCompletions.ts"
+      ],
+      "replaces": [
+        "Copilot FIM/NES availability and serve-as-completions routing",
+        "joint-provider last-NES cache-delay and same-document capture rules",
+        "selectedCompletionInfo quick-suggestions/build-channel gate",
+        "joint-provider and VS Code item/list disposal coordination"
+      ],
+      "adaptation": "Centralizes host-neutral routing predicates for independent FIM/NES enablement, explicit FIM invocation, the model-unification serve-as-completions quadrant, selectedCompletionInfo defaults, document-version cache delay, same-document NES capture, and cursor-jump presentation. It also aggregates scheduler-discarded FIM items before ending the originating core list."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/nes-item.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/isInlineSuggestion.ts"
+      ],
+      "replaces": [
+        "Copilot NES result to VS Code inline completion item conversion",
+        "inline-suggestion versus inline-edit presentation selection"
+      ],
+      "adaptation": "Binds the pinned toInlineSuggestion implementation to the local NES result and VS Code item metadata, while preserving cross-file, notebook-cell, cursor-jump, model-unification menu, command, and mimicGhostTextBehavior host presentation rules."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/nes-provider.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/node/nextEditProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabNextCursorPredictor.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts"
+      ],
+      "replaces": [
+        "Copilot instantiation services and model endpoint",
+        "LLM/diagnostics race wiring",
+        "OnlyWithEdit cursor prediction and same/cross-file retry wiring",
+        "NES cache and speculative request host lifecycle"
+      ],
+      "adaptation": "Binds the strict NES prompt, streaming response, cache, diagnostics, trigger, and cursor-prediction ports to CompletionModelReference: stateful cache/speculative and compatible pending-stream reuse precede the fresh empty-history gate; eligible fresh requests create DelaySession before context/transport; fresh callers resolve their first edit while the remainder runs in the background, regular joins wait for full stream completion, and speculative joins resolve at speculative first-edit settlement. Cache hits retain the originating request source, regular/speculative joins use the current caller source, one global pending request is replaced atomically, and shown edits schedule against a running origin stream before stream-end firing. Consumers detach independently, and a fixed one-second handoff window lets a following Core request reattach before the last-consumer transport cancellation. It preserves terminal edit-intent filtering, ordinary-filter retry/no-suggestion caching, malformed unified-response handling, explicit eagerness delay/rejection suppression, and independent diagnostics lifecycle routing without exposing provider trace metadata."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/diagnostics-provider.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/features/diagnosticsCompletionProcessor.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/features/diagnosticsInlineEditProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/features/diagnosticsBasedCompletions/asyncDiagnosticsCompletionProvider.ts"
+      ],
+      "replaces": [
+        "Copilot diagnostics provider instantiation",
+        "VS Code CodeAction to diagnostics NES conversion"
+      ],
+      "adaptation": "Uses VS Code diagnostics and CodeAction APIs directly while preserving delayed start, cancellation, preferred-action ordering, and target-document edit conversion."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/context-provider.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/types/src/contextProviderApiV1.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/asyncUtils.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviderRegistry.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviderStatistics.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviders/contextItemSchemas.ts",
+        "extensions/copilot/src/extension/languageContextProvider/vscode-node/languageContextProviderService.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts"
+      ],
+      "replaces": [
+        "Copilot language-context provider registry and DI service",
+        "LRUCacheMap-backed resolution and usage-statistics stores",
+        "resolveAll cancellation and timeout orchestration"
+      ],
+      "adaptation": "Exposes the Context Provider API v1 contract through local VS Code types. Completions preserve parallel 150ms resolution, cancellation, timeout-only fallback, the five-entry non-empty result cache, and a separate 25-completion usage LRU. NES instead preserves Xtab's shared absolute deadline: primary resolvers settle or reach the remaining debounce boundary without deadline cancellation, every matched fallback then runs, late provider side effects remain possible, and completed results are not cached across requests. Both paths retain schema and item-ID normalization; completions additionally compute full/partial/none/content-excluded/error prompt usage and previousUsageStatistics while NES remains outside that feedback store."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/workspace.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/contextProviderBridge.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviders/codeSnippets.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviders/diagnostics.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/contextProviders/traits.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/parts/vscodeWorkspace.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/similarFilesContext.ts",
+        "extensions/copilot/src/extension/xtab/node/xtabProvider.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/observableWorkspace.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/workspaceEditTracker/historyContextProvider.ts",
+        "extensions/copilot/src/platform/inlineEdits/common/workspaceEditTracker/nesXtabHistoryTracker.ts"
+      ],
+      "replaces": [
+        "Copilot DocumentManager and ObservableWorkspace",
+        "workspace edit history and recent-file services",
+        "Git, diagnostics, language context, and ignore host services"
+      ],
+      "adaptation": "Maps VS Code document/editor/notebook/configuration events into deterministic snapshots, records relative recent-edit positions newest-first, and forwards untracked edits for global trigger timing without tracking their contents. It bridges provider item identity through URI content-exclusion validation into the FIM prompt and submits source-level usage only after final prompt rendering. NES freezes the full base snapshot before enrichment, loads ignore rules for the union of current/recent/history roots, refilters the frozen snapshot after those rules settle, and fails closed for documents whose root rules remain unknown at the deadline. Language/Git enrichment shares the DelaySession absolute deadline while the FIM 1200ms outer boundary remains separate."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/fim-runtime-utils.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/ghostText/ghostTextProvider.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/completionState.ts",
+        "extensions/copilot/src/extension/completions-core/vscode-node/lib/src/prompt/components/splitContextPrompt.tsx",
+        "extensions/copilot/src/platform/inlineEdits/common/workspaceEditTracker/historyContextProvider.ts"
+      ],
+      "replaces": [
+        "Copilot workspace-to-GhostText context services",
+        "default language enablement configuration"
+      ],
+      "adaptation": "Selects newest edit history then emits it chronologically with positions, avoids duplicating recent files or symbols across prompt channels, preserves context-provider source identity and feedback, freezes default disabled language IDs, and builds the selectedCompletionInfo ProposedTextEdit with its official post-edit position."
+    },
+    {
+      "runtimeFile": "src/completion/copilot/runtime.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/completions-core/vscode-node/extension/src/ghostText/ghostTextProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/inlineCompletionProvider.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts"
+      ],
+      "replaces": [
+        "Copilot FIM and NES provider registration topology",
+        "instantiation service and model/auth resolution",
+        "joint provider item/list lifecycle routing"
+      ],
+      "adaptation": "Hosts persistent GhostText and NES branches inside the extension's single provider. Independent models use the pinned default separate-provider presentation path; the default-disabled joint Provider experiment remains an internal behavior treatment with its regular and cursorEndOfLine strategies. modelUnification constructs only the unified NES/Xtab branch, forces the unified response protocol, and never starts the separate FIM engine. Independent FIM applies the local per-provider n value to cycling without reproducing request-level temperature, while lifecycle routing preserves completion-affecting shown, accepted/discarded, and list-disposal state."
+    },
+    {
+      "runtimeFile": "src/completion/change-hint.ts",
+      "upstreamSources": [
+        "extensions/copilot/src/extension/inlineEdits/common/nesTriggerHint.ts",
+        "extensions/copilot/src/extension/inlineEdits/vscode-node/jointInlineCompletionProvider.ts"
+      ],
+      "replaces": [
+        "Copilot NES changeHint payload",
+        "single-provider branch and CompletionProvider routing protocol"
+      ],
+      "adaptation": "Wraps trigger reason and target FIM/NES/diagnostics branch with a provider id, validates opaque VS Code changeHint data, and prevents active hints from invoking unrelated providers."
+    }
+  ],
+  "adapterFiles": [
+    "src/completion/change-hint.ts",
+    "src/completion/copilot/algorithm.ts",
+    "src/completion/copilot/context-provider.ts",
+    "src/completion/copilot/default-context-providers.ts",
+    "src/completion/copilot/diagnostics-provider.ts",
+    "src/completion/copilot/fim-notebook-context.ts",
+    "src/completion/copilot/fim-runtime-utils.ts",
+    "src/completion/copilot/nes-item.ts",
+    "src/completion/copilot/nes-provider.ts",
+    "src/completion/copilot/options.ts",
+    "src/completion/copilot/runtime-routing.ts",
+    "src/completion/copilot/runtime.ts",
+    "src/completion/copilot/workspace.ts",
+    "src/completion/manager.ts"
+  ],
+  "runtimeFiles": [
+    "src/chat-lib/core/behavior-config.ts",
+    "src/chat-lib/core/ghost-text/behavior.ts",
+    "src/chat-lib/core/ghost-text/engine.ts",
+    "src/chat-lib/core/ghost-text/index.ts",
+    "src/chat-lib/core/ghost-text/model-boundary.ts",
+    "src/chat-lib/core/ghost-text/multiline.ts",
+    "src/chat-lib/core/ghost-text/parser-runtime.ts",
+    "src/chat-lib/core/ghost-text/postprocess.ts",
+    "src/chat-lib/core/ghost-text/prompt.ts",
+    "src/chat-lib/core/ghost-text/recent-edits.ts",
+    "src/chat-lib/core/ghost-text/state.ts",
+    "src/chat-lib/core/ghost-text/tokenizer.ts",
+    "src/chat-lib/core/ghost-text/types.ts",
+    "src/chat-lib/core/information-delta.ts",
+    "src/chat-lib/core/joint/index.ts",
+    "src/chat-lib/core/joint/joint-arbitrator.ts",
+    "src/chat-lib/core/joint/separate-provider-arbitrator.ts",
+    "src/chat-lib/core/joint/shared.ts",
+    "src/chat-lib/core/joint/types.ts",
+    "src/chat-lib/core/nes/cache-window.ts",
+    "src/chat-lib/core/nes/cache.ts",
+    "src/chat-lib/core/nes/cursor-predictor.ts",
+    "src/chat-lib/core/nes/diagnostics-race.ts",
+    "src/chat-lib/core/nes/diff-runtime.ts",
+    "src/chat-lib/core/nes/edit-intent.ts",
+    "src/chat-lib/core/nes/edit-rebase.ts",
+    "src/chat-lib/core/nes/prompt.ts",
+    "src/chat-lib/core/nes/response.ts",
+    "src/chat-lib/core/nes/similar-files.ts",
+    "src/chat-lib/core/nes/speculative.ts",
+    "src/chat-lib/core/nes/stream-compatibility.ts",
+    "src/chat-lib/core/nes/string-edit.ts",
+    "src/chat-lib/core/nes/tokenizer.ts",
+    "src/chat-lib/core/nes/triggerer.ts",
+    "src/chat-lib/core/nes/types.ts",
+    "src/chat-lib/core/nes/user-interaction.ts",
+    "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/contextualFilterConstants.ts",
+    "src/chat-lib/upstream/extension/completions-core/vscode-node/lib/src/ghostText/multilineModelWeights.ts",
+    "src/chat-lib/upstream/extension/inlineEdits/vscode-node/isInlineSuggestion.ts",
+    "src/chat-lib/upstream/extension/xtab/common/systemMessages.ts",
+    "src/chat-lib/upstream/extension/xtab/common/tags.ts"
+  ],
+  "forbiddenPatterns": [
+    "as any",
+    "@ts-ignore",
+    "@ts-nocheck"
+  ]
+}

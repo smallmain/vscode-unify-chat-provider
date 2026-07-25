@@ -12,8 +12,7 @@ function getApiKeyFromAuth(auth: AuthConfig | undefined): string | undefined {
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return undefined;
   }
-  const record = auth as unknown as Record<string, unknown>;
-  const apiKey = record['apiKey'];
+  const apiKey: unknown = Reflect.get(auth, 'apiKey');
   return typeof apiKey === 'string' ? apiKey : undefined;
 }
 
@@ -21,7 +20,9 @@ function setAuthApiKey(auth: AuthConfig, apiKey: string | undefined): AuthConfig
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return auth;
   }
-  return { ...(auth as unknown as Record<string, unknown>), apiKey } as AuthConfig;
+  const next: AuthConfig = { ...auth };
+  Reflect.set(next, 'apiKey', apiKey);
+  return next;
 }
 
 export async function resolveAuthApiKeyForExport(
@@ -115,32 +116,4 @@ export async function resolveProvidersForExportOrShowError(options: {
   }
 
   return resolvedProviders;
-}
-
-export async function deleteProviderApiKeySecretIfUnused(options: {
-  secretStore: SecretStore;
-  providers: readonly ProviderConfig[];
-  providerName: string;
-}): Promise<void> {
-  const provider = options.providers.find((p) => p.name === options.providerName);
-  const rawApiKey = getApiKeyFromAuth(provider?.auth)?.trim();
-  if (!rawApiKey) {
-    return;
-  }
-
-  const status = await options.secretStore.getApiKeyStatus(rawApiKey);
-  if (status.kind !== 'secret' && status.kind !== 'missing-secret') {
-    return;
-  }
-
-  const stillUsed = options.providers.some((p) => {
-    if (p.name === options.providerName) return false;
-    return getApiKeyFromAuth(p.auth)?.trim() === rawApiKey;
-  });
-
-  if (stillUsed) {
-    return;
-  }
-
-  await options.secretStore.deleteApiKey(rawApiKey);
 }

@@ -1,5 +1,8 @@
 import * as vscode from 'vscode';
-import { saveProviderDraft } from '../provider-ops';
+import {
+  captureDraftAuthCommitGuard,
+  saveProviderDraft,
+} from '../provider-ops';
 import type {
   UiContext,
   UiNavAction,
@@ -11,6 +14,7 @@ import {
   createAuthProvider,
   createAuthProviderForMethod,
   getAuthMethodDefinition,
+  normalizeAuthForProvider,
   type AuthMethod,
 } from '../../auth';
 import { deepClone } from '../../config-ops';
@@ -240,21 +244,47 @@ export async function runWellKnownProviderAuthScreen(
   const providerContext = {
     providerId,
     providerLabel,
+    providerType: route.draft.type,
+    baseUrl: route.draft.baseUrl,
     secretStore: ctx.secretStore,
     uriHandler: ctx.uriHandler,
   };
 
+  const selectedMethod =
+    selected.kind === 'preset' ? selected.preset.auth.method : selected.method;
+  const candidateAuth =
+    selected.kind === 'preset'
+      ? deepClone(selected.preset.auth)
+      : route.draft.auth;
+  const authForProvider = normalizeAuthForProvider(
+    candidateAuth,
+    {
+      providerType: route.draft.type,
+      baseUrl: route.draft.baseUrl,
+    },
+    selectedMethod,
+  );
   const authProvider =
     selected.kind === 'preset'
-      ? createAuthProvider(providerContext, deepClone(selected.preset.auth))
+      ? authForProvider
+        ? createAuthProvider(providerContext, authForProvider)
+        : null
       : createAuthProviderForMethod(
           providerContext,
           selected.method,
-          route.draft.auth,
+          authForProvider,
         );
 
   if (!authProvider) {
     return { kind: 'push', route: modelListRoute };
+  }
+
+  const configAtStart = authProvider.getConfig();
+  if (configAtStart) {
+    captureDraftAuthCommitGuard(route.draft, ctx.secretStore, {
+      auth: configAtStart,
+      force: true,
+    });
   }
 
   try {
@@ -263,7 +293,14 @@ export async function runWellKnownProviderAuthScreen(
       return { kind: 'pop' };
     }
     if (result.config) {
-      route.draft.auth = result.config;
+      captureDraftAuthCommitGuard(route.draft, ctx.secretStore, {
+        auth: result.config,
+      });
+      route.draft.auth =
+        normalizeAuthForProvider(result.config, {
+          providerType: route.draft.type,
+          baseUrl: route.draft.baseUrl,
+        }) ?? result.config;
     }
   } finally {
     authProvider.dispose?.();

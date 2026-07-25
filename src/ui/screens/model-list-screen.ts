@@ -20,17 +20,18 @@ import type {
 } from '../router/types';
 import { ModelConfig, ProviderConfig } from '../../types';
 import {
+  discardDraftAuthState,
   duplicateProvider,
   exportProviderConfigFromDraft,
 } from '../provider-ops';
-import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import {
   officialModelsManager,
   OfficialModelsDraftInput,
   OfficialModelsFetchState,
 } from '../../official-models-manager';
 import { t } from '../../i18n';
-import { isSecretRef } from '../../secret';
+import { cleanupUnusedSecrets } from '../../secret';
+import { mainInstance } from '../../main-instance';
 import {
   isRawBaseUrlEnabled,
   normalizeBaseUrlInput,
@@ -239,20 +240,12 @@ export async function runModelListScreen(
       if (decision === 'discard') {
         // Clean up draft session when discarding changes
         officialModelsManager.clearDraftSession(sessionId);
+        discardDraftAuthState(route.draft, ctx.secretStore, route.existing);
 
-        if (route.invocation !== 'providerEdit') {
-          const tokenRef = (() => {
-            const auth = route.draft.auth;
-            if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
-              return undefined;
-            }
-            const record = auth as unknown as Record<string, unknown>;
-            const token = record['token'];
-            return typeof token === 'string' ? token.trim() : undefined;
-          })();
-          if (tokenRef && isSecretRef(tokenRef)) {
-            await ctx.secretStore.deleteOAuth2Token(tokenRef);
-          }
+        if (mainInstance.isLeader() && mainInstance.isReady()) {
+          await mainInstance.runLeaderMutation(async () =>
+            cleanupUnusedSecrets(ctx.secretStore),
+          );
         }
         return route.invocation === 'addFromWellKnownProvider'
           ? { kind: 'popToRoot' }
@@ -321,11 +314,6 @@ export async function runModelListScreen(
     if (!route.existing || !route.originalName) return { kind: 'stay' };
     const confirmed = await confirmDelete(route.originalName, 'provider');
     if (!confirmed) return { kind: 'stay' };
-    await deleteProviderApiKeySecretIfUnused({
-      secretStore: ctx.secretStore,
-      providers: ctx.store.endpoints,
-      providerName: route.originalName,
-    });
     await ctx.store.removeProvider(route.originalName);
     showDeletedMessage(route.originalName, 'Provider');
     return { kind: 'pop' };
@@ -442,6 +430,14 @@ export async function runModelListScreen(
         model: selectedModel,
         models: route.models,
         originalId: selectedModel.id,
+        ...(route.originalName
+          ? {
+              completionState: ctx.store.getModelCompletionConfigState(
+                route.originalName,
+                selectedModel.id,
+              ),
+            }
+          : {}),
         providerLabel: route.draft?.name ?? route.providerLabel,
         providerType: route.draft?.type,
       },
@@ -464,6 +460,13 @@ function applyResume(
       if (originalId) {
         const idx = route.models.findIndex((m) => m.id === originalId);
         if (idx !== -1) {
+          if (result.model.id !== originalId && route.draft) {
+            const sourceIds = route.draft._completionModelSourceIds ?? {};
+            const sourceId = sourceIds[originalId] ?? originalId;
+            delete sourceIds[originalId];
+            sourceIds[result.model.id] = sourceId;
+            route.draft._completionModelSourceIds = sourceIds;
+          }
           route.models[idx] = result.model;
           return;
         }
@@ -473,6 +476,9 @@ function applyResume(
     }
 
     if (result.kind === 'deleted') {
+      if (route.draft?._completionModelSourceIds) {
+        delete route.draft._completionModelSourceIds[result.modelId];
+      }
       removeModel(route.models, result.modelId);
     }
 

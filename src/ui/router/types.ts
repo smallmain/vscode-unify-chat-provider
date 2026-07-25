@@ -12,6 +12,7 @@ import type { OfficialModelsFetchState } from '../../official-models-manager';
 import type { SecretStore } from '../../secret';
 import type { EventedUriHandler } from '../../uri-handler';
 import type { ProviderFormDraft } from '../form-utils';
+import type { CompletionConfigNormalizationResult } from '../../completion/model/configuration';
 
 export interface UiContext {
   store: ConfigStore;
@@ -32,6 +33,7 @@ export interface ProviderFormRoute {
   mode?: 'full' | 'settings';
   providerName?: string;
   initialConfig?: Partial<ProviderConfig>;
+  initialConfigValidated?: true;
   existing?: ProviderConfig;
   originalName?: string;
   draft?: ProviderFormDraft;
@@ -82,6 +84,7 @@ export interface ModelFormRoute {
   models: ModelConfig[];
   initialConfig?: Partial<ModelConfig>;
   originalId?: string;
+  completionState?: CompletionConfigNormalizationResult;
   draft?: ModelConfig;
 }
 
@@ -91,6 +94,20 @@ export interface ModelViewRoute {
   providerType?: ProviderType;
   model: ModelConfig;
   models: ModelConfig[];
+}
+
+export interface ThinkingFormRoute {
+  kind: 'thinkingForm';
+  model: ModelConfig;
+  draft: Partial<NonNullable<ModelConfig['thinking']>>;
+  readOnly: boolean;
+}
+
+export interface MultiAgentFormRoute {
+  kind: 'multiAgentForm';
+  model: ModelConfig;
+  draft: Partial<NonNullable<ModelConfig['multi-agent']>>;
+  readOnly: boolean;
 }
 
 export interface ModelSelectionRoute {
@@ -148,6 +165,8 @@ export type UiRoute =
   | ModelListRoute
   | ModelFormRoute
   | ModelViewRoute
+  | ThinkingFormRoute
+  | MultiAgentFormRoute
   | ModelSelectionRoute
   | TimeoutFormRoute
   | ImportProvidersRoute

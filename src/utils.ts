@@ -27,25 +27,15 @@ import type { buildConnector } from 'undici';
 import { SocksClient } from 'socks';
 import type { SocksProxy } from 'socks';
 import { t } from './i18n';
+import { PLACEHOLDER_MODEL_ID } from './model-id-utils';
 
-/**
- * Placeholder model ID used when official models are loading.
- * Uses double underscores to clearly distinguish from real model IDs.
- */
-export const PLACEHOLDER_MODEL_ID = '__PLACEHOLDER__';
+export {
+  isPlaceholderModelId,
+  PLACEHOLDER_MODEL_ID,
+} from './model-id-utils';
 
 export const DEFAULT_CONTEXT_CACHE_TTL_SECONDS = 300;
 export const DEFAULT_CONTEXT_CACHE_TYPE: ContextCacheType = 'only-free';
-
-/**
- * Check if a model ID is a placeholder.
- * Works with both raw model ID and full model ID format (provider/model).
- */
-export function isPlaceholderModelId(modelId: string): boolean {
-  const slashIndex = modelId.indexOf('/');
-  const modelName = slashIndex === -1 ? modelId : modelId.slice(slashIndex + 1);
-  return modelName === PLACEHOLDER_MODEL_ID;
-}
 
 /**
  * HTTP status codes that should trigger a retry.
@@ -993,6 +983,117 @@ export function isRetryableNetworkError(
   }
 
   return hasRetryableNetworkErrorMessage(error);
+}
+
+const RETRYABLE_STREAM_READ_ERROR_CODES = new Set([
+  'stream_read_error',
+]);
+
+export class RetryableStreamReadError extends Error {
+  constructor(cause: Error) {
+    super(cause.message, { cause });
+    this.name = cause.name;
+  }
+}
+
+function readStreamErrorStringField(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function getRetryableStreamReadErrorFields(error: unknown): {
+  code?: string;
+  message?: string;
+} {
+  if (!isRecord(error)) {
+    return typeof error === 'string' ? { message: error } : {};
+  }
+
+  const nestedError = isRecord(error['error']) ? error['error'] : undefined;
+  return {
+    code:
+      readStreamErrorStringField(error, 'code') ??
+      (nestedError
+        ? readStreamErrorStringField(nestedError, 'code')
+        : undefined),
+    message:
+      (error instanceof Error ? error.message : undefined) ??
+      readStreamErrorStringField(error, 'message') ??
+      (nestedError
+        ? readStreamErrorStringField(nestedError, 'message')
+        : undefined),
+  };
+}
+
+export function isRetryableStreamReadError(error: unknown): boolean {
+  const seen = new Set<unknown>();
+  let current: unknown = error;
+
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+
+    if (current instanceof RetryableStreamReadError) {
+      return true;
+    }
+
+    current = getErrorCause(current);
+  }
+
+  if (isAbortLikeError(error)) {
+    return false;
+  }
+
+  seen.clear();
+  current = error;
+  while (current !== undefined && !seen.has(current)) {
+    seen.add(current);
+
+    const { code, message } = getRetryableStreamReadErrorFields(current);
+    if (code && RETRYABLE_STREAM_READ_ERROR_CODES.has(code)) {
+      return true;
+    }
+
+    const normalizedMessage = message?.toLowerCase();
+    if (normalizedMessage) {
+      const isInternalStreamError =
+        (normalizedMessage.includes('internal_server_error') ||
+          normalizedMessage.includes('internal_error')) &&
+        (normalizedMessage.includes('stream error') ||
+          normalizedMessage.includes('stream id') ||
+          normalizedMessage.includes('received from peer'));
+      if (
+        normalizedMessage.includes('stream_read_error') ||
+        normalizedMessage.includes('stream read error') ||
+        isInternalStreamError
+      ) {
+        return true;
+      }
+    }
+
+    current = getErrorCause(current);
+  }
+
+  return false;
+}
+
+export function shouldRetryStreamReadError(
+  error: unknown,
+  state: {
+    emittedPartCount: number;
+    cancellationRequested: boolean;
+    retryAttempt: number;
+    maxRetries: number;
+  },
+): boolean {
+  return (
+    state.emittedPartCount === 0 &&
+    !state.cancellationRequested &&
+    state.retryAttempt < state.maxRetries &&
+    isRetryableStreamReadError(error)
+  );
 }
 
 /**
@@ -2365,7 +2466,11 @@ export async function* withIdleTimeout<T>(
           if (abortSignal?.aborted) {
             throw abortReasonToError(abortSignal);
           }
-          throw resolveMeaningfulError(error);
+          const meaningfulError = resolveMeaningfulError(error);
+          if (isRetryableNetworkError(error)) {
+            throw new RetryableStreamReadError(meaningfulError);
+          }
+          throw meaningfulError;
         }
 
         if (result.kind === 'abort') {
@@ -2378,7 +2483,7 @@ export async function* withIdleTimeout<T>(
         if (result.kind === 'timeout') {
           const timeoutError = createTimeoutError(timeoutMessage);
           onTimeout?.(timeoutError);
-          throw timeoutError;
+          throw new RetryableStreamReadError(timeoutError);
         }
 
         // Normal iteration result
@@ -2496,6 +2601,44 @@ export function normalizeCopilotUsage(usage: CopilotUsage): CopilotUsage {
       cached_tokens: cachedTokens,
     },
   };
+}
+
+export function tryNormalizeCopilotUsage(
+  usage: unknown,
+): CopilotUsage | undefined {
+  if (!isRecord(usage)) {
+    return undefined;
+  }
+
+  const promptTokens = usage['prompt_tokens'];
+  const completionTokens = usage['completion_tokens'];
+  if (
+    typeof promptTokens !== 'number' ||
+    !Number.isFinite(promptTokens) ||
+    typeof completionTokens !== 'number' ||
+    !Number.isFinite(completionTokens)
+  ) {
+    return undefined;
+  }
+
+  const details = usage['prompt_tokens_details'];
+  const cachedTokens = isRecord(details) ? details['cached_tokens'] : undefined;
+
+  return normalizeCopilotUsage({
+    prompt_tokens: promptTokens,
+    completion_tokens: completionTokens,
+    total_tokens:
+      typeof usage['total_tokens'] === 'number' &&
+      Number.isFinite(usage['total_tokens'])
+        ? usage['total_tokens']
+        : promptTokens + completionTokens,
+    prompt_tokens_details: {
+      cached_tokens:
+        typeof cachedTokens === 'number' && Number.isFinite(cachedTokens)
+          ? cachedTokens
+          : 0,
+    },
+  });
 }
 
 export function createUsageDataPart(
@@ -2638,6 +2781,13 @@ function sanitizeMessageForModelSwitch(
   message: vscode.LanguageModelChatRequestMessage,
   imageRetention: SanitizedImagePartRetention,
 ): vscode.LanguageModelChatRequestMessage | undefined {
+  // Tool calls and their sibling assistant content form one response. If the
+  // tool call cannot be replayed, retaining only its text/image parts invents
+  // a standalone assistant turn and can leave history ending in Assistant.
+  if (collectExplicitToolCallIds(message).length > 0) {
+    return undefined;
+  }
+
   // Cross-model history must be provider-neutral. Keep only text and images
   // that the target model can safely consume; drop markers, tools, thinking,
   // usage/cache metadata, and any unknown future part types.
@@ -2928,6 +3078,33 @@ export interface GetAllModelsOptions {
   forceFetch?: boolean;
 }
 
+export interface GetAllModelsResult {
+  readonly models: ModelConfig[];
+  readonly error?: string;
+}
+
+export async function getAllModelsForProviderData(
+  provider: ProviderConfig,
+  options?: GetAllModelsOptions,
+): Promise<GetAllModelsResult> {
+  const userModels = provider.models;
+  const userModelIds = new Set(userModels.map((model) => model.id));
+  if (!provider.autoFetchOfficialModels) {
+    return { models: [...userModels] };
+  }
+
+  const official = await officialModelsManager.getOfficialModelsData(provider, {
+    forceFetch: options?.forceFetch,
+  });
+  const officialModels = official.models.filter(
+    (model) => !userModelIds.has(model.id),
+  );
+  return {
+    models: [...userModels, ...officialModels],
+    ...(official.state?.lastError ? { error: official.state.lastError } : {}),
+  };
+}
+
 /**
  * Get all models for a provider (user models + official models)
  * - Automatically deduplicates, user models take priority
@@ -2937,23 +3114,7 @@ export async function getAllModelsForProvider(
   provider: ProviderConfig,
   options?: GetAllModelsOptions,
 ): Promise<ModelConfig[]> {
-  const userModels = provider.models;
-  const userModelIds = new Set(userModels.map((m) => m.id));
-
-  let officialModels: ModelConfig[] = [];
-  if (provider.autoFetchOfficialModels) {
-    officialModels = await officialModelsManager.getOfficialModels(
-      provider,
-      options?.forceFetch,
-    );
-  }
-
-  // Filter out official models that conflict with user models
-  const filteredOfficialModels = officialModels.filter(
-    (m) => !userModelIds.has(m.id),
-  );
-
-  return [...userModels, ...filteredOfficialModels];
+  return (await getAllModelsForProviderData(provider, options)).models;
 }
 
 /**

@@ -22,7 +22,10 @@ import {
   type ResponseMessage,
   type WelcomeMessage,
 } from './protocol';
-import { getMainInstanceSocket } from './socket';
+import {
+  getMainInstanceRuntimeNamespace,
+  getMainInstanceSocket,
+} from './socket';
 
 type Role = 'leader' | 'follower';
 
@@ -57,6 +60,12 @@ type LeaderInFlight = {
   clientId: string;
 };
 
+type LeaderMutationTenure = {
+  accepting: boolean;
+  readonly inFlight: Set<Promise<void>>;
+  tail: Promise<void>;
+};
+
 type FollowerHandshakeResult = {
   kind: 'connected';
   welcome: WelcomeMessage;
@@ -72,7 +81,6 @@ type FollowerHandshakeIncompatibleResult = {
 
 type FollowerConnectResult = 'connected' | 'incompatible' | 'failed';
 
-const AUTH_TOKEN_FILENAME = 'main-instance-auth-token.txt';
 const INTERNAL_READY_EVENT = '__main.ready';
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -147,18 +155,16 @@ async function safeUnlink(filePath: string): Promise<void> {
 }
 
 async function writeAuthTokenFile(
-  globalStoragePath: string,
+  filePath: string,
   token: string,
 ): Promise<void> {
-  await fs.mkdir(globalStoragePath, { recursive: true });
-  const filePath = path.join(globalStoragePath, AUTH_TOKEN_FILENAME);
+  await fs.mkdir(path.dirname(filePath), { recursive: true });
   await fs.writeFile(filePath, token, { mode: 0o600 });
 }
 
 async function readAuthTokenFile(
-  globalStoragePath: string,
+  filePath: string,
 ): Promise<string | undefined> {
-  const filePath = path.join(globalStoragePath, AUTH_TOKEN_FILENAME);
   try {
     const raw = await fs.readFile(filePath, 'utf8');
     const token = raw.trim();
@@ -219,6 +225,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   private role?: Role;
   private leaderId?: string;
   private socketPath?: string;
+  private authTokenPath?: string;
   private authToken?: string;
   private extensionVersion?: string;
   private ready = false;
@@ -227,15 +234,20 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   private readonly clientId = randomUUID();
 
   private server?: net.Server;
+  private readonly closingLeaderServers = new Set<net.Server>();
   private readonly followerSockets = new Map<string, net.Socket>();
+  private readonly incomingFollowerSockets = new Set<net.Socket>();
 
   private leaderSocket?: net.Socket;
   private leaderReadDisposable?: SocketLineReader;
 
   private readonly pending = new Map<string, PendingRequest>();
   private readonly leaderInFlight = new Map<string, LeaderInFlight>();
+  private leaderMutationTenure?: LeaderMutationTenure;
+  private leaderServerTeardown?: Promise<void>;
 
   private reconnectTimer?: NodeJS.Timeout;
+  private disposed = false;
 
   private readonly onDidChangeRoleEmitter =
     new vscode.EventEmitter<MainInstanceRoleSnapshot>();
@@ -267,7 +279,30 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   isLeader(): boolean {
-    return this.role === 'leader';
+    return (
+      !this.disposed &&
+      this.role === 'leader' &&
+      this.leaderMutationTenure?.accepting === true
+    );
+  }
+
+  async runLeaderMutation<T>(work: () => Promise<T>): Promise<T> {
+    const tenure = this.leaderMutationTenure;
+    if (!this.isLeader() || !tenure) {
+      throw new MainInstanceError('LEADER_GONE', 'Leader instance is gone');
+    }
+
+    const result = tenure.tail.then(work);
+    const settlement = result.then(
+      () => undefined,
+      () => undefined,
+    );
+    tenure.tail = settlement;
+    tenure.inFlight.add(settlement);
+    void settlement.finally(() => {
+      tenure.inFlight.delete(settlement);
+    });
+    return await result;
   }
 
   isReady(): boolean {
@@ -291,22 +326,31 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   async initialize(context: vscode.ExtensionContext): Promise<void> {
+    if (this.disposed) {
+      throw new MainInstanceError('LEADER_GONE', 'Leader instance is gone');
+    }
+
     this.context = context;
     this.extensionVersion = readExtensionVersion(context.extension.packageJSON);
 
     const descriptor = getMainInstanceSocket(
       context.extension.id,
       vscode.env.machineId,
-      context.globalStorageUri.fsPath,
+      getMainInstanceRuntimeNamespace(vscode.env.appRoot),
     );
     this.socketPath = descriptor.path;
+    this.authTokenPath = descriptor.authTokenPath;
 
     if (shouldBypassMainInstanceCoordination(context)) {
       this.stopReconnectLoop();
       this.disposeLeaderConnection();
-      this.disposeLeaderServer();
+      await this.disposeLeaderServer();
+      if (this.disposed) {
+        throw new MainInstanceError('LEADER_GONE', 'Leader instance is gone');
+      }
       this.authToken = undefined;
       this.clearCompatibilityError();
+      this.startLeaderMutationTenure();
       this.updateRole('leader', this.clientId, { forceEmit: true });
       authLog.verbose(
         'main-instance',
@@ -349,7 +393,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   setReady(ready: boolean): void {
-    if (this.role !== 'leader' || this.ready === ready) {
+    if (!this.isLeader() || this.ready === ready) {
       return;
     }
 
@@ -407,16 +451,19 @@ export class MainInstanceCoordinator implements vscode.Disposable {
 
   private async elect(descriptor: ReturnType<typeof getMainInstanceSocket>): Promise<void> {
     this.stopReconnectLoop();
+    if (this.disposed) {
+      return;
+    }
 
     // Try to become leader first.
     const becameLeader = await this.tryStartLeader(descriptor);
-    if (becameLeader) {
+    if (becameLeader || this.disposed) {
       return;
     }
 
     // Otherwise connect as follower.
     const connected = await this.tryConnectFollower();
-    if (connected !== 'failed') {
+    if (connected !== 'failed' || this.disposed) {
       return;
     }
 
@@ -448,10 +495,18 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     descriptor: ReturnType<typeof getMainInstanceSocket>,
   ): Promise<boolean> {
     this.disposeLeaderConnection();
-    this.disposeLeaderServer();
+    await this.disposeLeaderServer();
+    if (this.disposed) {
+      return false;
+    }
     this.clearCompatibilityError();
 
-    const server = net.createServer((socket) => {
+    const server = net.createServer();
+    server.on('connection', (socket) => {
+      if (this.closingLeaderServers.has(server)) {
+        socket.destroy();
+        return;
+      }
       this.handleIncomingFollowerSocket(socket);
     });
 
@@ -473,6 +528,11 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       throw error;
     }
 
+    if (this.disposed) {
+      await this.closeLeaderServer(server);
+      return false;
+    }
+
     this.server = server;
     this.authToken = randomBytes(32).toString('base64url');
     this.ready = false;
@@ -481,20 +541,34 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     if (!this.context) {
       throw new Error('Extension context not initialized');
     }
-    await writeAuthTokenFile(this.context.globalStorageUri.fsPath, this.authToken);
+    try {
+      await writeAuthTokenFile(descriptor.authTokenPath, this.authToken);
+    } catch (error) {
+      await this.disposeLeaderServer();
+      throw error;
+    }
 
+    if (this.disposed || this.server !== server) {
+      await this.disposeLeaderServer();
+      return false;
+    }
+
+    this.startLeaderMutationTenure();
     this.updateRole('leader', this.clientId);
     authLog.verbose('main-instance', `Elected leader (clientId: ${this.clientId})`);
     return true;
   }
 
   private scheduleReconnect(delayMs = 300): void {
-    if (this.reconnectTimer) {
+    if (this.disposed || this.reconnectTimer) {
       return;
     }
 
     this.reconnectTimer = setTimeout(() => {
       this.reconnectTimer = undefined;
+      if (this.disposed) {
+        return;
+      }
       const context = this.context;
       if (!context) {
         return;
@@ -502,8 +576,10 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       const descriptor = getMainInstanceSocket(
         context.extension.id,
         vscode.env.machineId,
-        context.globalStorageUri.fsPath,
+        getMainInstanceRuntimeNamespace(vscode.env.appRoot),
       );
+      this.socketPath = descriptor.path;
+      this.authTokenPath = descriptor.authTokenPath;
       void this.elect(descriptor).catch((error) => {
         authLog.error('main-instance', 'Re-election failed', error);
         this.scheduleReconnect();
@@ -533,11 +609,16 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     retryDelayMs?: number;
   }): Promise<FollowerConnectResult> {
     this.disposeLeaderConnection();
-    this.disposeLeaderServer();
+    await this.disposeLeaderServer();
+
+    if (this.disposed) {
+      return 'failed';
+    }
 
     const context = this.context;
     const socketPath = this.socketPath;
-    if (!context || !socketPath) {
+    const authTokenPath = this.authTokenPath;
+    if (!context || !socketPath || !authTokenPath) {
       return 'failed';
     }
 
@@ -545,12 +626,13 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     const retryDelayMs = options?.retryDelayMs ?? 50;
 
     for (let attempt = 0; attempt < attempts; attempt++) {
-      const token = await readAuthTokenFile(context.globalStorageUri.fsPath).catch(
-        (error) => {
-          authLog.error('main-instance', 'Failed to read auth token file', error);
-          return undefined;
-        },
-      );
+      if (this.disposed) {
+        return 'failed';
+      }
+      const token = await readAuthTokenFile(authTokenPath).catch((error) => {
+        authLog.error('main-instance', 'Failed to read auth token file', error);
+        return undefined;
+      });
 
       if (!token) {
         await delay(retryDelayMs);
@@ -575,6 +657,10 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       }
 
       const handshake = await this.performFollowerHandshake(socket, token);
+      if (this.disposed) {
+        socket.destroy();
+        return 'failed';
+      }
       if (handshake?.kind === 'connected') {
         if (
           handshake.welcome.protocolVersion !== PROTOCOL_VERSION ||
@@ -717,6 +803,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   private handleIncomingFollowerSocket(socket: net.Socket): void {
+    this.incomingFollowerSockets.add(socket);
     const disposable = new SocketLineReader(socket, (message) => {
       this.handleLeaderSideMessage(socket, message);
     });
@@ -728,6 +815,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
       }
       cleanedUp = true;
       disposable.dispose();
+      this.incomingFollowerSockets.delete(socket);
       let clientIdToRemove: string | undefined;
       for (const [clientId, existing] of this.followerSockets) {
         if (existing === socket) {
@@ -1140,7 +1228,7 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   broadcast(event: string, payload: unknown): void {
-    if (this.role !== 'leader') {
+    if (!this.isLeader()) {
       return;
     }
     const message: EventMessage = { type: 'event', event, payload };
@@ -1150,9 +1238,15 @@ export class MainInstanceCoordinator implements vscode.Disposable {
   }
 
   dispose(): void {
+    if (this.disposed) {
+      return;
+    }
+    this.disposed = true;
     this.stopReconnectLoop();
     this.disposeLeaderConnection();
-    this.disposeLeaderServer();
+    void this.disposeLeaderServer().catch((error) => {
+      authLog.error('main-instance', 'Failed to dispose leader server', error);
+    });
     this.onDidChangeRoleEmitter.dispose();
     this.onDidReceiveEventEmitter.dispose();
   }
@@ -1170,15 +1264,99 @@ export class MainInstanceCoordinator implements vscode.Disposable {
     }
   }
 
-  private disposeLeaderServer(): void {
+  private startLeaderMutationTenure(): void {
+    this.leaderMutationTenure = {
+      accepting: true,
+      inFlight: new Set<Promise<void>>(),
+      tail: Promise.resolve(),
+    };
+  }
+
+  private revokeLeaderMutationTenure(): LeaderMutationTenure | undefined {
+    const tenure = this.leaderMutationTenure;
+    if (tenure) {
+      tenure.accepting = false;
+      this.leaderMutationTenure = undefined;
+    }
+    return tenure;
+  }
+
+  private disposeLeaderServer(): Promise<void> {
+    const tenure = this.revokeLeaderMutationTenure();
     this.ready = false;
-    if (this.server) {
-      this.server.close();
+
+    const activeTeardown = this.leaderServerTeardown;
+    if (activeTeardown) {
+      return activeTeardown;
+    }
+
+    const server = this.server;
+    const teardown = this.finishLeaderServerTeardown(tenure, server);
+    this.leaderServerTeardown = teardown;
+    void teardown.then(
+      () => {
+        if (this.leaderServerTeardown === teardown) {
+          this.leaderServerTeardown = undefined;
+        }
+      },
+      () => {
+        if (this.leaderServerTeardown === teardown) {
+          this.leaderServerTeardown = undefined;
+        }
+      },
+    );
+    return teardown;
+  }
+
+  private async finishLeaderServerTeardown(
+    tenure: LeaderMutationTenure | undefined,
+    server: net.Server | undefined,
+  ): Promise<void> {
+    if (tenure) {
+      await Promise.allSettled([...tenure.inFlight]);
+    }
+
+    if (this.server === server) {
       this.server = undefined;
     }
-    for (const socket of this.followerSockets.values()) {
+
+    const serverClosed = server
+      ? this.closeLeaderServer(server)
+      : Promise.resolve();
+
+    for (const clientId of this.followerSockets.keys()) {
+      this.abortInFlightForClient(clientId);
+    }
+
+    const sockets = new Set([
+      ...this.incomingFollowerSockets,
+      ...this.followerSockets.values(),
+    ]);
+    this.incomingFollowerSockets.clear();
+    this.followerSockets.clear();
+    for (const socket of sockets) {
       socket.destroy();
     }
-    this.followerSockets.clear();
+
+    await serverClosed;
+  }
+
+  private async closeLeaderServer(server: net.Server): Promise<void> {
+    this.closingLeaderServers.add(server);
+    await new Promise<void>((resolve) => {
+      try {
+        server.close((error?: Error) => {
+          this.closingLeaderServers.delete(server);
+          if (error) {
+            authLog.verbose('main-instance', 'Leader server close error', error);
+          }
+          resolve();
+        });
+      } catch (error) {
+        this.closingLeaderServers.delete(server);
+        authLog.verbose('main-instance', 'Leader server close error', error);
+        resolve();
+      }
+    });
   }
 }

@@ -5,7 +5,6 @@ import {
 } from '../../auth/providers/antigravity-oauth/constants';
 import { t } from '../../i18n';
 import type { SecretStore } from '../../secret';
-import type { ProviderConfig } from '../../types';
 import type {
   BalanceConfig,
   BalanceMetric,
@@ -24,15 +23,18 @@ import type {
 } from '../balance-provider';
 import { refreshCodeAssistQuota } from './code-assist-quota';
 
-function resolveAntigravityProjectId(provider: ProviderConfig): string {
-  const auth = provider.auth;
-  if (auth?.method === 'antigravity-oauth') {
-    const managedProjectId = auth.managedProjectId?.trim();
+function resolveAntigravityProjectId(input: BalanceRefreshInput): string {
+  const context =
+    input.credential?.kind === 'token'
+      ? input.credential.authContext
+      : undefined;
+  if (context?.method === 'antigravity-oauth') {
+    const managedProjectId = context.managedProjectId?.trim();
     if (managedProjectId) {
       return managedProjectId;
     }
 
-    const projectId = auth.projectId?.trim();
+    const projectId = context.projectId?.trim();
     if (projectId) {
       return projectId;
     }
@@ -291,8 +293,7 @@ export class AntigravityBalanceProvider implements BalanceProvider {
       providerName: 'Antigravity',
       endpointFallbacks: CODE_ASSIST_ENDPOINT_FALLBACKS,
       requestHeaders: CODE_ASSIST_HEADERS,
-      resolveProjectId: (refreshInput) =>
-        resolveAntigravityProjectId(refreshInput.provider),
+      resolveProjectId: resolveAntigravityProjectId,
     });
 
     if (!result.success || !result.snapshot) {

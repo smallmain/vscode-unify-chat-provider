@@ -1,0 +1,29 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "rootDir": ".",
+    "types": ["node", "vscode"]
+  },
+  "include": [
+    "scripts/chat-lib-extract-utils.ts",
+    "scripts/chat-lib-update-workflow.ts",
+    "scripts/copy-chat-lib-resources.ts",
+    "scripts/extract-chat-lib.ts",
+    "scripts/update-chat-lib.ts",
+    "scripts/verify-chat-lib.ts",
+    "src/dts/**/*.d.ts",
+    "src/client/openai/openai.d.ts",
+    "src/completion/copilot/diagnostics-provider.ts",
+    "src/completion/copilot/nes-provider.ts",
+    "src/completion/copilot/runtime.ts",
+    "src/completion/copilot/workspace.ts",
+    "src/completion/change-hint.ts",
+    "src/chat-lib/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".vscode-test",
+    "src/chat-lib/upstream/**"
+  ]
+}

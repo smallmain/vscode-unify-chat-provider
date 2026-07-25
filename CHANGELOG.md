@@ -1,5 +1,101 @@
 # Changelog
 
+## v8.1.1 - 2026-07-25
+
+### Fixes
+- hash Windows targets without PowerShell modules (21a1539, SmallMain)
+- return success after elevated replacement (0941a04, SmallMain)
+- emit valid multiline PowerShell scripts (1552253, SmallMain)
+- harden proposed API product.json elevation (c4257ae, SmallMain)
+
+### Build/CI
+- annotate Windows test process failures (9ae946d, SmallMain)
+- target proposed API Windows regression (b08358c, SmallMain)
+- isolate Windows test phases (5287355, SmallMain)
+- expose Windows test failures (507c187, SmallMain)
+
+### Tests
+- report PowerShell replacement diagnostics (e8500ed, SmallMain)
+- match escaped Windows target paths (6fc3c15, SmallMain)
+- make product write fixtures portable (e1b1e6e, SmallMain)
+
+## v8.1.0 - 2026-07-25
+
+### Features
+- add Claude Opus 5 model and mid-conversation tool changes support (18482c7, SmallMain)
+
+## v8.0.4 - 2026-07-23
+
+### Features
+- retry stream read errors in withIdleTimeout and consolidate retry logic (6db3576, SmallMain)
+
+## v8.0.3 - 2026-07-23
+
+### Features
+- add LM Studio Local provider (d810d7e, SmallMain)
+
+### Docs
+- update Zed setup steps for local deployment in README (217a15e, SmallMain)
+
+## v8.0.2 - 2026-07-23
+
+### Fixes
+- detect empty output in OpenAI Responses API and handle final text/refusal deltas (62f991d, SmallMain)
+
+## v8.0.1 - 2026-07-23
+
+### Fixes
+- drop tool call messages on model switch to prevent invalid assistant turns (282a66a, SmallMain)
+- claude-code: update CCH seed and include stream flag in billing signature (7836498, SmallMain)
+- scope auth token and socket paths to VS Code runtime namespace instead of profile (0662a9f, SmallMain)
+
+### Refactors
+- extract model resolver and add Gemini 3.1 Pro routing (409f5e2, SmallMain)
+
+## v8.0.0 - 2026-07-23
+
+### Breaking Changes
+- fix multiple issues with the account process (fa2ad26, SmallMain)
+- add Zed, Inception, Mistral AI providers; add zeta, mercury-2... models; add code completion support (ca0fb1d, SmallMain)
+
+### Features
+- add LiteLLM preset template and model hints (41bffd5, RheagalFire)
+- add LiteLLM as AI gateway provider (5fdb37c, RheagalFire)
+- add Kimi K3, Gemini 3.6 Flash, KAT-Coder V2.5 models and update features (c060388, SmallMain)
+- add Proposed API enablement support with code completion and system message fallbacks (e5576d5, SmallMain)
+
+### Fixes
+- isolate completion e2e sessions (326596a, SmallMain)
+- unblock release validation (b83b5e9, SmallMain)
+- correct DeepSeek V4 Flash and Pro max output tokens to 64000 (f4b7813, SmallMain)
+- reduce maxInputTokens for GPT-5.6 models to 272000 (b5febfc, SmallMain)
+- remove redundant Anthropic Messages variant (aa0d17c, RheagalFire)
+
+## v7.12.3 - 2026-07-12
+
+### Features
+- codex: align OAuth and chat request construction with CLIProxyAPI (4f3a75c, SmallMain)
+
+## v7.12.2 - 2026-07-12
+
+### Features
+- xai: route OAuth HTTP requests through cli-chat-proxy and align headers with CLI (3ac6b77, SmallMain)
+
+## v7.12.1 - 2026-07-10
+
+### Fixes
+- pass 'max' effort through directly instead of mapping to 'xhigh' (3e6b574, SmallMain)
+
+## v7.12.0 - 2026-07-10
+
+### Features
+- add GPT-5.6 models, multi-agent support, and thinking mode/context config (6d1afd6, SmallMain)
+
+## v7.11.0 - 2026-07-09
+
+### Features
+- provider: propagate normalized token usage through stateful markers for cross-provider support (5c4f50f, SmallMain)
+
 ## v7.10.0 - 2026-07-09
 
 ### Features
