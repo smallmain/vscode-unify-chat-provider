@@ -2755,7 +2755,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       markerData.usage = createCopilotUsage(
         message.usage.input_tokens,
         message.usage.output_tokens,
-        message.usage.input_tokens_details.cached_tokens,
+        OpenAIResponsesProvider.resolveCachedInputTokens(message.usage),
       );
     }
     yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
@@ -3346,7 +3346,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
             markerData.usage = createCopilotUsage(
               response.usage.input_tokens,
               response.usage.output_tokens,
-              response.usage.input_tokens_details.cached_tokens,
+              OpenAIResponsesProvider.resolveCachedInputTokens(response.usage),
             );
           }
           yield encodeStatefulMarkerPart<OpenAIResponsesMarkerData>(
@@ -3426,9 +3426,16 @@ export class OpenAIResponsesProvider implements ApiProvider {
     const normalizedUsage = createCopilotUsage(
       usage.input_tokens,
       usage.output_tokens,
-      usage.input_tokens_details.cached_tokens,
+      OpenAIResponsesProvider.resolveCachedInputTokens(usage),
     );
     sharedProcessUsage(requestTrace, logger, normalizedUsage);
+  }
+
+  private static resolveCachedInputTokens(usage: ResponseUsage): number {
+    // OpenAI-compatible gateways may omit `input_tokens_details` entirely.
+    // Treat the missing details object as zero cached input tokens so the
+    // completion path does not throw on otherwise valid Responses payloads.
+    return usage.input_tokens_details?.cached_tokens ?? 0;
   }
 
   estimateTokenCount(text: string): number {

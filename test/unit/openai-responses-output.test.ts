@@ -191,7 +191,10 @@ function createRefusal(refusal: string): ResponseOutputMessage {
   };
 }
 
-function createResponse(output: ResponseOutputItem[]): Response {
+function createResponse(
+  output: ResponseOutputItem[],
+  responseUsage: ResponseUsage = usage,
+): Response {
   return {
     id: 'resp_test',
     created_at: 1,
@@ -216,7 +219,7 @@ function createResponse(output: ResponseOutputItem[]): Response {
     tools: [],
     top_p: null,
     status: 'completed',
-    usage,
+    usage: responseUsage,
   };
 }
 
@@ -469,5 +472,83 @@ describe('OpenAI Responses output parsing', () => {
     ).rejects.toThrow(
       'OpenAI Responses API completed without output text, refusal, tool calls, or other consumable output.',
     );
+  });
+});
+
+describe('OpenAI Responses usage normalization', () => {
+  // Some OpenAI-compatible gateways omit `usage.input_tokens_details` entirely
+  // while still returning a valid, otherwise consumable response. Cast once
+  // here so the regression tests below can exercise the same shape.
+  const usageWithoutDetails = {
+    input_tokens: 1234,
+    output_tokens: 567,
+    total_tokens: 1801,
+  } as unknown as ResponseUsage;
+
+  function readMarkerCachedTokens(
+    parts: readonly vscode.LanguageModelResponsePart2[],
+  ): number | undefined {
+    const dataPart = parts.find(
+      (part): part is vscode.LanguageModelDataPart =>
+        part instanceof vscode.LanguageModelDataPart,
+    );
+    if (!dataPart) {
+      return undefined;
+    }
+    const decoded = JSON.parse(
+      Buffer.from(dataPart.data).toString('utf8'),
+    ) as { usage?: { prompt_tokens_details?: { cached_tokens?: number } } };
+    return decoded.usage?.prompt_tokens_details?.cached_tokens;
+  }
+
+  it('completes HTTP responses when input_tokens_details is omitted', async () => {
+    const message = createMessage('hi');
+    const requestTrace = createTrace();
+    const parts = await collectParts(
+      provider.parseResponseForTest(
+        createResponse([message], usageWithoutDetails),
+        requestTrace,
+      ),
+    );
+
+    expect(textValues(parts)).toEqual(['hi']);
+    expect(readMarkerCachedTokens(parts)).toBe(0);
+    expect(requestTrace.usage?.prompt_tokens_details.cached_tokens).toBe(0);
+  });
+
+  it('completes streamed responses when input_tokens_details is omitted', async () => {
+    const message = createMessage('hi');
+    const requestTrace = createTrace();
+    const parts = await collectParts(
+      provider.parseStreamForTest(
+        [
+          {
+            type: 'response.output_text.delta',
+            content_index: 0,
+            delta: 'hi',
+            item_id: message.id,
+            logprobs: [],
+            output_index: 0,
+            sequence_number: 1,
+          },
+          {
+            type: 'response.output_item.done',
+            item: message,
+            output_index: 0,
+            sequence_number: 2,
+          },
+          {
+            type: 'response.completed',
+            response: createResponse([message], usageWithoutDetails),
+            sequence_number: 3,
+          },
+        ],
+        requestTrace,
+      ),
+    );
+
+    expect(textValues(parts)).toEqual(['hi']);
+    expect(readMarkerCachedTokens(parts)).toBe(0);
+    expect(requestTrace.usage?.prompt_tokens_details.cached_tokens).toBe(0);
   });
 });
