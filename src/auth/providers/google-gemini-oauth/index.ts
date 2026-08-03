@@ -18,8 +18,7 @@ import {
 } from '../../auth-provider';
 import { t } from '../../../i18n';
 import {
-  createSecretRef,
-  isSecretRef,
+  isSessionSecretRef,
   type SecretStore,
 } from '../../../secret';
 import type {
@@ -47,6 +46,7 @@ function toPersistableConfig(
 ): GeminiCliOAuthConfig {
   return {
     method: 'google-gemini-oauth',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     identityId: config?.identityId,
@@ -78,7 +78,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       throw new Error('Missing token');
     }
 
-    const tokenData = isSecretRef(tokenRaw)
+    const tokenData = isSessionSecretRef(tokenRaw)
       ? await secretStore.getOAuth2Token(tokenRaw)
       : this.parseTokenData(tokenRaw);
 
@@ -106,14 +106,14 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       }
 
       if (options.storeSecretsInSettings) {
-        if (!isSecretRef(raw)) {
+        if (!isSessionSecretRef(raw)) {
           return raw;
         }
         const stored = await secretStore.getOAuth2Token(raw);
         return stored ? JSON.stringify(stored) : raw;
       }
 
-      if (isSecretRef(raw)) {
+      if (isSessionSecretRef(raw)) {
         return raw;
       }
 
@@ -123,17 +123,25 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       }
 
       const existingRef =
-        options.existing?.token && isSecretRef(options.existing.token)
+        options.existing?.token && isSessionSecretRef(options.existing.token)
           ? options.existing.token
           : undefined;
 
-      const ref = existingRef ?? secretStore.createRef();
+      const ref =
+        existingRef ?? secretStore.createTransientOAuth2TokenRef();
       await secretStore.setOAuth2Token(ref, tokenData);
       return ref;
     };
 
     const token = await normalizeToken();
-    return { ...toPersistableConfig(auth), token };
+    return {
+      ...toPersistableConfig(auth),
+      identityId:
+        auth.token?.trim() && !isSessionSecretRef(auth.token.trim())
+          ? randomUUID()
+          : auth.identityId,
+      token,
+    };
   }
 
   static async prepareForDuplicate(
@@ -161,7 +169,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const tokenRaw = auth.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
+    if (tokenRaw && isSessionSecretRef(tokenRaw)) {
       await secretStore.deleteOAuth2Token(tokenRaw);
     }
   }
@@ -211,7 +219,11 @@ export class GeminiCliOAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(next: GeminiCliOAuthConfig): Promise<void> {
+  private async persistConfig(
+    next: GeminiCliOAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(next, guard);
     if (this.config) {
       // Preserve object identity so existing ProviderConfig/client instances
       // observe updates (e.g. managedProjectId provisioning) without requiring
@@ -220,8 +232,6 @@ export class GeminiCliOAuthProvider implements AuthProvider {
     } else {
       this.config = next;
     }
-
-    await this.context.persistAuthConfig?.(this.config);
   }
 
   private async resolveTokenData(): Promise<OAuth2TokenData | null> {
@@ -230,14 +240,17 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       return null;
     }
 
-    if (isSecretRef(raw)) {
+    if (isSessionSecretRef(raw)) {
       return this.context.secretStore.getOAuth2Token(raw);
     }
 
     return GeminiCliOAuthProvider.parseTokenData(raw);
   }
 
-  private async refreshAccountInfoIfNeeded(accessToken: string): Promise<void> {
+  private async refreshAccountInfoIfNeeded(
+    accessToken: string,
+    commitGuard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
     const config = this.config;
     if (!config) {
       return;
@@ -281,10 +294,13 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       }
 
       if (Object.keys(updates).length > 0) {
-        await this.persistConfig({
-          ...toPersistableConfig(config),
-          ...updates,
-        });
+        await this.persistConfig(
+          {
+            ...toPersistableConfig(config),
+            ...updates,
+          },
+          commitGuard,
+        );
       }
     } catch (error) {
       authLog.error(
@@ -397,6 +413,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
   }
 
   async getCredential(): Promise<AuthCredential | undefined> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
       'Getting credential',
@@ -451,7 +468,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       `${this.context.providerId}:google-gemini-oauth`,
       `Credential obtained (expires: ${token.expiresAt ? new Date(token.expiresAt).toISOString() : 'never'})`,
     );
-    await this.refreshAccountInfoIfNeeded(token.accessToken);
+    await this.refreshAccountInfoIfNeeded(token.accessToken, commitGuard);
     return {
       value: token.accessToken,
       tokenType: token.tokenType,
@@ -477,6 +494,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
       'Starting Gemini CLI OAuth configuration',
@@ -581,7 +599,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       `${this.context.providerId}:google-gemini-oauth`,
       'Storing tokens',
     );
-    const tokenRef = createSecretRef();
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
     await this.context.secretStore.setOAuth2Token(tokenRef, {
       accessToken: exchanged.accessToken,
       refreshToken: exchanged.refreshToken,
@@ -591,6 +609,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
 
     const nextConfig: GeminiCliOAuthConfig = {
       method: 'google-gemini-oauth',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       identityId: randomUUID(),
@@ -603,7 +622,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       email: exchanged.email,
     };
 
-    await this.persistConfig(nextConfig);
+    await this.persistConfig(nextConfig, commitGuard);
     this._onDidChangeStatus.fire({ status: 'valid' });
 
     vscode.window.showInformationMessage(t('Authorization successful!'));
@@ -615,6 +634,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
   }
 
   async refresh(): Promise<boolean> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
       'Starting token refresh',
@@ -652,7 +672,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
           `${this.context.providerId}:google-gemini-oauth`,
           'Refresh token was revoked (invalid_grant); reauthentication required',
         );
-        await this.revoke();
+        await this.revoke(commitGuard);
         this._onDidChangeStatus.fire({ status: 'revoked', errorType: 'auth_error' });
         return false;
       }
@@ -696,23 +716,7 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       tokenType: refreshed.tokenType ?? 'Bearer',
       expiresAt: refreshed.expiresAt,
     };
-
-    if (isSecretRef(raw)) {
-      authLog.verbose(
-        `${this.context.providerId}:google-gemini-oauth`,
-        'Storing refreshed token in secret storage',
-      );
-      await this.context.secretStore.setOAuth2Token(raw, nextToken);
-    } else {
-      authLog.verbose(
-        `${this.context.providerId}:google-gemini-oauth`,
-        'Storing refreshed token in config',
-      );
-      await this.persistConfig({
-        ...toPersistableConfig(this.config),
-        token: JSON.stringify(nextToken),
-      });
-    }
+    const updates: Partial<GeminiCliOAuthConfig> = {};
 
     // Optionally refresh account info if we don't have tier info
     const shouldRefreshAccountInfo =
@@ -728,7 +732,6 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       );
 
       const accountInfo = await fetchGeminiCliAccountInfo(refreshed.accessToken);
-      const updates: Partial<GeminiCliOAuthConfig> = {};
 
       if (
         !this.config?.managedProjectId?.trim() &&
@@ -744,14 +747,18 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       if (!this.config?.tierId || this.config.tierId !== accountInfo.tierId) {
         updates.tierId = accountInfo.tierId;
       }
-
-      if (Object.keys(updates).length > 0) {
-        await this.persistConfig({
-          ...toPersistableConfig(this.config),
-          ...updates,
-        });
-      }
     }
+
+    const tokenRef = this.context.secretStore.createTransientOAuth2TokenRef();
+    await this.context.secretStore.setOAuth2Token(tokenRef, nextToken);
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        ...updates,
+        token: tokenRef,
+      },
+      commitGuard,
+    );
 
     this._onDidChangeStatus.fire({ status: 'valid' });
     authLog.verbose(
@@ -761,7 +768,9 @@ export class GeminiCliOAuthProvider implements AuthProvider {
     return true;
   }
 
-  async revoke(): Promise<void> {
+  async revoke(
+    commitGuard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
     authLog.verbose(
       `${this.context.providerId}:google-gemini-oauth`,
       'Revoking tokens',
@@ -774,23 +783,21 @@ export class GeminiCliOAuthProvider implements AuthProvider {
       return;
     }
 
-    const tokenRaw = this.config.token?.trim();
-    if (tokenRaw && isSecretRef(tokenRaw)) {
-      authLog.verbose(
-        `${this.context.providerId}:google-gemini-oauth`,
-        'Deleting token from secret storage',
-      );
-      await this.context.secretStore.deleteOAuth2Token(tokenRaw);
+    const oldTokenRef = this.config.token?.trim();
+    await this.persistConfig(
+      {
+        ...toPersistableConfig(this.config),
+        token: undefined,
+        email: undefined,
+        tier: undefined,
+        tierId: undefined,
+        managedProjectId: undefined,
+      },
+      commitGuard,
+    );
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
     }
-
-    await this.persistConfig({
-      ...toPersistableConfig(this.config),
-      token: undefined,
-      email: undefined,
-      tier: undefined,
-      tierId: undefined,
-      managedProjectId: undefined,
-    });
 
     this._onDidChangeStatus.fire({ status: 'revoked' });
     authLog.verbose(

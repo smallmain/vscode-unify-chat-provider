@@ -14,12 +14,13 @@
  *   node scripts/release.mts --dry-run
  *   node scripts/release.mts --version 1.2.3
  *   node scripts/release.mts --bump patch|minor|major
+ *   node scripts/release.mts --resume-from-tag v1.2.3
  *   node scripts/release.mts --github-tag v1.2.3
  *   node scripts/release.mts --github-tag v1.2.3 --skip-github-upload
  *   node scripts/release.mts --github-tag v1.2.3 --skip-github-create --github-asset path/to/file.vsix
  *
  * Requirements:
- * - git (clean working tree recommended)
+ * - git
  * - vsce (https://github.com/microsoft/vscode-vsce) for packaging/publishing
  * - For GitHub release upload: gh OR GITHUB_TOKEN
  */
@@ -30,6 +31,8 @@ import { access, readFile, writeFile, mkdtemp } from 'node:fs/promises';
 import { constants as fsConstants } from 'node:fs';
 import { basename, join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { createHash } from 'node:crypto';
+import JSZip from 'jszip';
 
 type SemverCore = { major: number; minor: number; patch: number };
 type Semver = SemverCore & { prerelease?: string; build?: string };
@@ -46,7 +49,12 @@ type Section = {
   commits: Commit[];
 };
 
-const MARKETPLACE_PUBLISH_ATTEMPTS = 4;
+const MARKETPLACE_PUBLISH_ATTEMPTS = 8;
+const GITHUB_MUTATION_ATTEMPTS = 8;
+const MARKETPLACE_RECONCILIATION_ATTEMPTS = 35;
+const GITHUB_RECONCILIATION_ATTEMPTS = 12;
+
+class NonRetryableReleaseError extends Error {}
 
 const { values } = parseArgs({
   options: {
@@ -55,6 +63,7 @@ const { values } = parseArgs({
     'allow-dirty': { type: 'boolean' },
     version: { type: 'string' },
     bump: { type: 'string' },
+    'resume-from-tag': { type: 'string' },
     'github-tag': { type: 'string' },
     'github-asset': { type: 'string' },
     'github-notes-file': { type: 'string' },
@@ -72,6 +81,10 @@ const allowDirty = values['allow-dirty'] === true;
 const providedVersion =
   typeof values.version === 'string' ? values.version : undefined;
 const providedBump = typeof values.bump === 'string' ? values.bump : undefined;
+const resumeFromTagInput =
+  typeof values['resume-from-tag'] === 'string'
+    ? values['resume-from-tag']
+    : undefined;
 const githubTagInput =
   typeof values['github-tag'] === 'string' ? values['github-tag'] : undefined;
 const githubAssetInput =
@@ -105,6 +118,7 @@ async function main(): Promise<void> {
   const pkgJson = parseJsonObject(pkgText, pkgPath);
 
   const extensionName = getRequiredString(pkgJson, 'name', pkgPath);
+  const publisher = getRequiredString(pkgJson, 'publisher', pkgPath);
   const currentVersion = getRequiredString(pkgJson, 'version', pkgPath);
 
   const currentSemver = parseSemver(currentVersion);
@@ -114,21 +128,58 @@ async function main(): Promise<void> {
 
   await assertGitRepo(repoRoot);
 
-  if (githubTagInput) {
-    await runGitHubFromTagMode({
+  if (resumeFromTagInput && githubTagInput) {
+    throw new Error(
+      'Use either --resume-from-tag or --github-tag, not both.',
+    );
+  }
+
+  if (resumeFromTagInput) {
+    await runFromTagMode({
       repoRoot,
-      extensionName,
-      githubTagInput,
-      githubAssetInput,
-      githubNotesFileInput,
+      expectedExtensionName: extensionName,
+      expectedPublisher: publisher,
+      tagInput: resumeFromTagInput,
+      assetInput: githubAssetInput,
+      notesFileInput: githubNotesFileInput,
+      publishMarketplace: !skipPublish,
       skipGitHubCreate,
       skipGitHubUpload,
       githubDraft,
       yes,
       dryRun,
+      requireTagCheckout: true,
+      mode: 'resume',
       rl,
     });
     return;
+  }
+
+  if (githubTagInput) {
+    await runFromTagMode({
+      repoRoot,
+      expectedExtensionName: extensionName,
+      expectedPublisher: publisher,
+      tagInput: githubTagInput,
+      assetInput: githubAssetInput,
+      notesFileInput: githubNotesFileInput,
+      publishMarketplace: false,
+      skipGitHubCreate,
+      skipGitHubUpload,
+      githubDraft,
+      yes,
+      dryRun,
+      requireTagCheckout: false,
+      mode: 'github-only',
+      rl,
+    });
+    return;
+  }
+
+  if (skipGitHubCreate && !skipGitHubUpload) {
+    throw new Error(
+      'Full releases cannot upload a GitHub asset while release creation is skipped.',
+    );
   }
 
   await assertGitClean(repoRoot, dryRun || allowDirty);
@@ -142,18 +193,37 @@ async function main(): Promise<void> {
     rl,
   });
 
+  const nextSemver = parseSemver(nextVersion);
+  if (!nextSemver || compareSemverPrecedence(nextSemver, currentSemver) <= 0) {
+    throw new Error(
+      `Full release version must be greater than package.json (${currentVersion}): ${nextVersion}`,
+    );
+  }
+
   const tagName = `v${nextVersion}`;
   const date = formatDate(new Date());
 
   const branch = (
     await runCapture(repoRoot, 'git', ['branch', '--show-current'])
   ).stdout.trim();
+  if (!branch) {
+    throw new Error('Full releases require a checked-out branch.');
+  }
   const headSha = (
     await runCapture(repoRoot, 'git', ['rev-parse', 'HEAD'])
   ).stdout.trim();
   const baseTag = await getLatestGitTag(repoRoot);
   const range = baseTag ? `${baseTag}..HEAD` : 'HEAD';
   const commits = await getCommits(repoRoot, range);
+
+  await assertFullReleaseIdentifiersAvailable({
+    repoRoot,
+    tagName,
+    extensionId: `${publisher}.${extensionName}`,
+    version: nextVersion,
+    checkMarketplace: !skipPublish,
+    checkGitHub: !skipGitHubCreate || !skipGitHubUpload,
+  });
 
   const sections = groupCommits(commits);
   const changelogEntry = renderChangelogEntry({
@@ -234,16 +304,33 @@ async function main(): Promise<void> {
   ).stdout.trim();
 
   const vsixPath = join(repoRoot, `${extensionName}-${nextVersion}.vsix`);
-  await runInherit(repoRoot, 'vsce', ['package', '--out', vsixPath]);
+  await packageVsix({ repoRoot, vsixPath, commit: releaseSha });
+  await assertVsixIdentity({
+    repoRoot,
+    vsixPath,
+    extensionName,
+    publisher,
+    version: nextVersion,
+  });
+
+  await createReleaseTag(repoRoot, tagName, releaseSha);
+
+  await pushReleaseRefsAtomically({
+    repoRoot,
+    branch,
+    tagName,
+    releaseSha,
+  });
 
   if (!skipPublish) {
-    await publishToMarketplace(repoRoot, vsixPath);
+    await publishToMarketplace({
+      repoRoot,
+      vsixPath,
+      extensionId: `${publisher}.${extensionName}`,
+      version: nextVersion,
+      mode: 'full',
+    });
   }
-
-  // Create git tag after successful packaging/publishing to avoid manual cleanup on failure
-  await ensureGitTag(repoRoot, tagName);
-  // Push tag to remote for GitHub release
-  await runInherit(repoRoot, 'git', ['push', 'origin', tagName]);
 
   if (!skipGitHubCreate || !skipGitHubUpload) {
     await publishGitHubRelease({
@@ -256,8 +343,14 @@ async function main(): Promise<void> {
       draft: githubDraft,
       skipCreate: skipGitHubCreate,
       skipUpload: skipGitHubUpload,
+      mode: 'full',
     });
   }
+
+  await assertRemoteTagTarget(repoRoot, tagName, releaseSha);
+  console.log(
+    `Release reconciliation succeeded for ${tagName}: origin tag and requested external publications match the local release artifacts.`,
+  );
 
   console.log('Done.');
 } finally {
@@ -412,6 +505,41 @@ function formatSemver(version: Semver): string {
   const prerelease = version.prerelease ? `-${version.prerelease}` : '';
   const build = version.build ? `+${version.build}` : '';
   return `${core}${prerelease}${build}`;
+}
+
+function compareSemverPrecedence(left: Semver, right: Semver): number {
+  for (const key of ['major', 'minor', 'patch'] as const) {
+    if (left[key] !== right[key]) {
+      return left[key] < right[key] ? -1 : 1;
+    }
+  }
+
+  if (left.prerelease === undefined || right.prerelease === undefined) {
+    if (left.prerelease === right.prerelease) return 0;
+    return left.prerelease === undefined ? 1 : -1;
+  }
+
+  const leftIdentifiers = left.prerelease.split('.');
+  const rightIdentifiers = right.prerelease.split('.');
+  const length = Math.max(leftIdentifiers.length, rightIdentifiers.length);
+  for (let index = 0; index < length; index++) {
+    const leftIdentifier = leftIdentifiers[index];
+    const rightIdentifier = rightIdentifiers[index];
+    if (leftIdentifier === undefined || rightIdentifier === undefined) {
+      if (leftIdentifier === rightIdentifier) return 0;
+      return leftIdentifier === undefined ? -1 : 1;
+    }
+    if (leftIdentifier === rightIdentifier) continue;
+
+    const leftNumeric = /^\d+$/.test(leftIdentifier);
+    const rightNumeric = /^\d+$/.test(rightIdentifier);
+    if (leftNumeric && rightNumeric) {
+      return Number(leftIdentifier) < Number(rightIdentifier) ? -1 : 1;
+    }
+    if (leftNumeric !== rightNumeric) return leftNumeric ? -1 : 1;
+    return leftIdentifier < rightIdentifier ? -1 : 1;
+  }
+  return 0;
 }
 
 async function getLatestGitTag(cwd: string): Promise<string | null> {
@@ -609,22 +737,33 @@ function printSummary(params: {
   console.log('');
 }
 
-function printGitHubFromTagSummary(params: {
+function printFromTagSummary(params: {
+  mode: 'resume' | 'github-only';
   tagName: string;
   tagCommit: string;
   notesSource: string;
-  assetPath: string | null;
+  assetPath: string;
+  publishMarketplace: boolean;
   skipGitHubCreate: boolean;
   skipGitHubUpload: boolean;
   dryRun: boolean;
 }): void {
   console.log('');
-  console.log('GitHub release (from existing tag)');
-  console.log('=================================');
+  console.log(
+    params.mode === 'resume'
+      ? 'Resume release from existing tag'
+      : 'GitHub release from existing tag',
+  );
+  console.log('================================');
   console.log(`- Tag:       ${params.tagName}`);
   console.log(`- Commit:    ${params.tagCommit}`);
   console.log(`- Notes:     ${params.notesSource}`);
-  console.log(`- Asset:     ${params.assetPath ?? '(none)'}`);
+  console.log(`- Asset:     ${params.assetPath}`);
+  console.log(
+    `- Publish:   ${
+      params.publishMarketplace ? 'VS Code Marketplace' : 'skip'
+    }`,
+  );
   console.log(
     `- GitHub:    ${[
       params.skipGitHubCreate ? 'create=skip' : 'create=on',
@@ -712,40 +851,445 @@ async function upsertChangelog(
   );
 }
 
-async function ensureGitTag(cwd: string, tagName: string): Promise<void> {
-  const existing = (
-    await runCapture(cwd, 'git', ['tag', '--list', tagName])
-  ).stdout.trim();
-  if (existing === tagName) {
-    console.log(`Tag already exists: ${tagName}`);
-    return;
+async function assertFullReleaseIdentifiersAvailable(params: {
+  repoRoot: string;
+  tagName: string;
+  extensionId: string;
+  version: string;
+  checkMarketplace: boolean;
+  checkGitHub: boolean;
+}): Promise<void> {
+  const localTag = await getLocalTagTarget(params.repoRoot, params.tagName);
+  if (localTag) {
+    throw new Error(
+      `Full release tag already exists locally: ${params.tagName} -> ${localTag}`,
+    );
   }
-  await runInherit(cwd, 'git', ['tag', '-a', tagName, '-m', tagName]);
+
+  const remoteTag = await getRemoteTagTarget(params.repoRoot, params.tagName);
+  if (remoteTag) {
+    throw new Error(
+      `Full release tag already exists on origin: ${params.tagName} -> ${remoteTag}`,
+    );
+  }
+
+  if (params.checkMarketplace) {
+    const marketplaceVersion = await getMarketplaceVersionState({
+      repoRoot: params.repoRoot,
+      extensionId: params.extensionId,
+      version: params.version,
+    });
+    if (marketplaceVersion.status === 'present') {
+      throw new Error(
+        `VS Code Marketplace already contains ${params.extensionId}@${params.version}; full releases never reuse a published version. Use --resume-from-tag only when the matching release tag already exists.`,
+      );
+    }
+  }
+
+  if (
+    params.checkGitHub &&
+    (await githubReleaseExists(params.repoRoot, params.tagName))
+  ) {
+    throw new Error(
+      `GitHub Release already exists for ${params.tagName}; full releases never reuse an existing release. Use --resume-from-tag after verifying the tag.`,
+    );
+  }
 }
 
-async function publishToMarketplace(
+async function getLocalTagTarget(
   repoRoot: string,
-  vsixPath: string,
+  tagName: string,
+): Promise<string | null> {
+  const result = await runCaptureWithCode(repoRoot, 'git', [
+    'rev-parse',
+    '--verify',
+    '--quiet',
+    `refs/tags/${tagName}^{commit}`,
+  ]);
+  if (result.code === 1) {
+    return null;
+  }
+  if (result.code !== 0) {
+    throw new Error(
+      `Unable to resolve local tag ${tagName}: ${result.stderr || result.stdout}`,
+    );
+  }
+  const target = result.stdout.trim();
+  return target || null;
+}
+
+async function getRemoteTagTarget(
+  repoRoot: string,
+  tagName: string,
+): Promise<string | null> {
+  const directRef = `refs/tags/${tagName}`;
+  const peeledRef = `${directRef}^{}`;
+  const result = await runCapture(repoRoot, 'git', [
+    'ls-remote',
+    'origin',
+    directRef,
+    peeledRef,
+  ]);
+  const refs = parseLsRemote(result.stdout);
+  return refs.get(peeledRef) ?? refs.get(directRef) ?? null;
+}
+
+async function getRemoteBranchTarget(
+  repoRoot: string,
+  branch: string,
+): Promise<string | null> {
+  const refName = `refs/heads/${branch}`;
+  const result = await runCapture(repoRoot, 'git', [
+    'ls-remote',
+    'origin',
+    refName,
+  ]);
+  return parseLsRemote(result.stdout).get(refName) ?? null;
+}
+
+function parseLsRemote(output: string): Map<string, string> {
+  const refs = new Map<string, string>();
+  for (const line of output.split(/\r?\n/)) {
+    if (!line) {
+      continue;
+    }
+    const separator = line.indexOf('\t');
+    if (separator <= 0) {
+      throw new Error(`Unexpected git ls-remote output: ${line}`);
+    }
+    const sha = line.slice(0, separator);
+    const refName = line.slice(separator + 1);
+    refs.set(refName, sha);
+  }
+  return refs;
+}
+
+type MarketplaceVersionState =
+  | { status: 'absent' }
+  | { status: 'present'; sha256: string };
+
+async function getMarketplaceVersionState(params: {
+  repoRoot: string;
+  extensionId: string;
+  version: string;
+}): Promise<MarketplaceVersionState> {
+  const result = await runCaptureWithCode(params.repoRoot, 'vsce', [
+    'show',
+    params.extensionId,
+    '--json',
+  ]);
+  if (result.code !== 0) {
+    const output = `${result.stderr}\n${result.stdout}`.toLowerCase();
+    if (output.includes('not found')) {
+      return { status: 'absent' };
+    }
+    throw new Error(
+      `Unable to reconcile VS Code Marketplace metadata for ${params.extensionId}: ${result.stderr || result.stdout}`,
+    );
+  }
+
+  const stdout = result.stdout.trim();
+  // `vsce show --json` prints this literal for an extension that does not exist.
+  if (stdout === 'undefined') {
+    return { status: 'absent' };
+  }
+  if (!stdout) {
+    throw new Error(
+      `VS Code Marketplace returned empty metadata for ${params.extensionId}.`,
+    );
+  }
+
+  const metadata = parseJsonObject(
+    stdout,
+    `VS Code Marketplace metadata for ${params.extensionId}`,
+  );
+  const marketplacePublisher = metadata.publisher;
+  const marketplaceExtensionName = metadata.extensionName;
+  if (
+    !isRecord(marketplacePublisher) ||
+    typeof marketplacePublisher.publisherName !== 'string' ||
+    typeof marketplaceExtensionName !== 'string' ||
+    `${marketplacePublisher.publisherName}.${marketplaceExtensionName}`.toLowerCase() !==
+      params.extensionId.toLowerCase()
+  ) {
+    throw new Error(
+      `VS Code Marketplace returned metadata for a different extension than ${params.extensionId}.`,
+    );
+  }
+  const versions = metadata.versions;
+  if (!Array.isArray(versions)) {
+    throw new Error(
+      `VS Code Marketplace metadata for ${params.extensionId} has no versions array.`,
+    );
+  }
+
+  const matchingVersion = versions.find(
+    (candidate) =>
+      isRecord(candidate) && candidate.version === params.version,
+  );
+  if (!isRecord(matchingVersion)) {
+    return { status: 'absent' };
+  }
+
+  const properties = matchingVersion.properties;
+  if (!Array.isArray(properties)) {
+    throw new Error(
+      `VS Code Marketplace metadata for ${params.extensionId}@${params.version} has no properties array.`,
+    );
+  }
+  const hashProperty = properties.find(
+    (candidate) =>
+      isRecord(candidate) &&
+      candidate.key === 'Microsoft.VisualStudio.Services.VsixSha256',
+  );
+  if (!isRecord(hashProperty) || typeof hashProperty.value !== 'string') {
+    throw new Error(
+      `VS Code Marketplace metadata for ${params.extensionId}@${params.version} has no VSIX SHA-256.`,
+    );
+  }
+  const sha256 = hashProperty.value.trim().toLowerCase();
+  if (!/^[0-9a-f]{64}$/.test(sha256)) {
+    throw new Error(
+      `VS Code Marketplace returned an invalid VSIX SHA-256 for ${params.extensionId}@${params.version}.`,
+    );
+  }
+  return { status: 'present', sha256 };
+}
+
+async function assertFileSha256(
+  path: string,
+  expectedSha256: string,
+  remoteDescription: string,
 ): Promise<void> {
+  if (!/^[0-9a-f]{64}$/.test(expectedSha256)) {
+    throw new Error(
+      `${remoteDescription} returned an invalid SHA-256: ${expectedSha256}`,
+    );
+  }
+  const bytes = await readFile(path);
+  const actualSha256 = createHash('sha256').update(bytes).digest('hex');
+  if (actualSha256 !== expectedSha256) {
+    throw new NonRetryableReleaseError(
+      `${remoteDescription} already exists, but its VSIX SHA-256 (${expectedSha256}) does not match ${path} (${actualSha256}). Refusing to treat this as an idempotent resume.`,
+    );
+  }
+}
+
+async function assertRemoteTagTarget(
+  repoRoot: string,
+  tagName: string,
+  expectedCommit: string,
+): Promise<void> {
+  const remoteTag = await getRemoteTagTarget(repoRoot, tagName);
+  if (remoteTag !== expectedCommit) {
+    throw new Error(
+      `Remote tag reconciliation failed for ${tagName}: expected=${expectedCommit}, origin=${remoteTag ?? '(missing)'}.`,
+    );
+  }
+}
+
+async function createReleaseTag(
+  repoRoot: string,
+  tagName: string,
+  expectedCommit: string,
+): Promise<void> {
+  const existing = await getLocalTagTarget(repoRoot, tagName);
+  if (existing) {
+    throw new Error(
+      `Refusing to reuse local tag ${tagName}: it points to ${existing}.`,
+    );
+  }
+  await runInherit(repoRoot, 'git', [
+    'tag',
+    '-a',
+    tagName,
+    expectedCommit,
+    '-m',
+    tagName,
+  ]);
+  const actualCommit = await getLocalTagTarget(repoRoot, tagName);
+  if (actualCommit !== expectedCommit) {
+    throw new Error(
+      `Created tag ${tagName} points to ${actualCommit ?? '(missing)'}, expected ${expectedCommit}.`,
+    );
+  }
+}
+
+async function assertValidTagName(
+  repoRoot: string,
+  tagName: string,
+): Promise<void> {
+  const result = await runCaptureWithCode(repoRoot, 'git', [
+    'check-ref-format',
+    `refs/tags/${tagName}`,
+  ]);
+  if (result.code !== 0) {
+    throw new Error(`Invalid git tag name: ${tagName}`);
+  }
+}
+
+async function packageVsix(params: {
+  repoRoot: string;
+  vsixPath: string;
+  commit: string;
+}): Promise<void> {
+  const sourceDateEpoch = (
+    await runCapture(params.repoRoot, 'git', [
+      'show',
+      '-s',
+      '--format=%ct',
+      params.commit,
+    ])
+  ).stdout.trim();
+  if (!/^\d+$/.test(sourceDateEpoch)) {
+    throw new Error(
+      `Unable to determine SOURCE_DATE_EPOCH for ${params.commit}.`,
+    );
+  }
+  await runInherit(
+    params.repoRoot,
+    'vsce',
+    ['package', '--out', params.vsixPath],
+    {
+      env: { ...process.env, SOURCE_DATE_EPOCH: sourceDateEpoch },
+    },
+  );
+  const trackedStatus = (
+    await runCapture(params.repoRoot, 'git', [
+      'status',
+      '--porcelain',
+      '--untracked-files=no',
+    ])
+  ).stdout.trim();
+  if (trackedStatus) {
+    throw new Error(
+      `VSIX packaging modified tracked files; refusing to publish content that is not in ${params.commit}:\n${trackedStatus}`,
+    );
+  }
+}
+
+async function assertVsixIdentity(params: {
+  repoRoot: string;
+  vsixPath: string;
+  extensionName: string;
+  publisher: string;
+  version: string;
+}): Promise<void> {
+  const source = `${params.vsixPath}:extension/package.json`;
+  const archive = await JSZip.loadAsync(await readFile(params.vsixPath));
+  const embeddedPackage = archive.file('extension/package.json');
+  if (!embeddedPackage) {
+    throw new Error(`VSIX is missing ${source}.`);
+  }
+  const manifest = parseJsonObject(await embeddedPackage.async('string'), source);
+  const extensionName = getRequiredString(manifest, 'name', source);
+  const publisher = getRequiredString(manifest, 'publisher', source);
+  const version = getRequiredString(manifest, 'version', source);
+  if (
+    extensionName !== params.extensionName ||
+    publisher !== params.publisher ||
+    version !== params.version
+  ) {
+    throw new Error(
+      `VSIX identity mismatch for ${params.vsixPath}: expected ${params.publisher}.${params.extensionName}@${params.version}, found ${publisher}.${extensionName}@${version}.`,
+    );
+  }
+}
+
+async function pushReleaseRefsAtomically(params: {
+  repoRoot: string;
+  branch: string;
+  tagName: string;
+  releaseSha: string;
+}): Promise<void> {
+  console.log(
+    `Atomically pushing ${params.branch} and ${params.tagName} before external publishing...`,
+  );
+  await runInherit(params.repoRoot, 'git', [
+    'push',
+    '--atomic',
+    'origin',
+    `HEAD:refs/heads/${params.branch}`,
+    `refs/tags/${params.tagName}:refs/tags/${params.tagName}`,
+  ]);
+
+  const remoteBranch = await getRemoteBranchTarget(
+    params.repoRoot,
+    params.branch,
+  );
+  const remoteTag = await getRemoteTagTarget(params.repoRoot, params.tagName);
+  if (remoteBranch !== params.releaseSha || remoteTag !== params.releaseSha) {
+    throw new Error(
+      `Remote ref verification failed after atomic push: branch=${remoteBranch ?? '(missing)'}, tag=${remoteTag ?? '(missing)'}, expected=${params.releaseSha}.`,
+    );
+  }
+}
+
+async function publishToMarketplace(params: {
+  repoRoot: string;
+  vsixPath: string;
+  extensionId: string;
+  version: string;
+  mode: 'full' | 'resume';
+}): Promise<void> {
+  if (params.mode === 'resume') {
+    const existing = await getMarketplaceVersionState({
+      repoRoot: params.repoRoot,
+      extensionId: params.extensionId,
+      version: params.version,
+    });
+    if (existing.status === 'present') {
+      await assertFileSha256(
+        params.vsixPath,
+        existing.sha256,
+        `VS Code Marketplace ${params.extensionId}@${params.version}`,
+      );
+      console.log(
+        `VS Code Marketplace already contains ${params.extensionId}@${params.version}; tag and VSIX SHA-256 reconciliation succeeded.`,
+      );
+      return;
+    }
+  }
+
   const args = [
     'publish',
     '--packagePath',
-    vsixPath,
+    params.vsixPath,
     '--allow-all-proposed-apis',
   ];
 
   await retry(
     MARKETPLACE_PUBLISH_ATTEMPTS,
     async () => {
-      const result = await runInheritCaptureWithCode(repoRoot, 'vsce', args);
+      const result = await runInheritCaptureWithCode(
+        params.repoRoot,
+        'vsce',
+        args,
+      );
       if (result.code === 0) {
         return;
       }
 
       const output = `${result.stderr}\n${result.stdout}`;
+      const state = await getMarketplaceVersionState({
+        repoRoot: params.repoRoot,
+        extensionId: params.extensionId,
+        version: params.version,
+      });
+      if (state.status === 'present') {
+        await assertFileSha256(
+          params.vsixPath,
+          state.sha256,
+          `VS Code Marketplace ${params.extensionId}@${params.version}`,
+        );
+        console.log(
+          `VS Code Marketplace accepted ${params.extensionId}@${params.version} despite an ambiguous client response; VSIX SHA-256 reconciliation succeeded.`,
+        );
+        return;
+      }
       if (isMarketplaceAlreadyPublishedError(output)) {
         console.warn(
-          'VS Code Marketplace already has this extension version; treating publish as complete.',
+          `VS Code Marketplace reports ${params.extensionId}@${params.version} already exists, but its metadata is not visible yet; switching to read-only reconciliation.`,
         );
         return;
       }
@@ -765,6 +1309,35 @@ async function publishToMarketplace(
       );
     },
   );
+
+  await retry(
+    MARKETPLACE_RECONCILIATION_ATTEMPTS,
+    async () => {
+      const state = await getMarketplaceVersionState({
+        repoRoot: params.repoRoot,
+        extensionId: params.extensionId,
+        version: params.version,
+      });
+      if (state.status === 'absent') {
+        throw new Error(
+          `VS Code Marketplace has not exposed ${params.extensionId}@${params.version} yet.`,
+        );
+      }
+      await assertFileSha256(
+        params.vsixPath,
+        state.sha256,
+        `VS Code Marketplace ${params.extensionId}@${params.version}`,
+      );
+    },
+    (attempt, error) => {
+      console.warn(
+        `VS Code Marketplace post-publish reconciliation failed (attempt ${attempt}/${MARKETPLACE_RECONCILIATION_ATTEMPTS}): ${formatError(error)}`,
+      );
+    },
+  );
+  console.log(
+    `VS Code Marketplace publication verified: ${params.extensionId}@${params.version}.`,
+  );
 }
 
 function isMarketplaceAlreadyPublishedError(output: string): boolean {
@@ -777,46 +1350,90 @@ function isMarketplaceAlreadyPublishedError(output: string): boolean {
   );
 }
 
-async function runGitHubFromTagMode(params: {
+async function runFromTagMode(params: {
   repoRoot: string;
-  extensionName: string;
-  githubTagInput: string;
-  githubAssetInput: string | undefined;
-  githubNotesFileInput: string | undefined;
+  expectedExtensionName: string;
+  expectedPublisher: string;
+  tagInput: string;
+  assetInput: string | undefined;
+  notesFileInput: string | undefined;
+  publishMarketplace: boolean;
   skipGitHubCreate: boolean;
   skipGitHubUpload: boolean;
   githubDraft: boolean;
   yes: boolean;
   dryRun: boolean;
+  requireTagCheckout: boolean;
+  mode: 'resume' | 'github-only';
   rl: ReturnType<typeof createInterface> | null;
 }): Promise<void> {
-  const tagName = normalizeGitTag(params.githubTagInput);
+  const tagName = normalizeGitTag(params.tagInput);
+  await assertValidTagName(params.repoRoot, tagName);
   const versionFromTag = tagName.startsWith('v') ? tagName.slice(1) : tagName;
+  if (!parseSemver(versionFromTag)) {
+    throw new Error(
+      `Release tag must contain a semantic version (for example v1.2.3): ${tagName}`,
+    );
+  }
 
-  const tagExists = (
-    await runCapture(params.repoRoot, 'git', ['tag', '--list', tagName])
-  ).stdout.trim();
-  if (tagExists !== tagName) {
+  const tagCommit = await getLocalTagTarget(params.repoRoot, tagName);
+  if (!tagCommit) {
     throw new Error(`Git tag not found: ${tagName}`);
   }
 
-  const tagCommit = (
-    await runCapture(params.repoRoot, 'git', ['rev-parse', `${tagName}^{}`])
-  ).stdout.trim();
+  const remoteTagCommit = await getRemoteTagTarget(params.repoRoot, tagName);
+  if (remoteTagCommit !== tagCommit) {
+    throw new Error(
+      `Tag reconciliation failed for ${tagName}: local=${tagCommit}, origin=${remoteTagCommit ?? '(missing)'}.`,
+    );
+  }
 
-  const changelogPath = join(params.repoRoot, 'CHANGELOG.md');
+  const headCommit = (
+    await runCapture(params.repoRoot, 'git', ['rev-parse', 'HEAD'])
+  ).stdout.trim();
+  if (params.requireTagCheckout && headCommit !== tagCommit) {
+    throw new Error(
+      `--resume-from-tag must run from the tagged commit: HEAD=${headCommit}, ${tagName}=${tagCommit}.`,
+    );
+  }
+
+  const tagPackagePath = `${tagName}:package.json`;
+  const tagPackageText = (
+    await runCapture(params.repoRoot, 'git', ['show', tagPackagePath])
+  ).stdout;
+  const tagPackage = parseJsonObject(tagPackageText, tagPackagePath);
+  const extensionName = getRequiredString(tagPackage, 'name', tagPackagePath);
+  const publisher = getRequiredString(tagPackage, 'publisher', tagPackagePath);
+  const packageVersion = getRequiredString(tagPackage, 'version', tagPackagePath);
+  if (
+    extensionName !== params.expectedExtensionName ||
+    publisher !== params.expectedPublisher
+  ) {
+    throw new Error(
+      `Tag extension identity mismatch: expected ${params.expectedPublisher}.${params.expectedExtensionName}, found ${publisher}.${extensionName}.`,
+    );
+  }
+  if (packageVersion !== versionFromTag) {
+    throw new Error(
+      `Tag/package version mismatch: ${tagName} contains package version ${packageVersion}.`,
+    );
+  }
+
+  const changelogSource = `${tagName}:CHANGELOG.md`;
 
   let notesSource = `CHANGELOG.md (${tagName})`;
   let notes: string;
-  if (params.githubNotesFileInput) {
-    notesSource = params.githubNotesFileInput;
-    notes = await readTextFile(params.githubNotesFileInput);
+  if (params.notesFileInput) {
+    notesSource = params.notesFileInput;
+    notes = await readTextFile(params.notesFileInput);
   } else {
-    const changelogText = await readTextFile(changelogPath);
+    const changelogText = (
+      await runCapture(params.repoRoot, 'git', ['show', changelogSource])
+    ).stdout;
     const entry = extractChangelogEntryForTag(changelogText, tagName);
     if (!entry) {
       throw new Error(
-        `Unable to find ${tagName} entry in ${changelogPath}. Pass --github-notes-file to provide release notes.`,
+        `Unable to find ${tagName} entry in ${changelogSource}. Pass --github-notes-file to provide release notes.`,
       );
     }
     notes = changelogToGitHubReleaseNotes(entry);
@@ -824,24 +1441,17 @@ async function runGitHubFromTagMode(params: {
 
   const defaultAssetPath = join(
     params.repoRoot,
-    `${params.extensionName}-${versionFromTag}.vsix`,
+    `${extensionName}-${versionFromTag}.vsix`,
   );
-  const assetPath = params.githubAssetInput ?? defaultAssetPath;
-  const assetExists = await fileExists(assetPath);
-  const resolvedAssetPath =
-    params.skipGitHubUpload || !assetExists ? null : assetPath;
+  const assetPath = params.assetInput ?? defaultAssetPath;
 
-  if (!params.skipGitHubUpload && !resolvedAssetPath) {
-    throw new Error(
-      `GitHub upload requested but asset not found: ${assetPath}. Pass --skip-github-upload or build/package the VSIX first.`,
-    );
-  }
-
-  printGitHubFromTagSummary({
+  printFromTagSummary({
+    mode: params.mode,
     tagName,
     tagCommit,
     notesSource,
-    assetPath: resolvedAssetPath,
+    assetPath,
+    publishMarketplace: params.publishMarketplace,
     skipGitHubCreate: params.skipGitHubCreate,
     skipGitHubUpload: params.skipGitHubUpload,
     dryRun: params.dryRun,
@@ -855,13 +1465,48 @@ async function runGitHubFromTagMode(params: {
   if (!params.yes && params.rl) {
     const proceed = await confirm(
       params.rl,
-      'Continue with GitHub release create/upload?',
+      params.mode === 'resume'
+        ? 'Continue resuming this release?'
+        : 'Continue with GitHub release create/upload?',
       false,
     );
     if (!proceed) {
       console.log('Aborted.');
       return;
     }
+  }
+
+  const needsAsset = params.publishMarketplace || !params.skipGitHubUpload;
+  if (needsAsset) {
+    if (!(await fileExists(assetPath))) {
+      if (headCommit !== tagCommit) {
+        throw new Error(
+          `Cannot build ${assetPath}: HEAD must be the tagged commit ${tagCommit}.`,
+        );
+      }
+      await packageVsix({
+        repoRoot: params.repoRoot,
+        vsixPath: assetPath,
+        commit: tagCommit,
+      });
+    }
+    await assertVsixIdentity({
+      repoRoot: params.repoRoot,
+      vsixPath: assetPath,
+      extensionName,
+      publisher,
+      version: packageVersion,
+    });
+  }
+
+  if (params.publishMarketplace) {
+    await publishToMarketplace({
+      repoRoot: params.repoRoot,
+      vsixPath: assetPath,
+      extensionId: `${publisher}.${extensionName}`,
+      version: packageVersion,
+      mode: 'resume',
+    });
   }
 
   if (!params.skipGitHubCreate || !params.skipGitHubUpload) {
@@ -871,12 +1516,18 @@ async function runGitHubFromTagMode(params: {
       title: tagName,
       notes,
       targetCommitish: tagCommit,
-      assetPath: resolvedAssetPath ?? assetPath,
+      assetPath,
       draft: params.githubDraft,
       skipCreate: params.skipGitHubCreate,
       skipUpload: params.skipGitHubUpload,
+      mode: params.mode === 'resume' ? 'resume' : 'github-only',
     });
   }
+
+  await assertRemoteTagTarget(params.repoRoot, tagName, tagCommit);
+  console.log(
+    `Release reconciliation succeeded for ${tagName}: origin tag and requested external publications match the local release artifacts.`,
+  );
 }
 
 function normalizeGitTag(input: string): string {
@@ -930,6 +1581,7 @@ async function publishGitHubRelease(params: {
   draft: boolean;
   skipCreate: boolean;
   skipUpload: boolean;
+  mode: 'full' | 'resume' | 'github-only';
 }): Promise<void> {
   if (params.skipCreate && params.skipUpload) {
     return;
@@ -941,10 +1593,43 @@ async function publishGitHubRelease(params: {
     TERM: 'dumb',
   };
 
+  let existingRelease = await getGitHubReleaseMetadataOrNull(
+    params.repoRoot,
+    params.tagName,
+  );
+  if (existingRelease) {
+    if (params.mode === 'full') {
+      throw new Error(
+        `GitHub Release already exists for ${params.tagName}; full release collisions are fatal.`,
+      );
+    }
+    assertGitHubReleaseMatches({
+      metadata: existingRelease,
+      tagName: params.tagName,
+      targetCommitish: params.targetCommitish,
+      title: params.title,
+      notes: params.notes,
+      draft: params.draft,
+      checkPresentation: !params.skipCreate,
+    });
+  } else if (params.skipCreate && !params.skipUpload) {
+    throw new Error(
+      `Cannot upload ${basename(params.assetPath)} because GitHub Release ${params.tagName} does not exist and creation was skipped.`,
+    );
+  }
+
+  let shouldUpload = !params.skipUpload;
+  if (shouldUpload && existingRelease) {
+    shouldUpload = await shouldUploadGitHubAsset({
+      assetPath: params.assetPath,
+      release: existingRelease,
+    });
+  }
+
   if (await canRun(params.repoRoot, 'gh', ['--version'])) {
     const notesFile = await writeTempNotes(params.notes);
 
-    if (!params.skipCreate) {
+    if (!params.skipCreate && !existingRelease) {
       console.log(`Creating GitHub Release: ${params.tagName}`);
       const args = [
         'release',
@@ -961,30 +1646,56 @@ async function publishGitHubRelease(params: {
         args.push('--draft');
       }
 
-      const result = await runCaptureWithCode(params.repoRoot, 'gh', args, {
-        env: ghEnv,
-      });
-      if (result.code !== 0) {
-        const combined = `${result.stderr}\n${result.stdout}`.toLowerCase();
-        if (combined.includes('already exists')) {
-          console.log(`GitHub Release already exists: ${params.tagName}`);
-        } else {
-          throw new Error(
-            `gh release create failed (${String(result.code)}): ${result.stderr || result.stdout}`,
+      await retry(
+        GITHUB_MUTATION_ATTEMPTS,
+        async () => {
+          const result = await runCaptureWithCode(params.repoRoot, 'gh', args, {
+            env: ghEnv,
+          });
+          if (result.code === 0) {
+            const output = (result.stdout || result.stderr).trimEnd();
+            if (output) {
+              console.log(output);
+            }
+            return;
+          }
+
+          existingRelease = await getMatchingGitHubReleaseOrNull({
+            repoRoot: params.repoRoot,
+            tagName: params.tagName,
+            targetCommitish: params.targetCommitish,
+            title: params.title,
+            notes: params.notes,
+            draft: params.draft,
+            checkPresentation: true,
+          });
+          if (!existingRelease) {
+            throw new Error(
+              `gh release create failed (${String(result.code)}): ${result.stderr || result.stdout}`,
+            );
+          }
+          if (!params.skipUpload) {
+            shouldUpload = await shouldUploadGitHubAsset({
+              assetPath: params.assetPath,
+              release: existingRelease,
+            });
+          }
+          console.log(
+            `GitHub Release ${params.tagName} exists despite an ambiguous create response; metadata reconciliation succeeded.`,
           );
-        }
-      } else if (result.stdout.trim() || result.stderr.trim()) {
-        const output = (result.stdout || result.stderr).trimEnd();
-        if (output) {
-          console.log(output);
-        }
-      }
+        },
+        (attempt, error) => {
+          console.warn(
+            `GitHub Release creation failed (attempt ${attempt}/${GITHUB_MUTATION_ATTEMPTS}): ${formatError(error)}`,
+          );
+        },
+      );
     }
 
-    if (!params.skipUpload) {
+    if (shouldUpload) {
       console.log(`Uploading release asset: ${basename(params.assetPath)}`);
       await retry(
-        3,
+        GITHUB_MUTATION_ATTEMPTS,
         async () => {
           const result = await runCaptureWithCode(
             params.repoRoot,
@@ -994,11 +1705,23 @@ async function publishGitHubRelease(params: {
               'upload',
               params.tagName,
               params.assetPath,
-              '--clobber',
             ],
             { env: ghEnv },
           );
           if (result.code !== 0) {
+            const reconciled = await reconcileGitHubAssetAfterMutationError({
+              repoRoot: params.repoRoot,
+              tagName: params.tagName,
+              targetCommitish: params.targetCommitish,
+              title: params.title,
+              notes: params.notes,
+              draft: params.draft,
+              checkPresentation: !params.skipCreate,
+              assetPath: params.assetPath,
+            });
+            if (reconciled) {
+              return;
+            }
             throw new Error(
               `gh release upload failed (${String(result.code)}): ${result.stderr || result.stdout}`,
             );
@@ -1006,7 +1729,7 @@ async function publishGitHubRelease(params: {
         },
         (attempt, error) => {
           console.warn(
-            `GitHub asset upload failed (attempt ${attempt}/3): ${formatError(
+            `GitHub asset upload failed (attempt ${attempt}/${GITHUB_MUTATION_ATTEMPTS}): ${formatError(
               error,
             )}`,
           );
@@ -1017,6 +1740,7 @@ async function publishGitHubRelease(params: {
       );
     }
 
+    await reconcileGitHubPublication(params);
     return;
   }
 
@@ -1030,22 +1754,57 @@ async function publishGitHubRelease(params: {
     throw new Error('Unable to determine GitHub repository (owner/repo).');
   }
 
-  let uploadUrlTemplate: string | null = null;
+  let uploadUrlTemplate: string | null = existingRelease?.uploadUrl ?? null;
 
-  if (!params.skipCreate) {
-    const release = await createOrGetGitHubRelease({
-      repoSlug,
-      token,
-      tagName: params.tagName,
-      title: params.title,
-      body: params.notes,
-      targetCommitish: params.targetCommitish,
-      draft: params.draft,
-    });
-    uploadUrlTemplate = release.upload_url;
+  if (!params.skipCreate && !existingRelease) {
+    await retry(
+      GITHUB_MUTATION_ATTEMPTS,
+      async () => {
+        try {
+          const release = await createGitHubRelease({
+            repoSlug,
+            token,
+            tagName: params.tagName,
+            title: params.title,
+            body: params.notes,
+            targetCommitish: params.targetCommitish,
+            draft: params.draft,
+          });
+          uploadUrlTemplate = release.upload_url;
+        } catch (error) {
+          existingRelease = await getMatchingGitHubReleaseOrNull({
+            repoRoot: params.repoRoot,
+            tagName: params.tagName,
+            targetCommitish: params.targetCommitish,
+            title: params.title,
+            notes: params.notes,
+            draft: params.draft,
+            checkPresentation: true,
+          });
+          if (!existingRelease) {
+            throw error;
+          }
+          if (!params.skipUpload) {
+            shouldUpload = await shouldUploadGitHubAsset({
+              assetPath: params.assetPath,
+              release: existingRelease,
+            });
+          }
+          uploadUrlTemplate = existingRelease.uploadUrl;
+          console.log(
+            `GitHub Release ${params.tagName} exists despite an ambiguous create response; metadata reconciliation succeeded.`,
+          );
+        }
+      },
+      (attempt, error) => {
+        console.warn(
+          `GitHub Release creation failed (attempt ${attempt}/${GITHUB_MUTATION_ATTEMPTS}): ${formatError(error)}`,
+        );
+      },
+    );
   }
 
-  if (!params.skipUpload) {
+  if (shouldUpload) {
     if (!uploadUrlTemplate) {
       const release = await getGitHubReleaseByTag({
         repoSlug,
@@ -1061,17 +1820,33 @@ async function publishGitHubRelease(params: {
     const uploadUrl = uploadUrlTemplate;
 
     await retry(
-      3,
+      GITHUB_MUTATION_ATTEMPTS,
       async () => {
-        await uploadGitHubReleaseAsset({
-          uploadUrlTemplate: uploadUrl,
-          token,
-          assetPath: params.assetPath,
-        });
+        try {
+          await uploadGitHubReleaseAsset({
+            uploadUrlTemplate: uploadUrl,
+            token,
+            assetPath: params.assetPath,
+          });
+        } catch (error) {
+          const reconciled = await reconcileGitHubAssetAfterMutationError({
+            repoRoot: params.repoRoot,
+            tagName: params.tagName,
+            targetCommitish: params.targetCommitish,
+            title: params.title,
+            notes: params.notes,
+            draft: params.draft,
+            checkPresentation: !params.skipCreate,
+            assetPath: params.assetPath,
+          });
+          if (!reconciled) {
+            throw error;
+          }
+        }
       },
       (attempt, error) => {
         console.warn(
-          `GitHub asset upload failed (attempt ${attempt}/3): ${formatError(
+          `GitHub asset upload failed (attempt ${attempt}/${GITHUB_MUTATION_ATTEMPTS}): ${formatError(
             error,
           )}`,
         );
@@ -1081,25 +1856,334 @@ async function publishGitHubRelease(params: {
       },
     );
   }
+
+  await reconcileGitHubPublication(params);
 }
 
-async function ghReleaseExists(
+type GitHubReleaseAsset = {
+  name: string;
+  digest: string | null;
+};
+
+type GitHubReleaseMetadata = {
+  tagName: string;
+  targetCommitish: string;
+  title: string;
+  body: string;
+  draft: boolean;
+  assets: GitHubReleaseAsset[];
+  uploadUrl: string | null;
+};
+
+async function githubReleaseExists(
   repoRoot: string,
   tagName: string,
 ): Promise<boolean> {
-  try {
-    await runCapture(
+  return (await getGitHubReleaseMetadataOrNull(repoRoot, tagName)) !== null;
+}
+
+async function getGitHubReleaseMetadataOrNull(
+  repoRoot: string,
+  tagName: string,
+): Promise<GitHubReleaseMetadata | null> {
+  if (await canRun(repoRoot, 'gh', ['--version'])) {
+    const result = await runCaptureWithCode(
       repoRoot,
       'gh',
-      ['release', 'view', tagName, '--json', 'url'],
-      {
-        env: { ...process.env, NO_COLOR: '1', TERM: 'dumb' },
-      },
+      [
+        'release',
+        'view',
+        tagName,
+        '--json',
+        'name,body,tagName,targetCommitish,isDraft,assets',
+      ],
+      { env: { ...process.env, NO_COLOR: '1', TERM: 'dumb' } },
     );
-    return true;
-  } catch {
+    if (result.code !== 0) {
+      const combined = `${result.stderr}\n${result.stdout}`.toLowerCase();
+      if (combined.includes('release not found')) {
+        return null;
+      }
+      throw new Error(
+        `Unable to reconcile GitHub Release ${tagName}: ${result.stderr || result.stdout}`,
+      );
+    }
+    const json = parseJsonObject(
+      result.stdout,
+      `GitHub Release metadata for ${tagName}`,
+    );
+    return parseGitHubReleaseMetadata(json, tagName, 'gh');
+  }
+
+  const token = process.env.GITHUB_TOKEN;
+  if (!token) {
+    throw new Error(
+      'GitHub release reconciliation requires gh or GITHUB_TOKEN.',
+    );
+  }
+  const repoSlug = await resolveGitHubRepoSlug(repoRoot);
+  if (!repoSlug) {
+    throw new Error('Unable to determine GitHub repository (owner/repo).');
+  }
+  const url = `https://api.github.com/repos/${repoSlug}/releases/tags/${tagName}`;
+  const response = await fetch(url, {
+    method: 'GET',
+    headers: githubApiHeaders(token),
+  });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    const message = await safeReadResponseText(response);
+    throw new Error(
+      `GitHub release reconciliation failed (${response.status}): ${message}`,
+    );
+  }
+  const json: unknown = await response.json();
+  if (!isRecord(json)) {
+    throw new Error(`Unexpected GitHub Release metadata for ${tagName}.`);
+  }
+  return parseGitHubReleaseMetadata(json, tagName, 'api');
+}
+
+function parseGitHubReleaseMetadata(
+  json: Record<string, unknown>,
+  expectedTag: string,
+  source: 'gh' | 'api',
+): GitHubReleaseMetadata {
+  const tagName = getRequiredString(
+    json,
+    source === 'gh' ? 'tagName' : 'tag_name',
+    `GitHub Release metadata for ${expectedTag}`,
+  );
+  const targetCommitish = getRequiredString(
+    json,
+    source === 'gh' ? 'targetCommitish' : 'target_commitish',
+    `GitHub Release metadata for ${expectedTag}`,
+  );
+  const title = getRequiredString(
+    json,
+    source === 'gh' ? 'name' : 'name',
+    `GitHub Release metadata for ${expectedTag}`,
+  );
+  const bodyValue = json.body;
+  const draftValue = json[source === 'gh' ? 'isDraft' : 'draft'];
+  const assetsValue = json.assets;
+  if (typeof bodyValue !== 'string' || typeof draftValue !== 'boolean') {
+    throw new Error(`Unexpected GitHub Release metadata for ${expectedTag}.`);
+  }
+  if (!Array.isArray(assetsValue)) {
+    throw new Error(
+      `GitHub Release metadata for ${expectedTag} has no assets array.`,
+    );
+  }
+  const assets = assetsValue.map((asset): GitHubReleaseAsset => {
+    if (!isRecord(asset) || typeof asset.name !== 'string') {
+      throw new Error(
+        `Unexpected GitHub Release asset metadata for ${expectedTag}.`,
+      );
+    }
+    const digest = asset.digest;
+    if (digest !== undefined && digest !== null && typeof digest !== 'string') {
+      throw new Error(
+        `Unexpected GitHub Release asset digest for ${expectedTag}.`,
+      );
+    }
+    return { name: asset.name, digest: digest ?? null };
+  });
+  const uploadUrlValue = json.upload_url;
+  const uploadUrl =
+    typeof uploadUrlValue === 'string' ? uploadUrlValue : null;
+  return {
+    tagName,
+    targetCommitish,
+    title,
+    body: bodyValue,
+    draft: draftValue,
+    assets,
+    uploadUrl,
+  };
+}
+
+function assertGitHubReleaseMatches(params: {
+  metadata: GitHubReleaseMetadata;
+  tagName: string;
+  targetCommitish: string;
+  title: string;
+  notes: string;
+  draft: boolean;
+  checkPresentation: boolean;
+}): void {
+  if (
+    params.metadata.tagName !== params.tagName ||
+    params.metadata.targetCommitish !== params.targetCommitish
+  ) {
+    throw new Error(
+      `GitHub Release ${params.tagName} does not match the release tag: tag=${params.metadata.tagName}, target=${params.metadata.targetCommitish}, expected=${params.targetCommitish}.`,
+    );
+  }
+  if (!params.checkPresentation) {
+    return;
+  }
+  const normalizeNotes = (value: string) =>
+    value.replace(/\r\n/g, '\n').trimEnd();
+  if (
+    params.metadata.title !== params.title ||
+    params.metadata.draft !== params.draft ||
+    normalizeNotes(params.metadata.body) !== normalizeNotes(params.notes)
+  ) {
+    throw new Error(
+      `GitHub Release ${params.tagName} already exists with different title, notes, or draft state. Refusing to treat it as an idempotent resume.`,
+    );
+  }
+}
+
+async function getMatchingGitHubReleaseOrNull(params: {
+  repoRoot: string;
+  tagName: string;
+  targetCommitish: string;
+  title: string;
+  notes: string;
+  draft: boolean;
+  checkPresentation: boolean;
+}): Promise<GitHubReleaseMetadata | null> {
+  const metadata = await getGitHubReleaseMetadataOrNull(
+    params.repoRoot,
+    params.tagName,
+  );
+  if (!metadata) {
+    return null;
+  }
+  assertGitHubReleaseMatches({
+    metadata,
+    tagName: params.tagName,
+    targetCommitish: params.targetCommitish,
+    title: params.title,
+    notes: params.notes,
+    draft: params.draft,
+    checkPresentation: params.checkPresentation,
+  });
+  return metadata;
+}
+
+async function reconcileGitHubAssetAfterMutationError(params: {
+  repoRoot: string;
+  tagName: string;
+  targetCommitish: string;
+  title: string;
+  notes: string;
+  draft: boolean;
+  checkPresentation: boolean;
+  assetPath: string;
+}): Promise<boolean> {
+  const metadata = await getMatchingGitHubReleaseOrNull(params);
+  if (!metadata) {
     return false;
   }
+  const assetName = basename(params.assetPath);
+  const asset = metadata.assets.find(
+    (candidate) => candidate.name === assetName,
+  );
+  if (!asset) {
+    return false;
+  }
+  await assertGitHubAssetMatches(params.assetPath, asset);
+  console.log(
+    `GitHub accepted ${assetName} despite an ambiguous upload response; VSIX SHA-256 reconciliation succeeded.`,
+  );
+  return true;
+}
+
+async function shouldUploadGitHubAsset(params: {
+  assetPath: string;
+  release: GitHubReleaseMetadata;
+}): Promise<boolean> {
+  const assetName = basename(params.assetPath);
+  const existing = params.release.assets.find(
+    (candidate) => candidate.name === assetName,
+  );
+  if (!existing) {
+    return true;
+  }
+  await assertGitHubAssetMatches(params.assetPath, existing);
+  console.log(`GitHub asset already exists and matches: ${assetName}`);
+  return false;
+}
+
+async function assertGitHubAssetMatches(
+  assetPath: string,
+  asset: GitHubReleaseAsset,
+): Promise<void> {
+  const assetName = basename(assetPath);
+  if (asset.name !== assetName) {
+    throw new Error(
+      `GitHub Release asset mismatch: expected ${assetName}, found ${asset.name}.`,
+    );
+  }
+  if (!asset.digest?.startsWith('sha256:')) {
+    throw new Error(
+      `GitHub asset ${assetName} already exists without a verifiable SHA-256 digest. Refusing to overwrite it.`,
+    );
+  }
+  await assertFileSha256(
+    assetPath,
+    asset.digest.slice('sha256:'.length).toLowerCase(),
+    `GitHub asset ${assetName}`,
+  );
+}
+
+async function reconcileGitHubPublication(params: {
+  repoRoot: string;
+  tagName: string;
+  title: string;
+  notes: string;
+  targetCommitish: string;
+  assetPath: string;
+  draft: boolean;
+  skipCreate: boolean;
+  skipUpload: boolean;
+}): Promise<void> {
+  await retry(
+    GITHUB_RECONCILIATION_ATTEMPTS,
+    async () => {
+      const metadata = await getGitHubReleaseMetadataOrNull(
+        params.repoRoot,
+        params.tagName,
+      );
+      if (!metadata) {
+        throw new Error(
+          `GitHub Release ${params.tagName} is not visible yet.`,
+        );
+      }
+      assertGitHubReleaseMatches({
+        metadata,
+        tagName: params.tagName,
+        targetCommitish: params.targetCommitish,
+        title: params.title,
+        notes: params.notes,
+        draft: params.draft,
+        checkPresentation: !params.skipCreate,
+      });
+      if (!params.skipUpload) {
+        const assetName = basename(params.assetPath);
+        const asset = metadata.assets.find(
+          (candidate) => candidate.name === assetName,
+        );
+        if (!asset) {
+          throw new Error(
+            `GitHub Release ${params.tagName} does not expose ${assetName} yet.`,
+          );
+        }
+        await assertGitHubAssetMatches(params.assetPath, asset);
+      }
+    },
+    (attempt, error) => {
+      console.warn(
+        `GitHub Release post-publish reconciliation failed (attempt ${attempt}/${GITHUB_RECONCILIATION_ATTEMPTS}): ${formatError(error)}`,
+      );
+    },
+  );
+  console.log(`GitHub Release publication verified: ${params.tagName}.`);
 }
 
 async function resolveGitHubRepoSlug(repoRoot: string): Promise<string | null> {
@@ -1162,6 +2246,16 @@ function stripGitSuffix(repo: string): string {
   return repo.endsWith('.git') ? repo.slice(0, -4) : repo;
 }
 
+function githubApiHeaders(token: string): Record<string, string> {
+  return {
+    Authorization: `Bearer ${token}`,
+    'Content-Type': 'application/json',
+    Accept: 'application/vnd.github+json',
+    'X-GitHub-Api-Version': '2022-11-28',
+    'User-Agent': 'vscode-unify-chat-provider-release-script',
+  };
+}
+
 async function createGitHubRelease(params: {
   repoSlug: string;
   token: string;
@@ -1205,30 +2299,6 @@ async function createGitHubRelease(params: {
   return { upload_url: json.upload_url };
 }
 
-async function createOrGetGitHubRelease(params: {
-  repoSlug: string;
-  token: string;
-  tagName: string;
-  title: string;
-  body: string;
-  targetCommitish: string;
-  draft: boolean;
-}): Promise<{ upload_url: string }> {
-  try {
-    return await createGitHubRelease(params);
-  } catch (error) {
-    const message = String(error);
-    if (message.includes('GitHub release create failed (422)')) {
-      return await getGitHubReleaseByTag({
-        repoSlug: params.repoSlug,
-        token: params.token,
-        tagName: params.tagName,
-      });
-    }
-    throw error;
-  }
-}
-
 async function getGitHubReleaseByTag(params: {
   repoSlug: string;
   token: string;
@@ -1270,6 +2340,9 @@ async function retry(
       await fn();
       return;
     } catch (error) {
+      if (error instanceof NonRetryableReleaseError) {
+        throw error;
+      }
       onError?.(attempt, error);
       if (attempt >= maxAttempts) {
         throw error;

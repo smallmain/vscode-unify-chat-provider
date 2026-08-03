@@ -990,6 +990,82 @@ describe("OfficialNextEditProvider streaming lifecycle", () => {
     provider.dispose();
   });
 
+  it("isolates in-flight requests and streamed cache writes across auth generations", async () => {
+    const sourceText = Array.from(
+      { length: 12 },
+      (_value, index) => `const value${index} = ${index};`,
+    ).join("\n");
+    const source = mutableDocument(sourceText);
+    vscodeState.documents.push(source.document);
+    let releaseOld: () => void = () => undefined;
+    const oldReleased = new Promise<void>((resolve) => {
+      releaseOld = resolve;
+    });
+    let releaseCurrent: () => void = () => undefined;
+    const currentReleased = new Promise<void>((resolve) => {
+      releaseCurrent = resolve;
+    });
+    let transportCalls = 0;
+    const provider = providerFor(
+      source.document,
+      languageModel(async () => {
+        transportCalls += 1;
+        const requestNumber = transportCalls;
+        return chatResponse(
+          (async function* (): AsyncIterable<string> {
+            if (requestNumber === 1) {
+              await oldReleased;
+              yield unifiedEditWindow(sourceText, {
+                5: "const oldAuthValue5 = 500;",
+              });
+              return;
+            }
+            await currentReleased;
+            yield unifiedEditWindow(sourceText, {
+              5: "const currentAuthValue5 = 500;",
+            });
+          })(),
+        );
+      }),
+    );
+    const oldRequest = provider.provide(
+      input(source.document, 5, "auth-old"),
+      cancellationToken(),
+      false,
+    );
+    await vi.waitFor(() => expect(transportCalls).toBe(1));
+
+    provider.handleAuthChange();
+    expect(provider.getState()).toMatchObject({ cacheSize: 0, inFlight: 0 });
+    const currentRequest = provider.provide(
+      input(source.document, 5, "auth-current"),
+      cancellationToken(),
+      false,
+    );
+    await vi.waitFor(() => expect(transportCalls).toBe(2));
+
+    releaseCurrent();
+    const current = await currentRequest;
+    expect(current?.edit?.newText).toContain("currentAuthValue5");
+
+    releaseOld();
+    const old = await oldRequest;
+    expect(old?.edit?.newText).toContain("oldAuthValue5");
+
+    const cached = await provider.provide(
+      input(source.document, 5, "auth-cache"),
+      cancellationToken(),
+      false,
+    );
+    expect(cached).toMatchObject({
+      fromCache: true,
+      sourceRequestId: "auth-current",
+    });
+    expect(cached?.edit?.newText).toContain("currentAuthValue5");
+    expect(transportCalls).toBe(2);
+    provider.dispose();
+  });
+
   it("does not start fresh after a failed async rebase when history becomes empty", async () => {
     const sourceA = mutableDocument(
       Array.from(

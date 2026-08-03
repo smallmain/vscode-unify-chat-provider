@@ -219,13 +219,15 @@ describe('Plan 4 native completion payloads', () => {
         canceledAfterDispatch: false,
       });
     const port = configureZedCompletionSessionPort({
-      getPolicySnapshot: async () => ({
-        dataCollectionEnabled: false,
-        dataCollectionAllowed: false,
-        backoffKey,
+      openSession: async () => ({
+        policy: {
+          dataCollectionEnabled: false,
+          dataCollectionAllowed: false,
+          backoffKey,
+        },
+        predictV3,
+        predictV4: vi.fn(),
       }),
-      predictV3,
-      predictV4: vi.fn(),
     });
     const model: ModelConfig = { id: 'zeta-cloud' };
     const context = {
@@ -297,13 +299,15 @@ describe('Plan 4 native completion payloads', () => {
       canceledAfterDispatch: false,
     }));
     const port = configureZedCompletionSessionPort({
-      getPolicySnapshot: async () => ({
-        dataCollectionEnabled: false,
-        dataCollectionAllowed: false,
-        backoffKey: 'provider-key:org',
+      openSession: async () => ({
+        policy: {
+          dataCollectionEnabled: false,
+          dataCollectionAllowed: false,
+          backoffKey: 'provider-key:org',
+        },
+        predictV3: vi.fn(),
+        predictV4,
       }),
-      predictV3: vi.fn(),
-      predictV4,
     });
     const model: ModelConfig = { id: 'zeta-cloud' };
     const context = {
@@ -363,22 +367,24 @@ describe('Plan 4 native completion payloads', () => {
       settled: vi.fn(async () => undefined),
     };
     const port = configureZedCompletionSessionPort({
-      getPolicySnapshot: async () => ({
-        dataCollectionEnabled: false,
-        dataCollectionAllowed: false,
-        backoffKey: 'provider-key:invalid-v4',
-      }),
-      predictV3: vi.fn(),
-      predictV4: vi.fn(async () => ({
-        response: {
-          requestId: 'invalid-v4',
-          patch:
-            '--- a/../secret.ts\n+++ b/../secret.ts\n@@ -1 +1 @@\n-old\n+new\n',
-          modelVersion: 'zeta3:test',
+      openSession: async () => ({
+        policy: {
+          dataCollectionEnabled: false,
+          dataCollectionAllowed: false,
+          backoffKey: 'provider-key:invalid-v4',
         },
-        feedback,
-        canceledAfterDispatch: false,
-      })),
+        predictV3: vi.fn(),
+        predictV4: vi.fn(async () => ({
+          response: {
+            requestId: 'invalid-v4',
+            patch:
+              '--- a/../secret.ts\n+++ b/../secret.ts\n@@ -1 +1 @@\n-old\n+new\n',
+            modelVersion: 'zeta3:test',
+          },
+          feedback,
+          canceledAfterDispatch: false,
+        })),
+      }),
     });
     const model: ModelConfig = { id: 'zeta-cloud' };
     const context = {
@@ -432,21 +438,23 @@ describe('Plan 4 native completion payloads', () => {
       settled: vi.fn(async () => undefined),
     };
     const port = configureZedCompletionSessionPort({
-      getPolicySnapshot: async () => ({
-        dataCollectionEnabled: false,
-        dataCollectionAllowed: false,
-        backoffKey: 'provider-key:deletion',
-      }),
-      predictV3: vi.fn(async () => ({
-        response: {
-          requestId: 'delete-v3',
-          output: '',
-          editableRange: { start: 0, end: 5 },
+      openSession: async () => ({
+        policy: {
+          dataCollectionEnabled: false,
+          dataCollectionAllowed: false,
+          backoffKey: 'provider-key:deletion',
         },
-        feedback,
-        canceledAfterDispatch: false,
-      })),
-      predictV4: vi.fn(),
+        predictV3: vi.fn(async () => ({
+          response: {
+            requestId: 'delete-v3',
+            output: '',
+            editableRange: { start: 0, end: 5 },
+          },
+          feedback,
+          canceledAfterDispatch: false,
+        })),
+        predictV4: vi.fn(),
+      }),
     });
     const model: ModelConfig = { id: 'zeta-cloud' };
     const context = {

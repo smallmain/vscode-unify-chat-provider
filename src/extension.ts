@@ -4,8 +4,10 @@ import {
   SecretStore,
   migrateApiKeyToAuth,
   migrateProviderTypes,
+  migrateSessionAuthState,
   migrateApiKeyStorage,
   cleanupUnusedSecrets,
+  reconcileLocalAuthStateWithConfiguredEndpoints,
 } from './secret';
 import { UnifyChatService } from './service';
 import {
@@ -25,6 +27,7 @@ import { AuthManager } from './auth';
 import { balanceManager } from './balance';
 import { registerBalanceStatusBar } from './ui/balance-status-bar';
 import { mainInstance } from './main-instance';
+import { isLeaderUnavailableError } from './main-instance/errors';
 import {
   ensureMainInstanceCompatibility,
   showMainInstanceCompatibilityWarning,
@@ -58,15 +61,39 @@ import {
   registerProposedApiEnableCommand,
   scheduleProposedApiStartupReminder,
 } from './proposed-api/reminder';
+import { clearZedModelRoutes } from './client/zed/route-cache';
+import {
+  isSessionAuthConfig,
+  isValidAuthBindingId,
+} from './auth/local-auth-state';
 
 const VENDOR_ID = 'unify-chat-provider';
 const EXTENSIONS_CONFIG_NAMESPACE = 'extensions';
 const SUPPORT_AGENTS_WINDOW_SETTING = 'supportAgentsWindow';
+const E2E_SECRET_STORAGE_FILE_ENV = 'UCP_E2E_SECRET_STORAGE_FILE';
 
 export interface UnifyChatProviderExtensionApi {
   getContextProviderAPI(version: 'v1'): {
     registerContextProvider(provider: CopilotContextProvider): vscode.Disposable;
   };
+}
+
+async function resolveSecretStorage(
+  context: vscode.ExtensionContext,
+): Promise<vscode.SecretStorage> {
+  if (context.extensionMode === vscode.ExtensionMode.Production) {
+    return context.secrets;
+  }
+
+  const filePath = process.env[E2E_SECRET_STORAGE_FILE_ENV]?.trim();
+  if (!filePath) return context.secrets;
+
+  const { E2EFileSecretStorage } = await import(
+    './secret/e2e-file-secret-storage'
+  );
+  const storage = new E2EFileSecretStorage(filePath);
+  context.subscriptions.push(storage);
+  return storage;
 }
 
 /**
@@ -131,18 +158,50 @@ export async function activate(
   }
 
   const configStore = new ConfigStore();
-  const secretStore = new SecretStore(context.secrets);
+  const secretStore = new SecretStore(await resolveSecretStorage(context));
+  await secretStore.initializeLocalAuthState();
+  let localAuthReloadQueue = Promise.resolve();
+  const reloadConfiguredLocalAuthState = (): Promise<void> => {
+    const run = async (): Promise<void> => {
+      const bindingIds = new Set(
+        configStore.endpoints.flatMap((provider) => {
+          const auth = provider.auth;
+          return auth &&
+            isSessionAuthConfig(auth) &&
+            isValidAuthBindingId(auth.bindingId)
+            ? [auth.bindingId]
+            : [];
+        }),
+      );
+      await Promise.all(
+        Array.from(bindingIds, (bindingId) =>
+          secretStore.reloadLocalAuthState(bindingId),
+        ),
+      );
+    };
+    localAuthReloadQueue = localAuthReloadQueue.then(run, run);
+    return localAuthReloadQueue;
+  };
+  context.subscriptions.push(
+    configStore.onDidChange(() => {
+      void reloadConfiguredLocalAuthState().catch((error) => {
+        authLog.warn(
+          'auth-state',
+          `Failed to reload device-local auth state after configuration change: ${String(error)}`,
+        );
+      });
+    }),
+  );
+  await reloadConfiguredLocalAuthState();
 
   // Register URI handler (import-config + OAuth callbacks)
   const uriHandler = registerUriHandler(context, configStore, secretStore);
 
-  // Initialize auth system
-  const authManager = new AuthManager(configStore, secretStore, uriHandler);
-  context.subscriptions.push(authManager);
   let mainInstanceHandlersRegistered = false;
   let leaderStartupReady = false;
   let leaderPromotionPromise: Promise<void> | undefined;
   let leaderPromotionRetryTimer: ReturnType<typeof setTimeout> | undefined;
+  let authManager: AuthManager | undefined;
 
   const runLeaderStartupMigrations = async (): Promise<void> => {
     if (!mainInstance.isLeader()) {
@@ -152,10 +211,15 @@ export async function activate(
       );
       return;
     }
-    authLog.verbose('main-instance', 'Running leader startup migrations');
-    await migrateProviderTypes(configStore);
-    await migrateApiKeyToAuth(configStore);
-    authLog.verbose('main-instance', 'Leader startup migrations completed');
+    await mainInstance.runLeaderMutation(async () => {
+      authLog.verbose('main-instance', 'Running leader startup migrations');
+      await reloadConfiguredLocalAuthState();
+      await migrateProviderTypes(configStore);
+      await migrateApiKeyToAuth(configStore);
+      await migrateSessionAuthState({ configStore, secretStore });
+      await reconcileLocalAuthStateWithConfiguredEndpoints(secretStore);
+      authLog.verbose('main-instance', 'Leader startup migrations completed');
+    });
   };
 
   const setMainInstanceReadyIfPossible = (): void => {
@@ -223,6 +287,7 @@ export async function activate(
       return;
     }
     leaderStartupReady = true;
+    authManager?.setLeaderAuthReady(true);
     authLog.verbose(
       'main-instance',
       'Leader startup marked ready; scheduling secret storage maintenance',
@@ -259,6 +324,7 @@ export async function activate(
       authLog.verbose('main-instance', 'Observed main-instance role change', snapshot);
       if (snapshot.role !== 'leader') {
         leaderStartupReady = false;
+        authManager?.setLeaderAuthReady(false);
         if (leaderPromotionRetryTimer) {
           clearTimeout(leaderPromotionRetryTimer);
           leaderPromotionRetryTimer = undefined;
@@ -284,6 +350,20 @@ export async function activate(
   );
   if (mainInstance.isLeader()) {
     await ensureLeaderPromotionFinalized();
+  }
+
+  // Leader migration must finish before any auth provider can read legacy state.
+  authManager = new AuthManager(
+    configStore,
+    secretStore,
+    uriHandler,
+    leaderStartupReady,
+  );
+  context.subscriptions.push(authManager);
+
+  if (context.extensionMode !== vscode.ExtensionMode.Production) {
+    const { registerAuthTestCommands } = await import('./auth/test-control');
+    registerAuthTestCommands({ context, configStore, secretStore });
   }
 
   await balanceManager.initialize({
@@ -330,6 +410,43 @@ export async function activate(
     uriHandler,
   );
   context.subscriptions.push(officialModelsManager);
+  context.subscriptions.push(
+    authManager.onDidChangeAuthState((change) => {
+      if (
+        change.reason === 'refresh' ||
+        change.reason === 'migration'
+      ) {
+        return;
+      }
+      if (change.method === 'zed') {
+        clearZedModelRoutes(change.bindingId);
+      }
+      chatProvider.handleAuthStateChange(change.providerName);
+      if (!mainInstance.isLeader()) return;
+      const provider = configStore.getProvider(change.providerName);
+      void officialModelsManager
+        .clearProviderState(change.providerName)
+        .then(() => {
+          if (provider?.autoFetchOfficialModels) {
+            officialModelsManager.triggerBackgroundFetch(provider);
+          }
+        })
+        .catch((error) => {
+          authLog.warn(
+            'auth-state',
+            `Failed to reset official models after auth context changed for ${change.providerName}: ${String(error)}`,
+          );
+        });
+      void balanceManager
+        .handleAuthStateChange(change.providerName)
+        .catch((error) => {
+          authLog.warn(
+            'auth-state',
+            `Failed to reset balance after auth context changed for ${change.providerName}: ${String(error)}`,
+          );
+        });
+    }),
+  );
   if (mainInstance.isLeader()) {
     await migrateLegacyVSCodeModelIds(configStore);
   }
@@ -407,6 +524,16 @@ export async function activate(
     context.subscriptions.push(registerDefaultCopilotContextProviders());
     const completionManager = new CompletionManager(completionModelResolver);
     context.subscriptions.push(completionManager);
+    context.subscriptions.push(
+      authManager.onDidChangeAuthState((change) => {
+        if (
+          change.reason !== 'refresh' &&
+          change.reason !== 'migration'
+        ) {
+          completionManager.handleAuthStateChange(change.providerName);
+        }
+      }),
+    );
     if (context.extensionMode !== vscode.ExtensionMode.Production) {
       const [
         { registerCompletionWarningTestCommands },
@@ -493,6 +620,7 @@ export async function activate(
   context.subscriptions.push(
     configStore.onDidChange(() => {
       chatProvider.handleConfigurationChange();
+      if (!mainInstance.isLeader() || !mainInstance.isReady()) return;
       enqueueMaintenance('cleanup-unused-secrets-on-config-change', async () => {
         await cleanupUnusedSecrets(secretStore);
       });
@@ -783,9 +911,16 @@ function enqueueMaintenance(
     }
     try {
       authLog.verbose('main-instance', `Starting maintenance task (${label})`);
-      await work();
+      await mainInstance.runLeaderMutation(work);
       authLog.verbose('main-instance', `Completed maintenance task (${label})`);
     } catch (error) {
+      if (isLeaderUnavailableError(error)) {
+        authLog.verbose(
+          'main-instance',
+          `Maintenance stopped because leadership changed (${label})`,
+        );
+        return;
+      }
       authLog.error(
         'main-instance',
         `Secret storage maintenance failed (${label})`,
@@ -827,7 +962,9 @@ function registerSecretStorageMaintenance(
           storeApiKeyInSettings: nextStoreApiKeyInSettings,
           showProgress: true,
         });
-        await cleanupUnusedSecrets(secretStore);
+        if (mainInstance.isLeader() && mainInstance.isReady()) {
+          await cleanupUnusedSecrets(secretStore);
+        }
       });
     }),
   );

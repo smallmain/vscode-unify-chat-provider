@@ -29,6 +29,7 @@ import type {
   CompletionAlgorithm,
   CompletionAlgorithmChange,
   CompletionAlgorithmContext,
+  CompletionEnvironmentChangeReason,
   CompletionAlgorithmInput,
   CompletionAlgorithmResult,
   CompletionDiscardReason,
@@ -297,6 +298,16 @@ export class CopilotRuntime implements CompletionAlgorithm {
     this.options = normalized.value;
     this.nesProvider?.setEagerness(normalized.value.eagerness);
     return true;
+  }
+
+  handleEnvironmentChange(reason: CompletionEnvironmentChangeReason): void {
+    if (this.disposed || reason !== "auth-changed") {
+      return;
+    }
+    this.invocationCount += 1;
+    this.lastNesSuggestion = undefined;
+    this.nesProvider?.handleAuthChange();
+    this.changeEmitter.fire({ reason });
   }
 
   async provideInlineCompletions(

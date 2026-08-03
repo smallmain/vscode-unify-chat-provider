@@ -22,6 +22,9 @@ import {
   resolveZedBaseUrls,
 } from '../../src/client/zed/urls';
 
+const BINDING_ONE = '00000000-0000-4000-8000-000000000105';
+const BINDING_TWO = '00000000-0000-4000-8000-000000000106';
+
 function model(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     provider: 'open_ai',
@@ -84,24 +87,24 @@ describe('Zed URL and credential codecs', () => {
     const first = createZedProviderIdentity({
       name: 'Zed',
       baseUrl: 'https://zed.dev',
-      auth: { method: 'zed', identityId: 'one' },
+      auth: { method: 'zed', bindingId: BINDING_ONE },
     });
     const second = createZedProviderIdentity({
       name: 'Zed',
       baseUrl: 'https://self-hosted.example',
-      auth: { method: 'zed', identityId: 'one' },
+      auth: { method: 'zed', bindingId: BINDING_ONE },
     });
     const third = createZedProviderIdentity({
       name: 'Zed',
       baseUrl: 'https://zed.dev',
-      auth: { method: 'zed', identityId: 'two' },
+      auth: { method: 'zed', bindingId: BINDING_TWO },
     });
     expect(new Set([first.key, second.key, third.key]).size).toBe(3);
     const firstSubject = createZedProviderIdentity(
       {
         name: 'Zed',
         baseUrl: 'https://zed.dev',
-        auth: { method: 'zed' },
+        auth: { method: 'zed', bindingId: BINDING_ONE },
       },
       'user-one',
     );
@@ -109,7 +112,7 @@ describe('Zed URL and credential codecs', () => {
       {
         name: 'Zed',
         baseUrl: 'https://zed.dev',
-        auth: { method: 'zed' },
+        auth: { method: 'zed', bindingId: BINDING_ONE },
       },
       'user-two',
     );

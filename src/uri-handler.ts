@@ -9,10 +9,8 @@ import {
 } from './ui/base64-config';
 import { runUiStack } from './ui/router/stack-router';
 import type { UiContext } from './ui/router/types';
-import type { ProviderConfig } from './types';
 import {
-  isProviderConfigInput,
-  normalizeLegacyProviderConfig,
+  parseProviderConfigInput,
   parseProviderConfigArray,
 } from './ui/import-config';
 import { t } from './i18n';
@@ -243,37 +241,38 @@ export class ImportConfigUriHandler implements vscode.UriHandler {
 
     // Handle array of configs
     if (Array.isArray(configValue)) {
-      const configs = parseProviderConfigArray(configValue);
+      const configs = parseProviderConfigArray(
+        configValue.map((config) =>
+          typeof config === 'object' && config !== null
+            ? applyOverrides(config, overrides)
+            : config,
+        ),
+      );
       if (!configs) {
         vscode.window.showErrorMessage(t('Invalid provider configuration array.'));
         return;
       }
 
-      // Apply overrides to each config
-      const mergedConfigs = configs.map((config) =>
-        normalizeLegacyProviderConfig(applyOverrides(config, overrides)),
-      );
-
       await runUiStack(ctx, {
         kind: 'importProviderConfigArray',
-        configs: mergedConfigs,
+        configs,
       });
       return;
     }
 
     // Handle single config
-    if (!isProviderConfigInput(configValue)) {
+    const normalizedConfig = parseProviderConfigInput(
+      applyOverrides(configValue, overrides),
+    );
+    if (!normalizedConfig) {
       vscode.window.showErrorMessage(t('Invalid provider configuration.'));
       return;
     }
 
-    const normalizedConfig = normalizeLegacyProviderConfig(
-      applyOverrides(configValue as Partial<ProviderConfig>, overrides),
-    );
-
     await runUiStack(ctx, {
       kind: 'providerForm',
       initialConfig: normalizedConfig,
+      initialConfigValidated: true,
     });
   }
 }

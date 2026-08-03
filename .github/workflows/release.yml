@@ -10,7 +10,7 @@ on:
         default: full
         options:
           - full
-          - github_from_tag
+          - resume_from_tag
       bump:
         description: Semver bump (full mode; ignored when version is set)
         type: choice
@@ -25,7 +25,7 @@ on:
         type: string
         required: false
       github_tag:
-        description: Existing git tag (github_from_tag mode), e.g. v1.2.3
+        description: Existing git tag (resume_from_tag mode), e.g. v1.2.3
         type: string
         required: false
       publish_to_marketplace:
@@ -66,16 +66,25 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           persist-credentials: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: 24
           cache: npm
+
+      - name: Activate pinned npm
+        run: |
+          set -euo pipefail
+          package_manager="$(node -p "require('./package.json').packageManager")"
+          expected_version="${package_manager#npm@}"
+          corepack enable npm
+          corepack prepare "${package_manager}" --activate
+          test "$(npm --version)" = "${expected_version}"
 
       - name: Configure git author
         run: |
@@ -83,20 +92,32 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
       - name: Preserve current release tooling
-        if: ${{ inputs.mode == 'github_from_tag' }}
+        if: ${{ inputs.mode == 'resume_from_tag' }}
         run: cp scripts/release.mts "${RUNNER_TEMP}/release.mts"
 
       - name: Select ref
+        env:
+          RELEASE_MODE: ${{ inputs.mode }}
+          REQUESTED_TAG: ${{ inputs.github_tag }}
         run: |
           set -euo pipefail
 
-          if [ "${{ inputs.mode }}" = "github_from_tag" ]; then
-            if [ -z "${{ inputs.github_tag }}" ]; then
-              echo "Input 'github_tag' is required when mode=github_from_tag."
+          git fetch --prune --force origin \
+            "refs/heads/main:refs/remotes/origin/main" \
+            "refs/tags/*:refs/tags/*"
+
+          if [ "${RELEASE_MODE}" = "resume_from_tag" ]; then
+            if [ -z "${REQUESTED_TAG}" ]; then
+              echo "Input 'github_tag' is required when mode=resume_from_tag."
               exit 1
             fi
-            raw_tag="${{ inputs.github_tag }}"
+            raw_tag="${REQUESTED_TAG}"
             tag="${raw_tag}"
+
+            if ! git check-ref-format "refs/tags/${tag}" >/dev/null 2>&1; then
+              echo "Invalid git tag: ${raw_tag}"
+              exit 1
+            fi
 
             if ! git show-ref --verify --quiet "refs/tags/${tag}"; then
               if [ "${raw_tag#v}" = "${raw_tag}" ]; then
@@ -113,7 +134,8 @@ jobs:
             fi
 
             echo "RELEASE_TAG=${tag}" >> "${GITHUB_ENV}"
-            git checkout --detach "${tag}"
+            git checkout --detach "refs/tags/${tag}"
+            test "$(git rev-parse HEAD)" = "$(git rev-parse "refs/tags/${tag}^{commit}")"
             exit 0
           fi
 
@@ -122,21 +144,32 @@ jobs:
             exit 1
           fi
 
-          git checkout -B "${GITHUB_REF_NAME}"
+          dispatched_sha="$(git rev-parse "${GITHUB_SHA}^{commit}")"
+          remote_main_sha="$(git rev-parse "refs/remotes/origin/main^{commit}")"
+          if [ "${dispatched_sha}" != "${remote_main_sha}" ]; then
+            echo "main advanced after this workflow was dispatched."
+            echo "Dispatched: ${dispatched_sha}"
+            echo "origin/main: ${remote_main_sha}"
+            echo "Run the release workflow again from the latest main commit."
+            exit 1
+          fi
+
+          git checkout -B main "${remote_main_sha}"
+          test "$(git rev-parse HEAD)" = "${remote_main_sha}"
 
       - name: Install dependencies
         run: npm ci
 
       - name: Run checks
-        if: ${{ github.event.inputs.mode == 'full' }}
+        if: ${{ inputs.mode == 'full' }}
         run: npm run check
 
       - name: Run extension host tests
-        if: ${{ github.event.inputs.mode == 'full' }}
+        if: ${{ inputs.mode == 'full' }}
         run: xvfb-run -a npm run test:e2e
 
       - name: Validate secrets
-        if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.mode == 'full' && github.event.inputs.publish_to_marketplace == 'true' }}
+        if: ${{ !inputs.dry_run && inputs.publish_to_marketplace }}
         env:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
         run: |
@@ -151,86 +184,61 @@ jobs:
           VSCE_PAT: ${{ secrets.VSCE_PAT }}
           GH_TOKEN: ${{ github.token }}
           GITHUB_TOKEN: ${{ github.token }}
+          RELEASE_MODE: ${{ inputs.mode }}
+          REQUESTED_VERSION: ${{ inputs.version }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          DRAFT: ${{ inputs.draft }}
+          PUBLISH_TO_MARKETPLACE: ${{ inputs.publish_to_marketplace }}
+          CREATE_GITHUB_RELEASE: ${{ inputs.create_github_release }}
+          UPLOAD_VSIX_TO_GITHUB: ${{ inputs.upload_vsix_to_github }}
         run: |
           set -euo pipefail
 
           args=(--yes)
 
-          if [ "${{ inputs.dry_run }}" = "true" ]; then
+          if [ "${DRY_RUN}" = "true" ]; then
             args+=(--dry-run)
           fi
 
-          if [ "${{ inputs.draft }}" = "true" ]; then
+          if [ "${DRAFT}" = "true" ]; then
             args+=(--draft)
           fi
 
-          if [ "${{ inputs.mode }}" = "github_from_tag" ]; then
+          if [ "${PUBLISH_TO_MARKETPLACE}" != "true" ]; then
+            args+=(--skip-publish)
+          fi
+
+          if [ "${CREATE_GITHUB_RELEASE}" != "true" ] && [ "${UPLOAD_VSIX_TO_GITHUB}" != "true" ]; then
+            args+=(--skip-github)
+          else
+            if [ "${CREATE_GITHUB_RELEASE}" != "true" ]; then
+              args+=(--skip-github-create)
+            fi
+            if [ "${UPLOAD_VSIX_TO_GITHUB}" != "true" ]; then
+              args+=(--skip-github-upload)
+            fi
+          fi
+
+          if [ "${RELEASE_MODE}" = "resume_from_tag" ]; then
             if [ -z "${RELEASE_TAG:-}" ]; then
               echo "Missing RELEASE_TAG."
               exit 1
             fi
-            tag="${RELEASE_TAG}"
-
-            if [ "${{ inputs.dry_run }}" = "true" ]; then
-              args+=(--skip-github-upload)
-            fi
-
-            if [ "${{ inputs.create_github_release }}" != "true" ] && [ "${{ inputs.upload_vsix_to_github }}" != "true" ]; then
-              args+=(--skip-github)
-            else
-              if [ "${{ inputs.create_github_release }}" != "true" ]; then
-                args+=(--skip-github-create)
-              fi
-              if [ "${{ inputs.upload_vsix_to_github }}" != "true" ] || [ "${{ inputs.dry_run }}" = "true" ]; then
-                args+=(--skip-github-upload)
-              fi
-            fi
-
-            if [ "${{ inputs.upload_vsix_to_github }}" = "true" ] && [ "${{ inputs.dry_run }}" != "true" ]; then
-              ext_name="$(node -p "require('./package.json').name")"
-              version="${tag#v}"
-              vsix_path="${ext_name}-${version}.vsix"
-              npx --yes @vscode/vsce@3.9.2 package --out "${vsix_path}"
-              args+=(--github-tag "${tag}" --github-asset "${vsix_path}")
-            else
-              args+=(--github-tag "${tag}")
-            fi
+            args+=(--resume-from-tag "${RELEASE_TAG}")
           else
-            if [ -n "${{ inputs.version }}" ]; then
-              args+=(--version "${{ inputs.version }}")
+            if [ -n "${REQUESTED_VERSION}" ]; then
+              args+=(--version "${REQUESTED_VERSION}")
             else
               args+=(--bump "${{ inputs.bump }}")
             fi
-
-            if [ "${{ inputs.publish_to_marketplace }}" != "true" ]; then
-              args+=(--skip-publish)
-            fi
-
-            if [ "${{ inputs.create_github_release }}" != "true" ] && [ "${{ inputs.upload_vsix_to_github }}" != "true" ]; then
-              args+=(--skip-github)
-            else
-              if [ "${{ inputs.create_github_release }}" != "true" ]; then
-                args+=(--skip-github-create)
-              fi
-              if [ "${{ inputs.upload_vsix_to_github }}" != "true" ]; then
-                args+=(--skip-github-upload)
-              fi
-            fi
           fi
 
-          if [ "${{ inputs.mode }}" = "github_from_tag" ]; then
-            node "${RUNNER_TEMP}/release.mts" "${args[@]}"
+          if [ "${RELEASE_MODE}" = "resume_from_tag" ]; then
+            export PATH="${PWD}/node_modules/.bin:${PATH}"
+            resume_script="${PWD}/scripts/.release-resume.mts"
+            cp "${RUNNER_TEMP}/release.mts" "${resume_script}"
+            trap 'rm -f "${resume_script}"' EXIT
+            node "${resume_script}" "${args[@]}"
           else
             npm run release -- "${args[@]}"
-          fi
-
-      - name: Push release commit
-        if: ${{ github.event.inputs.dry_run != 'true' && github.event.inputs.mode == 'full' }}
-        run: |
-          set -euo pipefail
-          if git push origin "HEAD:${GITHUB_REF_NAME}"; then
-            echo "Pushed release commit to ${GITHUB_REF_NAME}."
-          else
-            echo "Unable to push release commit to ${GITHUB_REF_NAME} (branch may be protected)."
-            echo "The tag was already pushed by scripts/release.mts; merge/cherry-pick the release commit from the tag if needed."
           fi

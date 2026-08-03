@@ -56,6 +56,7 @@ const OPENAI_OSS_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const TENCENT_HY3_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const DEEPSEEK_V4_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
 const GLM_5_2_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
+const KIMI_K3_REASONING_EFFORTS = ['max', 'high', 'low'] as const;
 const NVIDIA_MINIMAX_REASONING_EFFORTS = [
   'high',
   'medium',
@@ -70,6 +71,13 @@ const ANTHROPIC_OPUS_4_7_REASONING_EFFORTS = [
   'low',
 ] as const;
 const ANTHROPIC_FABLE_5_REASONING_EFFORTS = [
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
+const ANTHROPIC_OPUS_5_REASONING_EFFORTS = [
+  'max',
   'xhigh',
   'high',
   'medium',
@@ -117,6 +125,7 @@ const MISTRAL_REASONING_EFFORTS = [
   'minimal',
   'none',
 ] as const;
+const QWEN_3_8_REASONING_EFFORTS = ['xhigh', 'medium', 'low'] as const;
 
 function doubaoReasoningEffort(
   defaultEffort: (typeof DOUBAO_REASONING_EFFORTS)[number] | 'auto',
@@ -710,6 +719,31 @@ const _WELL_KNOWN_MODELS = [
       withThinkingSummaryAuto(
         anthropicAdaptiveReasoningEffort(
           ANTHROPIC_FABLE_5_REASONING_EFFORTS,
+          'high',
+        ),
+      ),
+    ],
+  },
+  {
+    id: 'claude-opus-5',
+    name: 'Claude Opus 5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'high',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_OPUS_5_REASONING_EFFORTS,
           'high',
         ),
       ),
@@ -2342,7 +2376,7 @@ const _WELL_KNOWN_MODELS = [
     ],
     name: 'DeepSeek V4 Flash',
     maxInputTokens: 1000000,
-    maxOutputTokens: 384000,
+    maxOutputTokens: 65536,
     stream: true,
     tokenizer: 'deepseek',
     completion: { templates: ['fim'] },
@@ -2371,7 +2405,7 @@ const _WELL_KNOWN_MODELS = [
     ],
     name: 'DeepSeek V4 Pro',
     maxInputTokens: 1000000,
-    maxOutputTokens: 384000,
+    maxOutputTokens: 65536,
     stream: true,
     tokenizer: 'deepseek',
     completion: { templates: ['fim'] },
@@ -2683,7 +2717,63 @@ const _WELL_KNOWN_MODELS = [
     temperature: 1.0,
   },
   {
+    id: 'kimi-k3',
+    overrides: [
+      {
+        matchers: ['api.kimi.com/coding'],
+        config: {
+          id: 'k3',
+        },
+      },
+    ],
+    name: 'Kimi K3',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 131072,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'max',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      openAiReasoningEffort(KIMI_K3_REASONING_EFFORTS, 'max'),
+    ],
+  },
+  {
+    id: 'kimi-k2.7-code-highspeed',
+    overrides: [
+      {
+        matchers: ['api.kimi.com/coding'],
+        config: {
+          id: 'kimi-for-coding-highspeed',
+        },
+      },
+    ],
+    name: 'Kimi K2.7 Code Highspeed',
+    maxInputTokens: 256000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+  },
+  {
     id: 'kimi-k2.7-code',
+    overrides: [
+      {
+        matchers: ['api.kimi.com/coding'],
+        config: {
+          id: 'kimi-for-coding',
+        },
+      },
+    ],
     name: 'Kimi K2.7 Code',
     maxInputTokens: 256000,
     maxOutputTokens: 128000,
@@ -2866,20 +2956,26 @@ const _WELL_KNOWN_MODELS = [
     temperature: 0.6,
   },
   {
-    id: 'kimi-for-coding',
-    name: 'Kimi For Coding',
-    maxInputTokens: 262144,
-    maxOutputTokens: 32768,
+    id: 'qwen3.8-max',
+    name: 'Qwen3.8-Max',
+    maxInputTokens: 983616,
+    maxOutputTokens: 131072,
     stream: true,
     thinking: {
       type: 'enabled',
-      effort: 'medium',
+      effort: 'xhigh',
     },
+    parallelToolCalling: false,
     capabilities: {
       toolCalling: true,
-      imageInput: false,
+      imageInput: true,
     },
-    temperature: 0.6,
+    presetTemplates: [
+      reasoningEffort({
+        supported: QWEN_3_8_REASONING_EFFORTS,
+        default: 'xhigh',
+      }),
+    ],
   },
   {
     id: 'qwen3.7-max',
@@ -4786,6 +4882,44 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    id: 'gemini-3.6-flash',
+    overrides: ['models/gemini-3.6-flash'],
+    name: 'Gemini 3.6 Flash',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65535,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      geminiReasoningEffort(GEMINI_3_FLASH_REASONING_EFFORTS, 'medium'),
+    ],
+  },
+  {
+    id: 'gemini-3.5-flash-lite',
+    overrides: ['models/gemini-3.5-flash-lite'],
+    name: 'Gemini 3.5 Flash Lite',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65535,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      geminiReasoningEffort(GEMINI_3_FLASH_REASONING_EFFORTS, 'medium'),
+    ],
+  },
+  {
     id: 'gemini-3.5-flash',
     overrides: ['models/gemini-3.5-flash'],
     name: 'Gemini 3.5 Flash',
@@ -5189,6 +5323,28 @@ const _WELL_KNOWN_MODELS = [
     name: 'LongCat Flash Lite',
     maxInputTokens: 320000,
     maxOutputTokens: 128000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'kat-coder-pro-v2.5',
+    name: 'KAT-Coder-Pro V2.5',
+    maxInputTokens: 256000,
+    maxOutputTokens: 80000,
+    stream: true,
+    capabilities: {
+      toolCalling: true,
+      imageInput: false,
+    },
+  },
+  {
+    id: 'kat-coder-air-v2.5',
+    name: 'KAT-Coder-Air V2.5',
+    maxInputTokens: 256000,
+    maxOutputTokens: 80000,
     stream: true,
     capabilities: {
       toolCalling: true,

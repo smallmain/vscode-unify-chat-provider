@@ -165,6 +165,34 @@ function modelIdentityIncludes(
   );
 }
 
+function isMoonshotOpenAIProvider(provider: { baseUrl: string }): boolean {
+  return ['api.moonshot.cn', 'api.moonshot.ai'].some((pattern) =>
+    matchProvider(provider.baseUrl, pattern),
+  );
+}
+
+function isKimiK3Model(model: { id: string; family?: string }): boolean {
+  return modelIdentityIncludes(model, 'kimi-k3');
+}
+
+function isQwen38ModelStudioEndpoint(
+  model: { id: string; family?: string },
+  provider: { baseUrl: string },
+): boolean {
+  const isQwen38Max = [model.family, getBaseModelId(model.id)].some(
+    (value) => value?.toLowerCase() === 'qwen3.8-max',
+  );
+  return (
+    isQwen38Max &&
+    [
+      'dashscope.aliyuncs.com',
+      'dashscope-intl.aliyuncs.com',
+      'dashscope-us.aliyuncs.com',
+      'token-plan.cn-beijing.maas.aliyuncs.com',
+    ].some((host) => matchProvider(provider.baseUrl, host))
+  );
+}
+
 export enum FeatureId {
   /**
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
@@ -181,13 +209,19 @@ export enum FeatureId {
    */
   AnthropicInterleavedThinking = 'anthropic_interleaved-thinking',
   /**
+   * Preserve prompt caches when tools are added or removed between turns.
+   *
+   * @see https://platform.claude.com/docs/en/about-claude/models/whats-new-opus-5#mid-conversation-tool-changes-beta
+   */
+  AnthropicMidConversationToolChanges = 'anthropic_mid-conversation-tool-changes',
+  /**
    * Adaptive thinking is always enabled and cannot be disabled.
    *
    * @see https://platform.claude.com/docs/en/build-with-claude/adaptive-thinking
    */
   AnthropicAlwaysOnAdaptiveThinking = 'anthropic_always-on-adaptive-thinking',
   /**
-   * The `xhigh` effort level is currently documented for Claude Opus 4.7.
+   * The `xhigh` effort level is supported by recent Claude models.
    *
    * @see https://platform.claude.com/docs/en/build-with-claude/effort
    */
@@ -225,6 +259,7 @@ export enum FeatureId {
   /**
    * Use OpenRouter Claude adaptive thinking with top-level `verbosity`.
    *
+   * @see https://openrouter.ai/docs/cookbook/evaluate-and-optimize/model-migrations/claude-4-6
    * @see https://openrouter.ai/docs/cookbook/evaluate-and-optimize/model-migrations/claude-4-7
    */
   OpenRouterUseClaudeAdaptiveVerbosity = 'openrouter_use-claude-adaptive-verbosity',
@@ -238,6 +273,7 @@ export enum FeatureId {
    * Use `reasoning_effort` parameter in OpenAI-compatible Chat Completion APIs.
    *
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
+   * @see https://platform.kimi.com/docs/guide/kimi-k3-quickstart
    */
   OpenAIUseReasoningEffortParam = 'openai_use-reasoning-effort-param',
   /**
@@ -408,6 +444,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'claude-opus-4',
     ],
   },
+  [FeatureId.AnthropicMidConversationToolChanges]: {
+    supportedFamilys: ['claude-opus-5'],
+  },
   [FeatureId.AnthropicAlwaysOnAdaptiveThinking]: {
     supportedFamilys: [
       'claude-fable-5',
@@ -417,6 +456,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicXHighEffort]: {
     supportedFamilys: [
+      'claude-opus-5',
       'claude-sonnet-5',
       'claude-opus-4-8',
       'claude-opus-4.8',
@@ -526,6 +566,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       (model, provider) =>
         matchProvider(provider.baseUrl, 'openrouter.ai') &&
         [
+          'claude-opus-5',
           'claude-opus-4-8',
           'claude-opus-4.8',
           'claude-4-8-opus',
@@ -576,10 +617,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.xiaomimimo.com',
       'open.bigmodel.cn',
       'api.z.ai',
-      'api.moonshot.cn',
-      'api.moonshot.ai',
     ],
     customCheckers: [
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && !isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, [
           'deepseek-v3.2',
@@ -595,8 +636,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'z-ai/glm',
         ]),
-        (model) => modelFamilyIncludes(model, 'deepseek-v4'),
-        (model) => modelFamilyIncludes(model, 'glm-5.2'),
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+      (model) => modelFamilyIncludes(model, 'glm-5.2'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -615,6 +656,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.synthetic.new',
     ],
     customCheckers: [
+      isQwen38ModelStudioEndpoint,
+      (model, provider) =>
+        isMoonshotOpenAIProvider(provider) && isKimiK3Model(model),
       (model, provider) =>
         isBaiduQianfanModel(model, provider, ['gpt-oss-120b', 'gpt-oss-20b']),
     ],
@@ -676,6 +720,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'vanchin.streamlake.ai',
     ],
     customCheckers: [
+      isQwen38ModelStudioEndpoint,
       (model, provider) =>
         isBaiduQianfanModel(model, provider, [
           'qwen3-235b-a22b',
@@ -750,6 +795,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'qianfan.baidubce.com',
       'integrate.api.nvidia.com',
     ],
+    customCheckers: [isQwen38ModelStudioEndpoint],
   },
   [FeatureId.OpenAIUseClearThinking]: {
     supportedProviders: ['open.bigmodel.cn', 'api.z.ai'],

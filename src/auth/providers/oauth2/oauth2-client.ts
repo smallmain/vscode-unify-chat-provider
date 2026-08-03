@@ -21,6 +21,109 @@ import {
 import { authLog } from '../../../logger';
 import { generatePKCE as generatePKCEUtil } from '../../../utils';
 
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function optionalString(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined | null {
+  const value = record[key];
+  return value === undefined
+    ? undefined
+    : typeof value === 'string'
+      ? value
+      : null;
+}
+
+function optionalNonNegativeNumber(
+  record: Record<string, unknown>,
+  key: string,
+): number | undefined | null {
+  const value = record[key];
+  if (value === undefined) return undefined;
+  if (typeof value === 'number') {
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  }
+  if (typeof value === 'string' && value.trim()) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) && parsed >= 0 ? parsed : null;
+  }
+  return null;
+}
+
+function parseTokenResponse(value: unknown): TokenResponse {
+  if (!isRecord(value)) throw new Error('Invalid OAuth token response');
+  const accessToken = value['access_token'];
+  const tokenType = optionalString(value, 'token_type');
+  const refreshTokenValue = optionalString(value, 'refresh_token');
+  const expiresIn = optionalNonNegativeNumber(value, 'expires_in');
+  const scope = optionalString(value, 'scope');
+  if (typeof accessToken !== 'string' || accessToken.trim() === '') {
+    throw new Error('Invalid OAuth token response');
+  }
+  return {
+    access_token: accessToken,
+    token_type: typeof tokenType === 'string' && tokenType.trim()
+      ? tokenType
+      : 'Bearer',
+    ...(typeof refreshTokenValue !== 'string'
+      ? {}
+      : { refresh_token: refreshTokenValue }),
+    ...(typeof expiresIn !== 'number' ? {} : { expires_in: expiresIn }),
+    ...(typeof scope !== 'string' ? {} : { scope }),
+  };
+}
+
+function parseDeviceCodeResponse(value: unknown): DeviceCodeResponse {
+  if (!isRecord(value)) throw new Error('Invalid OAuth device-code response');
+  const deviceCode = value['device_code'];
+  const userCode = value['user_code'];
+  const verificationUri = value['verification_uri'];
+  const verificationUriComplete = optionalString(
+    value,
+    'verification_uri_complete',
+  );
+  const expiresIn = optionalNonNegativeNumber(value, 'expires_in');
+  const interval = optionalNonNegativeNumber(value, 'interval');
+  if (
+    typeof deviceCode !== 'string' ||
+    deviceCode.trim() === '' ||
+    typeof userCode !== 'string' ||
+    userCode.trim() === '' ||
+    typeof verificationUri !== 'string' ||
+    verificationUri.trim() === '' ||
+    expiresIn === undefined ||
+    expiresIn === null
+  ) {
+    throw new Error('Invalid OAuth device-code response');
+  }
+  return {
+    deviceCode,
+    userCode,
+    verificationUri,
+    ...(typeof verificationUriComplete !== 'string'
+      ? {}
+      : { verificationUriComplete }),
+    expiresIn,
+    interval: typeof interval === 'number' && interval > 0 ? interval : 5,
+  };
+}
+
+function parseOAuthErrorResponse(value: unknown): {
+  error?: string;
+  errorDescription?: string;
+} {
+  if (!isRecord(value)) return {};
+  const error = optionalString(value, 'error');
+  const errorDescription = optionalString(value, 'error_description');
+  return {
+    ...(typeof error === 'string' ? { error } : {}),
+    ...(typeof errorDescription === 'string' ? { errorDescription } : {}),
+  };
+}
+
 /**
  * Generate a random state string for OAuth
  */
@@ -107,7 +210,7 @@ export async function exchangeCodeForToken(
     throw new Error(t('Token exchange failed: {0}', error));
   }
 
-  const data = (await response.json()) as TokenResponse;
+  const data = parseTokenResponse(await response.json());
   authLog.verbose('oauth2-client', 'Token exchange successful');
   return tokenResponseToData(data);
 }
@@ -120,10 +223,14 @@ export async function getClientCredentialsToken(
   signal?: AbortSignal,
 ): Promise<OAuth2TokenData> {
   authLog.verbose('oauth2-client', `Getting token using client_credentials (tokenUrl: ${config.tokenUrl})`);
+  const clientSecret = config.clientSecret;
+  if (!clientSecret || clientSecret.trim() === '') {
+    throw new Error('OAuth client secret is missing');
+  }
   const params = new URLSearchParams({
     grant_type: 'client_credentials',
     client_id: config.clientId,
-    client_secret: config.clientSecret,
+    client_secret: clientSecret,
   });
 
   if (config.scopes && config.scopes.length > 0) {
@@ -154,7 +261,7 @@ export async function getClientCredentialsToken(
     throw oauth2Error;
   }
 
-  const data = (await response.json()) as TokenResponse;
+  const data = parseTokenResponse(await response.json());
   authLog.verbose('oauth2-client', 'Client credentials token request successful');
   return tokenResponseToData(data);
 }
@@ -188,16 +295,12 @@ export async function startDeviceCodeFlow(
     throw new Error(t('Device authorization failed: {0}', error));
   }
 
-  const data = await response.json();
-  authLog.verbose('oauth2-client', `Device code flow started (userCode: ${data.user_code})`);
-  return {
-    deviceCode: data.device_code,
-    userCode: data.user_code,
-    verificationUri: data.verification_uri,
-    verificationUriComplete: data.verification_uri_complete,
-    expiresIn: data.expires_in,
-    interval: data.interval || 5,
-  };
+  const data = parseDeviceCodeResponse(await response.json());
+  authLog.verbose(
+    'oauth2-client',
+    `Device code flow started (userCode: ${data.userCode})`,
+  );
+  return data;
 }
 
 /**
@@ -243,7 +346,7 @@ export async function pollDeviceCodeToken(
   }
 
   if (!response.ok) {
-    const data = await response.json();
+    const data = parseOAuthErrorResponse(await response.json());
     const error = data.error;
 
     if (error === 'authorization_pending') {
@@ -268,11 +371,20 @@ export async function pollDeviceCodeToken(
       throw new Error(t('Authorization was denied.'));
     }
 
-    authLog.error('oauth2-client', `Device code token request failed: ${error}`, data.error_description);
-    throw new Error(t('Token request failed: {0}', data.error_description || error));
+    authLog.error(
+      'oauth2-client',
+      `Device code token request failed: ${error ?? 'unknown_error'}`,
+      data.errorDescription,
+    );
+    throw new Error(
+      t(
+        'Token request failed: {0}',
+        data.errorDescription || error || 'unknown_error',
+      ),
+    );
   }
 
-  const data = (await response.json()) as TokenResponse;
+  const data = parseTokenResponse(await response.json());
   authLog.verbose('oauth2-client', 'Device code token obtained successfully');
   return tokenResponseToData(data);
 }
@@ -328,7 +440,7 @@ export async function refreshToken(
     throw oauth2Error;
   }
 
-  const data = (await response.json()) as TokenResponse;
+  const data = parseTokenResponse(await response.json());
   authLog.verbose('oauth2-client', 'Token refresh successful');
   return tokenResponseToData(data);
 }

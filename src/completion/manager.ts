@@ -12,6 +12,8 @@ import type {
   CompletionAlgorithmInput,
   CompletionModelResolver,
 } from "./types";
+import { INTERNAL_COMPLETION_VENDOR } from "./types";
+import { parseVsCodeModelId } from "../model-id-utils";
 import {
   createRoutedCompletionChange,
   readRoutedCompletionChange,
@@ -50,6 +52,7 @@ interface RuntimeEntry {
   key: string;
   optionsKey: string;
   usesLanguageModels: boolean;
+  providerNames: ReadonlySet<string>;
   instanceId: number;
   generation: number;
   active: boolean;
@@ -175,6 +178,11 @@ export class CompletionManager
   private nextRuntimeInstanceId = 1;
 
   readonly onDidChange = this.changeEmitter.event;
+
+  handleAuthStateChange(providerName: string): void {
+    if (this.disposed) return;
+    this.notifyProviderEnvironmentChange(providerName);
+  }
 
   constructor(
     private readonly modelResolver: CompletionModelResolver,
@@ -515,14 +523,21 @@ export class CompletionManager
         }
         continue;
       }
-      const modelFingerprints = (
-        definition.getModelReferences?.(normalizedOptions.value) ?? []
-      ).map((reference) => ({
+      const modelReferences =
+        definition.getModelReferences?.(normalizedOptions.value) ?? [];
+      const modelFingerprints = modelReferences.map((reference) => ({
         reference,
         fingerprint:
           this.modelResolver.getConfigurationFingerprint?.(reference) ??
           stableSerialize(reference),
       }));
+      const providerNames = new Set(
+        modelReferences.flatMap((reference) => {
+          if (reference.vendor !== INTERNAL_COMPLETION_VENDOR) return [];
+          const parsed = parseVsCodeModelId(reference.id);
+          return parsed ? [parsed.providerName] : [];
+        }),
+      );
       const optionsKey = stableSerialize(normalizedOptions.value);
       const runtimeIdentity = definition.getRuntimeIdentity
         ? definition.getRuntimeIdentity(normalizedOptions.value)
@@ -564,6 +579,7 @@ export class CompletionManager
         key,
         optionsKey,
         usesLanguageModels: modelFingerprints.length > 0,
+        providerNames,
         instanceId,
         generation: instanceId,
         active: true,
@@ -611,6 +627,26 @@ export class CompletionManager
         authLog.error(
           `completion:${providerId}`,
           "Completion runtime environment refresh failed",
+          error,
+        );
+      }
+    }
+  }
+
+  private notifyProviderEnvironmentChange(providerName: string): void {
+    for (const [providerId, entry] of this.runtimes) {
+      if (
+        !entry.providerNames.has(providerName) ||
+        !this.isRuntimeActive(providerId, entry)
+      ) {
+        continue;
+      }
+      try {
+        entry.algorithm.handleEnvironmentChange?.("auth-changed");
+      } catch (error) {
+        authLog.error(
+          `completion:${providerId}`,
+          "Completion runtime auth refresh failed",
           error,
         );
       }

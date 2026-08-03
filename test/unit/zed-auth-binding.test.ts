@@ -32,6 +32,7 @@ import type { ZedAuthConfig } from '../../src/auth/types';
 
 const OLD_TOKEN = '$UCPSECRET:00000000-0000-4000-8000-000000000001$';
 const NEW_TOKEN = '$UCPSECRET:00000000-0000-4000-8000-000000000002$';
+const BINDING_ID = '00000000-0000-4000-8000-000000000104';
 
 function zedAuth(
   baseUrl: string,
@@ -40,6 +41,7 @@ function zedAuth(
 ): ZedAuthConfig {
   return {
     method: 'zed',
+    bindingId: BINDING_ID,
     baseUrl,
     identityId,
     token,
@@ -58,10 +60,8 @@ describe('auth provider binding', () => {
         { providerType: 'zed', baseUrl: 'https://zed.example' },
         'zed',
       ),
-    ).toEqual({
+    ).toMatchObject({
       method: 'zed',
-      label: undefined,
-      description: undefined,
       baseUrl: 'https://zed.example',
       dataCollection: false,
       dataCollectionAllowed: false,
@@ -85,6 +85,7 @@ describe('auth provider binding', () => {
       }),
     ).toEqual({
       method: 'zed',
+      bindingId: BINDING_ID,
       label: undefined,
       description: undefined,
       baseUrl: 'https://zed.example',

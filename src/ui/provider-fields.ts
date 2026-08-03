@@ -32,12 +32,12 @@ import {
   createAuthProviderForMethod,
   getAuthMethodDefinition,
   normalizeAuthForProvider,
-  type AuthConfig,
+  type AuthRuntimeConfig,
   type AuthMethod,
   type AuthStatusViewItem,
   type AuthUiStatusSnapshot,
 } from '../auth';
-import type { AuthTokenInfo } from '../auth/types';
+import { toAuthTokenInfo, type AuthTokenInfo } from '../auth/types';
 import {
   BALANCE_METHODS,
   balanceManager,
@@ -54,6 +54,7 @@ import {
   type WellKnownAuthPreset,
 } from '../well-known/auths';
 import { deepClone, stableStringify } from '../config-ops';
+import { isSessionAuthConfig } from '../auth/local-auth-state';
 import { mainInstance } from '../main-instance';
 import {
   isLeaderUnavailableError,
@@ -63,6 +64,7 @@ import {
   editCompletionConfig,
   formatCompletionConfig,
 } from './completion-fields';
+import { captureDraftAuthCommitGuard } from './provider-ops';
 
 function getTransportModeDescription(draft: ProviderFormDraft): string {
   switch (draft.transport) {
@@ -811,14 +813,14 @@ type AuthStatusPickItem = AuthStatusViewItem & {
 
 function normalizeAuthForDraft(
   draft: ProviderFormDraft,
-  auth: AuthConfig | undefined,
+  auth: AuthRuntimeConfig | undefined,
   method: AuthMethod | undefined = auth?.method,
   previous?: {
     readonly type?: ProviderType;
     readonly baseUrl?: string;
-    readonly auth?: AuthConfig;
+    readonly auth?: AuthRuntimeConfig;
   },
-): AuthConfig | undefined {
+): AuthRuntimeConfig | undefined {
   return normalizeAuthForProvider(
     auth,
     {
@@ -850,7 +852,9 @@ type BalanceStatusPickItem = vscode.QuickPickItem & {
   viewAction?: 'reconfigure';
 };
 
-function getAuthDisplayLabel(auth: AuthConfig | undefined): string | undefined {
+function getAuthDisplayLabel(
+  auth: AuthRuntimeConfig | undefined,
+): string | undefined {
   if (!auth || typeof auth !== 'object' || Array.isArray(auth)) {
     return undefined;
   }
@@ -975,7 +979,7 @@ function intervalMsFromSnapshot(
 async function showAuthStatusView(options: {
   draft: ProviderFormDraft;
   ctx: ProviderFieldContext;
-  auth: AuthConfig;
+  auth: AuthRuntimeConfig;
 }): Promise<'exit' | 'reconfigure' | 'stay'> {
   const { pickQuickItem } = await import('./component');
 
@@ -994,9 +998,11 @@ async function showAuthStatusView(options: {
   const providerContext = {
     providerId,
     providerLabel,
+    providerType: options.draft.type,
+    baseUrl: options.draft.baseUrl,
     secretStore: options.ctx.secretStore,
     uriHandler: options.ctx.uriHandler,
-    persistAuthConfig: async (auth: AuthConfig) => {
+    persistAuthConfig: async (auth: AuthRuntimeConfig) => {
       options.draft.auth = normalizeAuthDisplay(
         normalizeAuthForDraft(options.draft, auth, auth.method) ?? auth,
       );
@@ -1123,6 +1129,8 @@ async function editAuthField(
     return;
   }
 
+  captureDraftAuthCommitGuard(draft, ctx.secretStore, { force: true });
+
   while (true) {
     const currentAuth = draft.auth;
 
@@ -1149,9 +1157,11 @@ async function editAuthField(
       const providerContext = {
         providerId,
         providerLabel,
+        providerType: draft.type,
+        baseUrl: draft.baseUrl,
         secretStore: ctx.secretStore,
         uriHandler: ctx.uriHandler,
-        persistAuthConfig: async (auth: AuthConfig) => {
+        persistAuthConfig: async (auth: AuthRuntimeConfig) => {
           draft.auth = normalizeAuthDisplay(
             normalizeAuthForDraft(draft, auth, auth.method) ?? auth,
           );
@@ -1198,15 +1208,29 @@ async function editAuthField(
         return;
       }
 
+      const configAtStart = authProvider.getConfig();
+      if (configAtStart) {
+        captureDraftAuthCommitGuard(draft, ctx.secretStore, {
+          auth: configAtStart,
+        });
+      }
+
       try {
         const result = await authProvider.configure();
         if (result.success && result.config) {
+          const resultConfig = preserveSessionBinding(
+            currentAuth,
+            result.config,
+          );
+          captureDraftAuthCommitGuard(draft, ctx.secretStore, {
+            auth: resultConfig,
+          });
           draft.auth = normalizeAuthDisplay(
             normalizeAuthForDraft(
               draft,
-              result.config,
-              result.config.method,
-            ) ?? result.config,
+              resultConfig,
+              resultConfig.method,
+            ) ?? resultConfig,
           );
           return;
         }
@@ -1249,9 +1273,11 @@ async function editAuthField(
     const providerContext = {
       providerId,
       providerLabel,
+      providerType: draft.type,
+      baseUrl: draft.baseUrl,
       secretStore: ctx.secretStore,
       uriHandler: ctx.uriHandler,
-      persistAuthConfig: async (auth: AuthConfig) => {
+      persistAuthConfig: async (auth: AuthRuntimeConfig) => {
         draft.auth = normalizeAuthDisplay(
           normalizeAuthForDraft(draft, auth, auth.method) ?? auth,
         );
@@ -1298,15 +1324,26 @@ async function editAuthField(
       continue;
     }
 
+    const configAtStart = authProvider.getConfig();
+    if (configAtStart) {
+      captureDraftAuthCommitGuard(draft, ctx.secretStore, {
+        auth: configAtStart,
+      });
+    }
+
     try {
       const result = await authProvider.configure();
       if (result.success && result.config) {
+        const resultConfig = preserveSessionBinding(baseline, result.config);
+        captureDraftAuthCommitGuard(draft, ctx.secretStore, {
+          auth: resultConfig,
+        });
         draft.auth = normalizeAuthDisplay(
           normalizeAuthForDraft(
             draft,
-            result.config,
-            result.config.method,
-          ) ?? result.config,
+            resultConfig,
+            resultConfig.method,
+          ) ?? resultConfig,
         );
       } else {
         draft.auth = baseline;
@@ -1315,6 +1352,20 @@ async function editAuthField(
       authProvider.dispose?.();
     }
   }
+}
+
+function preserveSessionBinding(
+  previous: AuthRuntimeConfig | undefined,
+  next: AuthRuntimeConfig,
+): AuthRuntimeConfig {
+  if (
+    previous &&
+    isSessionAuthConfig(previous) &&
+    isSessionAuthConfig(next)
+  ) {
+    return { ...next, bindingId: previous.bindingId };
+  }
+  return next;
 }
 
 function getBalanceDescription(draft: ProviderFormDraft): string {
@@ -1382,23 +1433,6 @@ async function pickBalanceMethod(
   });
 }
 
-function toAuthTokenInfo(
-  credential:
-    | { value: string; tokenType?: string; expiresAt?: number }
-    | undefined,
-): AuthTokenInfo {
-  if (!credential?.value) {
-    return { kind: 'none' };
-  }
-
-  return {
-    kind: 'token',
-    token: credential.value,
-    tokenType: credential.tokenType,
-    expiresAt: credential.expiresAt,
-  };
-}
-
 function resolveDraftProviderConfig(
   draft: ProviderFormDraft,
 ): ProviderConfig | undefined {
@@ -1437,6 +1471,8 @@ async function resolveDraftCredential(
     {
       providerId,
       providerLabel,
+      providerType: draft.type,
+      baseUrl: draft.baseUrl,
       secretStore: ctx.secretStore,
       uriHandler: ctx.uriHandler,
     },
@@ -1911,7 +1947,9 @@ function getStringProp(value: unknown, key: string): string | undefined {
   return typeof raw === 'string' ? raw : undefined;
 }
 
-function normalizeAuthDisplay(config: AuthConfig): AuthConfig {
+function normalizeAuthDisplay(
+  config: AuthRuntimeConfig,
+): AuthRuntimeConfig {
   if (config.method === 'none') {
     return config;
   }

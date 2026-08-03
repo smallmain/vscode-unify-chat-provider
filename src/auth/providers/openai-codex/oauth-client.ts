@@ -100,9 +100,22 @@ export interface OpenAICodexIdTokenClaims {
   chatgpt_account_id?: string;
   organizations?: Array<{ id: string }>;
   email?: string;
+  exp?: number;
   'https://api.openai.com/auth'?: {
     chatgpt_account_id?: string;
   };
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function claimString(
+  record: Record<string, unknown>,
+  key: string,
+): string | undefined {
+  const value = record[key];
+  return typeof value === 'string' ? value : undefined;
 }
 
 export function parseJwtClaims(token: string): OpenAICodexIdTokenClaims | undefined {
@@ -113,10 +126,47 @@ export function parseJwtClaims(token: string): OpenAICodexIdTokenClaims | undefi
   try {
     const json = Buffer.from(parts[1], 'base64url').toString('utf8');
     const parsed: unknown = JSON.parse(json);
-    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (!isRecord(parsed)) {
       return undefined;
     }
-    return parsed as OpenAICodexIdTokenClaims;
+    const accountId = claimString(parsed, 'chatgpt_account_id');
+    const email = claimString(parsed, 'email');
+    const expValue = parsed['exp'];
+    const exp =
+      typeof expValue === 'number' &&
+      Number.isFinite(expValue) &&
+      expValue >= 0
+        ? expValue
+        : undefined;
+    const namespaced = parsed['https://api.openai.com/auth'];
+    const organizations = parsed['organizations'];
+    const namespacedAccountId = isRecord(namespaced)
+      ? claimString(namespaced, 'chatgpt_account_id')
+      : undefined;
+    const organizationIds = Array.isArray(organizations)
+      ? organizations.flatMap((organization) =>
+          isRecord(organization) && typeof organization['id'] === 'string'
+            ? [organization['id']]
+            : [],
+        )
+      : [];
+    return {
+      ...(accountId === undefined ? {} : { chatgpt_account_id: accountId }),
+      ...(email === undefined ? {} : { email }),
+      ...(exp === undefined ? {} : { exp }),
+      ...(namespacedAccountId === undefined
+        ? {}
+        : {
+            'https://api.openai.com/auth': {
+              chatgpt_account_id: namespacedAccountId,
+            },
+          }),
+      ...(organizationIds.length === 0
+        ? {}
+        : {
+            organizations: organizationIds.map((id) => ({ id })),
+          }),
+    };
   } catch {
     return undefined;
   }

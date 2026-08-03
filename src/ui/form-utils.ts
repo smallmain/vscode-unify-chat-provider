@@ -33,19 +33,33 @@ import {
   type ModelEditTool,
   type DeprecatedProviderConfigKey,
 } from '../types';
+import type {
+  AuthRuntimeConfig,
+  SessionAuthMethod,
+} from '../auth/types';
+import type { LocalAuthCommitGuard } from '../secret';
+
+export interface DraftAuthCommitGuard {
+  bindingId: string;
+  method: SessionAuthMethod;
+  guard: LocalAuthCommitGuard;
+}
 
 /**
  * Draft type for provider form editing.
  */
 export type ProviderFormDraft = Omit<
   Partial<ProviderConfig>,
-  'models' | DeprecatedProviderConfigKey
+  'auth' | 'models' | DeprecatedProviderConfigKey
 > & {
+  auth?: AuthRuntimeConfig;
   models: ModelConfig[];
   /** Internal: Session ID for draft-only state (official models, oauth2 token, etc.) (not persisted) */
   _draftSessionId?: string;
   /** Internal: current model ID to persisted source ID, used across renames. */
   _completionModelSourceIds?: Record<string, string>;
+  /** Internal: optimistic guard captured before a local auth operation. */
+  _authCommitGuard?: DraftAuthCommitGuard;
 };
 
 type AssertNever<T extends never> = T;
@@ -113,6 +127,7 @@ export function normalizeProviderDraft(
   const {
     _draftSessionId: _draftSessionId,
     _completionModelSourceIds: _completionModelSourceIds,
+    _authCommitGuard: _authCommitGuard,
     ...rest
   } = cloned;
   return {
@@ -194,6 +209,7 @@ function toComparableProviderDraft(draft: ProviderFormDraft): unknown {
   const {
     _draftSessionId: _draftSessionId,
     _completionModelSourceIds: _completionModelSourceIds,
+    _authCommitGuard: _authCommitGuard,
     ...rest
   } = deepClone(draft);
   return {

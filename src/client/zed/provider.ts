@@ -110,6 +110,7 @@ export class ZedProvider implements ApiProvider {
 
   private async discoverModelsWithTokens(
     tokens: ZedLlmTokenSource,
+    credential: AuthTokenInfo,
     organizationId: string,
     options: ZedModelDiscoveryOptions = {},
   ): Promise<ZedModelDiscoveryResult> {
@@ -125,7 +126,7 @@ export class ZedProvider implements ApiProvider {
         },
       },
     );
-    rememberZedModelRoutes(this.config, organizationId, result.routes);
+    rememberZedModelRoutes(this.config, credential, result.routes);
     return result;
   }
 
@@ -134,9 +135,10 @@ export class ZedProvider implements ApiProvider {
     refreshCredential?: AuthTokenRefresh,
     options: ZedModelDiscoveryOptions = {},
   ): Promise<ZedModelDiscoveryResult> {
-    const organizationId = assertZedProviderAuth(this.config);
+    const organizationId = assertZedProviderAuth(this.config, credential);
     return this.discoverModelsWithTokens(
       createZedLlmTokenSource(credential, refreshCredential),
+      credential,
       organizationId,
       options,
     );
@@ -145,9 +147,11 @@ export class ZedProvider implements ApiProvider {
   async getAvailableModels(
     credential: AuthTokenInfo,
     refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
   ): Promise<ModelConfig[]> {
-    const models = (await this.discoverModels(credential, refreshCredential))
-      .models;
+    const models = (
+      await this.discoverModels(credential, refreshCredential, { signal })
+    ).models;
     return models.some((model) => model.id === 'zeta-cloud')
       ? models
       : [{ id: 'zeta-cloud' }, ...models];
@@ -164,7 +168,7 @@ export class ZedProvider implements ApiProvider {
     credential: AuthTokenInfo,
     refreshCredential?: AuthTokenRefresh,
   ): AsyncGenerator<vscode.LanguageModelResponsePart2> {
-    const organizationId = assertZedProviderAuth(this.config);
+    const organizationId = assertZedProviderAuth(this.config, credential);
     if (token.isCancellationRequested) return;
     const controller = new AbortController();
     const cancellation = token.onCancellationRequested(() => controller.abort());
@@ -173,18 +177,19 @@ export class ZedProvider implements ApiProvider {
       const baseModelId = getBaseModelId(model.id);
       let route = resolveCachedZedModelRoute(
         this.config,
-        organizationId,
+        credential,
         baseModelId,
       );
       if (!route) {
         await this.discoverModelsWithTokens(
           tokens,
+          credential,
           organizationId,
           { signal: controller.signal },
         );
         route = resolveCachedZedModelRoute(
           this.config,
-          organizationId,
+          credential,
           baseModelId,
         );
       }

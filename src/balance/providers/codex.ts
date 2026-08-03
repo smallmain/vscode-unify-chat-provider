@@ -391,12 +391,15 @@ function buildSnapshotItems(metrics: ParsedLimitMetric[]): BalanceMetric[] {
 }
 
 function resolveAccountId(input: BalanceRefreshInput): string | undefined {
-  const auth = input.provider.auth;
-  if (auth?.method !== 'openai-codex') {
+  const context =
+    input.credential?.kind === 'token'
+      ? input.credential.authContext
+      : undefined;
+  if (context?.method !== 'openai-codex') {
     return undefined;
   }
 
-  const accountId = auth.accountId?.trim();
+  const accountId = context.accountId?.trim();
   return accountId || undefined;
 }
 

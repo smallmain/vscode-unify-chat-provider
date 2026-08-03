@@ -2,7 +2,7 @@
   "name": "vscode-unify-chat-provider",
   "displayName": "%displayName%",
   "description": "%description%",
-  "version": "7.12.5",
+  "version": "8.3.0",
   "categories": [
     "AI",
     "Chat"
@@ -2014,12 +2014,13 @@
     "watch": "npm run clean:build && npm run build:chat-lib-runtime && tsc -watch -p .",
     "build:chat-lib-runtime": "tsx scripts/copy-chat-lib-resources.ts",
     "test": "npm run test:unit",
-    "test:unit": "tsc -p . --noEmit && tsc -p test/tsconfig.json && npm run build:chat-lib-runtime && vitest run",
+    "test:unit": "tsc -p . --noEmit && tsc -p test/tsconfig.json && npm run check:release && npm run build:chat-lib-runtime && vitest run",
     "test:e2e": "npm run compile && tsc -p test/e2e/tsconfig.json && node out-test/e2e/run.js",
     "extract:chat-lib": "tsx scripts/update-chat-lib.ts",
     "verify:chat-lib": "tsx scripts/verify-chat-lib.ts",
     "l10n:check": "tsx scripts/l10n-audit.ts",
     "l10n:sync": "tsx scripts/l10n-audit.ts --write --write-locales",
+    "check:release": "tsc --ignoreConfig --noEmit --strict --noUnusedLocals --noUnusedParameters --noImplicitReturns --noFallthroughCasesInSwitch --esModuleInterop --skipLibCheck --module NodeNext --moduleResolution NodeNext --target ES2022 --types node scripts/release.mts",
     "check": "npm run test:unit && npm run verify:chat-lib && npm run l10n:check",
     "release": "node scripts/release.mts"
   },
@@ -2031,6 +2032,7 @@
     "@vscode/tree-sitter-wasm": "0.0.5-php.2",
     "@vscode/vsce": "3.9.2",
     "esbuild": "0.28.1",
+    "jszip": "^3.10.1",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
     "vitest": "^4.1.10",

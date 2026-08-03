@@ -7,7 +7,13 @@ import {
   PROVIDER_CONFIG_KEYS,
 } from '../config-ops';
 import { showValidationErrors } from './component';
-import { SecretStore } from '../secret';
+import {
+  LocalAuthStateConflictError,
+  isLocalAuthStateConflictError,
+  SecretStore,
+  type LocalAuthCommitGuard,
+  type LocalAuthSessionTransaction,
+} from '../secret';
 import { resolveAuthForExportOrShowError } from '../auth/auth-transfer';
 import { showCopiedBase64Config } from './base64-config';
 import { resolveBalanceForExportOrShowError } from '../balance/balance-transfer';
@@ -23,7 +29,12 @@ import {
   promptConflictResolution,
   generateUniqueProviderName,
 } from './conflict-resolution';
-import { getAuthMethodCtor, normalizeAuthForProvider } from '../auth';
+import {
+  normalizeAuthForProvider,
+  normalizeAuthOnImport,
+  prepareAuthForDuplicate,
+  supportsSensitiveAuthInSettings,
+} from '../auth';
 import { getBalanceMethodDefinition } from '../balance';
 import { mainInstance } from '../main-instance';
 import {
@@ -31,6 +42,111 @@ import {
   isVersionIncompatibleError,
 } from '../main-instance/errors';
 import { migrateLegacyVSCodeModelIds } from '../vscode-model-id-migration';
+import {
+  assertValidInlineSessionAuthToken,
+  createAuthBindingId,
+  discardMismatchedLocalSessionState,
+  isSessionAuthConfig,
+  isValidAuthBindingId,
+  renewSessionAuthBinding,
+  stripSessionAuthState,
+  type AuthBindingDescriptor,
+} from '../auth/local-auth-state';
+import type { AuthRuntimeConfig } from '../auth/types';
+import {
+  captureProviderSourceGuard,
+  isProviderSourceGuardCurrent,
+  type ProviderSourceGuard,
+} from '../auth/provider-source-guard';
+
+export function captureDraftAuthCommitGuard(
+  draft: ProviderFormDraft,
+  secretStore: SecretStore,
+  options: {
+    auth?: AuthRuntimeConfig;
+    descriptor?: AuthBindingDescriptor;
+    force?: boolean;
+  } = {},
+): void {
+  const auth = options.auth ?? draft.auth;
+  if (
+    !auth ||
+    !isSessionAuthConfig(auth) ||
+    !isValidAuthBindingId(auth.bindingId)
+  ) {
+    if (options.force) draft._authCommitGuard = undefined;
+    return;
+  }
+
+  if (
+    !options.force &&
+    draft._authCommitGuard?.bindingId === auth.bindingId
+  ) {
+    return;
+  }
+
+  const descriptor =
+    options.descriptor ??
+    (draft.type && draft.baseUrl
+      ? {
+          providerName: draft.name?.trim() ?? '',
+          providerType: draft.type,
+          baseUrl: draft.baseUrl,
+          useRawBaseUrl: draft.useRawBaseUrl,
+        }
+      : undefined);
+  if (!descriptor) return;
+
+  draft._authCommitGuard = {
+    bindingId: auth.bindingId,
+    method: auth.method,
+    guard: secretStore.getLocalAuthCommitGuard(descriptor, auth),
+  };
+}
+
+function resolveDraftAuthCommitGuard(
+  draft: ProviderFormDraft,
+  auth: AuthRuntimeConfig | undefined,
+): LocalAuthCommitGuard | undefined {
+  if (!auth || !isSessionAuthConfig(auth)) return undefined;
+  return draft._authCommitGuard?.bindingId === auth.bindingId
+    ? draft._authCommitGuard.guard
+    : undefined;
+}
+
+export function discardDraftAuthState(
+  draft: Pick<ProviderFormDraft, 'auth'>,
+  secretStore: SecretStore,
+  original?: { auth?: AuthRuntimeConfig },
+): void {
+  const draftAuth = draft.auth;
+  const originalAuth = original?.auth;
+  if (draftAuth && isSessionAuthConfig(draftAuth)) {
+    secretStore.discardDraftSessionAuth(
+      draftAuth,
+      originalAuth && isSessionAuthConfig(originalAuth)
+        ? originalAuth
+        : undefined,
+    );
+  }
+  if (
+    originalAuth &&
+    isSessionAuthConfig(originalAuth) &&
+    (!draftAuth ||
+      !isSessionAuthConfig(draftAuth) ||
+      draftAuth.bindingId !== originalAuth.bindingId)
+  ) {
+    secretStore.discardDraftSessionAuth(originalAuth, originalAuth);
+  }
+}
+
+export function assertValidProviderDraftSessionAuthToken(
+  draft: Pick<ProviderFormDraft, 'auth'>,
+): void {
+  if (draft.auth && isSessionAuthConfig(draft.auth)) {
+    assertValidInlineSessionAuthToken(draft.auth);
+  }
+}
 
 async function applyAuthStoragePolicy(options: {
   store: ConfigStore;
@@ -39,7 +155,7 @@ async function applyAuthStoragePolicy(options: {
   existing?: ProviderConfig;
 }): Promise<ProviderConfig> {
   const next = options.provider;
-  const auth = normalizeAuthForProvider(
+  let auth = normalizeAuthForProvider(
     next.auth,
     {
       providerType: next.type,
@@ -54,21 +170,64 @@ async function applyAuthStoragePolicy(options: {
     return next;
   }
 
-  const ctor = getAuthMethodCtor(auth.method);
-  if (!ctor) {
-    return next;
-  }
-
   const storeSecretsInSettings =
     options.store.storeApiKeyInSettings &&
-    ctor.supportsSensitiveDataInSettings(auth);
+    supportsSensitiveAuthInSettings(auth);
   const existingAuth = options.existing?.auth;
 
-  const normalized = await ctor.normalizeOnImport(auth, {
+  if (isSessionAuthConfig(auth)) {
+    const existingBinding =
+      existingAuth &&
+      isSessionAuthConfig(existingAuth) &&
+      isValidAuthBindingId(existingAuth.bindingId)
+        ? existingAuth.bindingId
+        : undefined;
+    auth = {
+      ...auth,
+      bindingId:
+        existingBinding ??
+        (isValidAuthBindingId(auth.bindingId)
+          ? auth.bindingId
+          : createAuthBindingId()),
+    };
+    assertValidInlineSessionAuthToken(auth);
+    auth = discardMismatchedLocalSessionState(
+      {
+        providerName: next.name,
+        providerType: next.type,
+        baseUrl: next.baseUrl,
+        useRawBaseUrl: next.useRawBaseUrl,
+      },
+      auth,
+    );
+    if (auth.method === 'zed' && !auth.token?.trim()) {
+      auth = stripSessionAuthState(auth);
+    }
+  }
+
+  let normalized = await normalizeAuthOnImport(auth, {
     secretStore: options.secretStore,
     storeSecretsInSettings,
     existing: existingAuth?.method === auth.method ? existingAuth : undefined,
   });
+  if (isSessionAuthConfig(normalized)) {
+    const descriptor = {
+      providerName: next.name,
+      providerType: next.type,
+      baseUrl: next.baseUrl,
+      useRawBaseUrl: next.useRawBaseUrl,
+    };
+    const bound = {
+      ...normalized,
+      bindingId: normalized.bindingId,
+    };
+    const intent = await options.secretStore.prepareSessionAuthCommitIntent(
+      descriptor,
+      bound,
+    );
+    options.secretStore.discardPendingSessionAuth(descriptor, bound);
+    normalized = intent;
+  }
   next.auth = normalized;
   return next;
 }
@@ -109,12 +268,115 @@ async function applyBalanceStoragePolicy(options: {
 }
 
 async function syncPersistedProvider(options: {
+  store: ConfigStore;
+  secretStore: SecretStore;
   provider: ProviderConfig;
+  authGuard?: LocalAuthCommitGuard;
+  sourceGuard?: ProviderSourceGuard;
   originalName?: string;
   modelSourceIds?: Readonly<Record<string, string>>;
-}): Promise<void> {
-  if (mainInstance.isLeader()) {
-    return;
+  commitLocalProvider?: (provider: ProviderConfig) => Promise<void>;
+}): Promise<{ provider: ProviderConfig; committedByLeader: boolean }> {
+  const sessionAuth = options.provider.auth;
+  if (!sessionAuth || !isSessionAuthConfig(sessionAuth)) {
+    if (mainInstance.isLeader()) {
+      return { provider: options.provider, committedByLeader: false };
+    }
+    try {
+      await mainInstance.runInLeaderWhenAvailable(
+        'config.syncPersistedProvider',
+        {
+          provider: options.provider,
+          ...(options.originalName &&
+          options.originalName !== options.provider.name
+            ? { originalName: options.originalName }
+            : {}),
+          ...(options.modelSourceIds === undefined
+            ? {}
+            : { modelSourceIds: options.modelSourceIds }),
+        },
+      );
+    } catch (error) {
+      if (
+        !isLeaderUnavailableError(error) &&
+        !isVersionIncompatibleError(error)
+      ) {
+        throw error;
+      }
+    }
+    return { provider: options.provider, committedByLeader: false };
+  }
+
+  const assertSourceCurrent = (): void => {
+    const guard = options.sourceGuard;
+    if (
+      !guard ||
+      !isProviderSourceGuardCurrent(guard, (providerName) =>
+        options.store.getProvider(providerName),
+      )
+    ) {
+      throw new LocalAuthStateConflictError();
+    }
+  };
+
+  const persistLocally = async () => {
+    const auth = options.provider.auth;
+    if (!auth || !isSessionAuthConfig(auth)) {
+      throw new Error('Expected session authentication.');
+    }
+    const descriptor = {
+      providerName: options.provider.name,
+      providerType: options.provider.type,
+      baseUrl: options.provider.baseUrl,
+      useRawBaseUrl: options.provider.useRawBaseUrl,
+    };
+    let transaction: LocalAuthSessionTransaction | undefined;
+    try {
+      assertSourceCurrent();
+      transaction = await options.secretStore.prepareSessionAuthTransaction(
+        descriptor,
+        auth,
+        {
+          reason: 'import',
+          emptyToken: 'preserve',
+          binding: 'existing-or-random',
+          guard: options.authGuard,
+          assertSourceCurrent,
+        },
+      );
+      assertSourceCurrent();
+      return {
+        provider: { ...options.provider, auth: transaction.auth },
+        transaction,
+      };
+    } catch (error) {
+      await transaction?.rollback();
+      options.secretStore.discardPendingSessionAuth(descriptor, auth);
+      throw error;
+    }
+  };
+
+  const persistAndCommitLocally = async (): Promise<{
+    provider: ProviderConfig;
+    committedByLeader: boolean;
+  }> =>
+    mainInstance.runLeaderMutation(async () => {
+      const prepared = await persistLocally();
+      try {
+        await options.commitLocalProvider?.(prepared.provider);
+        prepared.transaction.commit();
+        return {
+          provider: prepared.provider,
+          committedByLeader: options.commitLocalProvider !== undefined,
+        };
+      } catch (error) {
+        await prepared.transaction.rollback();
+        throw error;
+      }
+    });
+
+  if (mainInstance.isLeader() && mainInstance.isReady()) {
+    return await persistAndCommitLocally();
   }
 
   try {
@@ -129,14 +391,67 @@ async function syncPersistedProvider(options: {
         ...(options.modelSourceIds === undefined
           ? {}
           : { modelSourceIds: options.modelSourceIds }),
+        ...(options.authGuard === undefined
+          ? {}
+          : { authGuard: options.authGuard }),
+        ...(options.sourceGuard === undefined
+          ? {}
+          : { sourceGuard: options.sourceGuard }),
       },
     );
+    const auth = options.provider.auth;
+    if (!auth || !isSessionAuthConfig(auth)) {
+      return { provider: options.provider, committedByLeader: true };
+    }
+    const descriptor = {
+      providerName: options.provider.name,
+      providerType: options.provider.type,
+      baseUrl: options.provider.baseUrl,
+      useRawBaseUrl: options.provider.useRawBaseUrl,
+    };
+    await options.secretStore.reloadLocalAuthState(auth.bindingId);
+    options.secretStore.clearPendingSessionAuth(descriptor, auth);
+    return {
+      provider: { ...options.provider, auth: stripSessionAuthState(auth) },
+      committedByLeader: true,
+    };
   } catch (error) {
     if (isLeaderUnavailableError(error) || isVersionIncompatibleError(error)) {
-      return;
+      if (mainInstance.isLeader() && mainInstance.isReady()) {
+        return await persistAndCommitLocally();
+      }
     }
     throw error;
   }
+}
+
+function captureSaveProviderSourceGuard(options: {
+  store: ConfigStore;
+  provider: ProviderConfig;
+  sourceProvider?: ProviderConfig;
+  targetProvider?: ProviderConfig;
+  originalName?: string;
+}): ProviderSourceGuard {
+  const sourceName =
+    options.originalName ??
+    options.sourceProvider?.name ??
+    options.provider.name;
+  const sourceProvider =
+    options.sourceProvider?.name === sourceName
+      ? options.sourceProvider
+      : options.store.getProvider(sourceName);
+  const captures = [{ providerName: sourceName, provider: sourceProvider }];
+  if (sourceName !== options.provider.name) {
+    const targetProvider =
+      options.targetProvider?.name === options.provider.name
+        ? options.targetProvider
+        : options.store.getProvider(options.provider.name);
+    captures.push({
+      providerName: options.provider.name,
+      provider: targetProvider,
+    });
+  }
+  return captureProviderSourceGuard(captures);
 }
 
 export async function saveProviderDraft(options: {
@@ -202,7 +517,33 @@ export async function saveProviderDraft(options: {
   }
 
   const previousProvider = options.existing ?? existingToOverwrite;
+  if (
+    previousProvider?.auth &&
+    isSessionAuthConfig(previousProvider.auth) &&
+    options.draft._authCommitGuard?.bindingId !==
+      previousProvider.auth.bindingId
+  ) {
+    captureDraftAuthCommitGuard(options.draft, options.secretStore, {
+      auth: previousProvider.auth,
+      descriptor: {
+        providerName: previousProvider.name,
+        providerType: previousProvider.type,
+        baseUrl: previousProvider.baseUrl,
+        useRawBaseUrl: previousProvider.useRawBaseUrl,
+      },
+      force: true,
+    });
+  } else if (!options.draft._authCommitGuard) {
+    captureDraftAuthCommitGuard(options.draft, options.secretStore);
+  }
   const normalizedProvider = normalizeProviderDraft(finalDraft);
+  const sourceGuard = captureSaveProviderSourceGuard({
+    store: options.store,
+    provider: normalizedProvider,
+    sourceProvider: previousProvider,
+    targetProvider: existingToOverwrite,
+    originalName: options.originalName,
+  });
 
   const providerWithAuth = await applyAuthStoragePolicy({
     store: options.store,
@@ -210,25 +551,77 @@ export async function saveProviderDraft(options: {
     provider: normalizedProvider,
     existing: previousProvider,
   });
-  const provider = await applyBalanceStoragePolicy({
+  const providerIntent = await applyBalanceStoragePolicy({
     store: options.store,
     secretStore: options.secretStore,
     provider: providerWithAuth,
     existing: options.existing ?? existingToOverwrite,
   });
-  await options.store.upsertProvider(provider, {
-    ...(options.originalName === undefined
-      ? {}
-      : { originalName: options.originalName }),
-    ...(options.draft._completionModelSourceIds === undefined
-      ? {}
-      : { modelSourceIds: options.draft._completionModelSourceIds }),
-  });
-  await syncPersistedProvider({
-    provider,
+  let provider = providerIntent;
+  const hasSessionAuth =
+    providerIntent.auth !== undefined &&
+    isSessionAuthConfig(providerIntent.auth);
+  const syncOptions = {
+    store: options.store,
+    secretStore: options.secretStore,
+    provider: providerIntent,
+    authGuard: resolveDraftAuthCommitGuard(
+      options.draft,
+      providerIntent.auth,
+    ),
+    sourceGuard,
     originalName: options.originalName,
     modelSourceIds: options.draft._completionModelSourceIds,
-  });
+    commitLocalProvider: async (candidate: ProviderConfig) => {
+      const updated = await options.store.upsertProviderIfUnchanged(
+        candidate,
+        {
+          ...(options.originalName === undefined
+            ? {}
+            : { originalName: options.originalName }),
+          ...(options.draft._completionModelSourceIds === undefined
+            ? {}
+            : { modelSourceIds: options.draft._completionModelSourceIds }),
+        },
+        () =>
+          isProviderSourceGuardCurrent(sourceGuard, (providerName) =>
+            options.store.getProvider(providerName),
+          ),
+      );
+      if (!updated) throw new LocalAuthStateConflictError();
+    },
+  };
+  try {
+    let sessionCommittedByLeader = false;
+    if (hasSessionAuth) {
+      const synced = await syncPersistedProvider(syncOptions);
+      provider = synced.provider;
+      sessionCommittedByLeader = synced.committedByLeader;
+    }
+    if (!sessionCommittedByLeader) {
+      await options.store.upsertProvider(provider, {
+        ...(options.originalName === undefined
+          ? {}
+          : { originalName: options.originalName }),
+        ...(options.draft._completionModelSourceIds === undefined
+          ? {}
+          : { modelSourceIds: options.draft._completionModelSourceIds }),
+      });
+    }
+    if (!hasSessionAuth) {
+      await syncPersistedProvider(syncOptions);
+    }
+  } catch (error) {
+    if (!isLocalAuthStateConflictError(error)) throw error;
+    discardDraftAuthState(options.draft, options.secretStore, previousProvider);
+    await vscode.window.showErrorMessage(
+      t(
+        'Authentication changed on this device while this operation was in progress. Please try again.',
+      ),
+      { modal: true },
+    );
+    return 'invalid';
+  }
   const draftSessionId = finalDraft._draftSessionId;
 
   // Handle official models state migration
@@ -274,23 +667,36 @@ export async function duplicateProvider(
 
   const auth = duplicated.auth;
   if (auth && auth.method !== 'none') {
-    const ctor = getAuthMethodCtor(auth.method);
-    if (!ctor) {
-      vscode.window.showErrorMessage(
-        t('Unsupported auth method: {0}', auth.method),
-        { modal: true },
-      );
-      return;
-    }
-
     const storeSecretsInSettings =
-      store.storeApiKeyInSettings && ctor.supportsSensitiveDataInSettings(auth);
+      store.storeApiKeyInSettings && supportsSensitiveAuthInSettings(auth);
 
     try {
-      duplicated.auth = await ctor.prepareForDuplicate(auth, {
+      const authForDuplicate = isSessionAuthConfig(auth)
+        ? await secretStore.prepareSessionAuthCommitIntent(
+            {
+              providerName: provider.name,
+              providerType: provider.type,
+              baseUrl: provider.baseUrl,
+              useRawBaseUrl: provider.useRawBaseUrl,
+            },
+            secretStore.hydrateSessionAuth(
+              {
+                providerName: provider.name,
+                providerType: provider.type,
+                baseUrl: provider.baseUrl,
+                useRawBaseUrl: provider.useRawBaseUrl,
+              },
+              auth,
+            ),
+          )
+        : auth;
+      duplicated.auth = await prepareAuthForDuplicate(authForDuplicate, {
         secretStore,
         storeSecretsInSettings,
       });
+      if (duplicated.auth) {
+        duplicated.auth = renewSessionAuthBinding(duplicated.auth);
+      }
     } catch {
       vscode.window.showErrorMessage(
         t(
@@ -338,8 +744,34 @@ export async function duplicateProvider(
     }
   }
 
-  await store.upsertProvider(duplicated);
-  await syncPersistedProvider({ provider: duplicated });
+  if (duplicated.auth && isSessionAuthConfig(duplicated.auth)) {
+    const duplicateSourceGuard = captureProviderSourceGuard([
+      { providerName: duplicated.name, provider: undefined },
+    ]);
+    const persistedDuplicate = await syncPersistedProvider({
+      store,
+      secretStore,
+      provider: duplicated,
+      sourceGuard: duplicateSourceGuard,
+      commitLocalProvider: async (candidate) => {
+        const updated = await store.upsertProviderIfUnchanged(
+          candidate,
+          {},
+          () =>
+            isProviderSourceGuardCurrent(duplicateSourceGuard, (providerName) =>
+              store.getProvider(providerName),
+            ),
+        );
+        if (!updated) throw new LocalAuthStateConflictError();
+      },
+    });
+    if (!persistedDuplicate.committedByLeader) {
+      await store.upsertProvider(persistedDuplicate.provider);
+    }
+  } else {
+    await store.upsertProvider(duplicated);
+    await syncPersistedProvider({ store, secretStore, provider: duplicated });
+  }
   vscode.window.showInformationMessage(
     t('Provider duplicated as "{0}".', newName),
   );
@@ -348,7 +780,12 @@ export async function duplicateProvider(
 export function buildProviderConfigFromDraft(
   draft: ProviderFormDraft,
 ): Partial<ProviderConfig> {
-  const { _draftSessionId: _, ...rest } = deepClone(draft);
+  const {
+    _draftSessionId: _draftSessionId,
+    _completionModelSourceIds: _completionModelSourceIds,
+    _authCommitGuard: _authCommitGuard,
+    ...rest
+  } = deepClone(draft);
   const source: Partial<ProviderConfig> = {
     ...rest,
     name: draft.name?.trim() || undefined,

@@ -726,8 +726,11 @@ async function executeV3(
   const startedAt = Date.now();
   let backoffKey: string | undefined;
   try {
-    const port = getZedCompletionSessionPort();
-    const policy = await port.getPolicySnapshot(context, token);
+    const session = await getZedCompletionSessionPort().openSession(
+      context,
+      token,
+    );
+    const { policy } = session;
     backoffKey = policy.backoffKey;
     if (inBackoff(backoffKey)) return emptyResponse();
     const collection = await evaluateZedDataCollection(
@@ -735,8 +738,7 @@ async function executeV3(
       policy,
     );
     const body = buildZedV3RequestBody(request, collection);
-    const result = await port.predictV3(
-      context,
+    const result = await session.predictV3(
       body,
       {
         trigger: request.trigger,
@@ -899,8 +901,11 @@ async function executeV4(
   const startedAt = Date.now();
   let backoffKey: string | undefined;
   try {
-    const port = getZedCompletionSessionPort();
-    const policy = await port.getPolicySnapshot(context, token);
+    const session = await getZedCompletionSessionPort().openSession(
+      context,
+      token,
+    );
+    const { policy } = session;
     backoffKey = policy.backoffKey;
     if (inBackoff(backoffKey)) return emptyResponse();
     const collection = await evaluateZedDataCollection(
@@ -908,8 +913,7 @@ async function executeV4(
       policy,
     );
     const body = buildZedV4RequestBody(request, collection);
-    const result = await port.predictV4(
-      context,
+    const result = await session.predictV4(
       body,
       {
         trigger: request.trigger,

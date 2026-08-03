@@ -142,18 +142,18 @@ function parseOrganizationConfiguration(
   value: unknown,
 ): { isEnabled: boolean; isFeedbackEnabled: boolean } {
   if (!isRecord(value)) {
-    return { isEnabled: true, isFeedbackEnabled: true };
+    return { isEnabled: true, isFeedbackEnabled: false };
   }
   const editPrediction = value['edit_prediction'];
   if (!isRecord(editPrediction)) {
-    return { isEnabled: true, isFeedbackEnabled: true };
+    return { isEnabled: true, isFeedbackEnabled: false };
   }
   return {
     isEnabled: booleanOrDefault(editPrediction, 'is_enabled', true),
     isFeedbackEnabled: booleanOrDefault(
       editPrediction,
       'is_feedback_enabled',
-      true,
+      false,
     ),
   };
 }

@@ -12,7 +12,7 @@ import {
   ProviderConfig,
   ModelConfig,
 } from '../../types';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import OpenAI from 'openai';
 import {
   decodeStatefulMarkerPart,
@@ -101,6 +101,7 @@ import {
  * - `disable_reasoning`            — Cerebras GLM `disable_reasoning` boolean
  * - `enable_thinking`              — Qwen / SiliconFlow `enable_thinking` boolean
  * - `enable_thinking_with_budget`  — Qwen / SiliconFlow `enable_thinking` + `thinking_budget`
+ * - `enable_thinking_with_reasoning_effort` — Qwen `enable_thinking` + `reasoning_effort`
  * - `official`                     — Standard OpenAI `reasoning_effort`
  */
 type ReasoningParamType =
@@ -112,7 +113,8 @@ type ReasoningParamType =
   | 'official'
   | 'disable_reasoning'
   | 'enable_thinking'
-  | 'enable_thinking_with_budget';
+  | 'enable_thinking_with_budget'
+  | 'enable_thinking_with_reasoning_effort';
 
 type OpenRouterThinkingContentType = 'summary' | 'encrypted' | 'content';
 
@@ -799,6 +801,23 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         return { enable_thinking: true };
       }
 
+      // Qwen 3.8 — `reasoning_effort` controls the native low/medium/xhigh
+      // levels and cannot be combined with `thinking_budget`.
+      case 'enable_thinking_with_reasoning_effort': {
+        if (!thinking) return {};
+        if (isDisabled) return { enable_thinking: false };
+        return {
+          enable_thinking: true,
+          ...(thinking.effort === undefined
+            ? {}
+            : {
+                reasoning_effort: this.normalizeReasoningEffortForOpenAi(
+                  thinking.effort,
+                ),
+              }),
+        };
+      }
+
       // Standard OpenAI — `reasoning_effort` only
       // @see https://platform.openai.com/docs/api-reference/chat/create
       case 'official': {
@@ -1083,9 +1102,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     } else if (useDisableReasoningParam) {
       thinkingParamType = 'disable_reasoning';
     } else if (useThinkingParam3) {
-      thinkingParamType = useThinkingBudgetParam
-        ? 'enable_thinking_with_budget'
-        : 'enable_thinking';
+      thinkingParamType = useReasoningEffortParam
+        ? 'enable_thinking_with_reasoning_effort'
+        : useThinkingBudgetParam
+          ? 'enable_thinking_with_budget'
+          : 'enable_thinking';
     } else {
       thinkingParamType = 'official';
     }
@@ -1871,7 +1892,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     return sharedEstimateTokenCount(text);
   }
 
-  async getAvailableModels(credential: AuthTokenInfo): Promise<ModelConfig[]> {
+  async getAvailableModels(
+    credential: AuthTokenInfo,
+    _refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
+  ): Promise<ModelConfig[]> {
     const logger = createSimpleHttpLogger({
       purpose: 'Get Available Models',
       providerName: this.config.name,
@@ -1888,6 +1913,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       );
       const page = await client.models.list({
         headers: this.buildHeaders(credential),
+        signal,
       });
       for await (const model of page) {
         const name = model.name?.trim();

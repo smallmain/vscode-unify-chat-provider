@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
+import { execFile } from 'node:child_process';
 import {
   chmod,
   mkdir,
@@ -14,6 +15,12 @@ import * as sudoPrompt from '@vscode/sudo-prompt';
 
 const PRODUCT_FILE_NAME = 'product.json';
 const BACKUP_DIRECTORY_NAME = 'proposed-api-product-backups';
+const POWERSHELL_COMMAND_PREFIX =
+  'powershell.exe -NoProfile -NonInteractive -EncodedCommand ';
+const ELEVATION_CANCELLED_EXIT_CODE = 72;
+const CONCURRENT_CHANGE_EXIT_CODE = 73;
+const ELEVATION_FAILED_EXIT_CODE = 74;
+const MAX_ELEVATION_DIAGNOSTIC_LENGTH = 4_000;
 
 export type ProductJsonErrorCode =
   | 'unsupported-web'
@@ -29,13 +36,24 @@ export type ProductJsonErrorCode =
   | 'verification-failed';
 
 export class ProductJsonError extends Error {
+  readonly targetPath: string | undefined;
+  readonly exitCode: number | undefined;
+  readonly stderr: string | undefined;
+
   constructor(
     readonly code: ProductJsonErrorCode,
     message: string,
-    options?: ErrorOptions,
+    options?: ErrorOptions & {
+      readonly targetPath?: string;
+      readonly exitCode?: number;
+      readonly stderr?: string;
+    },
   ) {
     super(message, options);
     this.name = 'ProductJsonError';
+    this.targetPath = options?.targetPath;
+    this.exitCode = options?.exitCode;
+    this.stderr = options?.stderr;
   }
 }
 
@@ -388,6 +406,115 @@ function quotePowerShellLiteral(value: string): string {
   return `'${value.replaceAll("'", "''")}'`;
 }
 
+function encodePowerShellScript(script: string): string {
+  return Buffer.from(script, 'utf16le').toString('base64');
+}
+
+function buildPowerShellCommand(script: string): string {
+  return `${POWERSHELL_COMMAND_PREFIX}${encodePowerShellScript(script)}`;
+}
+
+function buildWindowsElevationLauncher(elevatedScript: string): string {
+  const elevatedArguments = [
+    '-NoProfile',
+    '-NonInteractive',
+    '-EncodedCommand',
+    encodePowerShellScript(elevatedScript),
+  ].join(' ');
+  return [
+    `$ErrorActionPreference = 'Stop'`,
+    'try {',
+    `$process = Start-Process -FilePath (Join-Path $PSHOME 'powershell.exe') -ArgumentList ${quotePowerShellLiteral(
+      elevatedArguments,
+    )} -WindowStyle Hidden -Verb RunAs -Wait -PassThru`,
+    'exit $process.ExitCode',
+    '} catch {',
+    '$nativeCode = $_.Exception.NativeErrorCode',
+    '$innerNativeCode = $_.Exception.InnerException.NativeErrorCode',
+    '$hresultCode = $_.Exception.HResult -band 0xffff',
+    `if ($nativeCode -eq 1223 -or $innerNativeCode -eq 1223 -or $hresultCode -eq 1223) { exit ${ELEVATION_CANCELLED_EXIT_CODE} }`,
+    '[Console]::Error.WriteLine(($_ | Out-String))',
+    `exit ${ELEVATION_FAILED_EXIT_CODE}`,
+    '}',
+  ].join('\n');
+}
+
+function buildWindowsProductJsonScript(
+  sourcePath: string,
+  targetPath: string,
+  temporaryPath: string,
+  diagnosticPath: string,
+  expectedHash: string,
+): string {
+  const source = quotePowerShellLiteral(sourcePath);
+  const target = quotePowerShellLiteral(targetPath);
+  const temporary = quotePowerShellLiteral(temporaryPath);
+  const diagnostic = quotePowerShellLiteral(diagnosticPath);
+  return [
+    `$ErrorActionPreference = 'Stop'`,
+    `Remove-Item -LiteralPath ${diagnostic} -Force -ErrorAction SilentlyContinue`,
+    'function Get-FileSha256 {',
+    'param([string]$FilePath)',
+    '$stream = [System.IO.File]::OpenRead($FilePath)',
+    'try {',
+    '$hasher = [System.Security.Cryptography.SHA256]::Create()',
+    'try {',
+    "return ([System.BitConverter]::ToString($hasher.ComputeHash($stream))).Replace('-', '').ToLowerInvariant()",
+    '} finally {',
+    '$hasher.Dispose()',
+    '}',
+    '} finally {',
+    '$stream.Dispose()',
+    '}',
+    '}',
+    'try {',
+    `$currentHash = Get-FileSha256 -FilePath ${target}`,
+    `if ($currentHash -ne '${expectedHash}') { exit ${CONCURRENT_CHANGE_EXIT_CODE} }`,
+    `Copy-Item -LiteralPath ${source} -Destination ${temporary} -Force`,
+    'try {',
+    `[System.IO.File]::Replace(${temporary}, ${target}, $null, $true)`,
+    '} catch {',
+    `$fallbackHash = Get-FileSha256 -FilePath ${target}`,
+    `if ($fallbackHash -ne '${expectedHash}') { exit ${CONCURRENT_CHANGE_EXIT_CODE} }`,
+    `Copy-Item -LiteralPath ${source} -Destination ${target} -Force`,
+    '}',
+    '} catch {',
+    `try { [System.IO.File]::WriteAllText(${diagnostic}, ($_ | Out-String)) } catch { }`,
+    `exit ${ELEVATION_FAILED_EXIT_CODE}`,
+    '} finally {',
+    `Remove-Item -LiteralPath ${temporary} -Force -ErrorAction SilentlyContinue`,
+    '}',
+    'exit 0',
+  ].join('\n');
+}
+
+function buildPosixProductJsonScript(
+  sourcePath: string,
+  targetPath: string,
+  temporaryPath: string,
+  mode: number,
+  expectedHash: string,
+): string {
+  const permissions = (mode & 0o777).toString(8).padStart(3, '0');
+  return [
+    'set -e',
+    'umask 077',
+    `trap ${quoteShellArgument(
+      `rm -f ${quoteShellArgument(temporaryPath)}`,
+    )} EXIT`,
+    `if command -v sha256sum >/dev/null 2>&1; then current_hash=$(sha256sum ${quoteShellArgument(
+      targetPath,
+    )} | awk '{print $1}'); else current_hash=$(shasum -a 256 ${quoteShellArgument(
+      targetPath,
+    )} | awk '{print $1}'); fi`,
+    `[ "$current_hash" = ${quoteShellArgument(expectedHash)} ] || exit ${CONCURRENT_CHANGE_EXIT_CODE}`,
+    `cp ${quoteShellArgument(sourcePath)} ${quoteShellArgument(temporaryPath)}`,
+    `chmod ${permissions} ${quoteShellArgument(temporaryPath)}`,
+    `mv -f ${quoteShellArgument(temporaryPath)} ${quoteShellArgument(targetPath)}`,
+    'trap - EXIT',
+  ].join('\n');
+}
+
 export function buildProductJsonElevatedCommand(
   environment: ProductJsonEnvironment,
   sourcePath: string,
@@ -409,43 +536,232 @@ export function buildProductJsonElevatedCommand(
   validateCommandPath(targetPath);
   validateCommandPath(temporaryPath);
   if (environment.platform === 'win32') {
-    const source = quotePowerShellLiteral(sourcePath);
-    const target = quotePowerShellLiteral(targetPath);
-    const temporary = quotePowerShellLiteral(temporaryPath);
-    const script = [
-      `$ErrorActionPreference = 'Stop'`,
-      `$currentHash = (Get-FileHash -Algorithm SHA256 -LiteralPath ${target}).Hash.ToLowerInvariant()`,
-      `if ($currentHash -ne '${expectedHash}') { exit 73 }`,
-      `try { Copy-Item -LiteralPath ${source} -Destination ${temporary} -Force; [System.IO.File]::Replace(${temporary}, ${target}, $null) }`,
-      `finally { Remove-Item -LiteralPath ${temporary} -Force -ErrorAction SilentlyContinue }`,
-    ].join('; ');
-    const encodedScript = Buffer.from(script, 'utf16le').toString('base64');
-    return `powershell.exe -NoProfile -NonInteractive -EncodedCommand ${encodedScript}`;
+    const diagnosticPath = `${sourcePath}.elevated-error.txt`;
+    validateCommandPath(diagnosticPath);
+    const elevatedScript = buildWindowsProductJsonScript(
+      sourcePath,
+      targetPath,
+      temporaryPath,
+      diagnosticPath,
+      expectedHash,
+    );
+    return buildPowerShellCommand(
+      buildWindowsElevationLauncher(elevatedScript),
+    );
   }
 
-  const permissions = (mode & 0o777).toString(8).padStart(3, '0');
-  const script = [
-    'set -e',
-    'umask 077',
-    `trap ${quoteShellArgument(
-      `rm -f ${quoteShellArgument(temporaryPath)}`,
-    )} EXIT`,
-    `if command -v sha256sum >/dev/null 2>&1; then current_hash=$(sha256sum ${quoteShellArgument(
-      targetPath,
-    )} | awk '{print $1}'); else current_hash=$(shasum -a 256 ${quoteShellArgument(
-      targetPath,
-    )} | awk '{print $1}'); fi`,
-    `[ "$current_hash" = ${quoteShellArgument(expectedHash)} ] || exit 73`,
-    `cp ${quoteShellArgument(sourcePath)} ${quoteShellArgument(temporaryPath)}`,
-    `chmod ${permissions} ${quoteShellArgument(temporaryPath)}`,
-    `mv -f ${quoteShellArgument(temporaryPath)} ${quoteShellArgument(targetPath)}`,
-    'trap - EXIT',
-  ].join('\n');
-  return `/bin/sh -c ${quoteShellArgument(script)}`;
+  const script = buildPosixProductJsonScript(
+    sourcePath,
+    targetPath,
+    temporaryPath,
+    mode,
+    expectedHash,
+  );
+  const encodedScript = Buffer.from(script, 'utf8').toString('base64');
+  const decodeFlag = environment.platform === 'darwin' ? '-D' : '-d';
+  const decodeCommand = `printf %s ${encodedScript} | base64 ${decodeFlag} | /bin/sh`;
+  return `/bin/bash -o pipefail -c ${quoteShellArgument(decodeCommand)}`;
 }
 
 function isElevationCancellation(error: Error): boolean {
   return /cancel|canceled|cancelled|did not grant|denied/i.test(error.message);
+}
+
+function getNumericErrorCode(error: unknown): number | undefined {
+  if (typeof error !== 'object' || error === null) {
+    return undefined;
+  }
+  const value: unknown = Reflect.get(error, 'code');
+  if (typeof value === 'number' && Number.isInteger(value)) {
+    return value;
+  }
+  if (typeof value === 'string' && /^\d+$/.test(value)) {
+    return Number(value);
+  }
+  return undefined;
+}
+
+function outputToString(output: string | Buffer | undefined): string {
+  if (output === undefined) {
+    return '';
+  }
+  return typeof output === 'string' ? output : output.toString('utf8');
+}
+
+function truncateElevationDiagnostic(value: string): string {
+  const trimmed = value.trim();
+  if (trimmed.length <= MAX_ELEVATION_DIAGNOSTIC_LENGTH) {
+    return trimmed;
+  }
+  return `${trimmed.slice(0, MAX_ELEVATION_DIAGNOSTIC_LENGTH)}\n[truncated]`;
+}
+
+class ElevatedProcessError extends Error {
+  readonly exitCode: number | undefined;
+
+  constructor(
+    cause: Error,
+    readonly stdout: string,
+    readonly stderr: string,
+  ) {
+    const exitCode = getNumericErrorCode(cause);
+    super(
+      exitCode === undefined
+        ? 'The elevation launcher failed.'
+        : `The elevation launcher exited with code ${exitCode}.`,
+      { cause },
+    );
+    this.name = 'ElevatedProcessError';
+    this.exitCode = exitCode;
+  }
+}
+
+function executeFile(
+  executable: string,
+  args: readonly string[],
+): Promise<void> {
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      executable,
+      [...args],
+      { encoding: 'utf8', windowsHide: true },
+      (error, stdout, stderr) => {
+        if (!error) {
+          resolvePromise();
+          return;
+        }
+        rejectPromise(
+          new ElevatedProcessError(
+            error,
+            outputToString(stdout),
+            outputToString(stderr),
+          ),
+        );
+      },
+    );
+  });
+}
+
+async function readElevationDiagnostic(
+  diagnosticPath: string,
+): Promise<string | undefined> {
+  try {
+    return truncateElevationDiagnostic(
+      (await readFile(diagnosticPath)).toString('utf8'),
+    );
+  } catch (error) {
+    return getErrorCode(error) === 'ENOENT'
+      ? undefined
+      : `Unable to read elevated-process diagnostics (${getErrorCode(error) ?? 'unknown error'}).`;
+  }
+}
+
+function createElevatedWriteError(
+  error: Error,
+  targetPath: string,
+  processOutput?: string | Buffer,
+  diagnostic?: string,
+): ProductJsonError {
+  const exitCode =
+    error instanceof ElevatedProcessError
+      ? error.exitCode
+      : getNumericErrorCode(error);
+  const stderr = truncateElevationDiagnostic(
+    [
+      diagnostic,
+      error instanceof ElevatedProcessError ? error.stderr : undefined,
+      outputToString(processOutput),
+    ]
+      .filter((value): value is string => Boolean(value))
+      .join('\n'),
+  );
+  const options = {
+    cause: error,
+    targetPath,
+    exitCode,
+    stderr: stderr || undefined,
+  };
+  if (exitCode === CONCURRENT_CHANGE_EXIT_CODE) {
+    return new ProductJsonError(
+      'concurrent-change',
+      `product.json changed before the administrator write at ${JSON.stringify(targetPath)}. No changes were written (exit code ${exitCode}).`,
+      options,
+    );
+  }
+  if (
+    exitCode === ELEVATION_CANCELLED_EXIT_CODE ||
+    isElevationCancellation(error)
+  ) {
+    return new ProductJsonError(
+      'cancelled',
+      `Administrator authorization was cancelled for ${JSON.stringify(targetPath)}.`,
+      options,
+    );
+  }
+  const exitDetail =
+    exitCode === undefined ? '' : ` Exit code: ${exitCode}.`;
+  const stderrDetail = stderr ? ` ${stderr}` : '';
+  return new ProductJsonError(
+    'write-failed',
+    `The administrator write operation failed for ${JSON.stringify(targetPath)}.${exitDetail}${stderrDetail}`,
+    options,
+  );
+}
+
+async function writeWithWindowsElevation(
+  command: string,
+  sourcePath: string,
+  targetPath: string,
+): Promise<void> {
+  if (!command.startsWith(POWERSHELL_COMMAND_PREFIX)) {
+    throw new ProductJsonError(
+      'write-failed',
+      'The Windows elevation command could not be represented safely.',
+      { targetPath },
+    );
+  }
+  const encodedLauncher = command.slice(POWERSHELL_COMMAND_PREFIX.length);
+  const diagnosticPath = `${sourcePath}.elevated-error.txt`;
+  await unlinkIfPresent(diagnosticPath);
+  try {
+    await executeFile('powershell.exe', [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      encodedLauncher,
+    ]);
+  } catch (error) {
+    if (!(error instanceof Error)) {
+      throw error;
+    }
+    throw createElevatedWriteError(
+      error,
+      targetPath,
+      undefined,
+      await readElevationDiagnostic(diagnosticPath),
+    );
+  } finally {
+    await unlinkIfPresent(diagnosticPath);
+  }
+}
+
+function writeWithSudoPromptElevation(
+  command: string,
+  targetPath: string,
+): Promise<void> {
+  return new Promise<void>((resolvePromise, rejectPromise) => {
+    sudoPrompt.exec(
+      command,
+      { name: 'Unify Chat Provider' },
+      (error?: Error, _stdout?: string | Buffer, stderr?: string | Buffer) => {
+        if (!error) {
+          resolvePromise();
+          return;
+        }
+        rejectPromise(createElevatedWriteError(error, targetPath, stderr));
+      },
+    );
+  });
 }
 
 async function writeWithElevation(
@@ -462,34 +778,11 @@ async function writeWithElevation(
     mode,
     expectedHash,
   );
-  await new Promise<void>((resolvePromise, rejectPromise) => {
-    sudoPrompt.exec(
-      command,
-      { name: 'Unify Chat Provider' },
-      (error?: Error) => {
-        if (!error) {
-          resolvePromise();
-          return;
-        }
-        const errorCode: unknown = Reflect.get(error, 'code');
-        rejectPromise(
-          new ProductJsonError(
-            errorCode === 73
-              ? 'concurrent-change'
-              : isElevationCancellation(error)
-                ? 'cancelled'
-                : 'write-failed',
-            errorCode === 73
-              ? 'product.json changed before the administrator write. No changes were written.'
-              : isElevationCancellation(error)
-                ? 'Administrator authorization was cancelled.'
-                : 'The administrator write operation failed.',
-            { cause: error },
-          ),
-        );
-      },
-    );
-  });
+  if (environment.platform === 'win32') {
+    await writeWithWindowsElevation(command, sourcePath, targetPath);
+    return;
+  }
+  await writeWithSudoPromptElevation(command, targetPath);
 }
 
 async function assertHashUnchanged(

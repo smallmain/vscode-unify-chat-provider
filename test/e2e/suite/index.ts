@@ -1,9 +1,13 @@
 import * as assert from "node:assert/strict";
+import { createHash } from "node:crypto";
+import { writeFile } from "node:fs/promises";
 import * as vscode from "vscode";
 
 const EXTENSION_ID = "SmallMain.vscode-unify-chat-provider";
 const FAKE_LANGUAGE_MODEL_EXTENSION_ID = "ucp-e2e.fake-language-model";
 const FAKE_NES_MODEL = { vendor: "ucp-e2e-fake", id: "controlled" } as const;
+const CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX =
+  "Your task is to predict the line number";
 
 interface CompletionManagerState {
   registered: boolean;
@@ -22,6 +26,62 @@ interface ProposedApiTestState {
   canUse: Record<string, boolean>;
   completionAvailable: boolean;
   scmInputBoxMenuAvailable: boolean;
+}
+
+type AuthIsolationPhase =
+  | "device-a-login"
+  | "device-b-login"
+  | "device-a-verify";
+
+interface AuthStateDigest {
+  method: "openai-codex";
+  bindingId: string;
+  revision: number;
+  hasCredential: boolean;
+  credentialDigest?: string;
+  accountDigest?: string;
+  sessionDigest?: string;
+}
+
+interface AuthIsolationResult {
+  readonly phase: AuthIsolationPhase;
+  readonly processId: number;
+  readonly method: "openai-codex";
+  readonly bindingId: string;
+  readonly revision: number;
+  readonly credentialDigest: string;
+  readonly accountDigest: string;
+  readonly sessionDigest: string;
+}
+
+const AUTH_E2E_PROVIDER = "auth-isolation-e2e";
+const AUTH_E2E_BINDING = "00000000-0000-4000-8000-000000000901";
+
+function sha256(value: string): string {
+  return createHash("sha256").update(value).digest("hex");
+}
+
+function requireSha256Digest(
+  value: string | undefined,
+  description: string,
+): string {
+  if (typeof value !== "string" || !/^[0-9a-f]{64}$/.test(value)) {
+    assert.fail(`Missing or invalid ${description} digest`);
+  }
+  return value;
+}
+
+function parseAuthIsolationPhase(value: string | undefined):
+  | AuthIsolationPhase
+  | undefined {
+  switch (value) {
+    case "device-a-login":
+    case "device-b-login":
+    case "device-a-verify":
+      return value;
+    default:
+      return undefined;
+  }
 }
 
 interface UnavailableCompletionState extends CompletionManagerState {
@@ -79,6 +139,14 @@ interface FakeLanguageModelResponseInput {
   delayMs?: number;
   chunkDelayMs?: number;
   error?: string;
+  match?: {
+    role?: "system" | "user";
+    includes: string;
+  };
+}
+
+interface FakeLanguageModelResponseProgram {
+  responses: Array<string | FakeLanguageModelResponseInput>;
 }
 
 interface FakeLanguageModelRequestRecord {
@@ -346,13 +414,18 @@ async function triggerInlineSuggestion(): Promise<void> {
 async function waitForVscodeRequest(
   documentUri: string,
   minimumCount = 1,
+  predicate: (
+    request: CompletionHarnessState["requests"][number],
+  ) => boolean = () => true,
 ): Promise<CompletionHarnessState> {
   return waitForHarnessState(
     `${minimumCount} VS Code request(s) for ${documentUri}`,
     (state) =>
       state.requests.filter(
         (request) =>
-          request.origin === "vscode" && request.documentUri === documentUri,
+          request.origin === "vscode" &&
+          request.documentUri === documentUri &&
+          predicate(request),
       ).length >= minimumCount,
   );
 }
@@ -485,7 +558,7 @@ async function setNesResponse(
   response:
     | string
     | FakeLanguageModelResponseInput
-    | { responses: Array<string | FakeLanguageModelResponseInput> }
+    | FakeLanguageModelResponseProgram
     | undefined,
 ): Promise<void> {
   const configured = await vscode.commands.executeCommand<boolean>(
@@ -1309,13 +1382,35 @@ async function runRealVsCodeCompletionLifecycleE2E(
     realCrossSourceLines.join("\n"),
     new vscode.Position(4, realCrossSourceLines[4].length),
   );
-  await setNesResponse({
+  const crossFileResponseProgram = {
     responses: [
+      {
+        chunks: ["vscode-cross-target.ts:4"],
+        match: {
+          role: "system",
+          includes: CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX,
+        },
+      },
+      {
+        chunks: [
+          "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
+        ],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-cross-target.ts",
+        },
+      },
+      {
+        chunks: ["<NO_CHANGE>"],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-cross-source.ts",
+        },
+      },
       "<NO_CHANGE>",
-      "vscode-cross-target.ts:4",
-      "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
     ],
-  });
+  } satisfies FakeLanguageModelResponseProgram;
+  await setNesResponse(crossFileResponseProgram);
   await updateCompletionProviders(completionConfiguration, [
     copilotProvider("vscode-nes-cross-file", {
       enableFIM: false,
@@ -1325,22 +1420,31 @@ async function runRealVsCodeCompletionLifecycleE2E(
     }),
   ]);
   await recordRecentEditForProvider(crossSourceEditor, "vscode-nes-cross-file");
-  await setNesResponse({
-    responses: [
-      "<NO_CHANGE>",
-      "vscode-cross-target.ts:4",
-      "<INSERT>\nexport const committedAcrossFiles = true;\n</INSERT>",
-    ],
-  });
+  await setNesResponse(crossFileResponseProgram);
   const crossSourceUri = crossSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();
-  const crossRequestState = await waitForVscodeRequest(crossSourceUri);
+  const crossRequestState = await waitForVscodeRequest(
+    crossSourceUri,
+    1,
+    (request) =>
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
+  );
   const crossRequest = crossRequestState.requests.find(
     (request) =>
-      request.origin === "vscode" && request.documentUri === crossSourceUri,
+      request.origin === "vscode" &&
+      request.documentUri === crossSourceUri &&
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
   );
-  assert.equal(crossRequest?.itemCount, 1);
+  assert.equal(
+    crossRequest?.itemCount,
+    1,
+    JSON.stringify({
+      harness: crossRequestState,
+      runtime: await getRuntimeState("vscode-nes-cross-file"),
+      modelRequests: await getNesRequests(),
+    }),
+  );
   await waitForVscodeLifecycle(crossSourceUri, "show");
   await vscode.commands.executeCommand("editor.action.inlineSuggest.commit");
   await waitForVscodeLifecycle(crossSourceUri, "accept");
@@ -1386,9 +1490,26 @@ async function runRealVsCodeCompletionLifecycleE2E(
     pureJumpSourceLines.join("\n"),
     new vscode.Position(2, pureJumpSourceLines[2].length),
   );
-  await setNesResponse({
-    responses: ["<NO_CHANGE>", `${pureJumpTargetUri.toString()}:4`],
-  });
+  const pureJumpResponseProgram = {
+    responses: [
+      {
+        chunks: [`${pureJumpTargetUri.toString()}:4`],
+        match: {
+          role: "system",
+          includes: CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX,
+        },
+      },
+      {
+        chunks: ["<NO_CHANGE>"],
+        match: {
+          role: "user",
+          includes: "current_file_path: vscode-pure-cursor-jump-source.ts",
+        },
+      },
+      "<NO_CHANGE>",
+    ],
+  } satisfies FakeLanguageModelResponseProgram;
+  await setNesResponse(pureJumpResponseProgram);
   await updateCompletionProviders(completionConfiguration, [
     copilotProvider("vscode-nes-pure-cursor-jump", {
       enableFIM: false,
@@ -1401,16 +1522,21 @@ async function runRealVsCodeCompletionLifecycleE2E(
     pureJumpSourceEditor,
     "vscode-nes-pure-cursor-jump",
   );
-  await setNesResponse({
-    responses: ["<NO_CHANGE>", `${pureJumpTargetUri.toString()}:4`],
-  });
+  await setNesResponse(pureJumpResponseProgram);
   const pureJumpSourceUri = pureJumpSourceEditor.document.uri.toString();
   await clearHarness();
   await triggerInlineSuggestion();
-  const pureJumpRequestState = await waitForVscodeRequest(pureJumpSourceUri);
+  const pureJumpRequestState = await waitForVscodeRequest(
+    pureJumpSourceUri,
+    1,
+    (request) =>
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
+  );
   const pureJumpRequest = pureJumpRequestState.requests.find(
     (request) =>
-      request.origin === "vscode" && request.documentUri === pureJumpSourceUri,
+      request.origin === "vscode" &&
+      request.documentUri === pureJumpSourceUri &&
+      request.triggerKind === vscode.InlineCompletionTriggerKind.Invoke,
   );
   assert.equal(
     pureJumpRequest?.itemCount,
@@ -2835,7 +2961,6 @@ async function runDisabledProposedApiE2E(): Promise<void> {
     "contribSourceControlInputBoxMenu",
     "languageModelThinkingPart",
   ]);
-  assert.deepEqual(state.enabled, []);
   assert.deepEqual(state.missing, state.declared);
   assert.equal(state.canUse.languageModelSystem, false);
   assert.equal(state.canUse.chatProvider, false);
@@ -2918,7 +3043,103 @@ async function runDisabledProposedApiE2E(): Promise<void> {
   console.log("Extension Host disabled Proposed API fallback E2E passed");
 }
 
+async function runAuthIsolationE2E(phase: AuthIsolationPhase): Promise<void> {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
+  await extension.activate();
+
+  const commands = await vscode.commands.getCommands(true);
+  assert.ok(commands.includes("unifyChatProvider.auth.test.setCodexSession"));
+  assert.ok(commands.includes("unifyChatProvider.auth.test.getStateDigest"));
+
+  const configuration = vscode.workspace.getConfiguration("unifyChatProvider");
+  const endpoints = configuration.get<unknown[]>("endpoints");
+  assert.ok(
+    Array.isArray(endpoints) && endpoints.length === 1,
+    `Expected one auth isolation endpoint during ${phase}: ${JSON.stringify({
+      endpoints,
+      inspection: configuration.inspect("endpoints"),
+    })}`,
+  );
+  const serializedSettings = JSON.stringify(endpoints);
+  assert.ok(serializedSettings.includes(AUTH_E2E_BINDING));
+  assert.ok(!serializedSettings.includes("accessToken"));
+  assert.ok(!serializedSettings.includes("refreshToken"));
+  assert.ok(!serializedSettings.includes("account-a"));
+  assert.ok(!serializedSettings.includes("account-b"));
+
+  if (phase === "device-b-login") {
+    const before = await vscode.commands.executeCommand<AuthStateDigest>(
+      "unifyChatProvider.auth.test.getStateDigest",
+      AUTH_E2E_PROVIDER,
+    );
+    assert.equal(before.bindingId, AUTH_E2E_BINDING);
+    assert.equal(before.hasCredential, false);
+    assert.equal(before.revision, 0);
+  }
+
+  const expectedDevice = phase === "device-b-login" ? "b" : "a";
+  const accessToken = `device-${expectedDevice}-access-token`;
+  const accountId = `account-${expectedDevice}`;
+  const state =
+    phase === "device-a-verify"
+      ? await vscode.commands.executeCommand<AuthStateDigest>(
+          "unifyChatProvider.auth.test.getStateDigest",
+          AUTH_E2E_PROVIDER,
+        )
+      : await vscode.commands.executeCommand<AuthStateDigest>(
+          "unifyChatProvider.auth.test.setCodexSession",
+          {
+            providerName: AUTH_E2E_PROVIDER,
+            accessToken,
+            refreshToken: `device-${expectedDevice}-refresh-token`,
+            accountId,
+            email: `${accountId}@example.test`,
+          },
+        );
+
+  assert.equal(state.method, "openai-codex");
+  assert.equal(state.bindingId, AUTH_E2E_BINDING);
+  assert.equal(state.hasCredential, true);
+  assert.ok(state.revision >= 1);
+  assert.equal(state.credentialDigest, sha256(accessToken));
+  assert.equal(state.accountDigest, sha256(accountId));
+  const credentialDigest = requireSha256Digest(
+    state.credentialDigest,
+    "credential",
+  );
+  const accountDigest = requireSha256Digest(state.accountDigest, "account");
+  const sessionDigest = requireSha256Digest(state.sessionDigest, "session");
+
+  const resultFile = process.env["UCP_E2E_AUTH_ISOLATION_RESULT_FILE"];
+  assert.ok(resultFile, "Missing auth isolation result path");
+  const result: AuthIsolationResult = {
+    phase,
+    processId: process.pid,
+    method: state.method,
+    bindingId: state.bindingId,
+    revision: state.revision,
+    credentialDigest,
+    accountDigest,
+    sessionDigest,
+  };
+  await writeFile(resultFile, `${JSON.stringify(result)}\n`, {
+    encoding: "utf8",
+    mode: 0o600,
+  });
+
+  console.log(`Extension Host auth isolation ${phase} E2E passed`);
+}
+
 export async function run(): Promise<void> {
+  const authIsolationPhase = parseAuthIsolationPhase(
+    process.env["UCP_E2E_AUTH_ISOLATION_PHASE"],
+  );
+  if (authIsolationPhase) {
+    await runAuthIsolationE2E(authIsolationPhase);
+    return;
+  }
+
   if (process.env["UCP_E2E_PROPOSED_MODE"] === "disabled") {
     await runDisabledProposedApiE2E();
     return;

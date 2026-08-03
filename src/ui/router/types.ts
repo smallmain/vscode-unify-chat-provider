@@ -34,6 +34,7 @@ export interface ProviderFormRoute {
   mode?: 'full' | 'settings';
   providerName?: string;
   initialConfig?: Partial<ProviderConfig>;
+  initialConfigValidated?: true;
   existing?: ProviderConfig;
   originalName?: string;
   draft?: ProviderFormDraft;

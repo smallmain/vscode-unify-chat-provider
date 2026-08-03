@@ -9,7 +9,7 @@ import {
   MODEL_CONFIG_KEYS,
   withoutKeys,
 } from '../config-ops';
-import type { AuthConfig, AuthCredential } from '../auth/types';
+import type { AuthCredential, AuthRuntimeConfig } from '../auth/types';
 import type { AuthErrorType } from '../auth/auth-provider';
 import type { AuthManager } from '../auth';
 import type { BalanceManager } from '../balance';
@@ -31,6 +31,21 @@ import {
   type CompletionConfigIssue,
 } from '../completion/model/configuration';
 import type { CompletionConfig } from '../types';
+import {
+  LocalAuthStateConflictError,
+  type LocalAuthCommitGuard,
+} from '../secret/secret-store';
+import {
+  isSessionAuthConfig,
+  isSessionAuthMethod,
+  isValidAuthBindingId,
+  parseSessionAuthConfig,
+} from '../auth/local-auth-state';
+import {
+  isProviderSourceGuardCurrent,
+  parseProviderSourceGuard as parseProviderSourceGuardValue,
+  type ProviderSourceGuard,
+} from '../auth/provider-source-guard';
 
 type OAuthWaitResult = { type: 'success'; url: string } | { type: 'cancel' };
 
@@ -342,7 +357,15 @@ function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.every((item) => typeof item === 'string');
 }
 
-function isOAuthConfig(value: unknown): boolean {
+function hasOnlyFields(
+  record: Record<string, unknown>,
+  fields: readonly string[],
+): boolean {
+  const allowed = new Set(fields);
+  return Object.keys(record).every((field) => allowed.has(field));
+}
+
+function isStrictOAuthConfig(value: unknown): boolean {
   if (!isRecord(value)) return false;
   if (
     typeof value['tokenUrl'] !== 'string' ||
@@ -354,6 +377,17 @@ function isOAuthConfig(value: unknown): boolean {
   switch (value['grantType']) {
     case 'authorization_code':
       return (
+        hasOnlyFields(value, [
+          'grantType',
+          'authorizationUrl',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'clientSecret',
+          'redirectUri',
+          'scopes',
+          'pkce',
+        ]) &&
         typeof value['authorizationUrl'] === 'string' &&
         typeof value['clientId'] === 'string' &&
         hasOptionalStringFields(value, ['clientSecret', 'redirectUri']) &&
@@ -361,11 +395,27 @@ function isOAuthConfig(value: unknown): boolean {
       );
     case 'client_credentials':
       return (
+        hasOnlyFields(value, [
+          'grantType',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'clientSecret',
+          'scopes',
+        ]) &&
         typeof value['clientId'] === 'string' &&
-        typeof value['clientSecret'] === 'string'
+        hasOptionalStringFields(value, ['clientSecret'])
       );
     case 'device_code':
       return (
+        hasOnlyFields(value, [
+          'grantType',
+          'deviceAuthorizationUrl',
+          'tokenUrl',
+          'revocationUrl',
+          'clientId',
+          'scopes',
+        ]) &&
         typeof value['deviceAuthorizationUrl'] === 'string' &&
         typeof value['clientId'] === 'string'
       );
@@ -374,22 +424,53 @@ function isOAuthConfig(value: unknown): boolean {
   }
 }
 
-function isAuthConfig(value: unknown): value is AuthConfig {
+function isStrictAuthConfig(value: unknown): boolean {
   if (!isRecord(value)) return false;
   const commonFields = ['label', 'description'] as const;
   if (!hasOptionalStringFields(value, commonFields)) return false;
+  if (
+    isSessionAuthMethod(value['method']) &&
+    !isValidAuthBindingId(value['bindingId'])
+  ) {
+    return false;
+  }
   switch (value['method']) {
     case 'none':
-      return true;
+      return hasOnlyFields(value, ['method']);
     case 'api-key':
-      return hasOptionalStringFields(value, ['apiKey']);
+      return (
+        hasOnlyFields(value, ['method', 'label', 'description', 'apiKey']) &&
+        hasOptionalStringFields(value, ['apiKey'])
+      );
     case 'oauth2':
       return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'oauth',
+        ]) &&
         hasOptionalStringFields(value, ['identityId', 'token']) &&
-        isOAuthConfig(value['oauth'])
+        isStrictOAuthConfig(value['oauth'])
       );
     case 'antigravity-oauth':
       return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'projectId',
+          'managedProjectId',
+          'tier',
+          'tierId',
+          'email',
+        ]) &&
         hasOptionalStringFields(value, [
           'identityId',
           'token',
@@ -404,6 +485,20 @@ function isAuthConfig(value: unknown): value is AuthConfig {
       );
     case 'google-gemini-oauth':
       return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'oauthType',
+          'projectId',
+          'managedProjectId',
+          'tier',
+          'tierId',
+          'email',
+        ]) &&
         hasOptionalStringFields(value, [
           'identityId',
           'token',
@@ -421,27 +516,70 @@ function isAuthConfig(value: unknown): value is AuthConfig {
           value['tier'] === 'paid')
       );
     case 'openai-codex':
-      return hasOptionalStringFields(value, [
-        'identityId',
-        'token',
-        'accountId',
-        'email',
-      ]);
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'accountId',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'accountId',
+          'email',
+        ])
+      );
     case 'claude-code':
     case 'xai-grok-oauth':
-      return hasOptionalStringFields(value, [
-        'identityId',
-        'token',
-        'email',
-      ]);
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'email',
+        ]) &&
+        hasOptionalStringFields(value, ['identityId', 'token', 'email'])
+      );
     case 'github-copilot':
-      return hasOptionalStringFields(value, [
-        'identityId',
-        'token',
-        'enterpriseUrl',
-      ]);
+      return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'identityId',
+          'token',
+          'enterpriseUrl',
+        ]) &&
+        hasOptionalStringFields(value, [
+          'identityId',
+          'token',
+          'enterpriseUrl',
+        ])
+      );
     case 'zed':
       return (
+        hasOnlyFields(value, [
+          'method',
+          'bindingId',
+          'label',
+          'description',
+          'baseUrl',
+          'identityId',
+          'token',
+          'organizationId',
+          'dataCollection',
+          'dataCollectionAllowed',
+          'email',
+        ]) &&
         hasOptionalStringFields(value, [
           'baseUrl',
           'identityId',
@@ -458,17 +596,42 @@ function isAuthConfig(value: unknown): value is AuthConfig {
       switch (value['subType']) {
         case 'adc':
           return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'projectId',
+              'location',
+            ]) &&
             typeof value['projectId'] === 'string' &&
             typeof value['location'] === 'string'
           );
         case 'service-account':
           return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'keyFilePath',
+              'projectId',
+              'location',
+            ]) &&
             typeof value['keyFilePath'] === 'string' &&
             typeof value['location'] === 'string' &&
             hasOptionalStringFields(value, ['projectId'])
           );
         case 'api-key':
-          return hasOptionalStringFields(value, ['apiKey']);
+          return (
+            hasOnlyFields(value, [
+              'method',
+              'subType',
+              'label',
+              'description',
+              'apiKey',
+            ]) && hasOptionalStringFields(value, ['apiKey'])
+          );
         default:
           return false;
       }
@@ -687,14 +850,138 @@ function parseOptionalFiniteNumber(value: unknown): number | undefined {
     : undefined;
 }
 
-function parseAuthConfig(value: unknown, method: string): AuthConfig {
-  if (!isAuthConfig(value)) {
+export function parseAuthConfig(
+  value: unknown,
+  method: string,
+): AuthRuntimeConfig {
+  if (!isStrictAuthConfig(value) || !isRecord(value)) {
     throw new MainInstanceError(
       'BAD_REQUEST',
       `${method}: invalid authConfig`,
     );
   }
-  return value;
+  if (isSessionAuthMethod(value['method'])) {
+    const parsed = parseSessionAuthConfig(value);
+    if (parsed) return parsed;
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid authConfig`,
+    );
+  }
+
+  const label = parseOptionalString(value['label']);
+  const description = parseOptionalString(value['description']);
+  const common = {
+    ...(label === undefined ? {} : { label }),
+    ...(description === undefined ? {} : { description }),
+  };
+  switch (value['method']) {
+    case 'none':
+      return { method: 'none' };
+    case 'api-key': {
+      const apiKey = parseOptionalString(value['apiKey']);
+      return {
+        method: 'api-key',
+        ...common,
+        ...(apiKey === undefined ? {} : { apiKey }),
+      };
+    }
+    case 'google-vertex-ai-auth': {
+      const subType = value['subType'];
+      if (subType === 'adc') {
+        const projectId = value['projectId'];
+        const location = value['location'];
+        if (typeof projectId === 'string' && typeof location === 'string') {
+          return {
+            method: 'google-vertex-ai-auth',
+            subType,
+            ...common,
+            projectId,
+            location,
+          };
+        }
+      }
+      if (subType === 'service-account') {
+        const keyFilePath = value['keyFilePath'];
+        const projectId = parseOptionalString(value['projectId']);
+        const location = value['location'];
+        if (typeof keyFilePath === 'string' && typeof location === 'string') {
+          return {
+            method: 'google-vertex-ai-auth',
+            subType,
+            ...common,
+            keyFilePath,
+            ...(projectId === undefined ? {} : { projectId }),
+            location,
+          };
+        }
+      }
+      if (subType === 'api-key') {
+        const apiKey = parseOptionalString(value['apiKey']);
+        return {
+          method: 'google-vertex-ai-auth',
+          subType,
+          ...common,
+          ...(apiKey === undefined ? {} : { apiKey }),
+        };
+      }
+      break;
+    }
+  }
+  throw new MainInstanceError(
+    'BAD_REQUEST',
+    `${method}: invalid authConfig`,
+  );
+}
+
+export function parseLocalAuthCommitGuard(
+  value: unknown,
+  method: string,
+): LocalAuthCommitGuard | undefined {
+  if (value === undefined) return undefined;
+  const record = requireRecord(value, method);
+  const epoch = record['epoch'];
+  const revision = record['revision'];
+  const sessionId = record['sessionId'];
+  const staticConfigFingerprint = record['staticConfigFingerprint'];
+  if (
+    typeof staticConfigFingerprint !== 'string' ||
+    !/^[0-9a-f]{64}$/.test(staticConfigFingerprint) ||
+    typeof epoch !== 'number' ||
+    !Number.isSafeInteger(epoch) ||
+    epoch < 0 ||
+    typeof revision !== 'number' ||
+    !Number.isSafeInteger(revision) ||
+    revision < 0 ||
+    (sessionId !== undefined &&
+      (typeof sessionId !== 'string' || sessionId.trim() === ''))
+  ) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid auth commit guard`,
+    );
+  }
+  return {
+    staticConfigFingerprint,
+    epoch,
+    revision,
+    ...(typeof sessionId === 'string' ? { sessionId } : {}),
+  };
+}
+
+export function parseProviderSourceGuard(
+  value: unknown,
+  method: string,
+): ProviderSourceGuard | undefined {
+  if (value === undefined) return undefined;
+  const guard = parseProviderSourceGuardValue(value);
+  if (!guard) {
+    throw new MainInstanceError(
+      'BAD_REQUEST',
+      `${method}: invalid provider source guard`,
+    );
+  }
+  return guard;
 }
 
 function resolveCurrentProvidersByNames(options: {
@@ -1364,6 +1651,7 @@ function serializeAuthCredential(
     value,
     tokenType: credential.tokenType,
     expiresAt: credential.expiresAt,
+    authContext: credential.authContext,
   };
 }
 
@@ -1496,51 +1784,119 @@ export function registerMainInstanceHandlers(options: {
         p['authConfig'],
         'auth.syncPersistedAuthConfig',
       );
-      await options.authManager.syncPersistedAuthConfig(
+      const guard = parseLocalAuthCommitGuard(
+        p['guard'],
+        'auth.syncPersistedAuthConfig',
+      );
+      const sourceGuard = parseProviderSourceGuard(
+        p['sourceGuard'],
+        'auth.syncPersistedAuthConfig',
+      );
+      if (isSessionAuthConfig(authConfig) && !sourceGuard) {
+        throw new MainInstanceError(
+          'BAD_REQUEST',
+          'auth.syncPersistedAuthConfig: missing provider source guard',
+        );
+      }
+      const persisted = await options.authManager.syncPersistedAuthConfig(
         providerName,
         authConfig,
+        { reloadLocalState: true, guard, sourceGuard },
       );
-      return { ok: true };
+      return { ok: true, authConfig: persisted };
     },
   );
 
   mainInstance.registerHandler(
     'config.syncPersistedProvider',
-    async (params) => {
-      const p = requireRecord(params, 'config.syncPersistedProvider');
-      const provider = parseProviderConfig(
-        p['provider'],
-        'config.syncPersistedProvider',
-      );
-      const originalNameValue = p['originalName'];
-      if (
-        originalNameValue !== undefined &&
-        (typeof originalNameValue !== 'string' ||
-          originalNameValue.trim() === '')
-      ) {
-        throw new MainInstanceError(
-          'BAD_REQUEST',
-          'config.syncPersistedProvider: "originalName" must be a non-empty string',
+    async (params) =>
+      mainInstance.runLeaderMutation(async () => {
+        const p = requireRecord(params, 'config.syncPersistedProvider');
+        const providerIntent = parseProviderConfig(
+          p['provider'],
+          'config.syncPersistedProvider',
         );
-      }
-      if (typeof originalNameValue === 'string') {
-        options.authManager.clearProvider(originalNameValue);
-      }
-      const modelSourceIds = requireOptionalStringRecord(
-        p['modelSourceIds'],
-        'config.syncPersistedProvider',
-        'modelSourceIds',
-      );
-      options.authManager.clearProvider(provider.name);
-      await options.configStore.upsertProvider(provider, {
-        ...(typeof originalNameValue === 'string'
-          ? { originalName: originalNameValue }
-          : {}),
-        ...(modelSourceIds === undefined ? {} : { modelSourceIds }),
-      });
-      await migrateLegacyVSCodeModelIds(options.configStore);
-      return { ok: true };
-    },
+        const authGuard = parseLocalAuthCommitGuard(
+          p['authGuard'],
+          'config.syncPersistedProvider',
+        );
+        const sourceGuard = parseProviderSourceGuard(
+          p['sourceGuard'],
+          'config.syncPersistedProvider',
+        );
+        if (
+          providerIntent.auth &&
+          isSessionAuthConfig(providerIntent.auth) &&
+          !sourceGuard
+        ) {
+          throw new MainInstanceError(
+            'BAD_REQUEST',
+            'config.syncPersistedProvider: missing provider source guard',
+          );
+        }
+        const originalNameValue = p['originalName'];
+        if (
+          originalNameValue !== undefined &&
+          (typeof originalNameValue !== 'string' ||
+            originalNameValue.trim() === '')
+        ) {
+          throw new MainInstanceError(
+            'BAD_REQUEST',
+            'config.syncPersistedProvider: "originalName" must be a non-empty string',
+          );
+        }
+        const modelSourceIds = requireOptionalStringRecord(
+          p['modelSourceIds'],
+          'config.syncPersistedProvider',
+          'modelSourceIds',
+        );
+        const prepared =
+          await options.authManager.prepareProviderForPersistence(
+            providerIntent,
+            authGuard,
+            sourceGuard,
+          );
+        const hints = {
+          ...(typeof originalNameValue === 'string'
+            ? { originalName: originalNameValue }
+            : {}),
+          ...(modelSourceIds === undefined ? {} : { modelSourceIds }),
+        };
+        try {
+          if (providerIntent.auth && isSessionAuthConfig(providerIntent.auth)) {
+            if (!sourceGuard) throw new LocalAuthStateConflictError();
+            const updated = await options.configStore.upsertProviderIfUnchanged(
+              prepared.provider,
+              hints,
+              () =>
+                isProviderSourceGuardCurrent(sourceGuard, (providerName) =>
+                  options.configStore.getProvider(providerName),
+                ),
+            );
+            if (!updated) throw new LocalAuthStateConflictError();
+          } else {
+            await options.configStore.upsertProvider(prepared.provider, hints);
+          }
+          prepared.commit();
+        } catch (error) {
+          await prepared.rollback();
+          throw error;
+        }
+        if (typeof originalNameValue === 'string') {
+          options.authManager.clearProvider(originalNameValue);
+        }
+        options.authManager.clearProvider(prepared.provider.name);
+        try {
+          await migrateLegacyVSCodeModelIds(options.configStore);
+        } catch (error) {
+          authLog.error(
+            'main-instance',
+            'Provider saved, but legacy VS Code model ID migration failed',
+            error,
+          );
+        }
+        return { ok: true };
+      }),
   );
 
   mainInstance.registerHandler('balance.forceRefresh', async (params) => {

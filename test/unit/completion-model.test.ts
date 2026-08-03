@@ -21,6 +21,7 @@ import type {
   SimpleAlgorithmRequest,
 } from '../../src/completion/model/requests';
 import { createVsCodeModelId } from '../../src/model-id-utils';
+import { computeCompletionRequestTargetSignature } from '../../src/completion/provider-target';
 
 interface MockChatModel {
   readonly vendor: string;
@@ -608,6 +609,43 @@ describe('ConfiguredCompletionModelResolver', () => {
     vscodeMock.completionLogs.length = 0;
   });
 
+  it('limits credential target signatures to authentication and request URL inputs', () => {
+    const bindingId = '00000000-0000-4000-8000-000000000205';
+    const provider: ProviderConfig = {
+      ...internalProvider(),
+      auth: { method: 'openai-codex', bindingId },
+      completion: { baseUrl: './completions', templates: ['fim'] },
+      extraBody: { original: true },
+    };
+    const unrelatedUpdate: ProviderConfig = {
+      ...provider,
+      models: [...provider.models, { id: 'another-model' }],
+      retry: {
+        maxRetries: 3,
+        initialDelayMs: 25,
+        maxDelayMs: 100,
+        backoffMultiplier: 2,
+        jitterFactor: 0,
+      },
+      extraBody: { arrivedFromSync: true },
+      autoFetchOfficialModels: true,
+    };
+    const options = { modelId: provider.models[0].id };
+
+    expect(
+      computeCompletionRequestTargetSignature(unrelatedUpdate, options),
+    ).toBe(computeCompletionRequestTargetSignature(provider, options));
+    expect(
+      computeCompletionRequestTargetSignature(
+        {
+          ...provider,
+          completion: { ...provider.completion, baseUrl: './other-target' },
+        },
+        options,
+      ),
+    ).not.toBe(computeCompletionRequestTargetSignature(provider, options));
+  });
+
   it('resolves external models as compatible with all request templates', async () => {
     vscodeMock.models.push(
       externalChatModel('other-vendor', 'external-model'),
@@ -816,6 +854,106 @@ describe('ConfiguredCompletionModelResolver', () => {
       expect(vscodeMock.selectors).toEqual([]);
     },
   );
+
+  it('rejects a native request when its provider target changes during credential lookup', async () => {
+    const bindingId = '00000000-0000-4000-8000-000000000211';
+    const originalProvider: ProviderConfig = {
+      ...internalProvider(),
+      auth: { method: 'openai-codex', bindingId },
+      completion: { transport: 'native', templates: ['fim'] },
+    };
+    const updatedProvider: ProviderConfig = {
+      ...originalProvider,
+      baseUrl: 'https://updated.example.test/v1',
+    };
+    let currentProvider = originalProvider;
+    const store = {
+      ...resolverStore({
+        provider: originalProvider,
+        providerCompletion: {
+          status: 'valid' as const,
+          value: { transport: 'native' as const, templates: ['fim'] as const },
+        },
+      }),
+      getProvider: (name: string) =>
+        name === currentProvider.name ? currentProvider : undefined,
+    };
+    const getCredential = vi.fn(async () => {
+      currentProvider = updatedProvider;
+      return {
+        value: 'updated-token',
+        tokenType: 'Bearer',
+        authContext: {
+          method: 'openai-codex' as const,
+          bindingId,
+          sessionId: '00000000-0000-4000-8000-000000000212',
+          revision: 2,
+        },
+      };
+    });
+    const resolver = new ConfiguredCompletionModelResolver(store, {
+      getCredential,
+    });
+    const model = await resolver.resolveCompletionModel(
+      {
+        vendor: INTERNAL_COMPLETION_VENDOR,
+        id: createVsCodeModelId(
+          originalProvider.name,
+          originalProvider.models[0].id,
+        ),
+      },
+      cancellationToken(),
+    );
+
+    await expect(
+      model.complete(simpleRequest, cancellationToken()),
+    ).rejects.toMatchObject({
+      code: 'completion-request-failed',
+      cause: {
+        message:
+          'Authentication configuration changed while the completion request was starting. Please retry.',
+      },
+    });
+    expect(getCredential).toHaveBeenCalledTimes(1);
+  });
+
+  it('keeps stable API key credential resolution on the existing background path', async () => {
+    const provider: ProviderConfig = {
+      ...internalProvider(),
+      auth: { method: 'api-key', apiKey: '$UCPSECRET:test-api-key$' },
+      completion: { transport: 'native', templates: ['fim'] },
+    };
+    const credentialError = new Error('stable API key credential lookup');
+    const getCredential = vi.fn(async () => {
+      throw credentialError;
+    });
+    const resolver = new ConfiguredCompletionModelResolver(
+      resolverStore({
+        provider,
+        providerCompletion: {
+          status: 'valid',
+          value: { transport: 'native', templates: ['fim'] },
+        },
+      }),
+      { getCredential },
+    );
+    const model = await resolver.resolveCompletionModel(
+      {
+        vendor: INTERNAL_COMPLETION_VENDOR,
+        id: createVsCodeModelId(provider.name, provider.models[0].id),
+      },
+      cancellationToken(),
+    );
+
+    await expect(
+      model.complete(simpleRequest, cancellationToken()),
+    ).rejects.toMatchObject({
+      code: 'completion-request-failed',
+      cause: credentialError,
+    });
+    expect(getCredential).toHaveBeenCalledOnce();
+    expect(getCredential).toHaveBeenCalledWith(provider.name, 'background');
+  });
 
   it('resolves cached official models without persisting them as user models', async () => {
     const provider: ProviderConfig = {

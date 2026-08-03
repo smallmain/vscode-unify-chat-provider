@@ -1,4 +1,5 @@
 import { getBaseModelId } from '../../model-id-utils';
+import type { AuthTokenInfo } from '../../auth/types';
 import type { ModelConfig, ProviderConfig } from '../../types';
 import { isRawBaseUrlEnabled } from '../../utils';
 import { isRecord } from '../configuration';
@@ -40,6 +41,7 @@ import {
 } from './provider';
 import { omitRequestBodyFields } from './request-body';
 import { runWithCompletionConcurrency } from './concurrency';
+import { computeCompletionRequestTargetSignature } from '../provider-target';
 
 export const OPENAI_COMPLETIONS_CAPABILITIES = {
   fim: {
@@ -239,12 +241,51 @@ export function parseOpenAIZetaResponse(
   };
 }
 
-function completionUrl(context: NativeCompletionApiContext): string {
-  const baseUrl = buildCompletionBaseUrl(context, {
-    ensureSuffix: '/v1',
-    skipSuffixIfMatch: /\/v\d+$/,
-    useRawBaseUrl: isRawBaseUrlEnabled(context.provider),
+function providerSnapshotSignature(
+  context: NativeCompletionApiContext,
+  provider: ProviderConfig,
+): string {
+  return computeCompletionRequestTargetSignature(provider, {
+    modelId: context.model.id,
+    requestTarget: completionUrl(context, provider),
   });
+}
+
+async function resolveRequestSnapshot(
+  context: NativeCompletionApiContext,
+): Promise<{ provider: ProviderConfig; credential: AuthTokenInfo }> {
+  const expectedSignature = providerSnapshotSignature(
+    context,
+    context.provider,
+  );
+  const before = context.resolveProvider?.() ?? context.provider;
+  if (providerSnapshotSignature(context, before) !== expectedSignature) {
+    throw new Error(
+      'Authentication configuration changed while the completion request was starting. Please retry.',
+    );
+  }
+  const credential = await context.resolveCredential();
+  const after = context.resolveProvider?.() ?? context.provider;
+  if (providerSnapshotSignature(context, after) !== expectedSignature) {
+    throw new Error(
+      'Authentication configuration changed while the completion request was starting. Please retry.',
+    );
+  }
+  return { provider: context.provider, credential };
+}
+
+function completionUrl(
+  context: NativeCompletionApiContext,
+  provider: ProviderConfig,
+): string {
+  const baseUrl = buildCompletionBaseUrl(
+    { ...context, provider },
+    {
+      ensureSuffix: '/v1',
+      skipSuffixIfMatch: /\/v\d+$/,
+      useRawBaseUrl: isRawBaseUrlEnabled(provider),
+    },
+  );
   return `${baseUrl}/completions`;
 }
 
@@ -258,15 +299,16 @@ function createFimOperation(
         request.kind,
         token,
         async (logger) => {
-          const credential = await context.resolveCredential();
+          const { provider, credential } =
+            await resolveRequestSnapshot(context);
           const payload = await postCompletionJson(
-            completionUrl(context),
+            completionUrl(context, provider),
             buildOpenAIFimRequestBody(
-              context.provider,
+              provider,
               context.model,
               request,
             ),
-            context.provider,
+            provider,
             context.model,
             credential,
             token,
@@ -292,15 +334,16 @@ function createCodeGemmaOperation(
         request.kind,
         token,
         async (logger) => {
-          const credential = await context.resolveCredential();
+          const { provider, credential } =
+            await resolveRequestSnapshot(context);
           const payload = await postCompletionJson(
-            completionUrl(context),
+            completionUrl(context, provider),
             buildOpenAICodeGemmaRequestBody(
-              context.provider,
+              provider,
               context.model,
               request,
             ),
-            context.provider,
+            provider,
             context.model,
             credential,
             token,
@@ -331,17 +374,17 @@ async function executeZeta(
         request.kind,
         token,
         async (logger) => {
-      const credential = await context.resolveCredential();
+      const { provider, credential } = await resolveRequestSnapshot(context);
       const prompt = buildZetaPrompt(request);
       const payload = await postCompletionJson(
-        completionUrl(context),
+        completionUrl(context, provider),
         buildOpenAIZetaRequestBody(
-          context.provider,
+          provider,
           context.model,
           request,
           prompt,
         ),
-        context.provider,
+        provider,
         context.model,
         credential,
         token,

@@ -133,6 +133,8 @@ import { ZedAuthProvider } from '../../src/auth/providers/zed';
 import { performZedNativeSignIn } from '../../src/auth/providers/zed/native-signin';
 import type { AuthConfig } from '../../src/auth/types';
 
+const BINDING_ID = '00000000-0000-4000-8000-000000000107';
+
 beforeEach(() => {
   browser.systemId = '';
   browser.signInUrl = '';
@@ -159,7 +161,7 @@ describe('Zed native sign-in', () => {
     expect(browser.systemId).toBe('stable-system-id');
   });
 
-  it('stores only a SecretStorage reference in auth config', async () => {
+  it('commits the native credential only to the local session envelope', async () => {
     const secrets = new Map<string, string>();
     const secretStore = new SecretStore({
       get: async (key: string) => secrets.get(key),
@@ -212,17 +214,32 @@ describe('Zed native sign-in', () => {
     });
 
     let persisted: AuthConfig | undefined;
+    const descriptor = {
+      providerName: 'Zed Account',
+      providerType: 'zed',
+      baseUrl: 'https://zed.dev',
+    };
     const provider = new ZedAuthProvider(
       {
         providerId: 'Zed Account',
         providerLabel: 'Zed Account',
+        providerType: descriptor.providerType,
+        baseUrl: descriptor.baseUrl,
         secretStore,
         persistAuthConfig: async (config) => {
-          persisted = config;
+          if (config.method !== 'zed') {
+            throw new Error('Expected Zed authentication.');
+          }
+          persisted = await secretStore.persistSessionAuth(descriptor, config, {
+            reason: config.token ? 'context' : 'logout',
+            emptyToken: 'clear',
+            binding: 'existing-or-random',
+          });
         },
       },
       {
         method: 'zed',
+        bindingId: BINDING_ID,
         baseUrl: 'https://zed.dev',
         token: previousTokenRef,
         dataCollection: false,
@@ -232,6 +249,7 @@ describe('Zed native sign-in', () => {
     expect(result.success).toBe(true);
     expect(result.config).toMatchObject({
       method: 'zed',
+      bindingId: BINDING_ID,
       baseUrl: 'https://zed.dev',
       organizationId: 'org-default',
       dataCollection: false,
@@ -254,7 +272,7 @@ describe('Zed native sign-in', () => {
     expect(await secretStore.getOAuth2Token(previousTokenRef)).toBeDefined();
   });
 
-  it('assigns an identity and moves imported credentials into SecretStorage', async () => {
+  it('assigns an identity and stages imported credentials for envelope commit', async () => {
     const secrets = new Map<string, string>();
     const secretStore = new SecretStore({
       get: async (key: string) => secrets.get(key),
@@ -263,9 +281,36 @@ describe('Zed native sign-in', () => {
       keys: async () => Array.from(secrets.keys()),
       onDidChange: () => ({ dispose: () => undefined }),
     });
+    vi.stubGlobal(
+      'fetch',
+      async () =>
+        new Response(
+          JSON.stringify({
+            user: {
+              id_v2: 'imported-user',
+              username: 'imported-user',
+              email: 'imported@example.com',
+            },
+            organizations: [
+              { id: 'imported-org', name: 'Imported', is_personal: true },
+            ],
+            default_organization_id: 'imported-org',
+            configuration_by_organization: {
+              'imported-org': {
+                edit_prediction: {
+                  is_enabled: true,
+                  is_feedback_enabled: true,
+                },
+              },
+            },
+          }),
+          { status: 200, headers: { 'Content-Type': 'application/json' } },
+        ),
+    );
     const imported = await ZedAuthProvider.normalizeOnImport(
       {
         method: 'zed',
+        bindingId: BINDING_ID,
         token: JSON.stringify({
           accessToken: JSON.stringify({
             userId: 'imported-user',
@@ -282,17 +327,47 @@ describe('Zed native sign-in', () => {
     );
     expect(imported.token).toMatch(/^\$UCPSECRET:/);
     expect(JSON.stringify(imported)).not.toContain('imported-secret');
-    expect(Array.from(secrets.values()).join('\n')).toContain('imported-secret');
+    expect(Array.from(secrets.values()).join('\n')).not.toContain(
+      'imported-secret',
+    );
+    expect(await secretStore.getOAuth2Token(imported.token ?? '')).toMatchObject({
+      accessToken: expect.stringContaining('imported-secret'),
+      tokenType: 'Zed',
+    });
 
     const retained = await ZedAuthProvider.normalizeOnImport(
-      { method: 'zed' },
+      {
+        method: 'zed',
+        bindingId: BINDING_ID,
+        identityId: 'imported-identity',
+        organizationId: 'imported-org',
+        dataCollection: true,
+        dataCollectionAllowed: true,
+        email: 'imported@example.com',
+      },
       {
         secretStore,
         storeSecretsInSettings: false,
-        existing: { method: 'zed', identityId: 'existing-identity' },
+        existing: {
+          method: 'zed',
+          bindingId: BINDING_ID,
+          identityId: 'existing-identity',
+        },
       },
     );
-    expect(retained.identityId).toBeUndefined();
+    expect(retained).toEqual({
+      method: 'zed',
+      bindingId: BINDING_ID,
+      label: undefined,
+      description: undefined,
+      baseUrl: undefined,
+      identityId: undefined,
+      token: undefined,
+      organizationId: undefined,
+      dataCollection: false,
+      dataCollectionAllowed: false,
+      email: undefined,
+    });
 
     const provider = new ZedAuthProvider(
       {
@@ -307,6 +382,121 @@ describe('Zed native sign-in', () => {
     expect(Array.from(secrets.values()).join('\n')).not.toContain(
       'imported-secret',
     );
+  });
+
+  it('preserves the complete local session on a tokenless overwrite import', async () => {
+    const secrets = new Map<string, string>();
+    const secretStore = new SecretStore({
+      get: async (key: string) => secrets.get(key),
+      store: async (key: string, value: string) => void secrets.set(key, value),
+      delete: async (key: string) => void secrets.delete(key),
+      keys: async () => Array.from(secrets.keys()),
+      onDidChange: () => ({ dispose: () => undefined }),
+    });
+    const descriptor = {
+      providerName: 'Imported Zed',
+      providerType: 'zed',
+      baseUrl: 'https://zed.dev',
+    };
+    const tokenRef = secretStore.createTransientOAuth2TokenRef();
+    await secretStore.setOAuth2Token(tokenRef, {
+      accessToken: JSON.stringify({
+        userId: 'local-user',
+        accessToken: 'local-secret',
+      }),
+      tokenType: 'Zed',
+    });
+    const persisted = await secretStore.persistSessionAuth(
+      descriptor,
+      {
+        method: 'zed',
+        bindingId: BINDING_ID,
+        baseUrl: 'https://zed.dev',
+        identityId: 'local-session',
+        token: tokenRef,
+        organizationId: 'local-org',
+        dataCollection: true,
+        dataCollectionAllowed: true,
+        email: 'local@example.com',
+      },
+      {
+        reason: 'login',
+        emptyToken: 'clear',
+        binding: 'existing-or-random',
+      },
+    );
+    const before = secretStore.getLocalAuthEnvelope(BINDING_ID);
+
+    const normalized = await ZedAuthProvider.normalizeOnImport(
+      {
+        method: 'zed',
+        bindingId: BINDING_ID,
+        baseUrl: 'https://zed.dev',
+        identityId: 'imported-session',
+        organizationId: 'imported-org',
+        dataCollection: false,
+        dataCollectionAllowed: false,
+        email: 'imported@example.com',
+      },
+      {
+        secretStore,
+        storeSecretsInSettings: false,
+        existing: {
+          method: 'zed',
+          bindingId: BINDING_ID,
+          baseUrl: 'https://zed.dev',
+        },
+      },
+    );
+    const intent = await secretStore.prepareSessionAuthCommitIntent(
+      descriptor,
+      normalized,
+    );
+    const overwritten = await secretStore.persistSessionAuth(
+      descriptor,
+      intent,
+      {
+        reason: 'import',
+        emptyToken: 'preserve',
+        binding: 'existing-or-random',
+      },
+    );
+    const hydrated = secretStore.hydrateSessionAuth(descriptor, overwritten);
+    const snapshot = secretStore.getLocalAuthCredentialSnapshot(
+      descriptor,
+      hydrated,
+    );
+
+    expect(normalized).toMatchObject({
+      identityId: undefined,
+      token: undefined,
+      organizationId: undefined,
+      dataCollection: false,
+      dataCollectionAllowed: false,
+      email: undefined,
+    });
+    expect(hydrated).toMatchObject({
+      identityId: 'local-session',
+      organizationId: 'local-org',
+      dataCollection: true,
+      dataCollectionAllowed: true,
+      email: 'local@example.com',
+    });
+    expect(snapshot).toMatchObject({
+      sessionId: 'local-session',
+      token: { accessToken: expect.stringContaining('local-secret') },
+      authContext: {
+        method: 'zed',
+        bindingId: BINDING_ID,
+        sessionId: 'local-session',
+        organizationId: 'local-org',
+        dataCollection: true,
+        dataCollectionAllowed: true,
+        email: 'local@example.com',
+      },
+    });
+    expect(secretStore.getLocalAuthEnvelope(BINDING_ID)).toEqual(before);
+    expect(persisted).toEqual(overwritten);
   });
 
   it('revokes a long-lived credential on account HTTP 401', async () => {
@@ -341,6 +531,7 @@ describe('Zed native sign-in', () => {
       },
       {
         method: 'zed',
+        bindingId: BINDING_ID,
         baseUrl: 'https://zed.dev',
         identityId: 'identity',
         token: tokenRef,
@@ -356,6 +547,7 @@ describe('Zed native sign-in', () => {
     await expect(provider.getCredential()).resolves.toBeUndefined();
     expect(persisted.at(-1)).toEqual({
       method: 'zed',
+      bindingId: BINDING_ID,
       label: undefined,
       description: undefined,
       baseUrl: 'https://zed.dev',
@@ -402,6 +594,7 @@ describe('Zed native sign-in', () => {
       },
       {
         method: 'zed',
+        bindingId: BINDING_ID,
         baseUrl: 'https://zed.dev',
         identityId: 'identity',
         token: tokenRef,

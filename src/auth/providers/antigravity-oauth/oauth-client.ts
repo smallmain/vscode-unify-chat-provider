@@ -161,6 +161,38 @@ type TokenResponse = {
 
 type UserInfo = { email?: string };
 
+function parseNonNegativeNumber(value: unknown): number | undefined {
+  const parsed =
+    typeof value === 'number'
+      ? value
+      : typeof value === 'string' && value.trim()
+        ? Number(value)
+        : Number.NaN;
+  return Number.isFinite(parsed) && parsed >= 0 ? parsed : undefined;
+}
+
+function parseTokenResponse(value: unknown): TokenResponse | undefined {
+  if (!isRecord(value)) return undefined;
+  const accessToken = value['access_token'];
+  const expiresIn = parseNonNegativeNumber(value['expires_in']);
+  const refreshToken = value['refresh_token'];
+  const tokenType = value['token_type'];
+  return {
+    ...(typeof accessToken === 'string' ? { access_token: accessToken } : {}),
+    ...(expiresIn === undefined ? {} : { expires_in: expiresIn }),
+    ...(typeof refreshToken === 'string'
+      ? { refresh_token: refreshToken }
+      : {}),
+    ...(typeof tokenType === 'string' ? { token_type: tokenType } : {}),
+  };
+}
+
+function parseUserInfo(value: unknown): UserInfo {
+  if (!isRecord(value)) return {};
+  const email = value['email'];
+  return typeof email === 'string' ? { email } : {};
+}
+
 export type AntigravityRefreshTokenParts = {
   refreshToken: string;
   projectId?: string;
@@ -471,7 +503,10 @@ export async function exchangeAntigravity(options: {
       return { type: 'failed', error: errorText || 'Token exchange failed' };
     }
 
-    const tokenPayload = (await tokenResponse.json()) as TokenResponse;
+    const tokenPayload = parseTokenResponse(await tokenResponse.json());
+    if (!tokenPayload) {
+      return { type: 'failed', error: 'Invalid token response' };
+    }
 
     const accessToken = tokenPayload.access_token;
     const refreshToken = tokenPayload.refresh_token;
@@ -500,8 +535,8 @@ export async function exchangeAntigravity(options: {
       },
     });
 
-    const userInfo: UserInfo = userInfoResponse.ok
-      ? ((await userInfoResponse.json()) as UserInfo)
+    const userInfo = userInfoResponse.ok
+      ? parseUserInfo(await userInfoResponse.json())
       : {};
 
     const desiredProjectId = decoded.projectId.trim();
@@ -594,7 +629,11 @@ export async function refreshAccessToken(options: {
       });
     }
 
-    const payload = (await response.json()) as TokenResponse;
+    const payload = parseTokenResponse(await response.json());
+    if (!payload) {
+      authLog.error('antigravity-client', 'Invalid token refresh response');
+      return null;
+    }
     const accessToken = payload.access_token;
     if (typeof accessToken !== 'string' || accessToken.trim() === '') {
       authLog.error('antigravity-client', 'Missing access token in refresh response');

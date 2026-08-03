@@ -52,6 +52,7 @@ export interface ApiProvider {
   getAvailableModels?(
     credential: AuthTokenInfo,
     refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
   ): Promise<ModelConfig[]>;
 
   /**

@@ -195,6 +195,21 @@ async function showProductError(error: unknown): Promise<void> {
     if (error.code === 'cancelled') {
       await vscode.window.showInformationMessage(message);
     } else {
+      const diagnostics = [
+        `code=${error.code}`,
+        error.targetPath ? `target=${JSON.stringify(error.targetPath)}` : undefined,
+        error.exitCode === undefined
+          ? undefined
+          : `exitCode=${error.exitCode}`,
+        error.stderr ? `stderr=${JSON.stringify(error.stderr)}` : undefined,
+      ]
+        .filter((value): value is string => value !== undefined)
+        .join(', ');
+      authLog.error(
+        'proposed-api',
+        `Unable to update product.json (${diagnostics})`,
+        error,
+      );
       await vscode.window.showErrorMessage(message);
     }
     return;

@@ -102,10 +102,37 @@ const proposals = [
 const temporaryDirectories: string[] = [];
 const execFileAsync = promisify(execFile);
 
+function getProcessErrorValue(error: unknown, key: string): unknown {
+  return typeof error === 'object' && error !== null
+    ? Reflect.get(error, key)
+    : undefined;
+}
+
+function getProcessErrorText(error: unknown, key: string): string | undefined {
+  const value = getProcessErrorValue(error, key);
+  if (typeof value === 'string') return value;
+  return Buffer.isBuffer(value) ? value.toString('utf8') : undefined;
+}
+
 async function createTemporaryDirectory(): Promise<string> {
   const directory = await mkdtemp(join(tmpdir(), 'ucp-proposed-api-'));
   temporaryDirectories.push(directory);
   return directory;
+}
+
+function decodeWindowsElevatedCommand(command: string): {
+  readonly launcher: string;
+  readonly elevatedCommand: string;
+} {
+  const encodedLauncher = command.slice(command.lastIndexOf(' ') + 1);
+  const launcher = Buffer.from(encodedLauncher, 'base64').toString('utf16le');
+  const elevatedCommand = launcher.match(
+    /-ArgumentList '-NoProfile -NonInteractive -EncodedCommand ([A-Za-z0-9+/=]+)'/,
+  )?.[1];
+  if (!elevatedCommand) {
+    throw new Error('Expected an encoded elevated PowerShell command.');
+  }
+  return { launcher, elevatedCommand };
 }
 
 function createEnvironment(
@@ -410,7 +437,7 @@ describe('product.json Proposed API configuration', () => {
     ).toThrow(ProductJsonError);
   });
 
-  it('uses an encoded PowerShell command and rejects unsafe elevated paths', () => {
+  it('uses a direct encoded UAC launcher and rejects unsafe elevated paths', () => {
     const environment = createEnvironment('C:\\Code', 'C:\\Storage', {
       platform: 'win32',
     });
@@ -424,11 +451,29 @@ describe('product.json Proposed API configuration', () => {
     expect(command).toMatch(
       /^powershell\.exe -NoProfile -NonInteractive -EncodedCommand /,
     );
-    const encoded = command.slice(command.lastIndexOf(' ') + 1);
-    const decoded = Buffer.from(encoded, 'base64').toString('utf16le');
-    expect(decoded).toContain('Copy-Item -LiteralPath');
-    expect(decoded).toContain("'C:\\Storage\\stage''s.json'");
-    expect(decoded).toContain('[System.IO.File]::Replace');
+    const { launcher, elevatedCommand } =
+      decodeWindowsElevatedCommand(command);
+    expect(launcher).toContain('Start-Process');
+    expect(launcher).toContain('-Verb RunAs -Wait -PassThru');
+    expect(launcher).toContain('exit 72');
+    expect(launcher).not.toContain('{;');
+    const elevatedScript = Buffer.from(elevatedCommand, 'base64').toString(
+      'utf16le',
+    );
+    expect(elevatedScript).toContain('Copy-Item -LiteralPath');
+    expect(elevatedScript).toContain("'C:\\Storage\\stage''s.json'");
+    expect(elevatedScript).toContain(
+      '[System.Security.Cryptography.SHA256]::Create()',
+    );
+    expect(elevatedScript).not.toContain('Get-FileHash');
+    expect(elevatedScript).toContain(
+      '[System.IO.File]::Replace(',
+    );
+    expect(elevatedScript).toContain('$null, $true)');
+    expect(elevatedScript).toContain('exit 73');
+    expect(elevatedScript).toContain('exit 74');
+    expect(elevatedScript).not.toContain('{;');
+    expect(elevatedScript).toMatch(/\nexit 0$/);
     expect(() =>
       buildProductJsonElevatedCommand(
         environment,
@@ -440,7 +485,69 @@ describe('product.json Proposed API configuration', () => {
     ).toThrow(ProductJsonError);
   });
 
-  it('executes the generated POSIX replacement command with quoted paths', async () => {
+  it('executes the generated product replacement script with Windows PowerShell', async () => {
+    if (process.platform !== 'win32') return;
+    const directory = await createTemporaryDirectory();
+    const sourcePath = join(directory, "stage file's.json");
+    const targetPath = join(directory, 'product.json');
+    const original = Buffer.from('original product');
+    const replacement = Buffer.from('replacement product');
+    await Promise.all([
+      writeFile(sourcePath, replacement),
+      writeFile(targetPath, original),
+    ]);
+    const command = buildProductJsonElevatedCommand(
+      createEnvironment(directory, directory, { platform: 'win32' }),
+      sourcePath,
+      targetPath,
+      0o644,
+      createHash('sha256').update(original).digest('hex'),
+    );
+    const { elevatedCommand } = decodeWindowsElevatedCommand(command);
+    const args = [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      elevatedCommand,
+    ];
+
+    try {
+      await execFileAsync('powershell.exe', args);
+    } catch (error) {
+      let diagnostic = '';
+      try {
+        diagnostic = await readFile(
+          `${sourcePath}.elevated-error.txt`,
+          'utf8',
+        );
+      } catch {
+        // The elevated script may fail before it can create diagnostics.
+      }
+      const currentTarget = await readFile(targetPath);
+      const exitCode = getProcessErrorValue(error, 'code');
+      const stderr = getProcessErrorText(error, 'stderr')?.trim();
+      const stdout = getProcessErrorText(error, 'stdout')?.trim();
+      throw new Error(
+        [
+          `PowerShell replacement failed with exit code ${String(exitCode)}.`,
+          `Target state: ${currentTarget.equals(replacement) ? 'replacement' : 'original-or-other'}.`,
+          diagnostic.trim() ? `Diagnostic: ${diagnostic.trim()}` : undefined,
+          stderr ? `stderr: ${stderr}` : undefined,
+          stdout ? `stdout: ${stdout}` : undefined,
+        ]
+          .filter((value): value is string => value !== undefined)
+          .join('\n')
+          .slice(0, 8_000),
+      );
+    }
+    expect(await readFile(targetPath)).toEqual(replacement);
+    await expect(execFileAsync('powershell.exe', args)).rejects.toMatchObject({
+      code: 73,
+    });
+    expect(await readFile(targetPath)).toEqual(replacement);
+  });
+
+  it('survives the double-quoted shell used by sudo-prompt on POSIX', async () => {
     if (process.platform === 'win32') return;
     const directory = await createTemporaryDirectory();
     const sourcePath = join(directory, "stage file's.json");
@@ -452,13 +559,33 @@ describe('product.json Proposed API configuration', () => {
       writeFile(targetPath, original),
     ]);
     const command = buildProductJsonElevatedCommand(
-      createEnvironment(directory, directory, { platform: process.platform }),
+      createEnvironment(directory, directory, { platform: 'linux' }),
       sourcePath,
       targetPath,
       0o644,
       createHash('sha256').update(original).digest('hex'),
     );
-    await execFileAsync('/bin/sh', ['-c', command]);
+    expect(command).not.toMatch(/[$`"]/);
+    const encodedScript = command.match(
+      /printf %s ([A-Za-z0-9+/=]+) \|/,
+    )?.[1];
+    expect(encodedScript).toBeDefined();
+    if (!encodedScript) {
+      throw new Error('Expected an encoded POSIX replacement script.');
+    }
+    expect(Buffer.from(encodedScript, 'base64').toString('utf8')).toContain(
+      'current_hash=$(sha256sum',
+    );
+
+    const sudoPromptCommand = `/bin/bash -c "echo SUDOPROMPT; ${command.replaceAll(
+      '"',
+      '\\"',
+    )}"`;
+    await execFileAsync('/bin/sh', ['-c', sudoPromptCommand]);
+    expect(await readFile(targetPath)).toEqual(replacement);
+    await expect(
+      execFileAsync('/bin/sh', ['-c', sudoPromptCommand]),
+    ).rejects.toMatchObject({ code: 73 });
     expect(await readFile(targetPath)).toEqual(replacement);
   });
 

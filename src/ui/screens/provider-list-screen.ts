@@ -16,7 +16,6 @@ import {
 } from '../provider-ops';
 import { createProviderDraft } from '../form-utils';
 import { getAllModelsForProviderSync, isPlaceholderModelId } from '../../utils';
-import { deleteProviderApiKeySecretIfUnused } from '../../api-key-utils';
 import { resolveProvidersForExportOrShowError } from '../../auth/auth-transfer';
 import { balanceManager, formatSummaryLine } from '../../balance';
 import { officialModelsManager } from '../../official-models-manager';
@@ -96,11 +95,6 @@ export async function runProviderListScreen(
         qp.ignoreFocusOut = false;
 
         if (!confirmed) return;
-        await deleteProviderApiKeySecretIfUnused({
-          secretStore: ctx.secretStore,
-          providers: ctx.store.endpoints,
-          providerName: item.providerName,
-        });
         await ctx.store.removeProvider(item.providerName);
         showDeletedMessage(item.providerName, 'Provider');
         qp.items = buildProviderListItems(ctx.store);
@@ -153,7 +147,11 @@ export async function runProviderListScreen(
 
     return {
       kind: 'push',
-      route: { kind: 'providerForm', initialConfig: imported.config },
+      route: {
+        kind: 'providerForm',
+        initialConfig: imported.config,
+        initialConfigValidated: true,
+      },
     };
   }
 

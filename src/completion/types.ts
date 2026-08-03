@@ -136,6 +136,7 @@ export interface CompletionAlgorithmChange {
 }
 
 export type CompletionEnvironmentChangeReason =
+  | "auth-changed"
   | "provider-changed"
   | "settings-changed";
 

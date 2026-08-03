@@ -15,14 +15,19 @@ import type {
   AuthCredential,
   OAuth2TokenData,
   ZedAuthConfig,
+  ZedAuthContext,
 } from '../../types';
-import { createSecretRef, isSecretRef } from '../../../secret/constants';
-import type { SecretStore } from '../../../secret/secret-store';
+import { isSessionSecretRef } from '../../../secret/constants';
+import type {
+  LocalAuthCommitGuard,
+  SecretStore,
+} from '../../../secret/secret-store';
 import {
   parseZedCredential,
   serializeZedCredential,
 } from '../../../client/zed/codecs';
 import { ZedCloudError } from '../../../client/zed/cloud-client';
+import { ZedCloudClient } from '../../../client/zed/cloud-client';
 import {
   DEFAULT_ZED_WEB_BASE_URL,
   resolveZedBaseUrls,
@@ -39,6 +44,7 @@ import {
 function persistableConfig(config: ZedAuthConfig | undefined): ZedAuthConfig {
   return {
     method: 'zed',
+    bindingId: config?.bindingId ?? randomUUID(),
     label: config?.label,
     description: config?.description,
     baseUrl: config?.baseUrl?.trim() || undefined,
@@ -48,6 +54,22 @@ function persistableConfig(config: ZedAuthConfig | undefined): ZedAuthConfig {
     dataCollection: config?.dataCollection === true,
     dataCollectionAllowed: config?.dataCollectionAllowed === true,
     email: config?.email,
+  };
+}
+
+function withoutSessionState(config: ZedAuthConfig): ZedAuthConfig {
+  return {
+    method: 'zed',
+    bindingId: config.bindingId,
+    label: config.label,
+    description: config.description,
+    baseUrl: config.baseUrl?.trim() || undefined,
+    identityId: undefined,
+    token: undefined,
+    organizationId: undefined,
+    dataCollection: false,
+    dataCollectionAllowed: false,
+    email: undefined,
   };
 }
 
@@ -100,6 +122,7 @@ export class ZedAuthProvider implements AuthProvider {
       DEFAULT_ZED_WEB_BASE_URL;
     const cleared: ZedAuthConfig = {
       method: 'zed',
+      bindingId: auth?.bindingId ?? randomUUID(),
       label: auth?.label,
       description: auth?.description,
       baseUrl,
@@ -171,7 +194,7 @@ export class ZedAuthProvider implements AuthProvider {
   ): Promise<OAuth2TokenData | undefined> {
     const raw = auth.token?.trim();
     if (!raw) return undefined;
-    const data = isSecretRef(raw)
+    const data = isSessionSecretRef(raw)
       ? await secretStore.getOAuth2Token(raw)
       : parseTokenData(raw);
     if (!data) return undefined;
@@ -192,25 +215,58 @@ export class ZedAuthProvider implements AuthProvider {
     },
   ): Promise<ZedAuthConfig> {
     const raw = auth.token?.trim();
-    const normalized = {
+    const normalized: ZedAuthConfig = {
       ...persistableConfig(auth),
       identityId: raw
-        ? auth.identityId ?? options.existing?.identityId ?? randomUUID()
+        ? !isSessionSecretRef(raw)
+          ? randomUUID()
+          : auth.identityId ?? options.existing?.identityId ?? randomUUID()
         : auth.identityId,
     };
-    if (!raw) return { ...normalized, token: undefined };
-    if (isSecretRef(raw)) return normalized;
+    if (!raw) return withoutSessionState(normalized);
+    if (isSessionSecretRef(raw)) return normalized;
 
     const tokenData = parseTokenData(raw);
-    if (!tokenData) return { ...normalized, token: undefined };
-    parseZedCredential(tokenData.accessToken);
+    if (!tokenData) return withoutSessionState(normalized);
+    const credential = parseZedCredential(tokenData.accessToken);
+    const user = await new ZedCloudClient(
+      resolveAuthBaseUrl(normalized),
+    ).getAuthenticatedUser(
+      credential,
+      await getZedSystemId(options.secretStore),
+    );
+    const requestedOrganization = user.organizations.find(
+      (organization) => organization.id === auth.organizationId,
+    );
+    const fallbackOrganization =
+      user.organizations.find(
+        (organization) => organization.id === user.defaultOrganizationId,
+      ) ?? user.organizations[0];
+    const organization = requestedOrganization ?? fallbackOrganization;
+    if (!organization) {
+      throw new Error('The Zed account does not belong to an organization.');
+    }
+    const canInheritExportedContext = requestedOrganization !== undefined;
+    const dataCollectionAllowed =
+      organization.editPrediction.isFeedbackEnabled === true;
+    const validated: ZedAuthConfig = {
+      ...normalized,
+      organizationId: organization.id,
+      dataCollectionAllowed,
+      dataCollection:
+        canInheritExportedContext &&
+        dataCollectionAllowed &&
+        auth.dataCollection === true,
+      email: user.email,
+    };
     const existingRef =
-      options.existing?.token && isSecretRef(options.existing.token)
+      options.existing?.token && isSessionSecretRef(options.existing.token)
         ? options.existing.token
         : undefined;
-    const tokenRef = existingRef ?? createSecretRef();
+    const tokenRef =
+      existingRef ?? options.secretStore.createTransientOAuth2TokenRef();
     await options.secretStore.setOAuth2Token(tokenRef, tokenData);
-    return { ...normalized, token: tokenRef };
+    return { ...validated, token: tokenRef };
   }
 
   static async prepareForDuplicate(
@@ -236,7 +292,7 @@ export class ZedAuthProvider implements AuthProvider {
     secretStore: SecretStore,
   ): Promise<void> {
     const raw = auth.token?.trim();
-    if (raw && isSecretRef(raw)) await secretStore.deleteOAuth2Token(raw);
+    if (raw && isSessionSecretRef(raw)) await secretStore.deleteOAuth2Token(raw);
   }
 
   private readonly emitter = new vscode.EventEmitter<AuthStatusChange>();
@@ -260,9 +316,12 @@ export class ZedAuthProvider implements AuthProvider {
     return this.config;
   }
 
-  private async persistConfig(config: ZedAuthConfig): Promise<void> {
+  private async persistConfig(
+    config: ZedAuthConfig,
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<void> {
+    await this.context.persistAuthConfig?.(config, guard);
     this.config = config;
-    await this.context.persistAuthConfig?.(config);
   }
 
   private async tokenData(): Promise<OAuth2TokenData | undefined> {
@@ -287,6 +346,39 @@ export class ZedAuthProvider implements AuthProvider {
     return this.sessionCache;
   }
 
+  private authContextForSnapshot(
+    config: ZedAuthConfig,
+    snapshot: ZedAccountSnapshot,
+  ): ZedAuthContext | undefined {
+    if (!this.context.providerType || !this.context.baseUrl) return undefined;
+    const stored = this.context.secretStore.getAuthContextForCredential(
+      {
+        providerName: this.context.providerId,
+        providerType: this.context.providerType,
+        baseUrl: this.context.baseUrl,
+        useRawBaseUrl: this.context.useRawBaseUrl,
+      },
+      config,
+    );
+    if (
+      stored?.method !== 'zed' ||
+      !config.identityId ||
+      stored.sessionId !== config.identityId
+    ) {
+      return undefined;
+    }
+    const dataCollectionAllowed =
+      snapshot.organization.editPrediction.isFeedbackEnabled === true;
+    return {
+      ...stored,
+      organizationId: snapshot.organization.id,
+      dataCollectionAllowed,
+      dataCollection:
+        dataCollectionAllowed && config.dataCollection === true,
+      email: snapshot.user.email,
+    };
+  }
+
   private async requireSession(): Promise<ZedAuthSessionCache> {
     const session = await this.getSession();
     if (!session) throw new Error('Zed authentication is required.');
@@ -296,7 +388,11 @@ export class ZedAuthProvider implements AuthProvider {
   private async syncAccountConfig(
     snapshot: ZedAccountSnapshot,
     forceResetDataCollection = false,
-  ): Promise<ZedAuthConfig> {
+    guard = this.context.captureAuthCommitGuard?.(),
+  ): Promise<{
+    config: ZedAuthConfig;
+    guard: LocalAuthCommitGuard | undefined;
+  }> {
     const current = {
       ...persistableConfig(this.config),
       baseUrl: resolveAuthBaseUrl(this.config),
@@ -317,9 +413,13 @@ export class ZedAuthProvider implements AuthProvider {
       email: snapshot.user.email,
     };
     if (stableStringify(current) !== stableStringify(next)) {
-      await this.persistConfig(next);
+      await this.persistConfig(next, guard);
+      return {
+        config: next,
+        guard: this.context.captureAuthCommitGuard?.(),
+      };
     }
-    return next;
+    return { config: next, guard };
   }
 
   private fireError(error: unknown): void {
@@ -334,15 +434,11 @@ export class ZedAuthProvider implements AuthProvider {
   private async clearAuthData(options: {
     status: 'revoked';
     error?: Error;
-  }): Promise<void> {
-    const raw = this.config?.token?.trim();
-    if (raw && isSecretRef(raw)) {
-      await this.context.secretStore.deleteOAuth2Token(raw);
-    }
-    this.sessionCache?.clear();
-    this.sessionCache = undefined;
+  }, guard = this.context.captureAuthCommitGuard?.()): Promise<void> {
+    const oldTokenRef = this.config?.token?.trim();
     const next: ZedAuthConfig = {
       method: 'zed',
+      bindingId: this.config?.bindingId ?? randomUUID(),
       label: this.config?.label,
       description: this.config?.description,
       baseUrl: this.config?.baseUrl?.trim() || undefined,
@@ -353,7 +449,12 @@ export class ZedAuthProvider implements AuthProvider {
       dataCollectionAllowed: false,
       email: undefined,
     };
-    await this.persistConfig(next);
+    await this.persistConfig(next, guard);
+    if (oldTokenRef && isSessionSecretRef(oldTokenRef)) {
+      await this.context.secretStore.discardOAuth2TokenRef(oldTokenRef);
+    }
+    this.sessionCache?.clear();
+    this.sessionCache = undefined;
     this.emitter.fire({
       status: options.status,
       error: options.error,
@@ -363,10 +464,11 @@ export class ZedAuthProvider implements AuthProvider {
 
   private async handleCredentialError(
     error: unknown,
+    guard = this.context.captureAuthCommitGuard?.(),
   ): Promise<'revoked' | 'error'> {
     const resolved = toError(error);
     if (resolved instanceof ZedCloudError && resolved.status === 401) {
-      await this.clearAuthData({ status: 'revoked', error: resolved });
+      await this.clearAuthData({ status: 'revoked', error: resolved }, guard);
       return 'revoked';
     }
     this.fireError(resolved);
@@ -374,17 +476,29 @@ export class ZedAuthProvider implements AuthProvider {
   }
 
   async getCredential(): Promise<AuthCredential | undefined> {
+    let commitGuard = this.context.captureAuthCommitGuard?.();
     try {
       const session = await this.getSession();
       if (!session) return undefined;
       const account = await session.ensureAccount(this.config?.organizationId);
-      await this.syncAccountConfig(account);
+      const synced = await this.syncAccountConfig(account, false, commitGuard);
+      commitGuard = synced.guard;
+      const value = await session.getLlmToken(account.organization.id);
+      const authContext = this.authContextForSnapshot(synced.config, account);
+      if (
+        this.context.providerType &&
+        this.context.baseUrl &&
+        !authContext
+      ) {
+        return undefined;
+      }
       return {
-        value: await session.getLlmToken(account.organization.id),
+        value,
         tokenType: 'Bearer',
+        ...(authContext ? { authContext } : {}),
       };
     } catch (error) {
-      if ((await this.handleCredentialError(error)) === 'revoked') {
+      if ((await this.handleCredentialError(error, commitGuard)) === 'revoked') {
         return undefined;
       }
       throw error;
@@ -392,18 +506,20 @@ export class ZedAuthProvider implements AuthProvider {
   }
 
   async refresh(): Promise<boolean> {
+    let commitGuard = this.context.captureAuthCommitGuard?.();
     try {
       const session = await this.getSession();
       if (!session) return false;
       const account = await session.ensureAccount(this.config?.organizationId, {
         force: true,
       });
-      await this.syncAccountConfig(account);
+      const synced = await this.syncAccountConfig(account, false, commitGuard);
+      commitGuard = synced.guard;
       await session.refreshLlmToken(account.organization.id);
       this.emitter.fire({ status: 'valid' });
       return true;
     } catch (error) {
-      await this.handleCredentialError(error);
+      await this.handleCredentialError(error, commitGuard);
       return false;
     }
   }
@@ -432,6 +548,7 @@ export class ZedAuthProvider implements AuthProvider {
   }
 
   private async chooseOrganization(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     const session = await this.requireSession();
     const account = await session.ensureAccount(this.config?.organizationId);
     const selected = await vscode.window.showQuickPick(
@@ -453,23 +570,30 @@ export class ZedAuthProvider implements AuthProvider {
     await this.syncAccountConfig(
       nextAccount,
       selected.organization.id !== this.config?.organizationId,
+      commitGuard,
     );
     this.emitter.fire({ status: 'valid' });
   }
 
   private async toggleDataCollection(): Promise<void> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     const session = await this.requireSession();
     const account = await session.ensureAccount(this.config?.organizationId);
-    const current = await this.syncAccountConfig(account);
+    const synced = await this.syncAccountConfig(account, false, commitGuard);
+    const current = synced.config;
     if (current.dataCollectionAllowed !== true) return;
-    await this.persistConfig({
-      ...current,
-      dataCollection: current.dataCollection !== true,
-    });
+    await this.persistConfig(
+      {
+        ...current,
+        dataCollection: current.dataCollection !== true,
+      },
+      synced.guard,
+    );
     this.emitter.fire({ status: 'valid' });
   }
 
   async getStatusViewItems(): Promise<AuthStatusViewItem[]> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     const snapshot = await this.getStatusSnapshot();
     if (snapshot.kind !== 'valid') {
       return [
@@ -486,7 +610,7 @@ export class ZedAuthProvider implements AuthProvider {
     try {
       const session = await this.requireSession();
       const account = await session.ensureAccount(this.config?.organizationId);
-      await this.syncAccountConfig(account);
+      await this.syncAccountConfig(account, false, commitGuard);
       organizationLabel = account.organization.name;
       policyAllowsCollection =
         account.organization.editPrediction.isFeedbackEnabled;
@@ -527,6 +651,7 @@ export class ZedAuthProvider implements AuthProvider {
   }
 
   async configure(): Promise<AuthConfigureResult> {
+    const commitGuard = this.context.captureAuthCommitGuard?.();
     try {
       const baseUrl = resolveAuthBaseUrl(this.config);
       const systemId = await getZedSystemId(this.context.secretStore);
@@ -540,7 +665,8 @@ export class ZedAuthProvider implements AuthProvider {
         force: true,
       });
       const serializedCredential = serializeZedCredential(credential);
-      const tokenRef = createSecretRef();
+      const tokenRef =
+        this.context.secretStore.createTransientOAuth2TokenRef();
       await this.context.secretStore.setOAuth2Token(tokenRef, {
         accessToken: serializedCredential,
         tokenType: 'Zed',
@@ -548,6 +674,7 @@ export class ZedAuthProvider implements AuthProvider {
 
       const next: ZedAuthConfig = {
         method: 'zed',
+        bindingId: this.config?.bindingId ?? randomUUID(),
         label: this.config?.label,
         description: this.config?.description,
         baseUrl,
@@ -559,9 +686,9 @@ export class ZedAuthProvider implements AuthProvider {
           account.organization.editPrediction.isFeedbackEnabled,
         email: account.user.email,
       };
+      await this.persistConfig(next, commitGuard);
       this.sessionCache?.clear();
       this.sessionCache = temporarySession;
-      await this.persistConfig(next);
       this.emitter.fire({ status: 'valid' });
       vscode.window.showInformationMessage(t('Zed authorization successful.'));
       return { success: true, config: next };
@@ -576,7 +703,8 @@ export class ZedAuthProvider implements AuthProvider {
   }
 
   async revoke(): Promise<void> {
-    await this.clearAuthData({ status: 'revoked' });
+    const commitGuard = this.context.captureAuthCommitGuard?.();
+    await this.clearAuthData({ status: 'revoked' }, commitGuard);
   }
 
   dispose(): void {
