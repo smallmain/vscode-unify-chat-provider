@@ -121,6 +121,7 @@ export interface TimeoutFormRoute {
   kind: 'timeoutForm';
   timeout: TimeoutConfig;
   retry: RetryConfig;
+  ignoreSSLErrors: boolean | undefined;
   proxy: ProxyConfig;
   draft: ProviderFormDraft;
 }

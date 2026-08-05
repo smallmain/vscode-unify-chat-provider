@@ -331,6 +331,7 @@ export async function refreshCodeAssistQuota(
         },
         body: JSON.stringify({ project: projectId }),
         logger,
+        ignoreSSLErrors: input.provider.ignoreSSLErrors,
         proxy: input.provider.proxy,
       });
 

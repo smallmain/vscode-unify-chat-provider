@@ -156,6 +156,7 @@ export class MoonshotAIBalanceProvider implements BalanceProvider {
           Accept: 'application/json',
         },
         logger,
+        ignoreSSLErrors: input.provider.ignoreSSLErrors,
         proxy: input.provider.proxy,
       });
 

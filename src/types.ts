@@ -112,6 +112,8 @@ export interface ProviderConfig {
   timeout?: TimeoutConfig;
   /** Retry configuration */
   retry?: RetryConfig;
+  /** Whether to ignore TLS certificate validation errors for API requests. */
+  ignoreSSLErrors?: boolean;
   /** Proxy configuration */
   proxy?: ProxyConfig;
   /** Whether to auto-fetch official models from the provider API */

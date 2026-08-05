@@ -72,6 +72,7 @@ export interface FetchConfigSignature {
   authHash: string;
   extraHeadersHash: string;
   extraBodyHash: string;
+  ignoreSSLErrors: boolean;
   proxyHash: string;
 }
 
@@ -88,6 +89,7 @@ export interface OfficialModelsDraftInput {
   extraHeaders?: ProviderConfig['extraHeaders'];
   extraBody?: ProviderConfig['extraBody'];
   timeout?: ProviderConfig['timeout'];
+  ignoreSSLErrors?: ProviderConfig['ignoreSSLErrors'];
   proxy?: ProviderConfig['proxy'];
 }
 
@@ -1207,6 +1209,7 @@ export class OfficialModelsManager {
         stableStringify(input.extraHeaders ?? {}),
       ),
       extraBodyHash: this.hashString(stableStringify(input.extraBody ?? {})),
+      ignoreSSLErrors: input.ignoreSSLErrors === true,
       proxyHash: this.hashString(stableStringify(input.proxy ?? {})),
     };
   }
@@ -1265,6 +1268,7 @@ export class OfficialModelsManager {
       extraHeaders: input.extraHeaders,
       extraBody: input.extraBody,
       timeout: input.timeout,
+      ignoreSSLErrors: input.ignoreSSLErrors,
       proxy: input.proxy,
     };
 
@@ -1532,6 +1536,7 @@ export class OfficialModelsManager {
         stableStringify(provider.extraHeaders ?? {}),
       ),
       extraBodyHash: this.hashString(stableStringify(provider.extraBody ?? {})),
+      ignoreSSLErrors: provider.ignoreSSLErrors === true,
       proxyHash: this.hashString(stableStringify(provider.proxy ?? {})),
     };
   }
@@ -1596,6 +1601,7 @@ export class OfficialModelsManager {
           authHash: '',
           extraHeadersHash: '',
           extraBodyHash: '',
+          ignoreSSLErrors: false,
           proxyHash: '',
         },
       };
@@ -1674,6 +1680,7 @@ export class OfficialModelsManager {
       a.authHash === b.authHash &&
       a.extraHeadersHash === b.extraHeadersHash &&
       a.extraBodyHash === b.extraBodyHash &&
+      a.ignoreSSLErrors === b.ignoreSSLErrors &&
       a.proxyHash === b.proxyHash
     );
   }

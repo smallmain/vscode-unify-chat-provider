@@ -67,6 +67,7 @@ export async function postCompletionJson(
     connectionTimeoutMs: network.timeout.connection,
     responseTimeoutMs: network.timeout.response,
     retryConfig: network.retry,
+    ignoreSSLErrors: network.ignoreSSLErrors,
     proxy: network.proxy,
     type: 'chat',
     abortSignal: abortController.signal,

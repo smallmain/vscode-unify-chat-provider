@@ -1063,6 +1063,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
           {
             connectionTimeoutMs: requestTimeoutMs,
             retryConfig: chatNetwork.retry,
+            ignoreSSLErrors: chatNetwork.ignoreSSLErrors,
             proxy: chatNetwork.proxy,
           },
         );
@@ -1094,6 +1095,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
           {
             connectionTimeoutMs: requestTimeoutMs,
             retryConfig: chatNetwork.retry,
+            ignoreSSLErrors: chatNetwork.ignoreSSLErrors,
             proxy: chatNetwork.proxy,
           },
         );
@@ -1386,7 +1388,10 @@ export class GoogleAIStudioProvider implements ApiProvider {
             },
           });
         },
-        { proxy: network.proxy },
+        {
+          ignoreSSLErrors: network.ignoreSSLErrors,
+          proxy: network.proxy,
+        },
       );
       for await (const model of pager) {
         if (model.name) {
@@ -1405,6 +1410,7 @@ type FetchLoggerContext = {
   logger: ProviderHttpLogger;
   connectionTimeoutMs?: number;
   retryConfig?: RetryConfig;
+  ignoreSSLErrors?: boolean;
   proxy?: ProviderConfig['proxy'];
 };
 
@@ -1491,6 +1497,7 @@ function ensureInstalled(): void {
           logger: ctx.logger,
           retryConfig: ctx.retryConfig,
           connectionTimeoutMs: ctx.connectionTimeoutMs,
+          ignoreSSLErrors: ctx.ignoreSSLErrors,
           proxy: ctx.proxy,
         })
       : await baseFetch(input, init);
@@ -1528,7 +1535,7 @@ async function withGoogleFetchLogger<T>(
   fn: () => Promise<T>,
   options?: Pick<
     FetchLoggerContext,
-    'connectionTimeoutMs' | 'retryConfig' | 'proxy'
+    'connectionTimeoutMs' | 'retryConfig' | 'ignoreSSLErrors' | 'proxy'
   >,
 ): Promise<T> {
   ensureInstalled();

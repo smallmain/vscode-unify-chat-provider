@@ -171,6 +171,7 @@ export class MiniMaxBalanceProvider implements BalanceProvider {
           Accept: 'application/json',
         },
         logger,
+        ignoreSSLErrors: input.provider.ignoreSSLErrors,
         proxy: input.provider.proxy,
       });
 

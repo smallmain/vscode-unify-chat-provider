@@ -225,6 +225,7 @@ export class AiHubMixBalanceProvider implements BalanceProvider {
         method: 'GET',
         headers,
         logger,
+        ignoreSSLErrors: input.provider.ignoreSSLErrors,
         proxy: input.provider.proxy,
       });
 

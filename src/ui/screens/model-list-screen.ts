@@ -745,6 +745,7 @@ function buildOfficialModelsDraftInput(
     extraHeaders: draft.extraHeaders,
     extraBody: draft.extraBody,
     timeout: draft.timeout,
+    ignoreSSLErrors: draft.ignoreSSLErrors,
     proxy: draft.proxy,
   };
 }
