@@ -20,6 +20,7 @@ import {
   MainInstanceError,
 } from '../main-instance/errors';
 import { t } from '../i18n';
+import { resolveChatNetwork } from '../utils';
 
 const DEFAULT_PERIODIC_REFRESH_MS = 60_000;
 const DEFAULT_THROTTLE_WINDOW_MS = 10_000;
@@ -650,6 +651,7 @@ export class BalanceManager implements vscode.Disposable {
       const providerWithResolvedProxy = {
         ...snapshot.provider,
         proxy: this.resolveProviderProxy(snapshot.provider),
+        ignoreSSLErrors: resolveChatNetwork(snapshot.provider).ignoreSSLErrors,
       };
       const result = await balanceProvider.refresh({
         provider: providerWithResolvedProxy,
@@ -817,6 +819,8 @@ export class BalanceManager implements vscode.Disposable {
       useRawBaseUrl: provider.useRawBaseUrl === true,
       auth: provider.auth,
       balanceProvider: provider.balanceProvider,
+      ignoreSSLErrors: resolveChatNetwork(provider).ignoreSSLErrors,
+      proxy: this.resolveProviderProxy(provider),
     });
   }
 

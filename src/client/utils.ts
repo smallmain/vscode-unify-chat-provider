@@ -1002,6 +1002,7 @@ export interface CreateCustomFetchOptions {
   urlTransformer?: (url: string) => string;
   retryConfig?: RetryConfig;
   proxy?: ProviderConfig['proxy'];
+  ignoreSSLErrors?: boolean;
   type: FetchMode;
   /**
    * Optional upstream abort signal (e.g. derived from VSCode CancellationToken).
@@ -1039,6 +1040,7 @@ export function createCustomFetch(
     urlTransformer,
     retryConfig,
     proxy,
+    ignoreSSLErrors,
     type,
     abortSignal,
   } = options;
@@ -1154,6 +1156,7 @@ export function createCustomFetch(
             ? DEFAULT_CHAT_RETRY_CONFIG
             : DEFAULT_NORMAL_RETRY_CONFIG),
         connectionTimeoutMs,
+        ignoreSSLErrors,
         proxy,
       });
 

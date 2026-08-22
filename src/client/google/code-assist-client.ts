@@ -2042,6 +2042,7 @@ export abstract class GoogleCodeAssistProvider extends GoogleAIStudioProvider {
         responseTimeoutMs: chatNetwork.timeout.response,
         logger,
         retryConfig: { ...effectiveRetryConfig, maxRetries: 0 },
+        ignoreSSLErrors: chatNetwork.ignoreSSLErrors,
         proxy: chatNetwork.proxy,
         type: 'chat',
         abortSignal: abortController.signal,

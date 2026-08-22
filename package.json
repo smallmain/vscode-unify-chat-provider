@@ -322,6 +322,11 @@
                 }
               }
             },
+            "ignoreSSLErrors": {
+              "type": "boolean",
+              "description": "%configuration.networkSettings.ignoreSSLErrors.description%",
+              "default": false
+            },
             "proxy": {
               "type": "object",
               "description": "%configuration.networkSettings.proxy.description%",
@@ -1049,6 +1054,11 @@
                     "default": 0.1
                   }
                 }
+              },
+              "ignoreSSLErrors": {
+                "type": "boolean",
+                "description": "%configuration.endpoints.ignoreSSLErrors.description%",
+                "default": false
               },
               "proxy": {
                 "type": "object",

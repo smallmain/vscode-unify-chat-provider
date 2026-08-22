@@ -449,6 +449,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
         apiKey,
         logger,
         input.provider.proxy,
+        input.provider.ignoreSSLErrors === true,
       );
 
       const items: BalanceMetric[] = [];
@@ -477,6 +478,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
               systemToken,
               logger,
               input.provider.proxy,
+              input.provider.ignoreSSLErrors === true,
             );
             items.push(...userBalance.items);
           } catch (error) {
@@ -518,6 +520,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
     apiKey: string,
     logger: ReturnType<typeof createSimpleHttpLogger>,
     proxy: ProxyConfig | undefined,
+    ignoreSSLErrors: boolean,
   ): Promise<ParsedBalance> {
     const endpoint = new URL('/api/usage/token', `${baseUrl}/`).toString();
 
@@ -528,6 +531,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
         Accept: 'application/json',
       },
       logger,
+      ignoreSSLErrors,
       proxy,
     });
 
@@ -617,6 +621,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
     systemToken: string,
     logger: ReturnType<typeof createSimpleHttpLogger>,
     proxy: ProxyConfig | undefined,
+    ignoreSSLErrors: boolean,
   ): Promise<ParsedBalance> {
     const endpoint = new URL('/api/user/self', `${baseUrl}/`).toString();
 
@@ -628,6 +633,7 @@ export class NewAPIBalanceProvider implements BalanceProvider {
         Accept: 'application/json',
       },
       logger,
+      ignoreSSLErrors,
       proxy,
     });
 

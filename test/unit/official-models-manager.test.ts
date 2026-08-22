@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const providerClient = vi.hoisted(() => ({
   getAvailableModels: vi.fn(),
+  configs: [] as ProviderConfig[],
 }));
 
 vi.mock('vscode', () => {
@@ -48,9 +49,12 @@ vi.mock('../../src/main-instance', () => ({
 }));
 
 vi.mock('../../src/client/utils', () => ({
-  createProvider: () => ({
-    getAvailableModels: providerClient.getAvailableModels,
-  }),
+  createProvider: (config: ProviderConfig) => {
+    providerClient.configs.push(config);
+    return {
+      getAvailableModels: providerClient.getAvailableModels,
+    };
+  },
 }));
 
 vi.mock('../../src/utils', () => ({
@@ -170,9 +174,25 @@ function secretStore(): SecretStore {
 
 beforeEach(() => {
   providerClient.getAvailableModels.mockReset();
+  providerClient.configs.length = 0;
 });
 
 describe('official model manager provider boundary', () => {
+  it('preserves ignoreSSLErrors when fetching models for a draft', async () => {
+    providerClient.getAvailableModels.mockResolvedValue([]);
+    const manager = new OfficialModelsManager();
+
+    await manager.getOfficialModelsForDraft('draft-ssl', {
+      type: 'openai-responses',
+      name: 'Self-signed API',
+      baseUrl: 'https://127.0.0.1:9943',
+      ignoreSSLErrors: true,
+    });
+
+    expect(providerClient.configs.at(-1)?.ignoreSSLErrors).toBe(true);
+    manager.dispose();
+  });
+
   it('stores only the models returned through the common Provider API', async () => {
     providerClient.getAvailableModels.mockResolvedValue([
       { id: 'zeta-cloud' },

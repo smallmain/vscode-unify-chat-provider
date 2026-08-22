@@ -73,6 +73,7 @@ export function createZedCloudClient(provider: ProviderConfig): ZedCloudClient {
     connectionTimeoutMs: network.timeout.connection,
     responseTimeoutMs: network.timeout.response,
     retryConfig: network.retry,
+    ignoreSSLErrors: network.ignoreSSLErrors,
     proxy: network.proxy,
     type: 'normal',
   });

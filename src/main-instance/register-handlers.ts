@@ -809,6 +809,10 @@ export function parseProviderConfig(
   const extraHeaders = parseStringRecord(record['extraHeaders']);
   const timeout = parseTimeoutConfig(record['timeout']);
   const retry = parseRetryConfig(record['retry']);
+  const ignoreSSLErrors =
+    typeof record['ignoreSSLErrors'] === 'boolean'
+      ? record['ignoreSSLErrors']
+      : undefined;
   const contextCache = parseContextCacheConfig(record['contextCache']);
   const completion = parseCompletionConfig(
     record['completion'],
@@ -833,6 +837,7 @@ export function parseProviderConfig(
       : {}),
     ...(timeout ? { timeout } : {}),
     ...(retry ? { retry } : {}),
+    ...(ignoreSSLErrors === undefined ? {} : { ignoreSSLErrors }),
     ...(typeof record['autoFetchOfficialModels'] === 'boolean'
       ? { autoFetchOfficialModels: record['autoFetchOfficialModels'] }
       : {}),
@@ -1079,6 +1084,7 @@ export function parseOfficialModelsFetchState(
         method,
         'state.lastConfigSignature.extraBodyHash',
       ),
+      ignoreSSLErrors: signature['ignoreSSLErrors'] === true,
       proxyHash: parseOptionalString(signature['proxyHash']) ?? '',
     };
   }

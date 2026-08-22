@@ -129,6 +129,7 @@ export interface ResolvedChatRetryConfig {
 export interface ResolvedChatNetworkConfig {
   timeout: ResolvedChatTimeoutConfig;
   retry: ResolvedChatRetryConfig;
+  ignoreSSLErrors: boolean;
   proxy?: ProxyConfig;
 }
 
@@ -137,6 +138,7 @@ const MAX_SAFE_TIMEOUT_MS = 0x7fffffff;
 export interface ChatNetworkOverrides {
   timeout?: TimeoutConfig;
   retry?: RetryConfig;
+  ignoreSSLErrors?: boolean;
   proxy?: ProxyConfig;
 }
 
@@ -256,6 +258,7 @@ function applyGlobalRetryOverrides(
 function readConfiguredChatNetworkOverrides(): {
   timeout?: unknown;
   retry?: unknown;
+  ignoreSSLErrors?: unknown;
   proxy?: unknown;
 } {
   const config = vscode.workspace.getConfiguration(
@@ -266,9 +269,10 @@ function readConfiguredChatNetworkOverrides(): {
 
   const timeout = raw['timeout'];
   const retry = raw['retry'];
+  const ignoreSSLErrors = raw['ignoreSSLErrors'];
   const proxy = raw['proxy'];
 
-  return { timeout, retry, proxy };
+  return { timeout, retry, ignoreSSLErrors, proxy };
 }
 
 function readProxyType(value: unknown): ProxyType | undefined {
@@ -374,14 +378,21 @@ export function resolveChatNetwork(
       backoffMultiplier: DEFAULT_CHAT_RETRY_CONFIG.backoffMultiplier,
       jitterFactor: DEFAULT_CHAT_RETRY_CONFIG.jitterFactor,
     },
+    ignoreSSLErrors: false,
   };
 
   const configured = readConfiguredChatNetworkOverrides();
   applyTimeoutOverrides(resolved.timeout, configured.timeout);
   applyGlobalRetryOverrides(resolved.retry, configured.retry);
+  if (typeof configured.ignoreSSLErrors === 'boolean') {
+    resolved.ignoreSSLErrors = configured.ignoreSSLErrors;
+  }
 
   applyTimeoutOverrides(resolved.timeout, overrides?.timeout);
   applyRetryOverrides(resolved.retry, overrides?.retry);
+  if (typeof overrides?.ignoreSSLErrors === 'boolean') {
+    resolved.ignoreSSLErrors = overrides.ignoreSSLErrors;
+  }
   resolved.proxy = resolveChatProxyConfig(configured.proxy, overrides?.proxy);
 
   return resolved;
@@ -440,6 +451,7 @@ export interface FetchWithRetryOptions extends RequestInit {
   logger?: ProviderHttpLogger;
   /** Connection timeout in milliseconds. If not specified, uses DEFAULT_NORMAL_TIMEOUT_CONFIG.connection */
   connectionTimeoutMs?: number;
+  ignoreSSLErrors?: boolean;
   proxy?: ProxyConfig;
 }
 
@@ -1109,9 +1121,10 @@ export async function fetchWithRetry(
   input: RequestInfo | URL,
   options: FetchWithRetryOptions = {},
 ): Promise<Response> {
-  const { proxy, ...retryOptions } = options;
+  const { proxy, ignoreSSLErrors, ...retryOptions } = options;
   return fetchWithRetryUsingFetch(
-    (fetchInput, fetchInit) => fetchWithUndici(fetchInput, fetchInit, proxy),
+    (fetchInput, fetchInit) =>
+      fetchWithUndici(fetchInput, fetchInit, proxy, ignoreSSLErrors),
     input,
     { ...retryOptions, proxy: { type: 'direct' } },
   );
@@ -1669,6 +1682,7 @@ function readSocksProxy(
 function createAgentOptions(
   base: ResolvedUndiciDispatcherOptions,
   settings: ResolvedHttpProxySettings,
+  ignoreSSLErrors: boolean,
 ): Agent.Options {
   const options: Agent.Options = {};
 
@@ -1689,7 +1703,7 @@ function createAgentOptions(
   if (base.requestCA !== undefined) {
     connect.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (ignoreSSLErrors || !settings.proxyStrictSSL) {
     connect.rejectUnauthorized = false;
   }
   if (hasOwnProperties(connect)) {
@@ -1868,13 +1882,14 @@ function createSocksProxyDispatcher(
   base: ResolvedUndiciDispatcherOptions,
   settings: ResolvedHttpProxySettings,
   protocol: SocksProxyProtocol,
+  ignoreSSLErrors: boolean,
 ): Dispatcher {
   const proxy = settings.proxy;
   if (proxy === undefined) {
-    return new Agent(createAgentOptions(base, settings));
+    return new Agent(createAgentOptions(base, settings, ignoreSSLErrors));
   }
 
-  const agentOptions = createAgentOptions(base, settings);
+  const agentOptions = createAgentOptions(base, settings, ignoreSSLErrors);
   const socksProxy = readSocksProxy(
     proxy,
     protocol,
@@ -1891,6 +1906,7 @@ function createSocksProxyDispatcher(
 function createEnvProxyDispatcher(
   originalDispatcher: Dispatcher | undefined,
   settings: ResolvedHttpProxySettings,
+  ignoreSSLErrors: boolean,
 ): Dispatcher {
   const base =
     originalDispatcher === undefined
@@ -1924,6 +1940,7 @@ function createEnvProxyDispatcher(
     proxyCA: base.proxyCA ? 'custom' : '',
     proxyProtocol: proxyProtocol ?? '',
     proxyStrictSSL: settings.proxyStrictSSL,
+    ignoreSSLErrors,
     requestCA: base.requestCA ? 'custom' : '',
   });
 
@@ -1943,7 +1960,12 @@ function createEnvProxyDispatcher(
   }
 
   if (isSocksProxy) {
-    const dispatcher = createSocksProxyDispatcher(base, settings, proxyProtocol);
+    const dispatcher = createSocksProxyDispatcher(
+      base,
+      settings,
+      proxyProtocol,
+      ignoreSSLErrors,
+    );
     dispatcherCache.set(signature, dispatcher);
     return dispatcher;
   }
@@ -1966,7 +1988,7 @@ function createEnvProxyDispatcher(
   if (base.requestCA !== undefined) {
     connect.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (ignoreSSLErrors || !settings.proxyStrictSSL) {
     connect.rejectUnauthorized = false;
   }
   if (hasOwnProperties(connect)) {
@@ -1977,7 +1999,7 @@ function createEnvProxyDispatcher(
   if (base.requestCA !== undefined) {
     requestTls.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (ignoreSSLErrors || !settings.proxyStrictSSL) {
     requestTls.rejectUnauthorized = false;
   }
   if (hasOwnProperties(requestTls)) {
@@ -2004,13 +2026,34 @@ function createEnvProxyDispatcher(
 function getUndiciInitWithProxySupport(
   init?: RequestInitWithDispatcher,
   proxyConfig?: ProxyConfig,
+  ignoreSSLErrors = false,
 ): RequestInitWithDispatcher | undefined {
   const settings = getConfiguredHttpProxySettings(proxyConfig);
   if (settings.proxySupport === 'off') {
-    return init;
+    if (!ignoreSSLErrors) {
+      return init;
+    }
+    const base =
+      init?.dispatcher === undefined
+        ? {}
+        : getDispatcherOptions(init.dispatcher);
+    return {
+      ...init,
+      dispatcher: new Agent(createAgentOptions(base, settings, true)),
+    };
   }
   if (proxyConfig?.type === 'direct') {
-    return init;
+    if (!ignoreSSLErrors) {
+      return init;
+    }
+    const base =
+      init?.dispatcher === undefined
+        ? {}
+        : getDispatcherOptions(init.dispatcher);
+    return {
+      ...init,
+      dispatcher: new Agent(createAgentOptions(base, settings, true)),
+    };
   }
   if (proxyConfig?.type === 'custom' && settings.proxy === undefined) {
     return init;
@@ -2019,7 +2062,11 @@ function getUndiciInitWithProxySupport(
   // The dispatcher in this extension is used for timeout behavior, not as an
   // opt-out from VS Code proxy settings. Keep proxy support enabled unless the
   // user explicitly disables it with `http.proxySupport: off`.
-  const dispatcher = createEnvProxyDispatcher(init?.dispatcher, settings);
+  const dispatcher = createEnvProxyDispatcher(
+    init?.dispatcher,
+    settings,
+    ignoreSSLErrors,
+  );
   if (dispatcher === init?.dispatcher) {
     return init;
   }
@@ -2164,6 +2211,7 @@ function fetchWithUndici(
   input: RequestInfo | URL,
   init?: RequestInitWithDispatcher,
   proxyConfig?: ProxyConfig,
+  ignoreSSLErrors = false,
 ): Promise<Response> {
   if (typeof Request !== 'undefined' && input instanceof Request) {
     throw new TypeError('fetchWithRetry does not support Request input');
@@ -2179,7 +2227,9 @@ function fetchWithUndici(
 
   return undiciFetch(
     input,
-    toUndiciRequestInit(getUndiciInitWithProxySupport(init, proxyConfig)),
+    toUndiciRequestInit(
+      getUndiciInitWithProxySupport(init, proxyConfig, ignoreSSLErrors),
+    ),
   ).then(adaptUndiciResponse);
 }
 
@@ -2188,8 +2238,14 @@ export async function fetchWithRetryUsingFetch(
   input: RequestInfo | URL,
   options: FetchWithRetryOptions = {},
 ): Promise<Response> {
-  const { retryConfig, logger, connectionTimeoutMs, proxy, ...fetchOptions } =
-    options;
+  const {
+    retryConfig,
+    logger,
+    connectionTimeoutMs,
+    proxy,
+    ignoreSSLErrors,
+    ...fetchOptions
+  } = options;
   const maxRetries =
     retryConfig?.maxRetries ?? DEFAULT_NORMAL_RETRY_CONFIG.maxRetries;
   const initialDelayMs =
@@ -2263,6 +2319,7 @@ export async function fetchWithRetryUsingFetch(
           signal: timeoutController.signal,
         },
         proxy,
+        ignoreSSLErrors,
       );
 
       const response = await fetcher(input, requestInit);

@@ -12,6 +12,7 @@ import { t } from '../../i18n';
 
 type NetworkField =
   | { kind: 'timeout'; field: 'connection' | 'response' }
+  | { kind: 'ignoreSSLErrors' }
   | {
       kind: 'retry';
       field:
@@ -67,6 +68,18 @@ export async function runTimeoutFormScreen(
         'Maximum time to wait between data chunks during streaming (resets on each data received)',
       ),
       edit: { kind: 'timeout', field: 'response' },
+    },
+    { label: '', kind: vscode.QuickPickItemKind.Separator },
+    {
+      label: `$(shield) ${t('Ignore SSL Certificate Errors')}`,
+      description:
+        route.ignoreSSLErrors === undefined
+          ? t('default ({0})', t('Disabled'))
+          : route.ignoreSSLErrors
+            ? t('Enabled')
+            : t('Disabled'),
+      detail: t('Disable TLS certificate validation for API requests'),
+      edit: { kind: 'ignoreSSLErrors' },
     },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
     {
@@ -187,6 +200,7 @@ export async function runTimeoutFormScreen(
   if (!selection || selection.action === 'back') {
     route.draft.timeout = hasTimeoutValues(timeout) ? timeout : undefined;
     route.draft.retry = hasRetryValues(retry) ? retry : undefined;
+    route.draft.ignoreSSLErrors = route.ignoreSSLErrors;
     route.draft.proxy = hasProxyValues(proxy) ? proxy : undefined;
     return { kind: 'pop' };
   }
@@ -199,6 +213,7 @@ export async function runTimeoutFormScreen(
     route.retry.maxDelayMs = undefined;
     route.retry.backoffMultiplier = undefined;
     route.retry.jitterFactor = undefined;
+    route.ignoreSSLErrors = undefined;
     route.proxy.type = undefined;
     route.proxy.url = undefined;
     route.proxy.authorization = undefined;
@@ -223,6 +238,22 @@ export async function runTimeoutFormScreen(
       await editTimeoutField(timeout, selection.edit.field, defaultValue);
     } else if (selection.edit.kind === 'retry') {
       await editRetryField(retry, selection.edit.field, globalDefaults.retry);
+    } else if (selection.edit.kind === 'ignoreSSLErrors') {
+      const picked = await pickQuickItem<
+        vscode.QuickPickItem & { value: boolean | undefined }
+      >({
+        title: t('Ignore SSL Certificate Errors'),
+        placeholder: t('Select whether to validate API certificates'),
+        ignoreFocusOut: true,
+        items: [
+          { label: t('Default'), value: undefined },
+          { label: t('Disabled'), value: false },
+          { label: t('Enabled'), value: true },
+        ],
+      });
+      if (picked) {
+        route.ignoreSSLErrors = picked.value;
+      }
     } else {
       await editProxyField(proxy, selection.edit.field);
     }
