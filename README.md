@@ -198,7 +198,7 @@ This section uses DeepSeek as an example, adding the provider and two models.
    - You can create multiple configs for the same provider with different names, e.g., `DeepSeek-Person`, `DeepSeek-Team`.
 
 3. Choose the API format: `API Format`.
-   - DeepSeek uses the `OpenAI Chat Completion` format, so select that.
+   - DeepSeek uses the `OpenAI Responses` format by default, so select that.
    - To see all supported formats, refer to the [API Format Support Table](#api-format-support-table).
 
 4. Set the base URL: `API Base URL`.
