@@ -286,6 +286,13 @@ export enum FeatureId {
    */
   OpenAIUseDeepSeekReasoningEffortParam = 'openai_use-deepseek-reasoning-effort-param',
   /**
+   * GLM-5.3 always reasons and accepts `low`, `high`, or `max` as its
+   * `reasoning_effort` value.
+   *
+   * @see https://docs.z.ai/guides/llm/glm-5.3
+   */
+  OpenAIUseGlm53ReasoningEffortParam = 'openai_use-glm-5.3-reasoning-effort-param',
+  /**
    * Using both the unofficial `thinking` and the `reasoning` fields in the OpenAI Responses API.
    *
    * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
@@ -638,6 +645,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
         ]),
       (model) => modelFamilyIncludes(model, 'deepseek-v4'),
       (model) => modelFamilyIncludes(model, 'glm-5.2'),
+      (model) => modelFamilyIncludes(model, 'glm-5.3'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -668,6 +676,9 @@ export const FEATURES: Record<FeatureId, Feature> = {
       (model) => modelFamilyIncludes(model, 'glm-5.2'),
       (model) => modelFamilyIncludes(model, 'deepseek-v4'),
     ],
+  },
+  [FeatureId.OpenAIUseGlm53ReasoningEffortParam]: {
+    customCheckers: [(model) => modelFamilyIncludes(model, 'glm-5.3')],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
     supportedProviders: [
