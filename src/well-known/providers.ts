@@ -455,7 +455,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
   {
     name: 'DeepSeek',
     category: 'General',
-    type: 'openai-chat-completion',
+    type: 'openai-responses',
     baseUrl: 'https://api.deepseek.com',
     completion: { baseUrl: '../beta' },
     balanceProvider: { method: 'deepseek' },

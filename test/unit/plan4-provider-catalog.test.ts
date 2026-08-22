@@ -67,6 +67,15 @@ describe('Plan 4 well-known catalog', () => {
     });
   });
 
+  it('uses Responses by default for DeepSeek', () => {
+    expect(
+      WELL_KNOWN_PROVIDERS.find((provider) => provider.name === 'DeepSeek'),
+    ).toMatchObject({
+      type: 'openai-responses',
+      baseUrl: 'https://api.deepseek.com',
+    });
+  });
+
   it('declares Zeta primary IDs, aliases, and only completion templates', () => {
     expect(getModel('zeta')).toMatchObject({
       completion: { templates: ['zeta1'] },

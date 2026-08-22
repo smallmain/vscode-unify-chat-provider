@@ -198,7 +198,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
    - 同一个供应商可以添加多个不同名称的配置，比如 `DeepSeek-Person`、`DeepSeek-Team`。
 
 3. 填写接口格式：`API 格式`。
-   - DeepSeek 的接口是 `OpenAI Chat Completion` 格式，所以选则该格式。
+   - DeepSeek 默认使用 `OpenAI Responses` 格式，所以选择该格式。
    - 要了解支持的所有格式可查看 [API 格式支持表](#api-格式支持表)。
 
 4. 填写基础 URL：`API 基础 URL`。
