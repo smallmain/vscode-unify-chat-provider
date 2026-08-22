@@ -47,6 +47,9 @@ const CODEX_REASONING_SUMMARY_DEFAULTS = {
     summary: 'auto',
   },
 } satisfies Pick<ModelConfig, 'maxOutputTokens' | 'thinking'>;
+// Codex's 1M long-context mode reserves 128K tokens for model output.
+const CODEX_GPT_5_6_MAX_INPUT_TOKENS = 872000;
+
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
@@ -449,17 +452,17 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
     return [
       {
         id: 'gpt-5.6-sol',
-        maxInputTokens: 272000,
+        maxInputTokens: CODEX_GPT_5_6_MAX_INPUT_TOKENS,
         ...CODEX_REASONING_SUMMARY_DEFAULTS,
       },
       {
         id: 'gpt-5.6-terra',
-        maxInputTokens: 272000,
+        maxInputTokens: CODEX_GPT_5_6_MAX_INPUT_TOKENS,
         ...CODEX_REASONING_SUMMARY_DEFAULTS,
       },
       {
         id: 'gpt-5.6-luna',
-        maxInputTokens: 272000,
+        maxInputTokens: CODEX_GPT_5_6_MAX_INPUT_TOKENS,
         ...CODEX_REASONING_SUMMARY_DEFAULTS,
       },
       {
