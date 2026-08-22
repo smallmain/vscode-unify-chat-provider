@@ -96,6 +96,7 @@ import {
  * - `openrouter_claude_adaptive_verbosity` — OpenRouter Claude adaptive thinking + top-level `verbosity`
  * - `thinking`                     — DeepSeek / MiMo / GLM `thinking: { type }` param
  * - `thinking_with_high_max_reasoning_effort` — GLM / DeepSeek V4 `thinking` + `reasoning_effort` (`high` / `max`)
+ * - `forced_thinking_with_reasoning_effort` — GLM-5.3 forced thinking + `reasoning_effort`
  * - `thinking_with_reasoning_effort` — VolcEngine `thinking` + `reasoning_effort`
  * - `disable_reasoning`            — Cerebras GLM `disable_reasoning` boolean
  * - `enable_thinking`              — Qwen / SiliconFlow `enable_thinking` boolean
@@ -108,6 +109,7 @@ type ReasoningParamType =
   | 'openrouter_claude_adaptive_verbosity'
   | 'thinking'
   | 'thinking_with_high_max_reasoning_effort'
+  | 'forced_thinking_with_reasoning_effort'
   | 'thinking_with_reasoning_effort'
   | 'official'
   | 'disable_reasoning'
@@ -736,6 +738,17 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         };
       }
 
+      // GLM-5.3 — thinking is mandatory and `reasoning_effort` controls depth.
+      // @see https://docs.z.ai/guides/llm/glm-5.3
+      case 'forced_thinking_with_reasoning_effort': {
+        if (!thinking) {
+          return {};
+        }
+        return {
+          thinking: { type: 'enabled' },
+        };
+      }
+
       // VolcEngine — `thinking: { type }` + `reasoning_effort`
       // @see https://www.volcengine.com/docs/82379/1569618
       case 'thinking_with_reasoning_effort': {
@@ -855,6 +868,19 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       };
     }
 
+    if (type === 'forced_thinking_with_reasoning_effort') {
+      if (this.isThinkingDisabled(thinking)) {
+        return { reasoning_effort: 'low' };
+      }
+      return thinking.effort == null
+        ? {}
+        : {
+            reasoning_effort: this.normalizeReasoningEffortForGlm53(
+              thinking.effort,
+            ),
+          };
+    }
+
     if (type !== 'thinking_with_high_max_reasoning_effort') {
       return {};
     }
@@ -905,6 +931,24 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       case 'medium':
       case 'low':
       case 'minimal':
+      default:
+        return 'high';
+    }
+  }
+
+  private normalizeReasoningEffortForGlm53(
+    effort: NonNullable<NonNullable<ModelConfig['thinking']>['effort']>,
+  ): 'low' | 'high' | 'max' {
+    switch (effort) {
+      case 'none':
+      case 'minimal':
+      case 'low':
+        return 'low';
+      case 'xhigh':
+      case 'max':
+        return 'max';
+      case 'medium':
+      case 'high':
       default:
         return 'high';
     }
@@ -1016,6 +1060,11 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       this.config,
       model,
     );
+    const useGlm53ReasoningEffortParam = isFeatureSupported(
+      FeatureId.OpenAIUseGlm53ReasoningEffortParam,
+      this.config,
+      model,
+    );
     const useTopK = isFeatureSupported(
       FeatureId.OpenAIUseTopK,
       this.config,
@@ -1083,11 +1132,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     } else if (useReasoningParam) {
       thinkingParamType = 'reasoning';
     } else if (useThinkingParam) {
-      thinkingParamType = useDeepSeekReasoningEffortParam
-        ? 'thinking_with_high_max_reasoning_effort'
-        : useReasoningEffortParam
-          ? 'thinking_with_reasoning_effort'
-          : 'thinking';
+      thinkingParamType = useGlm53ReasoningEffortParam
+        ? 'forced_thinking_with_reasoning_effort'
+        : useDeepSeekReasoningEffortParam
+          ? 'thinking_with_high_max_reasoning_effort'
+          : useReasoningEffortParam
+            ? 'thinking_with_reasoning_effort'
+            : 'thinking';
     } else if (useDisableReasoningParam) {
       thinkingParamType = 'disable_reasoning';
     } else if (useThinkingParam3) {
