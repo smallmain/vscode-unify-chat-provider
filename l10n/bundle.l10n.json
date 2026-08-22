@@ -810,7 +810,7 @@
   "Monitor usage percentages via Gemini CLI retrieveUserQuota API": "Monitor usage percentages via Gemini CLI retrieveUserQuota API",
   "Monitor usage percentages via Codex usage APIs": "Monitor usage percentages via Codex usage APIs",
   "Monitor subscription and tool usage quotas via Synthetic API": "Monitor subscription and tool usage quotas via Synthetic API",
-  "Monitor balance via MiniMax coding plan API": "Monitor balance via MiniMax coding plan API",
+  "Monitor MiniMax Token Plan and Coding Plan quotas": "Monitor MiniMax Token Plan and Coding Plan quotas",
   "Moonshot AI Balance": "Moonshot AI Balance",
   "New API Balance": "New API Balance",
   "New API Balance Configuration": "New API Balance Configuration",

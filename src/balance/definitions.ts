@@ -223,7 +223,7 @@ export const BALANCE_METHODS = {
   minimax: {
     id: 'minimax',
     label: t('MiniMax Balance'),
-    description: t('Monitor balance via MiniMax coding plan API'),
+    description: t('Monitor MiniMax Token Plan and Coding Plan quotas'),
     category: 'General',
     ctor: MiniMaxBalanceProvider,
     supportsSensitiveDataInSettings:

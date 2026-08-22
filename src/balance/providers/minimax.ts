@@ -5,6 +5,7 @@ import { fetchWithRetry } from '../../utils';
 import type { SecretStore } from '../../secret';
 import type {
   BalanceConfig,
+  BalanceMetric,
   BalanceRefreshInput,
   BalanceRefreshResult,
   BalanceSnapshot,
@@ -75,10 +76,332 @@ function parseErrorMessage(text: string): string | undefined {
   return normalized;
 }
 
-const MINIMAX_BALANCE_PATH = '/v1/api/openplatform/coding_plan/remains';
+const MINIMAX_TOKEN_PLAN_PATH = '/v1/token_plan/remains';
+const MINIMAX_CODING_PLAN_PATH = '/v1/api/openplatform/coding_plan/remains';
 
-function resolveMiniMaxBalanceEndpoint(baseUrl: string): string {
-  return new URL(MINIMAX_BALANCE_PATH, baseUrl).toString();
+export function resolveMiniMaxTokenPlanEndpoint(baseUrl: string): string {
+  const hostname = new URL(baseUrl).hostname.toLowerCase();
+  const tokenPlanHost =
+    hostname === 'minimaxi.com' || hostname.endsWith('.minimaxi.com')
+      ? 'www.minimaxi.com'
+      : 'www.minimax.io';
+  return new URL(MINIMAX_TOKEN_PLAN_PATH, `https://${tokenPlanHost}`).toString();
+}
+
+export function resolveMiniMaxCodingPlanEndpoint(baseUrl: string): string {
+  return new URL(MINIMAX_CODING_PLAN_PATH, baseUrl).toString();
+}
+
+function isValidPercent(value: number | undefined): value is number {
+  return value !== undefined && value >= 0 && value <= 100;
+}
+
+function isValidTimestamp(value: number | undefined): value is number {
+  return value !== undefined && value > 0;
+}
+
+function hasQuotaWindow(model: Record<string, unknown>): boolean {
+  const intervalPercent = pickNumberLike(
+    model,
+    'current_interval_remaining_percent',
+  );
+  const weeklyPercent = pickNumberLike(
+    model,
+    'current_weekly_remaining_percent',
+  );
+  const intervalTotal = pickNumberLike(model, 'current_interval_total_count');
+  const weeklyTotal = pickNumberLike(model, 'current_weekly_total_count');
+  return (
+    isValidPercent(intervalPercent) ||
+    isValidPercent(weeklyPercent) ||
+    (intervalTotal !== undefined && intervalTotal > 0) ||
+    (weeklyTotal !== undefined && weeklyTotal > 0)
+  );
+}
+
+function isUnavailableQuotaModel(model: Record<string, unknown>): boolean {
+  return (
+    pickNumberLike(model, 'current_interval_total_count') === 0 &&
+    pickNumberLike(model, 'current_weekly_total_count') === 0 &&
+    pickNumberLike(model, 'current_interval_status') === 3 &&
+    pickNumberLike(model, 'current_weekly_status') === 3
+  );
+}
+
+function isCodingQuotaModel(model: Record<string, unknown>): boolean {
+  const name = pickString(model, 'model_name')?.trim().toLowerCase();
+  if (!name) {
+    return false;
+  }
+  return (
+    name === 'general' ||
+    name === 'text' ||
+    name.startsWith('minimax-') ||
+    name.startsWith('minimax_m')
+  );
+}
+
+function hasFiveHourWindow(model: Record<string, unknown>): boolean {
+  const startTime = pickNumberLike(model, 'start_time');
+  const endTime = pickNumberLike(model, 'end_time');
+  if (startTime === undefined || endTime === undefined) {
+    return false;
+  }
+  const durationMs = endTime - startTime;
+  return (
+    durationMs >= 4 * 60 * 60 * 1000 &&
+    durationMs <= 6 * 60 * 60 * 1000
+  );
+}
+
+function pickTokenPlanModel(
+  modelRemains: unknown[],
+): Record<string, unknown> | undefined {
+  const models = modelRemains
+    .filter(isRecord)
+    .filter((model) => !isUnavailableQuotaModel(model));
+  return (
+    models.find((model) => isCodingQuotaModel(model) && hasQuotaWindow(model)) ??
+    models.find((model) => hasFiveHourWindow(model) && hasQuotaWindow(model)) ??
+    models.find(hasQuotaWindow)
+  );
+}
+
+interface MiniMaxWindowDefinition {
+  id: string;
+  label: string;
+  period: 'custom' | 'week';
+  totalKey: string;
+  remainingKey: string;
+  remainingPercentKey: string;
+  endTimeKey: string;
+  statusKey: string;
+}
+
+function parseTokenPlanWindow(
+  model: Record<string, unknown>,
+  definition: MiniMaxWindowDefinition,
+): BalanceMetric[] {
+  const items: BalanceMetric[] = [];
+  const total = pickNumberLike(model, definition.totalKey);
+  const rawRemaining = pickNumberLike(model, definition.remainingKey);
+  const rawRemainingPercent = pickNumberLike(
+    model,
+    definition.remainingPercentKey,
+  );
+  const endTime = pickNumberLike(model, definition.endTimeKey);
+  const status = pickNumberLike(model, definition.statusKey);
+  const hasCountQuota = total !== undefined && total > 0;
+  const remaining =
+    hasCountQuota && rawRemaining !== undefined
+      ? Math.max(0, Math.min(total, rawRemaining))
+      : undefined;
+  const remainingPercent = isValidPercent(rawRemainingPercent)
+    ? rawRemainingPercent
+    : remaining !== undefined && total !== undefined
+      ? (remaining / total) * 100
+      : undefined;
+  const metricContext = {
+    period: definition.period,
+    label: definition.label,
+  } as const;
+
+  if (remaining !== undefined && total !== undefined) {
+    items.push(
+      {
+        id: `${definition.id}-remaining`,
+        type: 'integer',
+        ...metricContext,
+        direction: 'remaining',
+        value: remaining,
+      },
+      {
+        id: `${definition.id}-used`,
+        type: 'integer',
+        ...metricContext,
+        direction: 'used',
+        value: Math.max(0, total - remaining),
+      },
+      {
+        id: `${definition.id}-limit`,
+        type: 'integer',
+        ...metricContext,
+        direction: 'limit',
+        value: total,
+      },
+    );
+  }
+
+  if (status === 3 && !hasCountQuota) {
+    items.push({
+      id: `${definition.id}-status`,
+      type: 'status',
+      ...metricContext,
+      value: 'unlimited',
+    });
+  } else if (remainingPercent !== undefined) {
+    items.push({
+      id: `${definition.id}-remaining-percent`,
+      type: 'percent',
+      ...metricContext,
+      value: remainingPercent,
+      basis: 'remaining',
+    });
+  } else if (status === 2) {
+    items.push({
+      id: `${definition.id}-status`,
+      type: 'status',
+      ...metricContext,
+      value: 'exhausted',
+    });
+  }
+
+  if (items.length > 0 && isValidTimestamp(endTime)) {
+    items.push({
+      id: `${definition.id}-reset`,
+      type: 'time',
+      ...metricContext,
+      kind: 'resetAt',
+      value: new Date(endTime).toISOString(),
+      timestampMs: endTime,
+    });
+  }
+
+  return items;
+}
+
+export function parseMiniMaxTokenPlanSnapshot(
+  value: unknown,
+  updatedAt = Date.now(),
+): BalanceSnapshot | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const modelRemains = value['model_remains'];
+  if (!Array.isArray(modelRemains) || modelRemains.length === 0) {
+    return undefined;
+  }
+  const model = pickTokenPlanModel(modelRemains);
+  if (!model) {
+    return undefined;
+  }
+
+  const intervalItems = parseTokenPlanWindow(model, {
+    id: 'minimax-token-plan-5-hour',
+    label: t('5-hour limit'),
+    period: 'custom',
+    totalKey: 'current_interval_total_count',
+    remainingKey: 'current_interval_usage_count',
+    remainingPercentKey: 'current_interval_remaining_percent',
+    endTimeKey: 'end_time',
+    statusKey: 'current_interval_status',
+  });
+  const weeklyItems = parseTokenPlanWindow(model, {
+    id: 'minimax-token-plan-weekly',
+    label: t('Weekly limit'),
+    period: 'week',
+    totalKey: 'current_weekly_total_count',
+    remainingKey: 'current_weekly_usage_count',
+    remainingPercentKey: 'current_weekly_remaining_percent',
+    endTimeKey: 'weekly_end_time',
+    statusKey: 'current_weekly_status',
+  });
+  const items = [...intervalItems, ...weeklyItems];
+  if (items.length === 0) {
+    return undefined;
+  }
+
+  const primaryId =
+    intervalItems.find((item) => item.type === 'percent')?.id ??
+    intervalItems.find(
+      (item) => item.type === 'integer' && item.direction === 'remaining',
+    )?.id ??
+    intervalItems[0]?.id ??
+    weeklyItems[0]?.id;
+
+  return {
+    updatedAt,
+    items: items.map((item) => ({
+      ...item,
+      primary: item.id === primaryId,
+    })),
+  };
+}
+
+export function parseMiniMaxCodingPlanSnapshot(
+  value: unknown,
+  updatedAt = Date.now(),
+): BalanceSnapshot | undefined {
+  if (!isRecord(value)) {
+    return undefined;
+  }
+  const modelRemains = value['model_remains'];
+  if (!Array.isArray(modelRemains) || modelRemains.length === 0) {
+    return undefined;
+  }
+  const firstModel = modelRemains[0];
+  if (!isRecord(firstModel)) {
+    return undefined;
+  }
+
+  const totalCount = pickNumberLike(
+    firstModel,
+    'current_interval_total_count',
+  );
+  const currentIntervalRemainingCount = pickNumberLike(
+    firstModel,
+    'current_interval_usage_count',
+  );
+  const endTime = pickNumberLike(firstModel, 'end_time');
+  if (
+    totalCount === undefined ||
+    currentIntervalRemainingCount === undefined ||
+    endTime === undefined
+  ) {
+    return undefined;
+  }
+
+  const usedCount = Math.max(0, totalCount - currentIntervalRemainingCount);
+  const usedPercent =
+    totalCount > 0
+      ? Math.max(0, Math.min(100, (usedCount / totalCount) * 100))
+      : 0;
+
+  return {
+    updatedAt,
+    items: [
+      {
+        id: 'minimax-requests',
+        type: 'integer',
+        period: 'current',
+        direction: 'used',
+        value: usedCount,
+        primary: true,
+      },
+      {
+        id: 'minimax-requests-limit',
+        type: 'integer',
+        period: 'current',
+        direction: 'limit',
+        value: totalCount,
+      },
+      {
+        id: 'minimax-used-percent',
+        type: 'percent',
+        period: 'current',
+        value: usedPercent,
+        basis: 'used',
+      },
+      {
+        id: 'minimax-period-end',
+        type: 'time',
+        period: 'current',
+        kind: 'resetAt',
+        value: new Date(endTime).toISOString(),
+        timestampMs: endTime,
+      },
+    ],
+  };
 }
 
 export class MiniMaxBalanceProvider implements BalanceProvider {
@@ -121,7 +444,7 @@ export class MiniMaxBalanceProvider implements BalanceProvider {
     return {
       id: 'minimax',
       label: t('MiniMax Balance'),
-      description: t('Monitor balance via MiniMax coding plan API'),
+      description: t('Monitor MiniMax Token Plan and Coding Plan quotas'),
     };
   }
 
@@ -162,141 +485,85 @@ export class MiniMaxBalanceProvider implements BalanceProvider {
       providerType: input.provider.type,
     });
 
-    try {
-      const balanceEndpoint = resolveMiniMaxBalanceEndpoint(input.provider.baseUrl);
-      const response = await fetchWithRetry(balanceEndpoint, {
-        method: 'GET',
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-          Accept: 'application/json',
-        },
-        logger,
-        proxy: input.provider.proxy,
-      });
+    const queryEndpoint = async (
+      endpoint: string,
+      parseSnapshot: (value: unknown) => BalanceSnapshot | undefined,
+    ): Promise<BalanceRefreshResult> => {
+      try {
+        const response = await fetchWithRetry(endpoint, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${apiKey}`,
+            Accept: 'application/json',
+          },
+          logger,
+          proxy: input.provider.proxy,
+        });
 
-      if (!response.ok) {
-        const text = await response.text().catch(() => '');
-        return {
-          success: false,
-          error:
-            parseErrorMessage(text) ||
-            t(
-              'Failed to query {0} balance (HTTP {1}).',
-              'MiniMax',
-              `${response.status}`,
-            ),
-        };
-      }
-
-      const json: unknown = await response.json().catch(() => undefined);
-      if (!isRecord(json)) {
-        return {
-          success: false,
-          error: t('Unexpected {0} balance response.', 'MiniMax'),
-        };
-      }
-
-      const baseResp = json['base_resp'];
-      if (isRecord(baseResp)) {
-        const statusCode = pickNumberLike(baseResp, 'status_code');
-        if (statusCode !== undefined && statusCode !== 0) {
-          const statusMsg = pickString(baseResp, 'status_msg')?.trim();
+        if (!response.ok) {
+          const text = await response.text().catch(() => '');
           return {
             success: false,
-            error: statusMsg || t('Unexpected {0} balance response.', 'MiniMax'),
+            error:
+              parseErrorMessage(text) ||
+              t(
+                'Failed to query {0} balance (HTTP {1}).',
+                'MiniMax',
+                `${response.status}`,
+              ),
           };
         }
-      }
 
-      const modelRemains = json['model_remains'];
-      if (!Array.isArray(modelRemains) || modelRemains.length === 0) {
+        const json: unknown = await response.json().catch(() => undefined);
+        if (!isRecord(json)) {
+          return {
+            success: false,
+            error: t('Unexpected {0} balance response.', 'MiniMax'),
+          };
+        }
+
+        const baseResp = json['base_resp'];
+        if (isRecord(baseResp)) {
+          const statusCode = pickNumberLike(baseResp, 'status_code');
+          if (statusCode !== undefined && statusCode !== 0) {
+            const statusMsg = pickString(baseResp, 'status_msg')?.trim();
+            return {
+              success: false,
+              error:
+                statusMsg || t('Unexpected {0} balance response.', 'MiniMax'),
+            };
+          }
+        }
+
+        const snapshot = parseSnapshot(json);
+        if (!snapshot) {
+          return {
+            success: false,
+            error: t('Unexpected {0} balance response.', 'MiniMax'),
+          };
+        }
+
+        return { success: true, snapshot };
+      } catch (error) {
         return {
           success: false,
-          error: t('Unexpected {0} balance response.', 'MiniMax'),
+          error: error instanceof Error ? error.message : String(error),
         };
       }
+    };
 
-      // Use the first entry since all models have the same interval data.
-      const firstModel = modelRemains[0];
-      if (!isRecord(firstModel)) {
-        return {
-          success: false,
-          error: t('Unexpected {0} balance response.', 'MiniMax'),
-        };
-      }
-
-      const totalCount = pickNumberLike(
-        firstModel,
-        'current_interval_total_count',
-      );
-      const currentIntervalUsageCount = pickNumberLike(
-        firstModel,
-        'current_interval_usage_count',
-      );
-      const endTime = pickNumberLike(firstModel, 'end_time');
-      if (
-        totalCount === undefined ||
-        currentIntervalUsageCount === undefined ||
-        endTime === undefined
-      ) {
-        return {
-          success: false,
-          error: t('Unexpected {0} balance response.', 'MiniMax'),
-        };
-      }
-
-      // MiniMax's current_interval_usage_count is remaining quota for the current interval.
-      const usedCount = Math.max(0, totalCount - currentIntervalUsageCount);
-
-      const usedPercent = totalCount > 0
-        ? Math.max(0, Math.min(100, (usedCount / totalCount) * 100))
-        : 0;
-
-      const snapshot: BalanceSnapshot = {
-        updatedAt: Date.now(),
-        items: [
-          {
-            id: 'minimax-requests',
-            type: 'integer',
-            period: 'current',
-            direction: 'used',
-            value: usedCount,
-            primary: true,
-          },
-          {
-            id: 'minimax-requests-limit',
-            type: 'integer',
-            period: 'current',
-            direction: 'limit',
-            value: totalCount,
-          },
-          {
-            id: 'minimax-used-percent',
-            type: 'percent',
-            period: 'current',
-            value: usedPercent,
-            basis: 'used',
-          },
-          {
-            id: 'minimax-period-end',
-            type: 'time',
-            period: 'current',
-            kind: 'resetAt',
-            value: new Date(endTime).toISOString(),
-            timestampMs: endTime,
-          },
-        ],
-      };
-
-      return {
-        success: true,
-        snapshot,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-      };
+    const tokenPlanResult = await queryEndpoint(
+      resolveMiniMaxTokenPlanEndpoint(input.provider.baseUrl),
+      parseMiniMaxTokenPlanSnapshot,
+    );
+    if (tokenPlanResult.success) {
+      return tokenPlanResult;
     }
+
+    const codingPlanResult = await queryEndpoint(
+      resolveMiniMaxCodingPlanEndpoint(input.provider.baseUrl),
+      parseMiniMaxCodingPlanSnapshot,
+    );
+    return codingPlanResult.success ? codingPlanResult : tokenPlanResult;
   }
 }
