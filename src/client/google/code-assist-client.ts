@@ -451,7 +451,7 @@ function buildToolParameterSignature(schema: unknown): string {
   return segments.join(', ');
 }
 
-function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
+export function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
   const unsupportedConstraints = new Set<string>([
     'minLength',
     'maxLength',
@@ -480,6 +480,8 @@ function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
     'markdownDescription',
     'deprecationMessage',
     'errorMessage',
+    // MCP transport metadata is not a Google FunctionDeclaration schema field.
+    'x-mcp-header',
   ]);
 
   const appendHintToDescription = (
