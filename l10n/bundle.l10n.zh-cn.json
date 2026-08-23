@@ -1334,5 +1334,11 @@
   "LiteLLM Budget": "LiteLLM 预算",
   "Monitor budget via LiteLLM key info API": "通过 LiteLLM Key 信息 API 监控预算",
   "No budget limit configured": "未配置预算上限",
-  "Spent": "已支出"
+  "Spent": "已支出",
+  "All models": "全部模型",
+  "Filter Auto-Fetched Models": "筛选自动拉取的模型",
+  "Filter Auto-Fetched Models...": "筛选自动拉取的模型...",
+  "Not returned by provider": "供应商当前未返回",
+  "Select models to include": "选择要包含的模型",
+  "{0} selected": "已选择 {0} 个"
 }

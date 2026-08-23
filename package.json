@@ -1095,6 +1095,15 @@
                 "description": "%configuration.endpoints.autoFetchOfficialModels.description%",
                 "default": false
               },
+              "autoFetchOfficialModelsFilter": {
+                "type": "array",
+                "description": "%configuration.endpoints.autoFetchOfficialModelsFilter.description%",
+                "uniqueItems": true,
+                "items": {
+                  "type": "string",
+                  "minLength": 1
+                }
+              },
               "models": {
                 "type": "array",
                 "description": "%configuration.endpoints.models.description%",

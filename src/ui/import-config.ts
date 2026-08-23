@@ -8,6 +8,7 @@ import { mergePartialProviderConfig } from './base64-config';
 import { createProviderDraft, type ProviderFormDraft } from './form-utils';
 import { getRenamedProviderType } from '../secret/migration';
 import { parseAuthTransferConfig } from '../auth/auth-transfer-parser';
+import { normalizeAutoFetchOfficialModelsFilter } from '../official-model-filter';
 
 /**
  * Import compatibility: migrate legacy top-level `apiKey` field to `auth`.
@@ -72,7 +73,8 @@ function hasProviderIndicators(value: Record<string, unknown>): boolean {
     'apiKey' in value ||
     'balanceProvider' in value ||
     'timeout' in value ||
-    'autoFetchOfficialModels' in value
+    'autoFetchOfficialModels' in value ||
+    'autoFetchOfficialModelsFilter' in value
   );
 }
 
@@ -91,6 +93,20 @@ export function parseProviderConfigInput(
 
   const config: Partial<ProviderConfig> = {};
   mergePartialFromRecordByKeys(config, value, PROVIDER_CONFIG_KEYS);
+
+  const officialModelsFilter = value['autoFetchOfficialModelsFilter'];
+  if (officialModelsFilter !== undefined) {
+    if (
+      !Array.isArray(officialModelsFilter) ||
+      officialModelsFilter.some(
+        (item) => typeof item !== 'string' || item.trim() === '',
+      )
+    ) {
+      return undefined;
+    }
+    config.autoFetchOfficialModelsFilter =
+      normalizeAutoFetchOfficialModelsFilter(officialModelsFilter);
+  }
 
   const hasAuth = Object.prototype.hasOwnProperty.call(value, 'auth');
   const hasLegacyApiKey = Object.prototype.hasOwnProperty.call(value, 'apiKey');

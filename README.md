@@ -342,6 +342,7 @@ This feature periodically fetches the latest official model list from the provid
 </div>
 
 - Auto-fetched models show an `internet` icon before the model name.
+- Use `Filter Auto-Fetched Models` to include only selected model IDs while continuing to refresh their parameters from the provider.
 - If an auto-fetched model ID conflicts with a manually configured one, only the manually configured model is shown.
 - Auto-fetched models are refreshed periodically; you can also click `(click to fetch)` to refresh manually.
 - Run the VS Code command `Unify Chat Provider: Refresh All Provider's Official Models` to trigger refresh for all providers.
@@ -531,6 +532,7 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | Backoff Multiplier         | `retry.backoffMultiplier`                        | Minimum: `1`. Inherits the global value when unset; built-in default: `2`.                                                                                                                               |
 | Jitter Factor              | `retry.jitterFactor`                             | Range: `0`-`1`. Inherits the global value when unset; built-in default: `0.1`.                                                                                                                           |
 | Auto-Fetch Official Models | `autoFetchOfficialModels`                        | Whether to fetch and synchronize official models from the provider API. Default: `false`.                                                                                                               |
+| Auto-Fetched Model Filter  | `autoFetchOfficialModelsFilter`                  | Optional allowlist of auto-fetched model IDs. When omitted, all official models are included; an empty array excludes all official models.                                                             |
 
 </details>
 

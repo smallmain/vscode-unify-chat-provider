@@ -116,6 +116,8 @@ export interface ProviderConfig {
   proxy?: ProxyConfig;
   /** Whether to auto-fetch official models from the provider API */
   autoFetchOfficialModels?: boolean;
+  /** Optional allowlist of auto-fetched official model IDs */
+  autoFetchOfficialModelsFilter?: string[];
   /** Context cache / prompt caching configuration. */
   contextCache?: ContextCacheConfig;
   /** Default code-completion capability settings for this provider. */
