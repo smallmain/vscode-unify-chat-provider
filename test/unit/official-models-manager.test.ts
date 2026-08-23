@@ -75,6 +75,7 @@ vi.mock('../../src/auth', () => ({
 
 import type * as vscode from 'vscode';
 import {
+  OFFICIAL_MODELS_PROCESSING_REVISION,
   OfficialModelsManager,
   type OfficialModelsAuthManager,
   type OfficialModelsConfigStore,
@@ -244,6 +245,68 @@ describe('official model manager provider boundary', () => {
       }),
     ]);
     expect(manager.getProviderState(config.name)?.models).toEqual(models);
+    manager.dispose();
+  });
+
+  it('invalidates pre-revision caches before serving or refreshing them', async () => {
+    providerClient.getAvailableModels.mockResolvedValue([
+      { id: 'gpt-5.6-sol' },
+      { id: 'claude-sonnet-5' },
+      { id: 'deepseek-v4-flash-free' },
+    ]);
+    const config: ProviderConfig = {
+      ...provider(),
+      type: 'openai-chat-completion',
+      name: 'OpenCode Zen (OpenAI Chat Completion)',
+      baseUrl: 'https://opencode.ai/zen',
+    };
+    const staleState = {
+      lastFetchTime: Date.now(),
+      lastAttemptTime: Date.now(),
+      models: [
+        { id: 'gpt-5.6-sol' },
+        { id: 'claude-sonnet-5' },
+        { id: 'deepseek-v4-flash-free', name: 'DeepSeek V4 Flash' },
+      ],
+      modelsHash: 'pre-processing-revision',
+      consecutiveIdenticalFetches: 5,
+      currentIntervalMs: 24 * 60 * 60 * 1000,
+    };
+    const storage = new Map<string, unknown>([
+      ['officialModelsState', { [config.name]: staleState }],
+    ]);
+    const manager = new OfficialModelsManager();
+
+    await manager.initialize(
+      context(storage),
+      configStore(config),
+      secretStore(),
+      authManager(),
+    );
+
+    expect(manager.getProviderState(config.name)).toMatchObject({
+      modelsProcessingRevision: OFFICIAL_MODELS_PROCESSING_REVISION,
+      lastFetchTime: 0,
+      lastAttemptTime: 0,
+      models: [],
+      modelsHash: '',
+    });
+    const migrated = storage.get('officialModelsState') as Record<
+      string,
+      Record<string, unknown>
+    >;
+    expect(migrated[config.name]).toMatchObject({
+      modelsProcessingRevision: OFFICIAL_MODELS_PROCESSING_REVISION,
+      models: [],
+    });
+
+    await expect(manager.getOfficialModels(config)).resolves.toEqual([
+      expect.objectContaining({
+        id: 'deepseek-v4-flash-free',
+        name: 'DeepSeek V4 Flash (Free)',
+      }),
+    ]);
+    expect(providerClient.getAvailableModels).toHaveBeenCalledOnce();
     manager.dispose();
   });
 

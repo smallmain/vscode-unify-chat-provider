@@ -15,7 +15,10 @@ vi.mock('../../src/client/utils', () => ({
       : pattern.test(url),
 }));
 
-import { prepareOfficialModels } from '../../src/well-known/opencode-models';
+import {
+  OPENCODE_PROTOCOL_RULES_REVISION,
+  prepareOfficialModels,
+} from '../../src/well-known/opencode-models';
 import type { ModelConfig, ProviderConfig } from '../../src/types';
 
 type OpenCodeProviderType =
@@ -46,9 +49,10 @@ describe('OpenCode official model aggregation', () => {
     { id: 'grok-4.5' },
     { id: 'muse-spark-1.2' },
     { id: 'claude-sonnet-5' },
-    { id: 'qwen3.7-plus' },
+    { id: 'qwen3.6-plus' },
     { id: 'gemini-3.7-flash' },
     { id: 'minimax-m3' },
+    { id: 'minimax-m3-free' },
     { id: 'deepseek-v4-flash' },
     { id: 'deepseek-v4-flash-free' },
   ];
@@ -64,7 +68,10 @@ describe('OpenCode official model aggregation', () => {
         ],
       ],
       ['openai-responses', ['gpt-5.6-sol', 'grok-4.5', 'muse-spark-1.2']],
-      ['anthropic', ['claude-sonnet-5', 'qwen3.7-plus']],
+      [
+        'anthropic',
+        ['claude-sonnet-5', 'qwen3.6-plus', 'minimax-m3-free'],
+      ],
       ['google-ai-studio', ['gemini-3.7-flash']],
     ]);
 
@@ -82,13 +89,17 @@ describe('OpenCode official model aggregation', () => {
     );
   });
 
-  it('uses Go-specific Messages routing for MiniMax and Qwen models', () => {
+  it('keeps documented Go Qwen models in both supported protocols', () => {
     const goCatalog: ModelConfig[] = [
       { id: 'gpt-5.6-luna' },
       { id: 'grok-4.5' },
       { id: 'muse-spark-1.2-contributor' },
       { id: 'minimax-m3' },
       { id: 'minimax-m2.7' },
+      { id: 'qwen3.5-plus' },
+      { id: 'qwen3.6-plus' },
+      { id: 'qwen3.7-max' },
+      { id: 'qwen3.7-plus' },
       { id: 'qwen3.8-max' },
       { id: 'deepseek-v4-pro' },
       { id: 'glm-5.3' },
@@ -102,10 +113,26 @@ describe('OpenCode official model aggregation', () => {
           provider('openai-chat-completion', baseUrl),
         ),
       ),
-    ).toEqual(['deepseek-v4-pro', 'glm-5.3']);
+    ).toEqual([
+      'qwen3.5-plus',
+      'qwen3.6-plus',
+      'qwen3.7-max',
+      'qwen3.7-plus',
+      'qwen3.8-max',
+      'deepseek-v4-pro',
+      'glm-5.3',
+    ]);
     expect(
       ids(prepareOfficialModels(goCatalog, provider('anthropic', baseUrl))),
-    ).toEqual(['minimax-m3', 'minimax-m2.7', 'qwen3.8-max']);
+    ).toEqual([
+      'minimax-m3',
+      'minimax-m2.7',
+      'qwen3.5-plus',
+      'qwen3.6-plus',
+      'qwen3.7-max',
+      'qwen3.7-plus',
+      'qwen3.8-max',
+    ]);
     expect(
       ids(
         prepareOfficialModels(
@@ -114,6 +141,29 @@ describe('OpenCode official model aggregation', () => {
         ),
       ),
     ).toEqual(['gpt-5.6-luna', 'grok-4.5', 'muse-spark-1.2-contributor']);
+  });
+
+  it('uses the service default for unknown IDs instead of family prefixes', () => {
+    const unknownCatalog: ModelConfig[] = [
+      { id: 'qwen-future' },
+      { id: 'claude-future' },
+    ];
+
+    expect(
+      ids(
+        prepareOfficialModels(
+          unknownCatalog,
+          provider('openai-chat-completion'),
+        ),
+      ),
+    ).toEqual(['qwen-future', 'claude-future']);
+    expect(
+      ids(prepareOfficialModels(unknownCatalog, provider('anthropic'))),
+    ).toEqual([]);
+  });
+
+  it('exposes the protocol table revision used by persisted cache state', () => {
+    expect(OPENCODE_PROTOCOL_RULES_REVISION).toBe(20260823);
   });
 
   it('marks a matched free variant without changing its API model ID', () => {

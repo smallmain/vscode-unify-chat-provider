@@ -67,6 +67,7 @@ const METHOD = 'config.syncPersistedProvider';
 
 describe('main-instance completion configuration sync', () => {
   const officialState = {
+    modelsProcessingRevision: 20260823,
     lastFetchTime: 1,
     models: [{ id: 'cloud-model' }],
     modelsHash: 'hash',
@@ -81,6 +82,20 @@ describe('main-instance completion configuration sync', () => {
         'officialModels.applyProviderState',
       ),
     ).toEqual(officialState);
+  });
+
+  it('requires the model processing revision in shared official model state', () => {
+    expect(() =>
+      parseOfficialModelsFetchState(
+        { ...officialState, modelsProcessingRevision: undefined },
+        'officialModels.applyProviderState',
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining('modelsProcessingRevision'),
+      }),
+    );
   });
 
   it('strictly parses local auth commit guards', () => {
@@ -354,8 +369,8 @@ describe('main-instance completion configuration sync', () => {
     expect(provider.models[0].completion).toEqual({});
   });
 
-  it('uses compatibility version 7 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(7);
+  it('uses compatibility version 8 without changing protocol version 1', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(8);
     expect(PROTOCOL_VERSION).toBe(1);
   });
 

@@ -1012,6 +1012,11 @@ export function parseOfficialModelsFetchState(
   method: string,
 ): OfficialModelsFetchState {
   const record = requireRecord(value, method);
+  const modelsProcessingRevision = requireNumber(
+    record['modelsProcessingRevision'],
+    method,
+    'state.modelsProcessingRevision',
+  );
   const lastFetchTime = requireNumber(
     record['lastFetchTime'],
     method,
@@ -1084,6 +1089,7 @@ export function parseOfficialModelsFetchState(
   }
 
   return {
+    modelsProcessingRevision,
     lastFetchTime,
     models: parseModels(record['models'], method, 'state.models'),
     modelsHash,

@@ -1,7 +1,10 @@
 import * as vscode from 'vscode';
 import { ModelConfig, ProviderConfig } from './types';
 import { createProvider } from './client/utils';
-import { prepareOfficialModels } from './well-known/opencode-models';
+import {
+  OPENCODE_PROTOCOL_RULES_REVISION,
+  prepareOfficialModels,
+} from './well-known/opencode-models';
 import { stableStringify } from './config-ops';
 import { SecretStore } from './secret';
 import {
@@ -36,6 +39,8 @@ import type { ConfigStore } from './config-store';
  * State for a single provider's official models fetch
  */
 export interface OfficialModelsFetchState {
+  /** Revision of the model normalization/filtering rules applied to models */
+  modelsProcessingRevision: number;
   /** Last successful fetch timestamp (ms) */
   lastFetchTime: number;
   /** Last fetch attempt timestamp (ms), includes both success and failure */
@@ -159,6 +164,9 @@ const FETCH_CONFIG = {
   /** Multiplier for interval when errors continue */
   errorBackoffMultiplier: 2,
 };
+
+export const OFFICIAL_MODELS_PROCESSING_REVISION =
+  OPENCODE_PROTOCOL_RULES_REVISION;
 
 const STATE_KEY = 'officialModelsState';
 
@@ -701,8 +709,31 @@ export class OfficialModelsManager {
     if (!this.extensionContext) return;
     const persisted =
       this.extensionContext.globalState.get<PersistedState>(STATE_KEY);
-    if (persisted) {
-      this.state = persisted;
+    if (!persisted) {
+      return;
+    }
+
+    let migrated = false;
+    const nextState: PersistedState = {};
+    for (const [providerName, state] of Object.entries(persisted)) {
+      if (
+        state.modelsProcessingRevision ===
+        OFFICIAL_MODELS_PROCESSING_REVISION
+      ) {
+        nextState[providerName] = state;
+        continue;
+      }
+
+      // Older caches may contain output from prior processing rules. The raw
+      // catalog is not stored separately, so invalidate instead of attempting
+      // a lossy reprocessing migration.
+      nextState[providerName] = this.createInitialFetchState();
+      migrated = true;
+    }
+    this.state = nextState;
+
+    if (migrated) {
+      await this.saveState();
     }
   }
 
@@ -1357,18 +1388,23 @@ export class OfficialModelsManager {
   /**
    * Ensure a state exists for the provider
    */
+  private createInitialFetchState(): OfficialModelsFetchState {
+    return {
+      modelsProcessingRevision: OFFICIAL_MODELS_PROCESSING_REVISION,
+      lastFetchTime: 0,
+      lastAttemptTime: 0,
+      models: [],
+      modelsHash: '',
+      consecutiveIdenticalFetches: 0,
+      currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
+      consecutiveErrorFetches: 0,
+      currentErrorIntervalMs: FETCH_CONFIG.errorInitialIntervalMs,
+    };
+  }
+
   private ensureState(providerName: string): OfficialModelsFetchState {
     if (!this.state[providerName]) {
-      this.state[providerName] = {
-        lastFetchTime: 0,
-        lastAttemptTime: 0,
-        models: [],
-        modelsHash: '',
-        consecutiveIdenticalFetches: 0,
-        currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
-        consecutiveErrorFetches: 0,
-        currentErrorIntervalMs: FETCH_CONFIG.errorInitialIntervalMs,
-      };
+      this.state[providerName] = this.createInitialFetchState();
     }
     return this.state[providerName];
   }
@@ -1577,16 +1613,7 @@ export class OfficialModelsManager {
     let session = this.draftSessions.get(sessionId);
     if (!session) {
       session = {
-        state: {
-          lastFetchTime: 0,
-          lastAttemptTime: 0,
-          models: [],
-          modelsHash: '',
-          consecutiveIdenticalFetches: 0,
-          currentIntervalMs: FETCH_CONFIG.initialIntervalMs,
-          consecutiveErrorFetches: 0,
-          currentErrorIntervalMs: FETCH_CONFIG.errorInitialIntervalMs,
-        },
+        state: this.createInitialFetchState(),
         // Placeholder signature; real signature is set when a fetch is triggered.
         configSignature: {
           type: '',
