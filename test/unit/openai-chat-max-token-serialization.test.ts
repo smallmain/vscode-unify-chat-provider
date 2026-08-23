@@ -390,14 +390,24 @@ describe('OpenAI Chat Completions max token serialization', () => {
       expectedKey: 'max_tokens',
     },
     {
-      name: 'recognizes a namespaced OpenAI model from NVIDIA',
+      name: 'uses the NVIDIA max_tokens protocol for namespaced GPT-OSS 120B',
       providerConfig: provider('https://integrate.api.nvidia.com/v1'),
       model: {
         id: 'openai/gpt-oss-120b',
         maxOutputTokens: 71,
         stream: true,
       },
-      expectedKey: 'max_completion_tokens',
+      expectedKey: 'max_tokens',
+    },
+    {
+      name: 'uses the NVIDIA max_tokens protocol for namespaced GPT-OSS 20B',
+      providerConfig: provider('https://integrate.api.nvidia.com/v1'),
+      model: {
+        id: 'openai/gpt-oss-20b',
+        maxOutputTokens: 72,
+        stream: false,
+      },
+      expectedKey: 'max_tokens',
     },
     {
       name: 'keeps max_tokens for a namespaced DeepSeek model from NVIDIA',

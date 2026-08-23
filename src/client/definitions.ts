@@ -548,6 +548,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'tokenhub-intl.tencentmaas.com',
       'api.lkeap.cloud.tencent.com',
       'router.huggingface.co',
+      'integrate.api.nvidia.com',
       'qianfan.baidubce.com',
       'portal.qwen.ai',
       'api.siliconflow.cn',
