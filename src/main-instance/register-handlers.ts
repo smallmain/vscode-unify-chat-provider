@@ -646,6 +646,7 @@ function isBalanceConfig(value: unknown): value is BalanceConfig {
     case 'none':
     case 'moonshot-ai':
     case 'kimi-code':
+    case 'sub2api':
     case 'deepseek':
     case 'openrouter':
     case 'siliconflow':

@@ -8,6 +8,7 @@ import type { BalanceConfig, BalanceMethod } from './types';
 import { MoonshotAIBalanceProvider } from './providers/moonshot-ai';
 import { KimiCodeBalanceProvider } from './providers/kimi-code';
 import { NewAPIBalanceProvider } from './providers/newapi';
+import { Sub2APIBalanceProvider } from './providers/sub2api';
 import { DeepSeekBalanceProvider } from './providers/deepseek';
 import { OpenRouterBalanceProvider } from './providers/openrouter';
 import { SiliconFlowBalanceProvider } from './providers/siliconflow';
@@ -96,6 +97,19 @@ export const BALANCE_METHODS = {
     normalizeOnImport: NewAPIBalanceProvider.normalizeOnImport,
     prepareForDuplicate: NewAPIBalanceProvider.prepareForDuplicate,
     cleanupOnDiscard: NewAPIBalanceProvider.cleanupOnDiscard,
+  },
+  sub2api: {
+    id: 'sub2api',
+    label: t('Sub2API Balance'),
+    description: t('Monitor balance and quotas via Sub2API usage API'),
+    category: 'General',
+    ctor: Sub2APIBalanceProvider,
+    supportsSensitiveDataInSettings:
+      Sub2APIBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: Sub2APIBalanceProvider.redactForExport,
+    resolveForExport: Sub2APIBalanceProvider.resolveForExport,
+    normalizeOnImport: Sub2APIBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: Sub2APIBalanceProvider.prepareForDuplicate,
   },
   deepseek: {
     id: 'deepseek',

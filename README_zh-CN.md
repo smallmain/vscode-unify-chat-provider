@@ -385,6 +385,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
   - `Moonshot AI 余额`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。
   - `Kimi Code 用量`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。
   - `New API 余额`：默认显示 API Key 余额；用户余额为可选，需配置 `userId` + `systemToken`（敏感数据）。
+  - `Sub2API 余额`：无需额外配置，使用供应商 `baseUrl` 与 API Key 显示 Key 配额、订阅限额或钱包余额。
   - `DeepSeek 余额`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。
   - `OpenRouter 余额`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。
   - `SiliconFlow 余额`：无需额外配置，直接使用供应商 `baseUrl` 和 API Key。

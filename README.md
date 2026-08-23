@@ -385,6 +385,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Moonshot AI Balance`: no extra config required; uses provider `baseUrl` and API key.
   - `Kimi Code Usage`: no extra config required; uses provider `baseUrl` and API key.
   - `New API Balance`: always shows API key balance; user balance is optional and requires `userId` + `systemToken` (sensitive data).
+  - `Sub2API Balance`: no extra config required; uses provider `baseUrl` and API key to show key quotas, subscription limits, or wallet balance.
   - `DeepSeek Balance`: no extra config required; uses provider `baseUrl` and API key.
   - `OpenRouter Balance`: no extra config required; uses provider `baseUrl` and API key.
   - `SiliconFlow Balance`: no extra config required; uses provider `baseUrl` and API key.

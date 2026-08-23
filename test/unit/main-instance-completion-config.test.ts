@@ -354,8 +354,23 @@ describe('main-instance completion configuration sync', () => {
     expect(provider.models[0].completion).toEqual({});
   });
 
-  it('uses compatibility version 7 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(7);
+  it('round-trips the Sub2API balance method through leader RPC parsing', () => {
+    const provider = parseProviderConfig(
+      {
+        type: 'openai-chat-completion',
+        name: 'sub2api',
+        baseUrl: 'https://relay.example.test/v1',
+        models: [],
+        balanceProvider: { method: 'sub2api' },
+      },
+      METHOD,
+    );
+
+    expect(provider.balanceProvider).toEqual({ method: 'sub2api' });
+  });
+
+  it('uses compatibility version 8 without changing protocol version 1', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(8);
     expect(PROTOCOL_VERSION).toBe(1);
   });
 

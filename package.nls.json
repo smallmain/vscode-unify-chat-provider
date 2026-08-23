@@ -109,6 +109,7 @@
   "configuration.endpoints.balanceProvider.method.codex.description": "Use Codex usage monitor.",
   "configuration.endpoints.balanceProvider.method.synthetic.description": "Use Synthetic quota monitor.",
   "configuration.endpoints.balanceProvider.method.minimax.description": "Use MiniMax balance monitor.",
+  "configuration.endpoints.balanceProvider.method.sub2api.description": "Use Sub2API balance and quota monitor.",
   "configuration.endpoints.balanceProvider.method.newapi.description": "Use New API balance monitor.",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API user ID.",
   "configuration.endpoints.balanceProvider.newapi.systemToken.description": "New API system token.",

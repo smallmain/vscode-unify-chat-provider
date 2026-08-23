@@ -6,6 +6,7 @@ export type BalanceMethod =
   | 'moonshot-ai'
   | 'kimi-code'
   | 'newapi'
+  | 'sub2api'
   | 'deepseek'
   | 'openrouter'
   | 'siliconflow'
@@ -47,6 +48,10 @@ export interface NewAPIBalanceConfig {
     /** Multiplier applied after division. Defaults to 1. */
     multiplier?: number;
   };
+}
+
+export interface Sub2APIBalanceConfig {
+  method: 'sub2api';
 }
 
 export interface DeepSeekBalanceConfig {
@@ -100,6 +105,7 @@ export type BalanceConfig =
   | MoonshotAIBalanceConfig
   | KimiCodeBalanceConfig
   | NewAPIBalanceConfig
+  | Sub2APIBalanceConfig
   | DeepSeekBalanceConfig
   | OpenRouterBalanceConfig
   | SiliconFlowBalanceConfig
@@ -221,6 +227,12 @@ export function isNewAPIBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is NewAPIBalanceConfig {
   return config?.method === 'newapi';
+}
+
+export function isSub2APIBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is Sub2APIBalanceConfig {
+  return config?.method === 'sub2api';
 }
 
 export function isKimiCodeBalanceConfig(

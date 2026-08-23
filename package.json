@@ -831,6 +831,18 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "sub2api",
+                        "description": "%configuration.endpoints.balanceProvider.method.sub2api.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "newapi",
                         "description": "%configuration.endpoints.balanceProvider.method.newapi.description%"
                       },
