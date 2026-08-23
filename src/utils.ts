@@ -2750,6 +2750,17 @@ export interface SanitizedMessagesForModelSwitchResult {
 
 export type SanitizedImagePartRetention = 'discard' | 'user-only' | 'all';
 
+export interface SanitizeMessagesForModelSwitchOptions {
+  modelId: string;
+  expectedIdentity: string;
+  imageRetention?: SanitizedImagePartRetention;
+  /**
+   * Preserve complete thinking + tool-call exchanges as portable fallback
+   * history when VS Code omits the provider's stateful marker.
+   */
+  preserveThinkingToolRounds?: boolean;
+}
+
 function collectExplicitToolCallIds(
   message: vscode.LanguageModelChatRequestMessage,
 ): string[] {
@@ -2775,6 +2786,60 @@ function collectExplicitToolResultIds(
       ? [part.callId]
       : [],
   );
+}
+
+function isThinkingToolCallMessage(
+  message: vscode.LanguageModelChatRequestMessage,
+): boolean {
+  const ThinkingPart: unknown = vscode.LanguageModelThinkingPart;
+  return (
+    message.role === vscode.LanguageModelChatMessageRole.Assistant &&
+    collectExplicitToolCallIds(message).length > 0 &&
+    typeof ThinkingPart === 'function' &&
+    message.content.some((part) => part instanceof ThinkingPart)
+  );
+}
+
+function sanitizeThinkingToolCallMessage(
+  message: vscode.LanguageModelChatRequestMessage,
+): vscode.LanguageModelChatRequestMessage | undefined {
+  if (!isThinkingToolCallMessage(message)) {
+    return undefined;
+  }
+
+  const ThinkingPart = vscode.LanguageModelThinkingPart;
+  const portableParts = message.content.filter(
+    (
+      part,
+    ): part is
+      | vscode.LanguageModelTextPart
+      | vscode.LanguageModelThinkingPart
+      | vscode.LanguageModelToolCallPart =>
+      part instanceof vscode.LanguageModelTextPart ||
+      part instanceof ThinkingPart ||
+      part instanceof vscode.LanguageModelToolCallPart,
+  );
+
+  return {
+    role: message.role,
+    name: message.name,
+    content: portableParts,
+  };
+}
+
+function markIncompleteThinkingToolExchanges(
+  messages: readonly vscode.LanguageModelChatRequestMessage[],
+  fallbackMessageIndexes: ReadonlySet<number>,
+  sanitizedMessageIndexes: Set<number>,
+): void {
+  const resultIds = new Set(messages.flatMap(collectExplicitToolResultIds));
+
+  for (const index of fallbackMessageIndexes) {
+    const callIds = collectExplicitToolCallIds(messages[index]);
+    if (callIds.some((callId) => !resultIds.has(callId))) {
+      sanitizedMessageIndexes.add(index);
+    }
+  }
 }
 
 function sanitizeMessageForModelSwitch(
@@ -2879,13 +2944,10 @@ function propagateSanitizedToolNeighbors(
 
 export function sanitizeMessagesForModelSwitchDetailed(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
-  options: {
-    modelId: string;
-    expectedIdentity: string;
-    imageRetention?: SanitizedImagePartRetention;
-  },
+  options: SanitizeMessagesForModelSwitchOptions,
 ): SanitizedMessagesForModelSwitchResult {
   const sanitizedMessageIndexes = new Set<number>();
+  const thinkingToolFallbackIndexes = new Set<number>();
 
   let round: number[] = [];
   let roundHasAssistant = false;
@@ -2928,7 +2990,15 @@ export function sanitizeMessagesForModelSwitchDetailed(
 
       if (!isRoundValid) {
         for (const index of round) {
-          sanitizedMessageIndexes.add(index);
+          const message = messages[index];
+          if (
+            options.preserveThinkingToolRounds &&
+            isThinkingToolCallMessage(message)
+          ) {
+            thinkingToolFallbackIndexes.add(index);
+          } else {
+            sanitizedMessageIndexes.add(index);
+          }
         }
       }
     }
@@ -2963,11 +3033,28 @@ export function sanitizeMessagesForModelSwitchDetailed(
 
   flush();
 
+  markIncompleteThinkingToolExchanges(
+    messages,
+    thinkingToolFallbackIndexes,
+    sanitizedMessageIndexes,
+  );
   propagateSanitizedToolNeighbors(messages, sanitizedMessageIndexes);
 
   const out: vscode.LanguageModelChatRequestMessage[] = [];
   const messageOriginIndexes: number[] = [];
   for (const [index, message] of messages.entries()) {
+    if (
+      !sanitizedMessageIndexes.has(index) &&
+      thinkingToolFallbackIndexes.has(index)
+    ) {
+      const sanitizedMessage = sanitizeThinkingToolCallMessage(message);
+      if (sanitizedMessage) {
+        out.push(sanitizedMessage);
+        messageOriginIndexes.push(index);
+      }
+      continue;
+    }
+
     if (!sanitizedMessageIndexes.has(index)) {
       out.push(message);
       messageOriginIndexes.push(index);
@@ -2993,11 +3080,7 @@ export function sanitizeMessagesForModelSwitchDetailed(
 
 export function sanitizeMessagesForModelSwitch(
   messages: readonly vscode.LanguageModelChatRequestMessage[],
-  options: {
-    modelId: string;
-    expectedIdentity: string;
-    imageRetention?: SanitizedImagePartRetention;
-  },
+  options: SanitizeMessagesForModelSwitchOptions,
 ): vscode.LanguageModelChatRequestMessage[] {
   return sanitizeMessagesForModelSwitchDetailed(messages, options).messages;
 }
