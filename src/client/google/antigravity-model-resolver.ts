@@ -1,6 +1,7 @@
 export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export const ANTIGRAVITY_AVAILABLE_MODEL_IDS = [
+  'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
   'gemini-3.1-pro',
@@ -79,6 +80,21 @@ function resolveGemini35FlashRoute(
   }
 }
 
+function resolveKnownGemini35WireModel(
+  modelId: string,
+): Exclude<Gemini3ThinkingLevel, 'minimal'> | undefined {
+  switch (modelId) {
+    case ANTIGRAVITY_GEMINI_3_5_FLASH_LOW_MODEL:
+      return 'low';
+    case ANTIGRAVITY_GEMINI_3_5_FLASH_MEDIUM_MODEL:
+      return 'medium';
+    case ANTIGRAVITY_GEMINI_3_5_FLASH_HIGH_MODEL:
+      return 'high';
+    default:
+      return undefined;
+  }
+}
+
 export function resolveAntigravityModelForRequest(
   modelId: string,
   preferredGemini3ThinkingLevel?: Gemini3ThinkingLevel,
@@ -106,6 +122,16 @@ export function resolveAntigravityModelForRequest(
     return { requestModelId: trimmed };
   }
 
+  // Gemini 3.5 wire IDs do not use canonical effort suffixes. In particular,
+  // `gemini-3.5-flash-low` is the medium route and must not be remapped.
+  const knownGemini35WireLevel = resolveKnownGemini35WireModel(modelLower);
+  if (knownGemini35WireLevel) {
+    return {
+      requestModelId: modelLower,
+      gemini3ThinkingLevel: knownGemini35WireLevel,
+    };
+  }
+
   const { baseModelId, tier } = parseGemini3TierSuffix(trimmed);
   const baseModelLower = baseModelId.toLowerCase();
   const effectiveLevel: Gemini3ThinkingLevel =
@@ -113,7 +139,8 @@ export function resolveAntigravityModelForRequest(
 
   if (
     baseModelLower === 'gemini-3.5-flash' ||
-    baseModelLower === 'gemini-3.6-flash'
+    baseModelLower === 'gemini-3.6-flash' ||
+    baseModelLower === 'gemini-3.7-flash'
   ) {
     const flashThinkingLevel =
       normalizeAntigravityFlashThinkingLevel(effectiveLevel);
@@ -121,7 +148,7 @@ export function resolveAntigravityModelForRequest(
       requestModelId:
         baseModelLower === 'gemini-3.5-flash'
           ? resolveGemini35FlashRoute(flashThinkingLevel)
-          : `gemini-3.6-flash-${flashThinkingLevel}`,
+          : `${baseModelLower}-${flashThinkingLevel}`,
       gemini3ThinkingLevel: flashThinkingLevel,
     };
   }

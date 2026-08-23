@@ -6,10 +6,37 @@ import {
 } from '../../src/client/google/antigravity-model-resolver';
 
 describe('Antigravity model resolver', () => {
-  it('lists the supported Gemini 3.5 and 3.6 Flash models', () => {
+  it('lists the current supported Gemini Flash models newest first', () => {
+    expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS[0]).toBe('gemini-3.7-flash');
     expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.5-flash');
     expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.6-flash');
+    expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.7-flash');
   });
+
+  const gemini37FlashRoutes: Array<
+    [Gemini3ThinkingLevel, string, Gemini3ThinkingLevel]
+  > = [
+    ['minimal', 'gemini-3.7-flash-low', 'low'],
+    ['low', 'gemini-3.7-flash-low', 'low'],
+    ['medium', 'gemini-3.7-flash-medium', 'medium'],
+    ['high', 'gemini-3.7-flash-high', 'high'],
+  ];
+
+  it.each(gemini37FlashRoutes)(
+    'routes Gemini 3.7 Flash %s through %s',
+    (thinkingLevel, requestModelId, resolvedThinkingLevel) => {
+      expect(
+        resolveAntigravityModelForRequest(
+          'gemini-3.7-flash',
+          thinkingLevel,
+          true,
+        ),
+      ).toEqual({
+        requestModelId,
+        gemini3ThinkingLevel: resolvedThinkingLevel,
+      });
+    },
+  );
 
   const gemini36FlashRoutes: Array<
     [Gemini3ThinkingLevel, string, Gemini3ThinkingLevel]
@@ -65,6 +92,29 @@ describe('Antigravity model resolver', () => {
         requestModelId,
         gemini3ThinkingLevel: resolvedThinkingLevel,
       });
+    },
+  );
+
+  it.each([
+    ['gemini-3.5-flash-extra-low', 'low'],
+    ['gemini-3.5-flash-low', 'medium'],
+    ['gemini-3-flash-agent', 'high'],
+  ] as const)(
+    'preserves the Gemini 3.5 wire model %s as the %s route',
+    (requestModelId, gemini3ThinkingLevel) => {
+      const resolved = resolveAntigravityModelForRequest(requestModelId);
+
+      expect(resolved).toEqual({
+        requestModelId,
+        gemini3ThinkingLevel,
+      });
+      expect(
+        resolveAntigravityModelForRequest(
+          resolved.requestModelId,
+          resolved.gemini3ThinkingLevel,
+          true,
+        ),
+      ).toEqual(resolved);
     },
   );
 
