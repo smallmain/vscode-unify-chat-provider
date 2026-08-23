@@ -165,6 +165,55 @@ function modelIdentityIncludes(
   );
 }
 
+const GLM_5_3_MODEL_IDENTITIES = new Set(['glm-5.3', 'z-ai/glm-5.3']);
+const GLM_5_3_PROVIDER_ENDPOINTS = new Set([
+  'https://open.bigmodel.cn/api/paas/v4',
+  'https://open.bigmodel.cn/api/coding/paas/v4',
+  'https://api.z.ai/api/paas/v4',
+  'https://api.z.ai/api/coding/paas/v4',
+]);
+
+function isGlm53Model(model: { id: string; family?: string }): boolean {
+  const baseId = getBaseModelId(model.id).trim().toLowerCase();
+  const family = model.family?.trim().toLowerCase();
+  return (
+    GLM_5_3_MODEL_IDENTITIES.has(baseId) ||
+    (family !== undefined && GLM_5_3_MODEL_IDENTITIES.has(family))
+  );
+}
+
+function isOfficialGlm53Provider(provider: {
+  type: ProviderType;
+  baseUrl: string;
+}): boolean {
+  if (provider.type !== 'openai-chat-completion') {
+    return false;
+  }
+
+  try {
+    const url = new URL(provider.baseUrl);
+    if (
+      url.username !== '' ||
+      url.password !== '' ||
+      url.search !== '' ||
+      url.hash !== ''
+    ) {
+      return false;
+    }
+    const pathname = url.pathname.replace(/\/+$/, '');
+    return GLM_5_3_PROVIDER_ENDPOINTS.has(`${url.origin}${pathname}`);
+  } catch {
+    return false;
+  }
+}
+
+function isOfficialGlm53Request(
+  model: { id: string; family?: string },
+  provider: { type: ProviderType; baseUrl: string },
+): boolean {
+  return isGlm53Model(model) && isOfficialGlm53Provider(provider);
+}
+
 function isMoonshotOpenAIProvider(provider: { baseUrl: string }): boolean {
   return ['api.moonshot.cn', 'api.moonshot.ai'].some((pattern) =>
     matchProvider(provider.baseUrl, pattern),
@@ -645,7 +694,6 @@ export const FEATURES: Record<FeatureId, Feature> = {
         ]),
       (model) => modelFamilyIncludes(model, 'deepseek-v4'),
       (model) => modelFamilyIncludes(model, 'glm-5.2'),
-      (model) => modelFamilyIncludes(model, 'glm-5.3'),
     ],
   },
   [FeatureId.OpenAIUseThinkingParam2]: {
@@ -678,7 +726,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
   },
   [FeatureId.OpenAIUseGlm53ReasoningEffortParam]: {
-    customCheckers: [(model) => modelFamilyIncludes(model, 'glm-5.3')],
+    customCheckers: [isOfficialGlm53Request],
   },
   [FeatureId.OpenAIStripIncludeParam]: {
     supportedProviders: [
