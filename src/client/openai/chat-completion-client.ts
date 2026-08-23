@@ -126,6 +126,56 @@ type OpenAIChatCompletionMarkerData = {
   usage?: CopilotUsage;
 };
 
+type ChatCompletionTokenLimitKey =
+  | 'max_tokens'
+  | 'max_completion_tokens';
+
+function readExtraBodyTokenLimit(
+  extraBody: Record<string, unknown> | undefined,
+  preferredKey: ChatCompletionTokenLimitKey,
+): unknown {
+  if (!extraBody) {
+    return undefined;
+  }
+
+  const alternateKey =
+    preferredKey === 'max_tokens'
+      ? 'max_completion_tokens'
+      : 'max_tokens';
+  const preferredValue = extraBody[preferredKey];
+  return preferredValue !== undefined
+    ? preferredValue
+    : extraBody[alternateKey];
+}
+
+function normalizeChatCompletionTokenLimit(
+  body: ChatCompletionCreateParamsBase,
+  preferredKey: ChatCompletionTokenLimitKey,
+  maxOutputTokens: number | undefined,
+  providerExtraBody: Record<string, unknown> | undefined,
+  modelExtraBody: Record<string, unknown> | undefined,
+): void {
+  const modelOverride = readExtraBodyTokenLimit(modelExtraBody, preferredKey);
+  const providerOverride = readExtraBodyTokenLimit(
+    providerExtraBody,
+    preferredKey,
+  );
+  const value =
+    modelOverride !== undefined
+      ? modelOverride
+      : providerOverride !== undefined
+        ? providerOverride
+        : maxOutputTokens;
+
+  // extraBody is merged last and may contain either alias. Re-establish the
+  // provider/model wire contract on the final body so both can never be sent.
+  Reflect.deleteProperty(body, 'max_tokens');
+  Reflect.deleteProperty(body, 'max_completion_tokens');
+  if (value !== undefined) {
+    Reflect.set(body, preferredKey, value);
+  }
+}
+
 type NullableChoices<T extends { choices: unknown }> = Omit<T, 'choices'> & {
   choices: T['choices'] | null;
 };
@@ -1138,16 +1188,14 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     const headers = this.buildHeaders(credential, model, sanitizedMessages);
     const serviceTier = resolveOpenAIServiceTier(this.config, model);
-    // Provider wire constraints override model-family hints; unknown compatible
+    // Provider wire constraints override model-family hints. Opaque deployment
+    // names (including Azure) should set model.family; otherwise compatible
     // endpoints default to the broadly supported legacy parameter.
-    const maxOutputTokenParams =
-      model.maxOutputTokens === undefined
-        ? {}
-        : useOnlyMaxTokens
-          ? { max_tokens: model.maxOutputTokens }
-          : useOnlyMaxCompletionTokens
-            ? { max_completion_tokens: model.maxOutputTokens }
-            : { max_tokens: model.maxOutputTokens };
+    const tokenLimitKey: ChatCompletionTokenLimitKey = useOnlyMaxTokens
+      ? 'max_tokens'
+      : useOnlyMaxCompletionTokens
+        ? 'max_completion_tokens'
+        : 'max_tokens';
 
     const baseBody: ChatCompletionCreateParamsBase = {
       model: getBaseModelId(model.id),
@@ -1163,7 +1211,6 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       ...(useMaxInputTokens && model.maxInputTokens !== undefined
         ? { max_input_tokens: model.maxInputTokens }
         : {}),
-      ...maxOutputTokenParams,
       ...(model.temperature !== undefined
         ? { temperature: model.temperature }
         : {}),
@@ -1186,6 +1233,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     Object.assign(
       baseBody,
       reasoningExtraBody,
+      this.config.extraBody,
+      model.extraBody,
+    );
+    normalizeChatCompletionTokenLimit(
+      baseBody,
+      tokenLimitKey,
+      model.maxOutputTokens,
       this.config.extraBody,
       model.extraBody,
     );

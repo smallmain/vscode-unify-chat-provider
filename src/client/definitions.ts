@@ -148,6 +148,39 @@ function getModelFamily(model: { id: string; family?: string }): string {
   return model.family ?? getBaseModelId(model.id);
 }
 
+const OPENAI_MAX_COMPLETION_TOKEN_FAMILIES = [
+  'codex-mini-latest',
+  'gpt-5',
+  'o1',
+  'o3',
+  'o4-mini',
+  'gpt-oss-120b',
+  'gpt-oss-20b',
+] as const;
+
+function usesOpenAIMaxCompletionTokens(model: {
+  id: string;
+  family?: string;
+}): boolean {
+  // OpenRouter, NVIDIA, and similar catalogs namespace model IDs. Azure model
+  // IDs may instead be opaque deployment names, so an explicit family must
+  // remain authoritative when one is configured.
+  const family = getModelFamily(model).trim().toLowerCase();
+  const unnamespacedFamily = family.slice(family.lastIndexOf('/') + 1);
+
+  if (unnamespacedFamily.startsWith('mimo-')) {
+    return true;
+  }
+
+  return OPENAI_MAX_COMPLETION_TOKEN_FAMILIES.some(
+    (expected) =>
+      unnamespacedFamily === expected ||
+      unnamespacedFamily.startsWith(`${expected}-`) ||
+      unnamespacedFamily.startsWith(`${expected}.`) ||
+      unnamespacedFamily.startsWith(`${expected}:`),
+  );
+}
+
 function modelFamilyIncludes(
   model: { id: string; family?: string },
   expected: string,
@@ -505,32 +538,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'api.moonshot.ai',
       'api.kimi.com',
     ],
-    supportedFamilys: [
-      'codex-mini-latest',
-      'gpt-5.2',
-      'gpt-5.1',
-      'gpt-5.1-codex',
-      'gpt-5.1-codex-max',
-      'gpt-5.1-codex-mini',
-      'gpt-5',
-      'gpt-5-codex',
-      'gpt-5-mini',
-      'gpt-5-nano',
-      'gpt-5-pro',
-      'o1',
-      'o1-mini',
-      'o1-preview',
-      'o1-pro',
-      'o3',
-      'o3-deep-research',
-      'o3-mini',
-      'o3-pro',
-      'o4-mini',
-      'o4-mini-deep-research',
-      'gpt-oss-120b',
-      'gpt-oss-20b',
-      'mimo-',
-    ],
+    customCheckers: [(model) => usesOpenAIMaxCompletionTokens(model)],
   },
   [FeatureId.OpenAIOnlyMaxTokens]: {
     supportedProviders: [
