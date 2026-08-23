@@ -15,7 +15,9 @@ vi.mock('../../src/official-models-manager', () => ({
 }));
 
 import {
+  applyAutoFetchOfficialModelsFilterChange,
   filterAutoFetchedOfficialModels,
+  getAutoFetchOfficialModelsFilterItemIds,
   normalizeAutoFetchOfficialModelsFilter,
   resolveAutoFetchOfficialModelsFilter,
 } from '../../src/official-model-filter';
@@ -97,15 +99,83 @@ describe('auto-fetched official model filter', () => {
       resolveAutoFetchOfficialModelsFilter(
         ['model-a', 'model-b'],
         ['model-b'],
+        undefined,
       ),
     ).toEqual(['model-b']);
     expect(
       resolveAutoFetchOfficialModelsFilter(
         ['model-a', 'model-b'],
         ['model-b', 'model-a'],
+        undefined,
       ),
     ).toBeUndefined();
-    expect(resolveAutoFetchOfficialModelsFilter([], [])).toEqual([]);
+    expect(
+      resolveAutoFetchOfficialModelsFilter([], [], undefined),
+    ).toBeUndefined();
+  });
+
+  it('keeps an explicit allowlist when every displayed model is selected', () => {
+    expect(
+      resolveAutoFetchOfficialModelsFilter(
+        ['model-a', 'model-b'],
+        ['model-a', 'model-b'],
+        ['model-a', 'model-b'],
+      ),
+    ).toEqual(['model-a', 'model-b']);
+
+    expect(
+      filterAutoFetchedOfficialModels(
+        { autoFetchOfficialModelsFilter: ['model-a', 'model-b'] },
+        officialModels,
+      ).map((model) => model.id),
+    ).toEqual(['model-a', 'model-b']);
+  });
+
+  it('preserves filtering through disappearance, cancel, re-entry, and new models', () => {
+    const configuredFilter = ['model-a', 'model-b'];
+    const itemsAfterDisappearance =
+      getAutoFetchOfficialModelsFilterItemIds(
+        ['model-a'],
+        configuredFilter,
+      );
+    expect(itemsAfterDisappearance).toEqual(['model-a', 'model-b']);
+
+    const afterCancel = applyAutoFetchOfficialModelsFilterChange(
+      configuredFilter,
+      undefined,
+    );
+    expect(afterCancel).toBe(configuredFilter);
+
+    const itemsAfterReentry = getAutoFetchOfficialModelsFilterItemIds(
+      ['model-a'],
+      afterCancel,
+    );
+    expect(itemsAfterReentry).toEqual(['model-a', 'model-b']);
+
+    const afterRemovingDisappearedModel =
+      applyAutoFetchOfficialModelsFilterChange(afterCancel, {
+        kind: 'selection',
+        displayedModelIds: itemsAfterReentry,
+        selectedModelIds: ['model-a'],
+      });
+    expect(afterRemovingDisappearedModel).toEqual(['model-a']);
+    expect(
+      filterAutoFetchedOfficialModels(
+        { autoFetchOfficialModelsFilter: afterRemovingDisappearedModel },
+        [
+          ...officialModels,
+          { id: 'model-d', maxInputTokens: 32_000 },
+        ],
+      ).map((model) => model.id),
+    ).toEqual(['model-a']);
+  });
+
+  it('only includes future models after the explicit include-all action', () => {
+    expect(
+      applyAutoFetchOfficialModelsFilterChange(['model-a'], {
+        kind: 'include-all',
+      }),
+    ).toBeUndefined();
   });
 
   it('applies the filter to asynchronously fetched provider models', async () => {

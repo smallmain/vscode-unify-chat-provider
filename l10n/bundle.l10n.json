@@ -1340,5 +1340,6 @@
   "Filter Auto-Fetched Models...": "Filter Auto-Fetched Models...",
   "Not returned by provider": "Not returned by provider",
   "Select models to include": "Select models to include",
-  "{0} selected": "{0} selected"
+  "{0} selected": "{0} selected",
+  "Include all current and future models": "Include all current and future models"
 }

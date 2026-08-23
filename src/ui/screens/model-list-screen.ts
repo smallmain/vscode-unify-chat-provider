@@ -39,8 +39,10 @@ import {
   normalizeUseRawBaseUrl,
 } from '../../utils';
 import {
+  applyAutoFetchOfficialModelsFilterChange,
+  type AutoFetchOfficialModelsFilterChange,
   filterAutoFetchedOfficialModels,
-  resolveAutoFetchOfficialModelsFilter,
+  getAutoFetchOfficialModelsFilterItemIds,
 } from '../../official-model-filter';
 
 /**
@@ -288,10 +290,12 @@ export async function runModelListScreen(
 
   if (selection.action === 'filter-official') {
     if (!route.draft) return { kind: 'stay' };
-    const result = await showOfficialModelFilterPicker(route);
-    if (result) {
-      route.draft.autoFetchOfficialModelsFilter = result.filter;
-    }
+    const change = await showOfficialModelFilterPicker(route);
+    route.draft.autoFetchOfficialModelsFilter =
+      applyAutoFetchOfficialModelsFilterChange(
+        route.draft.autoFetchOfficialModelsFilter,
+        change,
+      );
     return { kind: 'stay' };
   }
 
@@ -674,22 +678,24 @@ type OfficialModelFilterItem = vscode.QuickPickItem & {
 
 async function showOfficialModelFilterPicker(
   route: ModelListRoute,
-): Promise<{ filter: string[] | undefined } | undefined> {
+): Promise<AutoFetchOfficialModelsFilterChange | undefined> {
   const draft = route.draft;
   if (!draft) return undefined;
 
   const officialModels = route.officialModelsData?.models ?? [];
-  const modelsById = new Map<string, ModelConfig | undefined>(
+  const modelsById = new Map(
     officialModels.map((model) => [model.id, model] as const),
   );
   const configuredFilter = draft.autoFetchOfficialModelsFilter;
-  for (const modelId of configuredFilter ?? []) {
-    if (!modelsById.has(modelId)) modelsById.set(modelId, undefined);
-  }
+  const displayedModelIds = getAutoFetchOfficialModelsFilterItemIds(
+    officialModels.map((model) => model.id),
+    configuredFilter,
+  );
 
   const configuredIds = new Set(configuredFilter);
-  const items: OfficialModelFilterItem[] = Array.from(modelsById).map(
-    ([modelId, model]) => ({
+  const items: OfficialModelFilterItem[] = displayedModelIds.map((modelId) => {
+    const model = modelsById.get(modelId);
+    return {
       label: model?.name || modelId,
       description: model
         ? model.name
@@ -698,17 +704,21 @@ async function showOfficialModelFilterPicker(
         : t('Not returned by provider'),
       detail: model ? formatModelDetail(model) : undefined,
       modelId,
-    }),
-  );
+    };
+  });
 
   const qp = vscode.window.createQuickPick<OfficialModelFilterItem>();
+  const includeAllModelsButton: vscode.QuickInputButton = {
+    iconPath: new vscode.ThemeIcon('check-all'),
+    tooltip: t('Include all current and future models'),
+  };
   qp.title = t('Filter Auto-Fetched Models');
   qp.placeholder = t('Select models to include');
   qp.matchOnDescription = true;
   qp.matchOnDetail = true;
   qp.canSelectMany = true;
   qp.ignoreFocusOut = true;
-  qp.buttons = [vscode.QuickInputButtons.Back];
+  qp.buttons = [vscode.QuickInputButtons.Back, includeAllModelsButton];
   qp.items = items;
   qp.selectedItems =
     configuredFilter === undefined
@@ -722,15 +732,22 @@ async function showOfficialModelFilterPicker(
       accepted = true;
       const selectedIds = qp.selectedItems.map((item) => item.modelId);
       resolve({
-        filter: resolveAutoFetchOfficialModelsFilter(
-          officialModels.map((model) => model.id),
-          selectedIds,
-        ),
+        kind: 'selection',
+        displayedModelIds,
+        selectedModelIds: selectedIds,
       });
       qp.hide();
     });
     qp.onDidTriggerButton((button) => {
-      if (button === vscode.QuickInputButtons.Back) qp.hide();
+      if (button === vscode.QuickInputButtons.Back) {
+        qp.hide();
+        return;
+      }
+      if (button === includeAllModelsButton) {
+        accepted = true;
+        resolve({ kind: 'include-all' });
+        qp.hide();
+      }
     });
     qp.onDidHide(() => {
       if (!accepted) resolve(undefined);

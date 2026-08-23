@@ -35,15 +35,52 @@ export function filterAutoFetchedOfficialModels(
   return models.filter((model) => includedIds.has(model.id));
 }
 
-export function resolveAutoFetchOfficialModelsFilter(
+export function getAutoFetchOfficialModelsFilterItemIds(
   availableModelIds: readonly string[],
+  configuredFilter: readonly string[] | undefined,
+): string[] {
+  return normalizeAutoFetchOfficialModelsFilter([
+    ...availableModelIds,
+    ...(configuredFilter ?? []),
+  ]);
+}
+
+export function resolveAutoFetchOfficialModelsFilter(
+  displayedModelIds: readonly string[],
   selectedModelIds: readonly string[],
+  configuredFilter: readonly string[] | undefined,
 ): string[] | undefined {
   const normalizedSelectedIds =
     normalizeAutoFetchOfficialModelsFilter(selectedModelIds);
+  if (configuredFilter !== undefined) return normalizedSelectedIds;
+
   const selectedIds = new Set(normalizedSelectedIds);
-  const includesEveryAvailableModel =
-    availableModelIds.length > 0 &&
-    availableModelIds.every((modelId) => selectedIds.has(modelId));
-  return includesEveryAvailableModel ? undefined : normalizedSelectedIds;
+  const normalizedDisplayedIds =
+    normalizeAutoFetchOfficialModelsFilter(displayedModelIds);
+  const includesEveryDisplayedModel = normalizedDisplayedIds.every((modelId) =>
+    selectedIds.has(modelId),
+  );
+  return includesEveryDisplayedModel ? undefined : normalizedSelectedIds;
+}
+
+export type AutoFetchOfficialModelsFilterChange =
+  | { readonly kind: 'include-all' }
+  | {
+      readonly kind: 'selection';
+      readonly displayedModelIds: readonly string[];
+      readonly selectedModelIds: readonly string[];
+    };
+
+export function applyAutoFetchOfficialModelsFilterChange(
+  configuredFilter: string[] | undefined,
+  change: AutoFetchOfficialModelsFilterChange | undefined,
+): string[] | undefined {
+  if (change === undefined) return configuredFilter;
+  if (change.kind === 'include-all') return undefined;
+
+  return resolveAutoFetchOfficialModelsFilter(
+    change.displayedModelIds,
+    change.selectedModelIds,
+    configuredFilter,
+  );
 }

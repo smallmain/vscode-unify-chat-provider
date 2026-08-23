@@ -1340,5 +1340,6 @@
   "Filter Auto-Fetched Models...": "筛选自动拉取的模型...",
   "Not returned by provider": "供应商当前未返回",
   "Select models to include": "选择要包含的模型",
-  "{0} selected": "已选择 {0} 个"
+  "{0} selected": "已选择 {0} 个",
+  "Include all current and future models": "包含当前及未来的所有模型"
 }
