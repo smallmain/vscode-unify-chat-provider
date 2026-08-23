@@ -252,8 +252,16 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
   let defaultPrimaryId: string | undefined;
 
   const apiKeyStatus = pickString(payload, 'status')?.toLowerCase();
+  const apiKeyExpiresAt = pickString(payload, 'expires_at');
+  const apiKeyExpiresTimestampMs = apiKeyExpiresAt
+    ? Date.parse(apiKeyExpiresAt)
+    : Number.NaN;
+  const isApiKeyExpired =
+    apiKeyStatus === 'expired' ||
+    (Number.isFinite(apiKeyExpiresTimestampMs) &&
+      apiKeyExpiresTimestampMs <= Date.now());
   const isValid = payload['isValid'];
-  if (apiKeyStatus === 'expired') {
+  if (isApiKeyExpired) {
     unavailablePrimaryId = 'api-key-expired';
     items.push({
       id: unavailablePrimaryId,
@@ -452,7 +460,7 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
     scope: 'api-key',
     period: 'current',
     kind: 'expiresAt',
-    value: pickString(payload, 'expires_at'),
+    value: apiKeyExpiresAt,
   });
 
   const selected =

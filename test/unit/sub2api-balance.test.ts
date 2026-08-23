@@ -82,7 +82,7 @@ describe('Sub2API balance provider', () => {
               reset_at: '2026-08-23T12:00:00Z',
             },
           ],
-          expires_at: '2026-09-01T00:00:00Z',
+          expires_at: '2099-09-01T00:00:00Z',
         }),
         { status: 200 },
       ),
@@ -185,6 +185,47 @@ describe('Sub2API balance provider', () => {
         tokenThresholdMillions: 0,
       }),
     ).toEqual({ isNearThreshold: true, reasons: ['status'] });
+  });
+
+  it('treats a past expiry as unavailable even when status remains active', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'quota_limited',
+          isValid: true,
+          status: 'active',
+          quota: { limit: 100, used: 25, remaining: 75, unit: 'USD' },
+          remaining: 75,
+          unit: 'USD',
+          expires_at: '2000-01-01T00:00:00+08:00',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+
+    expect(result.snapshot?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'api-key-expired',
+          type: 'status',
+          value: 'unavailable',
+          message: 'Expired',
+          primary: true,
+        }),
+        expect.objectContaining({
+          id: 'api-key-quota-remaining',
+          value: 75,
+          primary: false,
+        }),
+        expect.objectContaining({
+          id: 'api-key-expires',
+          kind: 'expiresAt',
+          timestampMs: Date.parse('2000-01-01T00:00:00+08:00'),
+        }),
+      ]),
+    );
   });
 
   it('honors quota_exhausted status over a stale positive quota', async () => {

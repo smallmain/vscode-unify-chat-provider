@@ -115,14 +115,14 @@ export function evaluateBalanceWarning(
 
   const reasons: BalanceWarningReason[] = [];
 
+  const explicitPrimary = items.find((item) => item.primary);
+  const statusMetric =
+    explicitPrimary ?? items.find((item) => item.type === 'status');
   if (
-    items.some(
-      (item) =>
-        item.type === 'status' &&
-        (item.value === 'exhausted' ||
-          item.value === 'error' ||
-          item.value === 'unavailable'),
-    )
+    statusMetric?.type === 'status' &&
+    (statusMetric.value === 'exhausted' ||
+      statusMetric.value === 'error' ||
+      statusMetric.value === 'unavailable')
   ) {
     reasons.push('status');
   }
