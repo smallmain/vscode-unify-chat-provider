@@ -340,11 +340,74 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
               }
             }
 
+            const convertedMessage: ChatCompletionAssistantMessageParam = {
+              role: 'assistant',
+            };
             for (const part of msg.content) {
-              const parts = this.convertPart(msg.role, part, reasoningType) as
+              const convertedPart = this.convertPart(
+                msg.role,
+                part,
+                reasoningType,
+              ) as
                 | ChatCompletionAssistantMessageParam
                 | undefined;
-              if (parts) outMessages.push(parts);
+              if (!convertedPart) continue;
+
+              const incomingContent = convertedPart.content;
+              if (incomingContent !== undefined && incomingContent !== null) {
+                const currentContent = convertedMessage.content;
+                if (currentContent === undefined || currentContent === null) {
+                  convertedMessage.content = incomingContent;
+                } else if (typeof currentContent === 'string') {
+                  convertedMessage.content =
+                    typeof incomingContent === 'string'
+                      ? currentContent + incomingContent
+                      : [
+                          { type: 'text', text: currentContent },
+                          ...incomingContent,
+                        ];
+                } else {
+                  convertedMessage.content =
+                    typeof incomingContent === 'string'
+                      ? [
+                          ...currentContent,
+                          { type: 'text', text: incomingContent },
+                        ]
+                      : [...currentContent, ...incomingContent];
+                }
+              }
+
+              if (convertedPart.reasoning_content !== undefined) {
+                convertedMessage.reasoning_content =
+                  (convertedMessage.reasoning_content ?? '') +
+                  convertedPart.reasoning_content;
+              }
+              if (convertedPart.reasoning !== undefined) {
+                convertedMessage.reasoning =
+                  (convertedMessage.reasoning ?? '') + convertedPart.reasoning;
+              }
+              if (convertedPart.reasoning_details !== undefined) {
+                convertedMessage.reasoning_details = [
+                  ...(convertedMessage.reasoning_details ?? []),
+                  ...convertedPart.reasoning_details,
+                ];
+              }
+              if (convertedPart.tool_calls !== undefined) {
+                convertedMessage.tool_calls = [
+                  ...(convertedMessage.tool_calls ?? []),
+                  ...convertedPart.tool_calls,
+                ];
+              }
+            }
+
+            if (
+              convertedMessage.content !== undefined ||
+              convertedMessage.reasoning_content !== undefined ||
+              convertedMessage.reasoning !== undefined ||
+              convertedMessage.reasoning_details !== undefined ||
+              convertedMessage.tool_calls !== undefined
+            ) {
+              outMessages.push(convertedMessage);
             }
           }
           break;
@@ -359,8 +422,6 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       const index = outMessages.indexOf(param);
       outMessages[index] = raw;
     }
-
-    // TODO 将连续的不同种类的 Assistant 消息尽量合并为一条消息（比如 content, reasoning_content, tool_calls 可以合并，但是 content, content 则不可以合并，(content and reasoning_content), tool_calls 可以合并）
 
     // add a cache breakpoint at the end.
     if (shouldApplyCacheControl) {

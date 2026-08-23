@@ -795,7 +795,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
       'qianfan.baidubce.com',
       'integrate.api.nvidia.com',
     ],
-    customCheckers: [isQwen38ModelStudioEndpoint],
+    customCheckers: [
+      isQwen38ModelStudioEndpoint,
+      (model) => modelFamilyIncludes(model, 'deepseek-v4'),
+    ],
   },
   [FeatureId.OpenAIUseClearThinking]: {
     supportedProviders: ['open.bigmodel.cn', 'api.z.ai'],
