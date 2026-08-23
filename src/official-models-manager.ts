@@ -5,6 +5,10 @@ import {
   OPENCODE_PROTOCOL_RULES_REVISION,
   prepareOfficialModels,
 } from './well-known/opencode-models';
+import {
+  fetchOpenCodeCatalog,
+  isOpenCodeCatalogProvider,
+} from './well-known/opencode-catalog';
 import { stableStringify } from './config-ops';
 import { SecretStore } from './secret';
 import {
@@ -876,6 +880,31 @@ export class OfficialModelsManager {
     }
   }
 
+  private async fetchAvailableModels(
+    provider: ProviderConfig,
+    credentialAccess: OfficialModelsCredentialAccess,
+    signal: AbortSignal,
+  ): Promise<ModelConfig[]> {
+    if (isOpenCodeCatalogProvider(provider)) {
+      return fetchOpenCodeCatalog(
+        provider,
+        credentialAccess.credential,
+        signal,
+      );
+    }
+
+    const client = createProvider(provider);
+    if (!client.getAvailableModels) {
+      throw new Error(t('Provider does not support fetching available models'));
+    }
+
+    return client.getAvailableModels(
+      credentialAccess.credential,
+      credentialAccess.refreshCredential,
+      signal,
+    );
+  }
+
   /**
    * Fetch official models for a provider
    * Returns cached models if within interval, fetches new ones otherwise
@@ -1108,17 +1137,9 @@ export class OfficialModelsManager {
         return state.models;
       }
 
-      const client = createProvider(provider);
-
-      if (!client.getAvailableModels) {
-        throw new Error(
-          t('Provider does not support fetching available models'),
-        );
-      }
-
-      const rawModels = await client.getAvailableModels(
-        credentialAccess.credential,
-        credentialAccess.refreshCredential,
+      const rawModels = await this.fetchAvailableModels(
+        provider,
+        credentialAccess,
         fetchContext.controller.signal,
       );
       const models = prepareOfficialModels(rawModels, provider);
@@ -1776,17 +1797,9 @@ export class OfficialModelsManager {
         return session.state.models;
       }
 
-      const client = createProvider(provider);
-
-      if (!client.getAvailableModels) {
-        throw new Error(
-          t('Provider does not support fetching available models'),
-        );
-      }
-
-      const rawModels = await client.getAvailableModels(
-        credentialAccess.credential,
-        credentialAccess.refreshCredential,
+      const rawModels = await this.fetchAvailableModels(
+        provider,
+        credentialAccess,
         fetchContext.controller.signal,
       );
       const models = prepareOfficialModels(rawModels, provider);

@@ -4,6 +4,14 @@ const providerClient = vi.hoisted(() => ({
   getAvailableModels: vi.fn(),
 }));
 
+const providerFactory = vi.hoisted(() => ({
+  create: vi.fn(),
+}));
+
+const openCodeCatalog = vi.hoisted(() => ({
+  fetch: vi.fn(),
+}));
+
 vi.mock('vscode', () => {
   class Disposable {
     constructor(private readonly callback: () => void = () => undefined) {}
@@ -48,13 +56,17 @@ vi.mock('../../src/main-instance', () => ({
 }));
 
 vi.mock('../../src/client/utils', () => ({
-  createProvider: () => ({
-    getAvailableModels: providerClient.getAvailableModels,
-  }),
+  createProvider: providerFactory.create,
   matchProvider: (url: string, pattern: string | RegExp) =>
     typeof pattern === 'string'
       ? url.includes(pattern.replaceAll('*', ''))
       : pattern.test(url),
+}));
+
+vi.mock('../../src/well-known/opencode-catalog', () => ({
+  fetchOpenCodeCatalog: openCodeCatalog.fetch,
+  isOpenCodeCatalogProvider: (provider: ProviderConfig) =>
+    provider.baseUrl.startsWith('https://opencode.ai/zen'),
 }));
 
 vi.mock('../../src/utils', () => ({
@@ -175,6 +187,14 @@ function secretStore(): SecretStore {
 
 beforeEach(() => {
   providerClient.getAvailableModels.mockReset();
+  providerFactory.create.mockReset();
+  providerFactory.create.mockReturnValue({
+    getAvailableModels: providerClient.getAvailableModels,
+  });
+  openCodeCatalog.fetch.mockReset();
+  openCodeCatalog.fetch.mockImplementation(() =>
+    providerClient.getAvailableModels(),
+  );
 });
 
 describe('official model manager provider boundary', () => {
@@ -244,7 +264,52 @@ describe('official model manager provider boundary', () => {
         name: 'DeepSeek V4 Flash (Free)',
       }),
     ]);
+    expect(openCodeCatalog.fetch).toHaveBeenCalledOnce();
+    expect(providerFactory.create).not.toHaveBeenCalled();
     expect(manager.getProviderState(config.name)?.models).toEqual(models);
+    manager.dispose();
+  });
+
+  it('uses the unified OpenCode catalog before filtering Gemini models', async () => {
+    providerClient.getAvailableModels.mockResolvedValue([
+      { id: 'gemini-3-flash' },
+      { id: 'gemini-3.1-pro' },
+      { id: 'gemini-3.5-flash' },
+      { id: 'gemini-3.5-flash-lite' },
+      { id: 'gemini-3.6-flash' },
+      { id: 'gemini-3.7-flash' },
+      { id: 'gpt-5.6-sol' },
+    ]);
+    const config: ProviderConfig = {
+      ...provider(),
+      type: 'google-ai-studio',
+      name: 'OpenCode Zen (Gemini)',
+      baseUrl: 'https://opencode.ai/zen',
+    };
+    const manager = new OfficialModelsManager();
+    await manager.initialize(
+      context(new Map()),
+      configStore(config),
+      secretStore(),
+      authManager(),
+    );
+
+    const models = await manager.getOfficialModels(config, true);
+
+    expect(models.map((model) => model.id)).toEqual([
+      'gemini-3-flash',
+      'gemini-3.1-pro',
+      'gemini-3.5-flash',
+      'gemini-3.5-flash-lite',
+      'gemini-3.6-flash',
+      'gemini-3.7-flash',
+    ]);
+    expect(openCodeCatalog.fetch).toHaveBeenCalledWith(
+      config,
+      expect.objectContaining({ kind: 'token', token: 'llm-token' }),
+      expect.any(AbortSignal),
+    );
+    expect(providerFactory.create).not.toHaveBeenCalled();
     manager.dispose();
   });
 

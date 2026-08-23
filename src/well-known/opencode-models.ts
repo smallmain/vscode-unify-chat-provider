@@ -122,7 +122,9 @@ const PROTOCOL_OVERRIDES: Readonly<
   go: GO_PROTOCOL_OVERRIDES,
 };
 
-function getOpenCodeService(baseUrl: string): OpenCodeService | undefined {
+export function getOpenCodeService(
+  baseUrl: string,
+): OpenCodeService | undefined {
   let url: URL;
   try {
     url = new URL(baseUrl);
