@@ -48,6 +48,10 @@ import {
   resolveMiniMaxCodingPlanEndpoint,
   resolveMiniMaxTokenPlanEndpoint,
 } from '../../src/balance/providers/minimax';
+import {
+  formatMetricValue,
+  formatSnapshotLines,
+} from '../../src/balance/display';
 import { SecretStore } from '../../src/secret/secret-store';
 
 function createSecretStore(): SecretStore {
@@ -91,6 +95,11 @@ describe('MiniMax balance provider', () => {
     expect(
       resolveMiniMaxTokenPlanEndpoint('https://api.minimaxi.com/anthropic'),
     ).toBe('https://www.minimaxi.com/v1/token_plan/remains');
+    expect(
+      resolveMiniMaxTokenPlanEndpoint(
+        'https://gateway.example.test/minimax/anthropic',
+      ),
+    ).toBe('https://gateway.example.test/v1/token_plan/remains');
     expect(
       resolveMiniMaxCodingPlanEndpoint('https://api.minimax.io/anthropic'),
     ).toBe(
@@ -178,8 +187,9 @@ describe('MiniMax balance provider', () => {
           end_time: 1_800_000_000_000,
           current_weekly_total_count: 0,
           current_weekly_usage_count: 0,
-          current_weekly_remaining_percent: 73,
+          current_weekly_remaining_percent: 100,
           current_weekly_status: 1,
+          weekly_boost_permille: 1500,
           weekly_end_time: 1_800_500_000_000,
         },
       ],
@@ -194,10 +204,96 @@ describe('MiniMax balance provider', () => {
         }),
         expect.objectContaining({
           id: 'minimax-token-plan-weekly-remaining-percent',
-          value: 73,
+          value: 150,
+          displayMaximum: 200,
         }),
       ]),
     );
+    const weeklyPercent = snapshot?.items.find(
+      (item) =>
+        item.id === 'minimax-token-plan-weekly-remaining-percent' &&
+        item.type === 'percent',
+    );
+    expect(weeklyPercent && formatMetricValue(weeklyPercent)).toBe('150%');
+    expect(
+      formatSnapshotLines(snapshot).some((line) =>
+        line.includes('150% remaining'),
+      ),
+    ).toBe(true);
+  });
+
+  it('caps boosted weekly percentages at the 200% display ceiling', () => {
+    const snapshot = parseMiniMaxTokenPlanSnapshot({
+      model_remains: [
+        {
+          model_name: 'general',
+          current_interval_total_count: 0,
+          current_interval_usage_count: 0,
+          current_interval_remaining_percent: 50,
+          current_interval_status: 1,
+          current_weekly_total_count: 0,
+          current_weekly_usage_count: 0,
+          current_weekly_remaining_percent: 100,
+          current_weekly_status: 1,
+          weekly_boost_permille: 5000,
+        },
+      ],
+    });
+
+    expect(snapshot?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'minimax-token-plan-weekly-remaining-percent',
+          type: 'percent',
+          value: 200,
+          displayMaximum: 200,
+        }),
+      ]),
+    );
+    expect(
+      formatSnapshotLines(snapshot).some((line) =>
+        line.includes('200% remaining'),
+      ),
+    ).toBe(true);
+  });
+
+  it('prioritizes an unlimited weekly status over counts and boost', () => {
+    const snapshot = parseMiniMaxTokenPlanSnapshot({
+      model_remains: [
+        {
+          model_name: 'general',
+          current_interval_total_count: 100,
+          current_interval_usage_count: 50,
+          current_interval_remaining_percent: 50,
+          current_interval_status: 1,
+          current_weekly_total_count: 1_000,
+          current_weekly_usage_count: 900,
+          current_weekly_remaining_percent: 90,
+          current_weekly_status: 3,
+          weekly_boost_permille: 1500,
+        },
+      ],
+    });
+
+    expect(snapshot?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'minimax-token-plan-weekly-status',
+          type: 'status',
+          value: 'unlimited',
+        }),
+      ]),
+    );
+    expect(
+      snapshot?.items.some(
+        (item) =>
+          item.id.startsWith('minimax-token-plan-weekly-') &&
+          (item.type === 'integer' || item.type === 'percent'),
+      ),
+    ).toBe(false);
+    const lines = formatSnapshotLines(snapshot);
+    expect(lines.some((line) => line.includes('Unlimited'))).toBe(true);
+    expect(lines.some((line) => line.includes('135% remaining'))).toBe(false);
   });
 
   it('rejects Token Plan rows that the API marks as unavailable', () => {
@@ -282,7 +378,7 @@ describe('MiniMax balance provider', () => {
     );
   });
 
-  it('falls back to the legacy Coding Plan endpoint', async () => {
+  it('keeps credentials on a custom provider origin while falling back', async () => {
     mocks.fetchWithRetry
       .mockResolvedValueOnce(
         new Response(JSON.stringify({ message: 'not a Token Plan key' }), {
@@ -306,15 +402,35 @@ describe('MiniMax balance provider', () => {
       );
 
     const result = await createBalanceProvider().refresh({
-      provider: providerConfig('https://api.minimax.io/anthropic'),
+      provider: providerConfig(
+        'https://gateway.example.test/minimax/anthropic',
+      ),
       credential: { kind: 'token', token: 'legacy-key' },
     });
 
     expect(result.success).toBe(true);
     expect(mocks.fetchWithRetry).toHaveBeenCalledTimes(2);
     expect(mocks.fetchWithRetry.mock.calls.map(([url]) => url)).toEqual([
-      'https://www.minimax.io/v1/token_plan/remains',
-      'https://api.minimax.io/v1/api/openplatform/coding_plan/remains',
+      'https://gateway.example.test/v1/token_plan/remains',
+      'https://gateway.example.test/v1/api/openplatform/coding_plan/remains',
     ]);
+    expect(mocks.fetchWithRetry).toHaveBeenNthCalledWith(
+      1,
+      'https://gateway.example.test/v1/token_plan/remains',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer legacy-key',
+        }),
+      }),
+    );
+    expect(mocks.fetchWithRetry).toHaveBeenNthCalledWith(
+      2,
+      'https://gateway.example.test/v1/api/openplatform/coding_plan/remains',
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: 'Bearer legacy-key',
+        }),
+      }),
+    );
   });
 });

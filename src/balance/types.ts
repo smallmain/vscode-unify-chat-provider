@@ -162,6 +162,8 @@ export interface BalancePercentMetric extends BalanceMetricBase {
   type: 'percent';
   value: number;
   basis?: 'remaining' | 'used';
+  /** Optional formatting ceiling for provider percentages that can exceed 100. */
+  displayMaximum?: number;
 }
 
 export interface BalanceTimeMetric extends BalanceMetricBase {

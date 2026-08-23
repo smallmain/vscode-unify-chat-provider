@@ -1112,6 +1112,7 @@ export class BalanceManager implements vscode.Disposable {
     if (type === 'percent') {
       const value = this.toFiniteNumber(raw.value);
       const basis = this.toPercentBasis(raw.basis);
+      const displayMaximum = this.toFiniteNumber(raw.displayMaximum);
       if (value === undefined) {
         return undefined;
       }
@@ -1121,6 +1122,9 @@ export class BalanceManager implements vscode.Disposable {
         type,
         value,
         ...(basis ? { basis } : {}),
+        ...(displayMaximum !== undefined && displayMaximum >= 100
+          ? { displayMaximum }
+          : {}),
       };
     }
 

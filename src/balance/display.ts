@@ -33,11 +33,30 @@ function formatIntegerAmount(value: number): string {
   return Math.round(value).toLocaleString();
 }
 
-function formatPercent(value: number): string {
-  return `${clampPercent(value).toLocaleString(undefined, {
+function formatPercent(value: number, displayMaximum = 100): string {
+  const maximum =
+    Number.isFinite(displayMaximum) && displayMaximum >= 100
+      ? displayMaximum
+      : 100;
+  const normalized = Number.isFinite(value)
+    ? Math.max(0, Math.min(maximum, value))
+    : 0;
+  return `${normalized.toLocaleString(undefined, {
     minimumFractionDigits: 0,
     maximumFractionDigits: PERCENT_FRACTION_DIGITS,
   })}%`;
+}
+
+function resolvePercentDisplayMaximum(metric: BalancePercentMetric): number {
+  return metric.displayMaximum !== undefined &&
+    Number.isFinite(metric.displayMaximum) &&
+    metric.displayMaximum >= 100
+    ? metric.displayMaximum
+    : 100;
+}
+
+function formatPercentMetric(metric: BalancePercentMetric): string {
+  return formatPercent(metric.value, resolvePercentDisplayMaximum(metric));
 }
 
 function resolveTimeText(metric: BalanceTimeMetric): string {
@@ -853,7 +872,14 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   }
   const statusMetric = pickStatusMetric(group.metrics);
   const timeMetric = pickTimeMetric(group.metrics);
+  const percentMetric = pickPercentMetric(group.metrics);
   const percent = resolveGroupPercent(group.metrics, amount, token);
+  const extendedRemainingPercent =
+    percentMetric &&
+    percentMetric.basis !== 'used' &&
+    resolvePercentDisplayMaximum(percentMetric) > 100
+      ? formatPercentMetric(percentMetric)
+      : undefined;
 
   let value: string | undefined;
   let valueSource:
@@ -873,6 +899,9 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   } else if (statusMetric) {
     value = resolveStatusText(statusMetric);
     valueSource = 'status';
+  } else if (extendedRemainingPercent) {
+    value = `${extendedRemainingPercent} ${t('remaining')}`;
+    valueSource = 'percent';
   } else if (percent !== undefined) {
     value = `${formatPercent(percent)} / ${formatPercent(100)}`;
     valueSource = 'percent';
@@ -890,9 +919,10 @@ function formatGroupLine(group: MetricLineGroup): string | undefined {
   const usedPercentText =
     percent !== undefined ? formatPercent(percent) : undefined;
   const remainingPercentText =
-    percent !== undefined
+    extendedRemainingPercent ??
+    (percent !== undefined
       ? formatPercent(clampPercent(100 - percent))
-      : undefined;
+      : undefined);
   const shouldPrefixPercentInTitle = valueSource !== 'percent';
   const title = quotaLike
     ? shouldPrefixPercentInTitle && remainingPercentText
@@ -1022,7 +1052,7 @@ export function formatMetricValue(metric: BalanceMetric): string | undefined {
     return formatIntegerAmount(metric.value);
   }
   if (metric.type === 'percent') {
-    return formatPercent(metric.value);
+    return formatPercentMetric(metric);
   }
   if (metric.type === 'time') {
     return resolveTimeText(metric);

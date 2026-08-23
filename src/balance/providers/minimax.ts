@@ -78,14 +78,37 @@ function parseErrorMessage(text: string): string | undefined {
 
 const MINIMAX_TOKEN_PLAN_PATH = '/v1/token_plan/remains';
 const MINIMAX_CODING_PLAN_PATH = '/v1/api/openplatform/coding_plan/remains';
+// Match the MiniMax CLI ceiling so boosted quota text stays readable.
+const MINIMAX_WEEKLY_PERCENT_DISPLAY_MAXIMUM = 200;
+const MINIMAX_GLOBAL_HOSTS = new Set([
+  'minimax.io',
+  'api.minimax.io',
+  'platform.minimax.io',
+  'www.minimax.io',
+]);
+const MINIMAX_CHINA_HOSTS = new Set([
+  'minimaxi.com',
+  'api.minimaxi.com',
+  'platform.minimaxi.com',
+  'www.minimaxi.com',
+]);
 
 export function resolveMiniMaxTokenPlanEndpoint(baseUrl: string): string {
-  const hostname = new URL(baseUrl).hostname.toLowerCase();
-  const tokenPlanHost =
-    hostname === 'minimaxi.com' || hostname.endsWith('.minimaxi.com')
-      ? 'www.minimaxi.com'
-      : 'www.minimax.io';
-  return new URL(MINIMAX_TOKEN_PLAN_PATH, `https://${tokenPlanHost}`).toString();
+  const base = new URL(baseUrl);
+  const hostname = base.hostname.toLowerCase();
+  if (MINIMAX_GLOBAL_HOSTS.has(hostname)) {
+    return new URL(
+      MINIMAX_TOKEN_PLAN_PATH,
+      'https://www.minimax.io',
+    ).toString();
+  }
+  if (MINIMAX_CHINA_HOSTS.has(hostname)) {
+    return new URL(
+      MINIMAX_TOKEN_PLAN_PATH,
+      'https://www.minimaxi.com',
+    ).toString();
+  }
+  return new URL(MINIMAX_TOKEN_PLAN_PATH, base).toString();
 }
 
 export function resolveMiniMaxCodingPlanEndpoint(baseUrl: string): string {
@@ -176,6 +199,7 @@ interface MiniMaxWindowDefinition {
   remainingPercentKey: string;
   endTimeKey: string;
   statusKey: string;
+  boostPermilleKey?: string;
 }
 
 function parseTokenPlanWindow(
@@ -191,6 +215,9 @@ function parseTokenPlanWindow(
   );
   const endTime = pickNumberLike(model, definition.endTimeKey);
   const status = pickNumberLike(model, definition.statusKey);
+  const boostPermille = definition.boostPermilleKey
+    ? pickNumberLike(model, definition.boostPermilleKey)
+    : undefined;
   const hasCountQuota = total !== undefined && total > 0;
   const remaining =
     hasCountQuota && rawRemaining !== undefined
@@ -201,12 +228,20 @@ function parseTokenPlanWindow(
     : remaining !== undefined && total !== undefined
       ? (remaining / total) * 100
       : undefined;
+  const boostedRemainingPercent =
+    remainingPercent !== undefined && boostPermille !== undefined
+      ? Math.min(
+          MINIMAX_WEEKLY_PERCENT_DISPLAY_MAXIMUM,
+          remainingPercent * (Math.max(0, boostPermille) / 1000),
+        )
+      : remainingPercent;
+  const isUnlimited = status === 3;
   const metricContext = {
     period: definition.period,
     label: definition.label,
   } as const;
 
-  if (remaining !== undefined && total !== undefined) {
+  if (!isUnlimited && remaining !== undefined && total !== undefined) {
     items.push(
       {
         id: `${definition.id}-remaining`,
@@ -232,20 +267,23 @@ function parseTokenPlanWindow(
     );
   }
 
-  if (status === 3 && !hasCountQuota) {
+  if (isUnlimited) {
     items.push({
       id: `${definition.id}-status`,
       type: 'status',
       ...metricContext,
       value: 'unlimited',
     });
-  } else if (remainingPercent !== undefined) {
+  } else if (boostedRemainingPercent !== undefined) {
     items.push({
       id: `${definition.id}-remaining-percent`,
       type: 'percent',
       ...metricContext,
-      value: remainingPercent,
+      value: boostedRemainingPercent,
       basis: 'remaining',
+      ...(boostedRemainingPercent > 100
+        ? { displayMaximum: MINIMAX_WEEKLY_PERCENT_DISPLAY_MAXIMUM }
+        : {}),
     });
   } else if (status === 2) {
     items.push({
@@ -305,6 +343,7 @@ export function parseMiniMaxTokenPlanSnapshot(
     remainingPercentKey: 'current_weekly_remaining_percent',
     endTimeKey: 'weekly_end_time',
     statusKey: 'current_weekly_status',
+    boostPermilleKey: 'weekly_boost_permille',
   });
   const items = [...intervalItems, ...weeklyItems];
   if (items.length === 0) {
