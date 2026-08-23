@@ -18,7 +18,7 @@ export interface BalanceWarningThresholds {
   tokenThresholdMillions: number;
 }
 
-export type BalanceWarningReason = 'time' | 'amount' | 'tokens';
+export type BalanceWarningReason = 'time' | 'amount' | 'tokens' | 'status';
 
 export interface BalanceWarningEvaluation {
   isNearThreshold: boolean;
@@ -75,10 +75,12 @@ function resolveRemainingTokens(tokens: BalanceTokenMetric): number | undefined 
 function findAmountMetric(
   items: readonly BalanceMetric[],
 ): BalanceAmountMetric | undefined {
-  return items.find(
-    (item): item is BalanceAmountMetric =>
-      item.type === 'amount' && item.direction === 'remaining',
-  );
+  const isRemainingAmount = (
+    item: BalanceMetric,
+  ): item is BalanceAmountMetric =>
+    item.type === 'amount' && item.direction === 'remaining';
+  const remainingAmounts = items.filter(isRemainingAmount);
+  return remainingAmounts.find((item) => item.primary) ?? remainingAmounts[0];
 }
 
 function findTokenMetric(
@@ -112,6 +114,18 @@ export function evaluateBalanceWarning(
   }
 
   const reasons: BalanceWarningReason[] = [];
+
+  if (
+    items.some(
+      (item) =>
+        item.type === 'status' &&
+        (item.value === 'exhausted' ||
+          item.value === 'error' ||
+          item.value === 'unavailable'),
+    )
+  ) {
+    reasons.push('status');
+  }
 
   const amountMetric = findAmountMetric(items);
   if (

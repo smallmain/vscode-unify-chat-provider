@@ -25,6 +25,11 @@ type SubscriptionWindow = {
   limitField: string;
 };
 
+type QuotaConstraint = {
+  metricId: string;
+  remaining: number;
+};
+
 type Sub2APIBalanceProviderContext = Pick<
   BalanceProviderContext,
   'persistBalanceConfig'
@@ -50,6 +55,8 @@ const SUBSCRIPTION_WINDOWS: readonly SubscriptionWindow[] = [
     limitField: 'monthly_limit_usd',
   },
 ];
+
+const DAY_MS = 24 * 60 * 60 * 1000;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return !!value && typeof value === 'object' && !Array.isArray(value);
@@ -78,6 +85,31 @@ function pickString(
   return typeof value === 'string' && value.trim()
     ? value.trim()
     : undefined;
+}
+
+function addDaysIso(
+  value: string | undefined,
+  days: number,
+): string | undefined {
+  if (!value) {
+    return undefined;
+  }
+  const timestampMs = Date.parse(value);
+  return Number.isFinite(timestampMs)
+    ? new Date(timestampMs + days * DAY_MS).toISOString()
+    : undefined;
+}
+
+function pickTightestConstraint(
+  constraints: readonly QuotaConstraint[],
+): string | undefined {
+  return constraints.reduce<QuotaConstraint | undefined>(
+    (selected, constraint) =>
+      !selected || constraint.remaining < selected.remaining
+        ? constraint
+        : selected,
+    undefined,
+  )?.metricId;
 }
 
 function parseErrorMessage(text: string): string | undefined {
@@ -135,7 +167,6 @@ function appendAmountGroup(
     remaining?: number;
     used?: number;
     limit?: number;
-    primary?: boolean;
   },
 ): void {
   const shared = {
@@ -153,7 +184,6 @@ function appendAmountGroup(
       type: 'amount',
       direction: 'remaining',
       value: options.remaining,
-      primary: options.primary,
     });
   }
   if (options.used !== undefined) {
@@ -216,8 +246,48 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
   const subscription = isRecord(payload['subscription'])
     ? payload['subscription']
     : undefined;
+  const constraints: QuotaConstraint[] = [];
+  let unavailablePrimaryId: string | undefined;
+  let exhaustedPrimaryId: string | undefined;
+  let defaultPrimaryId: string | undefined;
 
-  if (quota) {
+  const apiKeyStatus = pickString(payload, 'status')?.toLowerCase();
+  const isValid = payload['isValid'];
+  if (apiKeyStatus === 'expired') {
+    unavailablePrimaryId = 'api-key-expired';
+    items.push({
+      id: unavailablePrimaryId,
+      type: 'status',
+      period: 'current',
+      scope: 'api-key',
+      label: t('API Key balance'),
+      value: 'unavailable',
+      message: t('Expired'),
+    });
+  } else if (apiKeyStatus === 'disabled' || isValid === false) {
+    unavailablePrimaryId = 'api-key-unavailable';
+    items.push({
+      id: unavailablePrimaryId,
+      type: 'status',
+      period: 'current',
+      scope: 'api-key',
+      label: t('API Key balance'),
+      value: 'unavailable',
+      message: apiKeyStatus === 'disabled' ? t('Disabled') : undefined,
+    });
+  } else if (apiKeyStatus === 'quota_exhausted') {
+    exhaustedPrimaryId = 'api-key-quota-exhausted';
+    items.push({
+      id: exhaustedPrimaryId,
+      type: 'status',
+      period: 'current',
+      scope: 'api-key',
+      label: t('API Key balance'),
+      value: 'exhausted',
+    });
+  }
+
+  if (mode === 'quota_limited' && quota) {
     const limit = pickNumberLike(quota, 'limit');
     const used = pickNumberLike(quota, 'used');
     const remaining =
@@ -234,34 +304,50 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
       remaining,
       used,
       limit,
-      primary: remaining !== undefined,
     });
-  } else {
+    if (remaining !== undefined) {
+      constraints.push({
+        metricId: 'api-key-quota-remaining',
+        remaining,
+      });
+    }
+  } else if (mode === 'unrestricted' && subscription) {
     const topLevelRemaining = pickNumberLike(payload, 'remaining');
     if (topLevelRemaining === -1) {
+      defaultPrimaryId = 'subscription-unlimited';
       items.push({
-        id: 'quota-unlimited',
+        id: defaultPrimaryId,
         type: 'status',
         period: 'current',
-        scope: subscription ? 'subscription' : 'api-key',
-        label: subscription ? t('Subscription') : t('API Key balance'),
+        scope: 'subscription',
+        label: t('Subscription'),
         value: 'unlimited',
-        primary: true,
       });
-    } else {
-      const balance = pickNumberLike(payload, 'balance');
-      const remaining = topLevelRemaining ?? balance;
-      if (remaining !== undefined) {
-        appendAmountGroup(items, {
-          id: subscription ? 'subscription-quota' : 'wallet-balance',
-          scope: subscription ? 'subscription' : 'user',
-          period: 'current',
-          label: subscription ? t('Subscription') : t('Balance'),
-          currencySymbol,
-          remaining,
-          primary: true,
-        });
-      }
+    } else if (topLevelRemaining !== undefined) {
+      defaultPrimaryId = 'subscription-quota-remaining';
+      appendAmountGroup(items, {
+        id: 'subscription-quota',
+        scope: 'subscription',
+        period: 'current',
+        label: t('Subscription'),
+        currencySymbol,
+        remaining: topLevelRemaining,
+      });
+    }
+  } else if (mode === 'unrestricted') {
+    const walletBalance =
+      pickNumberLike(payload, 'balance') ??
+      pickNumberLike(payload, 'remaining');
+    if (walletBalance !== undefined) {
+      defaultPrimaryId = 'wallet-balance-remaining';
+      appendAmountGroup(items, {
+        id: 'wallet-balance',
+        scope: 'user',
+        period: 'current',
+        label: t('Balance'),
+        currencySymbol,
+        remaining: walletBalance,
+      });
     }
   }
 
@@ -283,6 +369,17 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
         limit,
       });
     }
+
+    appendTimeMetric(items, {
+      id: 'subscription-weekly-reset',
+      scope: 'subscription',
+      period: 'week',
+      kind: 'resetAt',
+      value: addDaysIso(
+        pickString(subscription, 'weekly_window_start'),
+        7,
+      ),
+    });
 
     appendTimeMetric(items, {
       id: 'subscription-expires',
@@ -307,10 +404,12 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
         (limit !== undefined && used !== undefined
           ? Math.max(0, limit - used)
           : undefined);
+      const period =
+        window === '1d' ? 'day' : window === '7d' ? 'week' : 'custom';
       appendAmountGroup(items, {
         id: `rate-limit-${index}`,
         scope: 'api-key-rate-limit',
-        period: window === '1d' ? 'day' : window === '7d' ? 'week' : 'custom',
+        period,
         periodLabel: window,
         label: t('API Key balance'),
         currencySymbol,
@@ -318,10 +417,29 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
         used,
         limit,
       });
+      if (remaining !== undefined) {
+        constraints.push({
+          metricId: `rate-limit-${index}-remaining`,
+          remaining,
+        });
+        if (remaining <= 0) {
+          const statusId = `rate-limit-${index}-exhausted`;
+          exhaustedPrimaryId ??= statusId;
+          items.push({
+            id: statusId,
+            type: 'status',
+            period,
+            periodLabel: window,
+            scope: 'api-key-rate-limit',
+            label: t('API Key balance'),
+            value: 'exhausted',
+          });
+        }
+      }
       appendTimeMetric(items, {
         id: `rate-limit-${index}-reset`,
         scope: 'api-key-rate-limit',
-        period: window === '1d' ? 'day' : window === '7d' ? 'week' : 'custom',
+        period,
         periodLabel: window,
         kind: 'resetAt',
         value: pickString(value, 'reset_at'),
@@ -338,11 +456,15 @@ function parseUsageMetrics(payload: Record<string, unknown>): BalanceMetric[] {
   });
 
   const selected =
-    items.find((item) => item.primary)?.id ??
+    unavailablePrimaryId ??
+    exhaustedPrimaryId ??
+    (mode === 'quota_limited'
+      ? pickTightestConstraint(constraints)
+      : defaultPrimaryId) ??
+    items.find((item) => item.type === 'status')?.id ??
     items.find(
       (item) => item.type === 'amount' && item.direction === 'remaining',
     )?.id ??
-    items.find((item) => item.type === 'status')?.id ??
     items[0]?.id;
 
   return items.map((item) => ({

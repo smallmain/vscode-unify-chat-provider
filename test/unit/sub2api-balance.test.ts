@@ -37,6 +37,7 @@ vi.mock('../../src/utils', () => ({
 }));
 
 import { Sub2APIBalanceProvider } from '../../src/balance/providers/sub2api';
+import { evaluateBalanceWarning } from '../../src/balance/warning-utils';
 
 function provider(baseUrl = 'https://relay.example.test/v1'): ProviderConfig {
   return {
@@ -107,7 +108,7 @@ describe('Sub2API balance provider', () => {
           type: 'amount',
           direction: 'remaining',
           value: 75,
-          primary: true,
+          primary: false,
         }),
         expect.objectContaining({
           id: 'api-key-quota-used',
@@ -118,6 +119,7 @@ describe('Sub2API balance provider', () => {
           id: 'rate-limit-0-remaining',
           periodLabel: '5h',
           value: 12,
+          primary: true,
         }),
         expect.objectContaining({
           id: 'rate-limit-0-reset',
@@ -131,6 +133,144 @@ describe('Sub2API balance provider', () => {
         }),
       ]),
     );
+    expect(
+      evaluateBalanceWarning(result.snapshot?.items, {
+        enabled: true,
+        timeThresholdDays: 0,
+        amountThreshold: 20,
+        tokenThresholdMillions: 0,
+      }),
+    ).toMatchObject({ isNearThreshold: true, reasons: ['amount'] });
+  });
+
+  it('prioritizes an expired API key status and raises a warning', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'quota_limited',
+          isValid: true,
+          status: 'expired',
+          quota: { limit: 100, used: 25, remaining: 75, unit: 'USD' },
+          remaining: 75,
+          unit: 'USD',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+    const items = result.snapshot?.items;
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'api-key-expired',
+          type: 'status',
+          value: 'unavailable',
+          message: 'Expired',
+          primary: true,
+        }),
+        expect.objectContaining({
+          id: 'api-key-quota-remaining',
+          value: 75,
+          primary: false,
+        }),
+      ]),
+    );
+    expect(
+      evaluateBalanceWarning(items, {
+        enabled: true,
+        timeThresholdDays: 0,
+        amountThreshold: 10,
+        tokenThresholdMillions: 0,
+      }),
+    ).toEqual({ isNearThreshold: true, reasons: ['status'] });
+  });
+
+  it('honors quota_exhausted status over a stale positive quota', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'quota_limited',
+          isValid: true,
+          status: 'quota_exhausted',
+          quota: { limit: 100, used: 25, remaining: 75, unit: 'USD' },
+          remaining: 75,
+          unit: 'USD',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+
+    expect(result.snapshot?.items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'api-key-quota-exhausted',
+          type: 'status',
+          value: 'exhausted',
+          primary: true,
+        }),
+        expect.objectContaining({
+          id: 'api-key-quota-remaining',
+          value: 75,
+          primary: false,
+        }),
+      ]),
+    );
+  });
+
+  it('prioritizes and warns about an exhausted execution rate window', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'quota_limited',
+          isValid: true,
+          status: 'active',
+          quota: { limit: 100, used: 25, remaining: 75, unit: 'USD' },
+          remaining: 75,
+          unit: 'USD',
+          rate_limits: [
+            {
+              window: '5h',
+              limit: 20,
+              used: 20,
+              remaining: 0,
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+    const items = result.snapshot?.items;
+
+    expect(items).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          id: 'rate-limit-0-exhausted',
+          type: 'status',
+          periodLabel: '5h',
+          value: 'exhausted',
+          primary: true,
+        }),
+        expect.objectContaining({
+          id: 'api-key-quota-remaining',
+          value: 75,
+          primary: false,
+        }),
+      ]),
+    );
+    expect(
+      evaluateBalanceWarning(items, {
+        enabled: true,
+        timeThresholdDays: 0,
+        amountThreshold: 10,
+        tokenThresholdMillions: 0,
+      }),
+    ).toMatchObject({ isNearThreshold: true, reasons: ['status'] });
   });
 
   it('maps subscription windows and the effective remaining quota', async () => {
@@ -147,6 +287,7 @@ describe('Sub2API balance provider', () => {
             daily_limit_usd: 10,
             weekly_usage_usd: 15,
             weekly_limit_usd: 50,
+            weekly_window_start: '2026-08-17T08:30:00+08:00',
             monthly_usage_usd: 65,
             monthly_limit_usd: 100,
             expires_at: '2026-09-30T00:00:00Z',
@@ -182,6 +323,12 @@ describe('Sub2API balance provider', () => {
           value: 100,
         }),
         expect.objectContaining({
+          id: 'subscription-weekly-reset',
+          kind: 'resetAt',
+          value: '2026-08-24T00:30:00.000Z',
+          timestampMs: Date.parse('2026-08-24T08:30:00+08:00'),
+        }),
+        expect.objectContaining({
           id: 'subscription-expires',
           kind: 'expiresAt',
         }),
@@ -215,6 +362,60 @@ describe('Sub2API balance provider', () => {
         id: 'wallet-balance-remaining',
         value: 42.5,
         currencySymbol: '$',
+        primary: true,
+      }),
+    ]);
+  });
+
+  it('treats negative wallet balance as an amount, not unlimited quota', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'unrestricted',
+          isValid: true,
+          planName: 'Wallet',
+          remaining: 999,
+          balance: -1,
+          unit: 'USD',
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+
+    expect(result.snapshot?.items).toEqual([
+      expect.objectContaining({
+        id: 'wallet-balance-remaining',
+        type: 'amount',
+        value: -1,
+        primary: true,
+      }),
+    ]);
+  });
+
+  it('keeps the -1 unlimited sentinel for subscription mode', async () => {
+    state.fetchWithRetry.mockResolvedValueOnce(
+      new Response(
+        JSON.stringify({
+          mode: 'unrestricted',
+          isValid: true,
+          planName: 'Unlimited Plan',
+          remaining: -1,
+          unit: 'USD',
+          subscription: {},
+        }),
+        { status: 200 },
+      ),
+    );
+
+    const result = await refresh();
+
+    expect(result.snapshot?.items).toEqual([
+      expect.objectContaining({
+        id: 'subscription-unlimited',
+        type: 'status',
+        value: 'unlimited',
         primary: true,
       }),
     ]);
