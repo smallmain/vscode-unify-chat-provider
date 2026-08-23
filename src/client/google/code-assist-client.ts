@@ -55,6 +55,7 @@ import {
 } from './antigravity-model-resolver';
 
 export {
+  ANTIGRAVITY_AVAILABLE_MODEL_IDS,
   resolveAntigravityModelForRequest,
   type Gemini3ThinkingLevel,
 } from './antigravity-model-resolver';

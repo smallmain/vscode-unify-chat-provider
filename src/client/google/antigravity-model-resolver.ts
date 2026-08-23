@@ -1,5 +1,14 @@
 export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
+export const ANTIGRAVITY_AVAILABLE_MODEL_IDS = [
+  'gemini-3.6-flash',
+  'gemini-3.5-flash',
+  'gemini-3.1-pro',
+  'gemini-3-flash',
+  'claude-sonnet-4-6',
+  'claude-opus-4-6',
+] as const;
+
 const IMAGE_MODEL_PATTERN = /image|imagen/i;
 const GEMINI_3_TIER_SUFFIX = /-(minimal|low|medium|high)$/i;
 const GEMINI_3_PRO_PATTERN = /^gemini-3(?:\.\d+)?-pro/i;
@@ -8,6 +17,10 @@ const CLAUDE_THINKING_SUFFIX = /-thinking$/i;
 
 const ANTIGRAVITY_GEMINI_3_1_PRO_AGENT_MODEL = 'gemini-pro-agent';
 const ANTIGRAVITY_GEMINI_3_1_PRO_LOW_MODEL = 'gemini-3.1-pro-low';
+const ANTIGRAVITY_GEMINI_3_5_FLASH_HIGH_MODEL = 'gemini-3-flash-agent';
+const ANTIGRAVITY_GEMINI_3_5_FLASH_LOW_MODEL =
+  'gemini-3.5-flash-extra-low';
+const ANTIGRAVITY_GEMINI_3_5_FLASH_MEDIUM_MODEL = 'gemini-3.5-flash-low';
 
 export function isAntigravityImageModel(modelId: string): boolean {
   return IMAGE_MODEL_PATTERN.test(modelId);
@@ -47,6 +60,25 @@ function resolveGemini31ProRoute(
     : ANTIGRAVITY_GEMINI_3_1_PRO_AGENT_MODEL;
 }
 
+function normalizeAntigravityFlashThinkingLevel(
+  thinkingLevel: Gemini3ThinkingLevel,
+): Exclude<Gemini3ThinkingLevel, 'minimal'> {
+  return thinkingLevel === 'minimal' ? 'low' : thinkingLevel;
+}
+
+function resolveGemini35FlashRoute(
+  thinkingLevel: Exclude<Gemini3ThinkingLevel, 'minimal'>,
+): string {
+  switch (thinkingLevel) {
+    case 'low':
+      return ANTIGRAVITY_GEMINI_3_5_FLASH_LOW_MODEL;
+    case 'medium':
+      return ANTIGRAVITY_GEMINI_3_5_FLASH_MEDIUM_MODEL;
+    case 'high':
+      return ANTIGRAVITY_GEMINI_3_5_FLASH_HIGH_MODEL;
+  }
+}
+
 export function resolveAntigravityModelForRequest(
   modelId: string,
   preferredGemini3ThinkingLevel?: Gemini3ThinkingLevel,
@@ -74,12 +106,28 @@ export function resolveAntigravityModelForRequest(
     return { requestModelId: trimmed };
   }
 
+  const { baseModelId, tier } = parseGemini3TierSuffix(trimmed);
+  const baseModelLower = baseModelId.toLowerCase();
+  const effectiveLevel: Gemini3ThinkingLevel =
+    preferredGemini3ThinkingLevel ?? tier ?? 'high';
+
+  if (
+    baseModelLower === 'gemini-3.5-flash' ||
+    baseModelLower === 'gemini-3.6-flash'
+  ) {
+    const flashThinkingLevel =
+      normalizeAntigravityFlashThinkingLevel(effectiveLevel);
+    return {
+      requestModelId:
+        baseModelLower === 'gemini-3.5-flash'
+          ? resolveGemini35FlashRoute(flashThinkingLevel)
+          : `gemini-3.6-flash-${flashThinkingLevel}`,
+      gemini3ThinkingLevel: flashThinkingLevel,
+    };
+  }
+
   const isGemini3Pro = GEMINI_3_PRO_PATTERN.test(modelLower);
   if (isGemini3Pro) {
-    const { baseModelId, tier } = parseGemini3TierSuffix(trimmed);
-    const effectiveLevel: Gemini3ThinkingLevel =
-      preferredGemini3ThinkingLevel ?? tier ?? 'high';
-
     if (isAntigravityImageModel(baseModelId)) {
       return {
         requestModelId: baseModelId,
@@ -93,8 +141,6 @@ export function resolveAntigravityModelForRequest(
     return { requestModelId, gemini3ThinkingLevel: effectiveLevel };
   }
 
-  const effectiveLevel: Gemini3ThinkingLevel =
-    preferredGemini3ThinkingLevel ?? 'high';
   return {
     requestModelId: trimmed,
     gemini3ThinkingLevel: effectiveLevel,

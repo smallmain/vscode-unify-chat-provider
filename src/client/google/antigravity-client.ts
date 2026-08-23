@@ -5,6 +5,7 @@ import {
   CODE_ASSIST_HEADERS,
 } from '../../auth/providers/antigravity-oauth/constants';
 import {
+  ANTIGRAVITY_AVAILABLE_MODEL_IDS,
   type Gemini3ThinkingLevel,
   GoogleCodeAssistProvider,
   resolveAntigravityModelForRequest,
@@ -45,11 +46,6 @@ export class GoogleAntigravityProvider extends GoogleCodeAssistProvider {
     this.validateAuth();
     // Sync rule: keep canonical model IDs used by this project config.
     // Do NOT copy reference project's "antigravity-*" prefixed IDs directly.
-    return [
-      { id: 'gemini-3.1-pro' },
-      { id: 'gemini-3-flash' },
-      { id: 'claude-sonnet-4-6' },
-      { id: 'claude-opus-4-6' },
-    ];
+    return ANTIGRAVITY_AVAILABLE_MODEL_IDS.map((id) => ({ id }));
   }
 }
