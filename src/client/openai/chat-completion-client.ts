@@ -1138,6 +1138,16 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
 
     const headers = this.buildHeaders(credential, model, sanitizedMessages);
     const serviceTier = resolveOpenAIServiceTier(this.config, model);
+    // Provider wire constraints override model-family hints; unknown compatible
+    // endpoints default to the broadly supported legacy parameter.
+    const maxOutputTokenParams =
+      model.maxOutputTokens === undefined
+        ? {}
+        : useOnlyMaxTokens
+          ? { max_tokens: model.maxOutputTokens }
+          : useOnlyMaxCompletionTokens
+            ? { max_completion_tokens: model.maxOutputTokens }
+            : { max_tokens: model.maxOutputTokens };
 
     const baseBody: ChatCompletionCreateParamsBase = {
       model: getBaseModelId(model.id),
@@ -1153,16 +1163,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       ...(useMaxInputTokens && model.maxInputTokens !== undefined
         ? { max_input_tokens: model.maxInputTokens }
         : {}),
-      ...(model.maxOutputTokens !== undefined
-        ? useOnlyMaxCompletionTokens
-          ? { max_completion_tokens: model.maxOutputTokens }
-          : useOnlyMaxTokens
-            ? { max_tokens: model.maxOutputTokens }
-            : {
-                max_tokens: model.maxOutputTokens,
-                max_completion_tokens: model.maxOutputTokens,
-              }
-        : {}),
+      ...maxOutputTokenParams,
       ...(model.temperature !== undefined
         ? { temperature: model.temperature }
         : {}),
