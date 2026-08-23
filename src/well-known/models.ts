@@ -2428,7 +2428,7 @@ const _WELL_KNOWN_MODELS = [
         matchers: ['integrate.api.nvidia.com'],
         config: {
           id: 'deepseek-ai/deepseek-v4-pro',
-          maxOutputTokens: 262144,
+          maxOutputTokens: 16384,
         },
       },
     ],
