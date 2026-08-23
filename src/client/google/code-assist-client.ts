@@ -480,9 +480,22 @@ export function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
     'markdownDescription',
     'deprecationMessage',
     'errorMessage',
-    // MCP transport metadata is not a Google FunctionDeclaration schema field.
-    'x-mcp-header',
   ]);
+
+  const cloneOpaqueValue = (value: unknown): unknown => {
+    if (Array.isArray(value)) {
+      return value.map(cloneOpaqueValue);
+    }
+    if (!isRecord(value)) {
+      return value;
+    }
+
+    const cloned: Record<string, unknown> = {};
+    for (const [key, child] of Object.entries(value)) {
+      cloned[key] = cloneOpaqueValue(child);
+    }
+    return cloned;
+  };
 
   const appendHintToDescription = (
     target: Record<string, unknown>,
@@ -747,6 +760,10 @@ export function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
       if (droppedKeys.has(k)) {
         continue;
       }
+      if (k === 'x-mcp-header') {
+        // MCP transport metadata is not a Google schema field.
+        continue;
+      }
 
       if (k === '$ref' || k === 'allOf' || k === 'anyOf' || k === 'oneOf') {
         continue;
@@ -754,8 +771,14 @@ export function cleanJsonSchemaForAntigravity(schema: unknown): unknown {
 
       if (k === 'const') {
         if (!Array.isArray(out['enum'])) {
-          out['enum'] = [clean(v, { topLevel: false }).value];
+          out['enum'] = [cloneOpaqueValue(v)];
         }
+        continue;
+      }
+
+      if (k === 'example' || k === 'enum') {
+        // Instance values are opaque data, not child schema nodes.
+        out[k] = cloneOpaqueValue(v);
         continue;
       }
 

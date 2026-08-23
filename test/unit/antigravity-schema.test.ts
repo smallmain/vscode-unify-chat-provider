@@ -21,6 +21,7 @@ describe('Antigravity tool schema', () => {
     expect(
       cleanJsonSchemaForAntigravity({
         type: 'object',
+        'x-mcp-header': 'Root',
         properties: {
           region: {
             type: 'string',
@@ -57,5 +58,63 @@ describe('Antigravity tool schema', () => {
       },
       required: ['region'],
     });
+  });
+
+  it('preserves x-mcp-header keys inside opaque schema values', () => {
+    const literal = { 'x-mcp-header': 'literal' };
+
+    expect(
+      cleanJsonSchemaForAntigravity({ example: literal }),
+    ).toEqual({ example: literal });
+    expect(cleanJsonSchemaForAntigravity({ const: literal })).toEqual({
+      enum: [JSON.stringify(literal)],
+    });
+    expect(cleanJsonSchemaForAntigravity({ enum: [literal] })).toEqual({
+      enum: [JSON.stringify(literal)],
+    });
+  });
+
+  it('keeps a tool argument named x-mcp-header and its required entry', () => {
+    expect(
+      cleanJsonSchemaForAntigravity({
+        type: 'object',
+        properties: {
+          'x-mcp-header': {
+            type: 'string',
+            description: 'A regular tool argument',
+          },
+        },
+        required: ['x-mcp-header'],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: {
+        'x-mcp-header': {
+          type: 'string',
+          description: 'A regular tool argument',
+        },
+      },
+      required: ['x-mcp-header'],
+    });
+  });
+
+  it('does not mutate the input schema', () => {
+    const schema = {
+      type: 'object',
+      properties: {
+        region: {
+          type: 'string',
+          'x-mcp-header': 'Region',
+          example: { 'x-mcp-header': 'literal' },
+        },
+      },
+      required: ['region'],
+    };
+    const original = structuredClone(schema);
+
+    const cleaned = cleanJsonSchemaForAntigravity(schema);
+
+    expect(schema).toEqual(original);
+    expect(cleaned).not.toBe(schema);
   });
 });
