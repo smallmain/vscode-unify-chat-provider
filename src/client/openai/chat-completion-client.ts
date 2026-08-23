@@ -387,14 +387,9 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
                   (convertedMessage.reasoning ?? '') + convertedPart.reasoning;
               }
               if (convertedPart.reasoning_details !== undefined) {
-                const currentDetails =
-                  convertedMessage.reasoning_details ?? [];
                 convertedMessage.reasoning_details = [
-                  ...currentDetails,
-                  ...convertedPart.reasoning_details.map((detail, index) => ({
-                    ...detail,
-                    index: currentDetails.length + index,
-                  })),
+                  ...(convertedMessage.reasoning_details ?? []),
+                  ...convertedPart.reasoning_details,
                 ];
               }
               if (convertedPart.tool_calls !== undefined) {
@@ -1185,7 +1180,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       expectedIdentity,
       imageRetention:
         model.capabilities?.imageInput === true ? 'user-only' : 'discard',
-      preserveThinkingToolRounds: reasoningType !== 'none',
+      preserveThinkingToolRounds: reasoningType === 'content',
     });
 
     const convertedMessages = this.convertMessages(

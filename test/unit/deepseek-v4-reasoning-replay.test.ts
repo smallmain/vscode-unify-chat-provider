@@ -2,6 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const network = vi.hoisted(() => ({
   bodies: [] as Record<string, unknown>[],
+  responseMessage: { role: 'assistant', content: 'done' } as Record<
+    string,
+    unknown
+  >,
+  finishReason: 'stop',
   fetcher: (async () => new Response('', { status: 500 })) as typeof fetch,
 }));
 
@@ -224,9 +229,9 @@ function completionResponse(): Response {
       choices: [
         {
           index: 0,
-          finish_reason: 'stop',
+          finish_reason: network.finishReason,
           logprobs: null,
-          message: { role: 'assistant', content: 'done' },
+          message: network.responseMessage,
         },
       ],
     }),
@@ -237,14 +242,20 @@ function completionResponse(): Response {
   );
 }
 
-async function captureRequestBody(
+interface StreamChatCapture {
+  body: Record<string, unknown>;
+  parts: vscode.LanguageModelResponsePart2[];
+}
+
+async function runStreamChat(
   config: ProviderConfig,
   selectedModel: ModelConfig,
   messages: readonly vscode.LanguageModelChatRequestMessage[],
   requestModelId = encodedModelId,
-): Promise<Record<string, unknown>> {
+): Promise<StreamChatCapture> {
   const Provider = PROVIDER_TYPES['openai-chat-completion'].class;
   const provider = new Provider(config);
+  const parts: vscode.LanguageModelResponsePart2[] = [];
   for await (const part of provider.streamChat(
     requestModelId,
     selectedModel,
@@ -255,14 +266,24 @@ async function captureRequestBody(
     new SilentRequestLogger('deepseek-reasoning-replay'),
     { kind: 'token', token: 'test-token' },
   )) {
-    void part;
+    parts.push(part);
   }
 
   const body = network.bodies.at(-1);
   if (!body) {
     throw new Error('No Chat Completions request body was captured');
   }
-  return body;
+  return { body, parts };
+}
+
+async function captureRequestBody(
+  config: ProviderConfig,
+  selectedModel: ModelConfig,
+  messages: readonly vscode.LanguageModelChatRequestMessage[],
+  requestModelId = encodedModelId,
+): Promise<Record<string, unknown>> {
+  return (await runStreamChat(config, selectedModel, messages, requestModelId))
+    .body;
 }
 
 function createMarker(
@@ -278,6 +299,65 @@ function createMarker(
     Buffer.from(`${encodedModelId}\\${encoded}`),
     DataPartMimeTypes.StatefulMarker,
   );
+}
+
+function materializeMarker(
+  marker: vscode.LanguageModelDataPart,
+  requestModelId = encodedModelId,
+): vscode.LanguageModelDataPart {
+  const serialized = Buffer.from(marker.data).toString('utf8');
+  const separatorIndex = serialized.indexOf('\\');
+  if (separatorIndex <= 0) {
+    throw new Error('Response marker did not contain a model prefix');
+  }
+
+  return new vscode.LanguageModelDataPart(
+    Buffer.from(
+      `${requestModelId}${serialized.slice(separatorIndex)}`,
+    ),
+    marker.mimeType,
+  );
+}
+
+function responseToolHistory(
+  parts: readonly vscode.LanguageModelResponsePart2[],
+  includeMarker: boolean,
+): vscode.LanguageModelChatRequestMessage[] {
+  const assistantContent: unknown[] = [];
+  for (const part of parts) {
+    if (
+      part instanceof vscode.LanguageModelDataPart &&
+      part.mimeType === DataPartMimeTypes.StatefulMarker
+    ) {
+      if (includeMarker) {
+        assistantContent.push(materializeMarker(part));
+      }
+      continue;
+    }
+    assistantContent.push(part);
+  }
+
+  return [
+    {
+      role: vscode.LanguageModelChatMessageRole.User,
+      name: undefined,
+      content: [new vscode.LanguageModelTextPart('question')],
+    },
+    {
+      role: vscode.LanguageModelChatMessageRole.Assistant,
+      name: undefined,
+      content: assistantContent,
+    },
+    {
+      role: vscode.LanguageModelChatMessageRole.User,
+      name: undefined,
+      content: [
+        new vscode.LanguageModelToolResultPart('call-openrouter', [
+          new vscode.LanguageModelTextPart('openrouter result'),
+        ]),
+      ],
+    },
+  ];
 }
 
 function toolHistory(
@@ -331,6 +411,8 @@ function requestMessages(body: Record<string, unknown>): unknown[] {
 
 beforeEach(() => {
   network.bodies = [];
+  network.responseMessage = { role: 'assistant', content: 'done' };
+  network.finishReason = 'stop';
   network.fetcher = async (input, init) => {
     const request = new Request(input, init);
     const parsed: unknown = JSON.parse(await request.text());
@@ -343,8 +425,9 @@ beforeEach(() => {
 });
 
 describe('DeepSeek V4 reasoning replay', () => {
-  it('uses real feature matching for custom and ordinary model IDs', () => {
+  it('uses real feature matching for custom, ordinary, and OpenRouter models', () => {
     const config = providerConfig();
+    const openRouterConfig = providerConfig('https://openrouter.ai/api/v1');
 
     expect(
       isFeatureSupported(
@@ -360,6 +443,20 @@ describe('DeepSeek V4 reasoning replay', () => {
         model('ordinary-chat-model'),
       ),
     ).toBe(false);
+    expect(
+      isFeatureSupported(
+        FeatureId.OpenAIUseReasoningDetails,
+        openRouterConfig,
+        model(),
+      ),
+    ).toBe(true);
+    expect(
+      isFeatureSupported(
+        FeatureId.OpenAIUseReasoningContent,
+        openRouterConfig,
+        model(),
+      ),
+    ).toBe(true);
   });
 
   it.each([
@@ -457,60 +554,253 @@ describe('DeepSeek V4 reasoning replay', () => {
     ]);
   });
 
-  it('prefers OpenRouter reasoning_details and reindexes multiple thinking parts', async () => {
-    const config = providerConfig('https://openrouter.ai/api/v1');
-    const selectedModel = model();
+  it('replays two consecutive complete markerless tool exchanges', async () => {
+    const body = await captureRequestBody(providerConfig(), model(), [
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        name: undefined,
+        content: [new vscode.LanguageModelTextPart('question')],
+      },
+      {
+        role: vscode.LanguageModelChatMessageRole.Assistant,
+        name: undefined,
+        content: [
+          new vscode.LanguageModelThinkingPart('first reasoning'),
+          new vscode.LanguageModelTextPart('First tool'),
+          new vscode.LanguageModelToolCallPart('call-first', 'lookup', {
+            query: 'first',
+          }),
+        ],
+      },
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        name: undefined,
+        content: [
+          new vscode.LanguageModelToolResultPart('call-first', [
+            new vscode.LanguageModelTextPart('first result'),
+          ]),
+        ],
+      },
+      {
+        role: vscode.LanguageModelChatMessageRole.Assistant,
+        name: undefined,
+        content: [
+          new vscode.LanguageModelThinkingPart('second reasoning'),
+          new vscode.LanguageModelTextPart('Second tool'),
+          new vscode.LanguageModelToolCallPart('call-second', 'lookup', {
+            query: 'second',
+          }),
+        ],
+      },
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        name: undefined,
+        content: [
+          new vscode.LanguageModelToolResultPart('call-second', [
+            new vscode.LanguageModelTextPart('second result'),
+          ]),
+        ],
+      },
+    ]);
 
-    expect(
-      isFeatureSupported(
-        FeatureId.OpenAIUseReasoningDetails,
-        config,
-        selectedModel,
-      ),
-    ).toBe(true);
-    expect(
-      isFeatureSupported(
-        FeatureId.OpenAIUseReasoningContent,
-        config,
-        selectedModel,
-      ),
-    ).toBe(true);
+    expect(requestMessages(body)).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'question' }],
+      },
+      {
+        role: 'assistant',
+        reasoning_content: 'first reasoning',
+        content: [{ type: 'text', text: 'First tool' }],
+        tool_calls: [
+          {
+            id: 'call-first',
+            type: 'function',
+            function: { name: 'lookup', arguments: '{"query":"first"}' },
+          },
+        ],
+      },
+      { role: 'tool', content: 'first result', tool_call_id: 'call-first' },
+      {
+        role: 'assistant',
+        reasoning_content: 'second reasoning',
+        content: [{ type: 'text', text: 'Second tool' }],
+        tool_calls: [
+          {
+            id: 'call-second',
+            type: 'function',
+            function: { name: 'lookup', arguments: '{"query":"second"}' },
+          },
+        ],
+      },
+      { role: 'tool', content: 'second result', tool_call_id: 'call-second' },
+    ]);
+  });
 
-    const body = await captureRequestBody(
-      config,
-      selectedModel,
-      toolHistory(),
-    );
-    const assistant = requestMessages(body)[1];
-
-    expect(assistant).toEqual({
-      role: 'assistant',
-      reasoning_details: [
-        { type: 'reasoning.text', index: 0, text: 'reason-1' },
-        { type: 'reasoning.text', index: 1, text: 'reason-2' },
-        { type: 'reasoning.text', index: 2, text: 'reason-3' },
+  it('does not satisfy a later reused call ID with an earlier result', async () => {
+    const history = toolHistory(undefined, ['call-1']);
+    history[1] = {
+      role: vscode.LanguageModelChatMessageRole.Assistant,
+      name: undefined,
+      content: [
+        new vscode.LanguageModelThinkingPart('first reasoning'),
+        new vscode.LanguageModelToolCallPart('call-1', 'lookup', {
+          query: 'first',
+        }),
       ],
-      content: [{ type: 'text', text: 'Calling tools' }],
-      tool_calls: [
-        {
-          id: 'call-1',
-          type: 'function',
-          function: {
-            name: 'lookup',
-            arguments: '{"query":"first"}',
-          },
-        },
-        {
-          id: 'call-2',
-          type: 'function',
-          function: {
-            name: 'lookup',
-            arguments: '{"query":"second"}',
-          },
-        },
+    };
+    history.push({
+      role: vscode.LanguageModelChatMessageRole.Assistant,
+      name: undefined,
+      content: [
+        new vscode.LanguageModelThinkingPart('incomplete reasoning'),
+        new vscode.LanguageModelToolCallPart('call-1', 'lookup', {
+          query: 'reused',
+        }),
       ],
     });
-    expect(assistant).not.toHaveProperty('reasoning_content');
+
+    const body = await captureRequestBody(providerConfig(), model(), history);
+
+    expect(requestMessages(body)).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'question' }],
+      },
+      {
+        role: 'assistant',
+        reasoning_content: 'first reasoning',
+        tool_calls: [
+          {
+            id: 'call-1',
+            type: 'function',
+            function: { name: 'lookup', arguments: '{"query":"first"}' },
+          },
+        ],
+      },
+      { role: 'tool', content: 'first result', tool_call_id: 'call-1' },
+    ]);
+  });
+
+  it('restores extracted OpenRouter details exactly only through a valid marker', async () => {
+    const config = providerConfig('https://openrouter.ai/api/v1');
+    const selectedModel = model();
+    const raw = {
+      role: 'assistant',
+      content: null,
+      reasoning_details: [
+        {
+          type: 'reasoning.text',
+          index: 4,
+          text: 'signed reasoning',
+          signature: 'signature-value',
+        },
+        {
+          type: 'reasoning.encrypted',
+          index: 7,
+          data: 'encrypted-reasoning',
+        },
+      ],
+      tool_calls: [
+        {
+          id: 'call-openrouter',
+          type: 'function',
+          function: {
+            name: 'lookup',
+            arguments: '{"query":"openrouter"}',
+          },
+        },
+      ],
+    };
+    network.responseMessage = raw;
+    network.finishReason = 'tool_calls';
+
+    const extracted = await runStreamChat(config, selectedModel, [
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        name: undefined,
+        content: [new vscode.LanguageModelTextPart('question')],
+      },
+    ]);
+    const thinkingParts = extracted.parts.filter(
+      (part): part is vscode.LanguageModelThinkingPart =>
+        part instanceof vscode.LanguageModelThinkingPart,
+    );
+    expect(thinkingParts.map((part) => part.value)).toEqual([
+      'signed reasoning',
+      '\nEncrypted thinking...',
+      '',
+    ]);
+    expect(thinkingParts.at(-1)?.metadata).toEqual({
+      _completeThinking: 'signed reasoning',
+      signature: 'signature-value',
+      redactedData: 'encrypted-reasoning',
+    });
+
+    network.responseMessage = { role: 'assistant', content: 'done' };
+    network.finishReason = 'stop';
+    const replay = await captureRequestBody(
+      config,
+      selectedModel,
+      responseToolHistory(extracted.parts, true),
+    );
+
+    expect(requestMessages(replay)[1]).toEqual(raw);
+  });
+
+  it('drops extracted OpenRouter details when the stateful marker is absent', async () => {
+    const config = providerConfig('https://openrouter.ai/api/v1');
+    const selectedModel = model();
+    network.responseMessage = {
+      role: 'assistant',
+      content: null,
+      reasoning_details: [
+        {
+          type: 'reasoning.text',
+          index: 0,
+          text: 'signed reasoning',
+          signature: 'signature-value',
+        },
+        {
+          type: 'reasoning.encrypted',
+          index: 1,
+          data: 'encrypted-reasoning',
+        },
+      ],
+      tool_calls: [
+        {
+          id: 'call-openrouter',
+          type: 'function',
+          function: {
+            name: 'lookup',
+            arguments: '{"query":"openrouter"}',
+          },
+        },
+      ],
+    };
+    network.finishReason = 'tool_calls';
+    const extracted = await runStreamChat(config, selectedModel, [
+      {
+        role: vscode.LanguageModelChatMessageRole.User,
+        name: undefined,
+        content: [new vscode.LanguageModelTextPart('question')],
+      },
+    ]);
+
+    network.responseMessage = { role: 'assistant', content: 'done' };
+    network.finishReason = 'stop';
+    const replay = await captureRequestBody(
+      config,
+      selectedModel,
+      responseToolHistory(extracted.parts, false),
+    );
+
+    expect(requestMessages(replay)).toEqual([
+      {
+        role: 'user',
+        content: [{ type: 'text', text: 'question' }],
+      },
+    ]);
   });
 
   it('does not retain an untrusted reasoning tool round for an ordinary model', async () => {

@@ -2827,19 +2827,69 @@ function sanitizeThinkingToolCallMessage(
   };
 }
 
-function markIncompleteThinkingToolExchanges(
-  messages: readonly vscode.LanguageModelChatRequestMessage[],
-  fallbackMessageIndexes: ReadonlySet<number>,
-  sanitizedMessageIndexes: Set<number>,
-): void {
-  const resultIds = new Set(messages.flatMap(collectExplicitToolResultIds));
+interface ExplicitToolExchange {
+  assistantMessageIndex: number;
+  resultMessageIndexes: number[];
+  complete: boolean;
+}
 
-  for (const index of fallbackMessageIndexes) {
-    const callIds = collectExplicitToolCallIds(messages[index]);
-    if (callIds.some((callId) => !resultIds.has(callId))) {
-      sanitizedMessageIndexes.add(index);
+function collectExplicitToolExchanges(
+  messages: readonly vscode.LanguageModelChatRequestMessage[],
+): ExplicitToolExchange[] {
+  const exchanges: ExplicitToolExchange[] = [];
+
+  // Call IDs may be reused later in the history. Only contiguous tool-result
+  // messages immediately following an assistant belong to that exchange.
+  for (const [assistantMessageIndex, message] of messages.entries()) {
+    const callIds = collectExplicitToolCallIds(message);
+    if (callIds.length === 0) {
+      continue;
     }
+
+    const expectedCallIds = new Set(callIds);
+    const resultCountByCallId = new Map<string, number>();
+    const resultMessageIndexes: number[] = [];
+    let hasUnexpectedResult = false;
+
+    for (
+      let resultMessageIndex = assistantMessageIndex + 1;
+      resultMessageIndex < messages.length;
+      resultMessageIndex++
+    ) {
+      const resultMessage = messages[resultMessageIndex];
+      if (resultMessage.role !== vscode.LanguageModelChatMessageRole.User) {
+        break;
+      }
+
+      const resultIds = collectExplicitToolResultIds(resultMessage);
+      if (resultIds.length === 0) {
+        break;
+      }
+
+      resultMessageIndexes.push(resultMessageIndex);
+      for (const resultId of resultIds) {
+        if (!expectedCallIds.has(resultId)) {
+          hasUnexpectedResult = true;
+          continue;
+        }
+        resultCountByCallId.set(
+          resultId,
+          (resultCountByCallId.get(resultId) ?? 0) + 1,
+        );
+      }
+    }
+
+    exchanges.push({
+      assistantMessageIndex,
+      resultMessageIndexes,
+      complete:
+        expectedCallIds.size === callIds.length &&
+        !hasUnexpectedResult &&
+        callIds.every((callId) => resultCountByCallId.get(callId) === 1),
+    });
   }
+
+  return exchanges;
 }
 
 function sanitizeMessageForModelSwitch(
@@ -2891,34 +2941,16 @@ function sanitizeMessageForModelSwitch(
 }
 
 function propagateSanitizedToolNeighbors(
-  messages: readonly vscode.LanguageModelChatRequestMessage[],
+  exchanges: readonly ExplicitToolExchange[],
   sanitizedMessageIndexes: Set<number>,
 ): void {
-  const toolCallMessageIndexByCallId = new Map<string, number>();
-  const toolResultMessageIndexesByCallId = new Map<string, number[]>();
-
-  for (const [index, message] of messages.entries()) {
-    for (const callId of collectExplicitToolCallIds(message)) {
-      toolCallMessageIndexByCallId.set(callId, index);
-    }
-
-    for (const callId of collectExplicitToolResultIds(message)) {
-      const indexes = toolResultMessageIndexesByCallId.get(callId);
-      if (indexes) {
-        indexes.push(index);
-      } else {
-        toolResultMessageIndexesByCallId.set(callId, [index]);
-      }
-    }
-  }
-
   let changed = true;
   while (changed) {
     changed = false;
 
-    for (const [callId, callMessageIndex] of toolCallMessageIndexByCallId) {
-      const resultMessageIndexes =
-        toolResultMessageIndexesByCallId.get(callId) ?? [];
+    for (const exchange of exchanges) {
+      const callMessageIndex = exchange.assistantMessageIndex;
+      const resultMessageIndexes = exchange.resultMessageIndexes;
       const callMessageSanitized =
         sanitizedMessageIndexes.has(callMessageIndex);
       const hasSanitizedResultMessage = resultMessageIndexes.some((index) =>
@@ -2948,6 +2980,29 @@ export function sanitizeMessagesForModelSwitchDetailed(
 ): SanitizedMessagesForModelSwitchResult {
   const sanitizedMessageIndexes = new Set<number>();
   const thinkingToolFallbackIndexes = new Set<number>();
+  const toolExchanges = collectExplicitToolExchanges(messages);
+  const toolExchangeByAssistantIndex = new Map(
+    toolExchanges.map((exchange) => [
+      exchange.assistantMessageIndex,
+      exchange,
+    ]),
+  );
+  const preservedThinkingToolResultIndexes = new Set<number>();
+
+  if (options.preserveThinkingToolRounds) {
+    for (const exchange of toolExchanges) {
+      if (
+        exchange.complete &&
+        isThinkingToolCallMessage(
+          messages[exchange.assistantMessageIndex],
+        )
+      ) {
+        for (const resultMessageIndex of exchange.resultMessageIndexes) {
+          preservedThinkingToolResultIndexes.add(resultMessageIndex);
+        }
+      }
+    }
+  }
 
   let round: number[] = [];
   let roundHasAssistant = false;
@@ -2991,11 +3046,15 @@ export function sanitizeMessagesForModelSwitchDetailed(
       if (!isRoundValid) {
         for (const index of round) {
           const message = messages[index];
+          const exchange = toolExchangeByAssistantIndex.get(index);
           if (
             options.preserveThinkingToolRounds &&
+            exchange?.complete === true &&
             isThinkingToolCallMessage(message)
           ) {
             thinkingToolFallbackIndexes.add(index);
+          } else if (preservedThinkingToolResultIndexes.has(index)) {
+            continue;
           } else {
             sanitizedMessageIndexes.add(index);
           }
@@ -3033,12 +3092,7 @@ export function sanitizeMessagesForModelSwitchDetailed(
 
   flush();
 
-  markIncompleteThinkingToolExchanges(
-    messages,
-    thinkingToolFallbackIndexes,
-    sanitizedMessageIndexes,
-  );
-  propagateSanitizedToolNeighbors(messages, sanitizedMessageIndexes);
+  propagateSanitizedToolNeighbors(toolExchanges, sanitizedMessageIndexes);
 
   const out: vscode.LanguageModelChatRequestMessage[] = [];
   const messageOriginIndexes: number[] = [];
