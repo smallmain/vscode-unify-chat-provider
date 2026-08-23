@@ -51,6 +51,10 @@ vi.mock('../../src/client/utils', () => ({
   createProvider: () => ({
     getAvailableModels: providerClient.getAvailableModels,
   }),
+  matchProvider: (url: string, pattern: string | RegExp) =>
+    typeof pattern === 'string'
+      ? url.includes(pattern.replaceAll('*', ''))
+      : pattern.test(url),
 }));
 
 vi.mock('../../src/utils', () => ({
@@ -208,6 +212,38 @@ describe('official model manager provider boundary', () => {
     expect(Object.hasOwn(persisted?.[config.name] ?? {}, 'zedRoutes')).toBe(
       false,
     );
+    manager.dispose();
+  });
+
+  it('persists only models compatible with an OpenCode provider protocol', async () => {
+    providerClient.getAvailableModels.mockResolvedValue([
+      { id: 'gpt-5.6-sol' },
+      { id: 'claude-sonnet-5' },
+      { id: 'deepseek-v4-flash-free' },
+    ]);
+    const config: ProviderConfig = {
+      ...provider(),
+      type: 'openai-chat-completion',
+      name: 'OpenCode Zen (OpenAI Chat Completion)',
+      baseUrl: 'https://opencode.ai/zen',
+    };
+    const manager = new OfficialModelsManager();
+    await manager.initialize(
+      context(new Map()),
+      configStore(config),
+      secretStore(),
+      authManager(),
+    );
+
+    const models = await manager.getOfficialModels(config, true);
+
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'deepseek-v4-flash-free',
+        name: 'DeepSeek V4 Flash (Free)',
+      }),
+    ]);
+    expect(manager.getProviderState(config.name)?.models).toEqual(models);
     manager.dispose();
   });
 

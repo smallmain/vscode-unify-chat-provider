@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { ModelConfig, ProviderConfig } from './types';
 import { createProvider } from './client/utils';
-import { mergeWithWellKnownModels } from './well-known/models';
+import { prepareOfficialModels } from './well-known/opencode-models';
 import { stableStringify } from './config-ops';
 import { SecretStore } from './secret';
 import {
@@ -1090,7 +1090,7 @@ export class OfficialModelsManager {
         credentialAccess.refreshCredential,
         fetchContext.controller.signal,
       );
-      const models = mergeWithWellKnownModels(rawModels, provider);
+      const models = prepareOfficialModels(rawModels, provider);
       const modelsHash = this.hashModels(models);
 
       const isIdentical = state.modelsHash === modelsHash;
@@ -1762,7 +1762,7 @@ export class OfficialModelsManager {
         credentialAccess.refreshCredential,
         fetchContext.controller.signal,
       );
-      const models = mergeWithWellKnownModels(rawModels, provider);
+      const models = prepareOfficialModels(rawModels, provider);
       const now = Date.now();
       if (!this.isDraftFetchCurrent(sessionId, fetchContext)) {
         return session.state.models;
