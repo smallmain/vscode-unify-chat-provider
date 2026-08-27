@@ -64,6 +64,7 @@ import {
   ChatCompletion,
   ChatCompletionAssistantMessageParam,
   ChatCompletionChunk,
+  ChatCompletionContentPart,
   ChatCompletionContentPartText,
   ChatCompletionCreateParamsBase,
   ChatCompletionFunctionTool,
@@ -292,10 +293,28 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       ChatCompletionAssistantMessageParam,
       ChatCompletionMessageParam
     >();
+    const pendingToolMessages: ChatCompletionToolMessageParam[] = [];
+    const pendingToolUserContent: ChatCompletionContentPart[] = [];
+    const flushPendingToolResults = (): void => {
+      if (pendingToolMessages.length === 0) {
+        return;
+      }
+
+      outMessages.push(...pendingToolMessages);
+      if (pendingToolUserContent.length > 0) {
+        outMessages.push({
+          role: 'user',
+          content: [...pendingToolUserContent],
+        });
+      }
+      pendingToolMessages.length = 0;
+      pendingToolUserContent.length = 0;
+    };
 
     for (const msg of messages) {
       switch (msg.role) {
         case vscode.LanguageModelChatMessageRole.System:
+          flushPendingToolResults();
           for (const part of msg.content) {
             const parts = this.convertPart(msg.role, part) as
               | ChatCompletionSystemMessageParam
@@ -305,16 +324,26 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           break;
 
         case vscode.LanguageModelChatMessageRole.User:
-          for (const part of msg.content) {
-            const parts = this.convertPart(msg.role, part) as
-              | ChatCompletionUserMessageParam
-              | ChatCompletionToolMessageParam
-              | undefined;
-            if (parts) outMessages.push(parts);
+          {
+            const converted = this.convertUserMessage(msg);
+            if (converted.hasToolResults) {
+              pendingToolMessages.push(...converted.toolMessages);
+              pendingToolUserContent.push(...converted.userContent);
+              if (converted.hasOrdinaryUserContent) {
+                flushPendingToolResults();
+              }
+            } else if (converted.userContent.length > 0) {
+              flushPendingToolResults();
+              outMessages.push({
+                role: 'user',
+                content: converted.userContent,
+              });
+            }
           }
           break;
 
         case vscode.LanguageModelChatMessageRole.Assistant:
+          flushPendingToolResults();
           {
             const markerParts = msg.content.filter(
               (v): v is vscode.LanguageModelDataPart =>
@@ -356,6 +385,8 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       }
     }
 
+    flushPendingToolResults();
+
     // use raw messages, for details, see parseMessage's NOTE comments.
     for (const [param, raw] of rawMap) {
       const index = outMessages.indexOf(param);
@@ -370,6 +401,125 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     }
 
     return outMessages;
+  }
+
+  private convertUserMessage(
+    message: vscode.LanguageModelChatRequestMessage,
+  ): {
+    toolMessages: ChatCompletionToolMessageParam[];
+    userContent: ChatCompletionContentPart[];
+    hasToolResults: boolean;
+    hasOrdinaryUserContent: boolean;
+  } {
+    const toolMessages: ChatCompletionToolMessageParam[] = [];
+    const userContent: ChatCompletionContentPart[] = [];
+    let hasToolResults = false;
+    let hasOrdinaryUserContent = false;
+
+    for (const part of message.content) {
+      if (
+        part instanceof vscode.LanguageModelToolResultPart ||
+        part instanceof vscode.LanguageModelToolResultPart2
+      ) {
+        hasToolResults = true;
+        const converted = this.convertToolResultPart(part);
+        toolMessages.push(converted.message);
+        userContent.push(...converted.images);
+        continue;
+      }
+
+      const converted = this.convertPart(message.role, part) as
+        | ChatCompletionUserMessageParam
+        | undefined;
+      if (!converted) {
+        continue;
+      }
+      hasOrdinaryUserContent = true;
+
+      if (typeof converted.content === 'string') {
+        userContent.push({ type: 'text', text: converted.content });
+      } else {
+        userContent.push(...converted.content);
+      }
+    }
+
+    return {
+      toolMessages,
+      userContent,
+      hasToolResults,
+      hasOrdinaryUserContent,
+    };
+  }
+
+  private convertToolResultPart(
+    part:
+      | vscode.LanguageModelToolResultPart
+      | vscode.LanguageModelToolResultPart2,
+  ): {
+    message: ChatCompletionToolMessageParam;
+    images: ChatCompletionContentPart[];
+  } {
+    const textContent: ChatCompletionContentPartText[] = [];
+    const images: ChatCompletionContentPart[] = [];
+
+    for (const contentPart of part.content) {
+      if (contentPart instanceof vscode.LanguageModelTextPart) {
+        if (contentPart.value.trim()) {
+          textContent.push({ type: 'text', text: contentPart.value });
+        }
+        continue;
+      }
+
+      if (contentPart instanceof vscode.LanguageModelDataPart) {
+        if (
+          isCacheControlMarker(contentPart) ||
+          isInternalMarker(contentPart) ||
+          isUsageMarker(contentPart)
+        ) {
+          continue;
+        }
+
+        if (isImageMarker(contentPart)) {
+          const mimeType = normalizeImageMimeType(contentPart.mimeType);
+          if (!mimeType) {
+            throw new Error(
+              `Unsupported image mime type for provider: ${contentPart.mimeType}`,
+            );
+          }
+          images.push({
+            type: 'image_url',
+            image_url: {
+              url: `data:${mimeType};base64,${Buffer.from(
+                contentPart.data,
+              ).toString('base64')}`,
+            },
+          });
+          continue;
+        }
+
+        throw new Error(
+          `Unsupported from_tool_result message LanguageModelDataPart mime type: ${contentPart.mimeType}`,
+        );
+      }
+
+      throw new Error(
+        'Unsupported from_tool_result message part type encountered',
+      );
+    }
+
+    return {
+      message: {
+        role: 'tool',
+        content:
+          textContent.length > 1
+            ? textContent
+            : textContent.length > 0
+              ? textContent[0].text
+              : '',
+        tool_call_id: part.callId,
+      },
+      images,
+    };
   }
 
   private applyCacheControl(messages: ChatCompletionMessageParam[]): void {
@@ -434,6 +584,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     | ChatCompletionUserMessageParam
     | ChatCompletionSystemMessageParam
     | ChatCompletionAssistantMessageParam
+    | ChatCompletionMessageParam[]
     | ChatCompletionContentPartText[]
     | undefined {
     if (part == null) {
@@ -578,25 +729,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       if (role !== vscode.LanguageModelChatMessageRole.User) {
         throw new Error('Tool result parts can only appear in user messages');
       }
-      const content = part.content
-        .map(
-          (v) =>
-            this.convertPart('from_tool_result', v) as
-              | ChatCompletionContentPartText[]
-              | undefined,
-        )
-        .filter((v) => v !== undefined)
-        .flat();
-      return {
-        role: 'tool',
-        content:
-          content.length > 1
-            ? content
-            : content.length > 0
-              ? content[0].text
-              : '',
-        tool_call_id: part.callId,
-      };
+      const converted = this.convertToolResultPart(part);
+      return converted.images.length > 0
+        ? [
+            converted.message,
+            { role: 'user', content: converted.images },
+          ]
+        : converted.message;
     } else {
       throw new Error(`Unsupported ${role} message part type encountered`);
     }
