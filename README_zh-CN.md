@@ -870,6 +870,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [xAI](https://docs.x.ai/)                                                                     |                                                                                      |                       |
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)         |                                                                                      |                       |
 | [OpenRouter](https://openrouter.ai/)                                                          | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [详情](#openrouter)   |    ✅    |
+| [Atlas Cloud](https://www.atlascloud.ai/docs/zh/models/llm)                                   |                                                                                      |                       |
 | [AIHubMix](https://aihubmix.com/)                                                             |                                                                                      |                       |    ✅    |
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
 | [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                                 | <li>ReasoningContent                                                                 | [详情](#opencode-zen) |

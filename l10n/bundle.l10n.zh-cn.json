@@ -1342,5 +1342,6 @@
   "LiteLLM Budget": "LiteLLM 预算",
   "Monitor budget via LiteLLM key info API": "通过 LiteLLM Key 信息 API 监控预算",
   "No budget limit configured": "未配置预算上限",
-  "Spent": "已支出"
+  "Spent": "已支出",
+  "Atlas Cloud": "Atlas Cloud"
 }

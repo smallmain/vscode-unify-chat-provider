@@ -1342,5 +1342,6 @@
   "LiteLLM Budget": "LiteLLM Budget",
   "Monitor budget via LiteLLM key info API": "Monitor budget via LiteLLM key info API",
   "No budget limit configured": "No budget limit configured",
-  "Spent": "Spent"
+  "Spent": "Spent",
+  "Atlas Cloud": "Atlas Cloud"
 }
