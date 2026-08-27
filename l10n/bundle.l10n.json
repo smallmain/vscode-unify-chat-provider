@@ -329,6 +329,8 @@
   "Hugging Face (Inference Providers)": "Hugging Face (Inference Providers)",
   "OpenRouter": "OpenRouter",
   "Cerebras": "Cerebras",
+  "Command Code": "Command Code",
+  "Official API with automatic model synchronization": "Official API with automatic model synchronization",
   "OpenCode Zen (OpenAI Chat Completion)": "OpenCode Zen (OpenAI Chat Completion)",
   "OpenCode Zen (OpenAI Responses)": "OpenCode Zen (OpenAI Responses)",
   "OpenCode Zen (Anthropic Messages)": "OpenCode Zen (Anthropic Messages)",

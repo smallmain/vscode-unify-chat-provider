@@ -4,7 +4,10 @@ import {
   DEFAULT_MAX_INPUT_TOKENS,
   DEFAULT_MAX_OUTPUT_TOKENS,
 } from './defaults';
-import { ApiProvider } from './client/interface';
+import {
+  ApiProvider,
+  resolveEmptyChatResponsePolicy,
+} from './client/interface';
 import { createRequestLogger } from './logger';
 import {
   ChatRequestTrace,
@@ -18,6 +21,7 @@ import {
   parseVsCodeModelId,
 } from './model-id-utils';
 import { createProvider } from './client/utils';
+import { PROVIDER_TYPES } from './client/definitions';
 import {
   formatProviderBadgeSuffixForModelSelection,
   formatModelTooltipForModelSelection,
@@ -843,7 +847,13 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           // response as an error, so the Anthropic client suppresses all
           // parts in this scenario. We must treat those 0-part responses as
           // successful no-op completions and not retry.
-          if (resolvedProvider.type === 'anthropic') {
+          if (
+            resolveEmptyChatResponsePolicy(
+              PROVIDER_TYPES[resolvedProvider.type],
+              client,
+              resolvedRequestModel,
+            ) === 'success'
+          ) {
             break;
           }
 

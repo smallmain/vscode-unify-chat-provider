@@ -82,8 +82,11 @@ vi.mock('../../src/main-instance', () => ({
 }));
 
 vi.mock('../../src/client/definitions', () => ({
-  PROVIDER_KEYS: ['openai-chat-completion'],
-  PROVIDER_TYPES: { 'openai-chat-completion': {} },
+  PROVIDER_KEYS: ['command-code', 'openai-chat-completion'],
+  PROVIDER_TYPES: {
+    'command-code': {},
+    'openai-chat-completion': {},
+  },
 }));
 
 vi.mock('../../src/utils', () => ({
@@ -146,6 +149,36 @@ describe('ImportConfigUriHandler auth validation', () => {
       token: '{invalid-json}',
     },
   };
+
+  it('preserves the Command Code provider and model identity during import parsing', () => {
+    expect(
+      parseProviderConfigInput({
+        type: 'command-code',
+        name: 'Command Code',
+        baseUrl: 'https://api.commandcode.ai/provider/v1',
+        transport: 'sse',
+        serviceTier: 'priority',
+        extraBody: { shared_provider_option: true },
+        models: [
+          {
+            id: 'opaque-id',
+            name: 'Claude Model With Opaque ID',
+            serviceTier: 'standard',
+            extraBody: { model_option: 'override' },
+          },
+        ],
+      }),
+    ).toMatchObject({
+      type: 'command-code',
+      name: 'Command Code',
+      models: [
+        {
+          id: 'opaque-id',
+          name: 'Claude Model With Opaque ID',
+        },
+      ],
+    });
+  });
 
   it('rejects malformed session tokens in single and array config inputs', () => {
     expect(parseProviderConfigInput(malformedTokenProvider)).toBeUndefined();

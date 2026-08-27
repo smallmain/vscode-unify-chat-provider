@@ -213,6 +213,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     ],
   },
   {
+    name: 'Command Code',
+    category: 'General',
+    type: 'command-code',
+    baseUrl: 'https://api.commandcode.ai/provider/v1',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'OpenCode Zen (OpenAI Chat Completion)',
     category: 'General',
     type: 'openai-chat-completion',

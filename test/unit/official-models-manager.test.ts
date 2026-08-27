@@ -78,6 +78,7 @@ import {
 } from '../../src/official-models-manager';
 import { SecretStore } from '../../src/secret/secret-store';
 import type { ProviderConfig } from '../../src/types';
+import { resolveCommandCodeProtocol } from '../../src/client/command-code/protocol';
 
 const ZED_BINDING_ID = '00000000-0000-4000-8000-000000000103';
 
@@ -123,6 +124,16 @@ function provider(): ProviderConfig {
       bindingId: ZED_BINDING_ID,
       baseUrl: 'https://zed.dev',
     },
+    models: [],
+    autoFetchOfficialModels: true,
+  };
+}
+
+function commandCodeProvider(): ProviderConfig {
+  return {
+    type: 'command-code',
+    name: 'Command Code',
+    baseUrl: 'https://api.commandcode.ai/provider/v1',
     models: [],
     autoFetchOfficialModels: true,
   };
@@ -302,5 +313,53 @@ describe('official model manager provider boundary', () => {
       ).toBe(false);
     });
     manager.dispose();
+  });
+
+  it('preserves Command Code routing identity across an official-model cache restart', async () => {
+    const config = commandCodeProvider();
+    const storage = new Map<string, unknown>();
+    providerClient.getAvailableModels.mockResolvedValue([
+      {
+        id: 'opaque-id',
+        name: 'Claude Model With Opaque ID',
+        maxInputTokens: 1_000_000,
+      },
+    ]);
+    const firstManager = new OfficialModelsManager();
+    await firstManager.initialize(
+      context(storage),
+      configStore(config),
+      secretStore(),
+      authManager(false),
+    );
+    await firstManager.getOfficialModels(config, true);
+    firstManager.dispose();
+
+    const serialized = JSON.stringify(storage.get('officialModelsState'));
+    const reloadedState: unknown = JSON.parse(serialized);
+    const restartedStorage = new Map<string, unknown>([
+      ['officialModelsState', reloadedState],
+    ]);
+    providerClient.getAvailableModels.mockReset();
+    const secondManager = new OfficialModelsManager();
+    await secondManager.initialize(
+      context(restartedStorage),
+      configStore(config),
+      secretStore(),
+      authManager(false),
+    );
+
+    const models = await secondManager.getOfficialModels(config);
+
+    expect(providerClient.getAvailableModels).not.toHaveBeenCalled();
+    expect(models).toEqual([
+      expect.objectContaining({
+        id: 'opaque-id',
+        name: 'Claude Model With Opaque ID',
+        maxInputTokens: 1_000_000,
+      }),
+    ]);
+    expect(resolveCommandCodeProtocol(models[0])).toBe('anthropic-messages');
+    secondManager.dispose();
   });
 });

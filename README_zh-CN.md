@@ -844,6 +844,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Google AI Studio (Gemini API)](https://ai.google.dev/aistudio)                              | `google-ai-studio`       | `/v1beta/models:generateContent` | 自动检测并处理版本号后缀。                |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                       | `google-vertex-ai`       | `/v1beta/models:generateContent` | 根据身份验证自动使用不同的基础 URL。      |
 | [Anthropic Messages API](https://platform.claude.com/docs/en/api/typescript/messages/create) | `anthropic`              | `/v1/messages`                   | 自动移除重复的 `/v1` 后缀。               |
+| [Command Code](https://commandcode.ai/docs/provider)                                        | `command-code`           | `/provider/v1`                   | 官方 API，支持自动同步模型。                 |
 | [Ollama Chat API](https://docs.ollama.com/api/chat)                                          | `ollama`                 | `/api/chat`                      | 自动移除重复的 `/api` 后缀。              |
 | [Zed Cloud API](https://zed.dev/)                                                            | `zed`                    | `/completions`                   | 原生登录、组织模型与 Edit Prediction v3/v4。 |
 
@@ -873,6 +874,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Atlas Cloud](https://www.atlascloud.ai/docs/zh/models/llm)                                   |                                                                                      |                       |
 | [AIHubMix](https://aihubmix.com/)                                                             |                                                                                      |                       |    ✅    |
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
+| [Command Code](https://commandcode.ai/docs/provider)                                          | <li>自动同步官方模型                                                                 |                       |
 | [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                                 | <li>ReasoningContent                                                                 | [详情](#opencode-zen) |
 | [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                       | <li>ReasoningContent                                                                 | [详情](#opencode-zen) |
 | [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                     | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [详情](#opencode-zen) |
@@ -987,6 +989,11 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
   - GPT-OSS-120B
   - Qwen 3 235B Instruct
   - ...
+
+#### Command Code
+
+- 一份供应商配置和一个 API Key 即可连接 Command Code 官方 API，并自动同步官方模型目录。
+- 供应商级和模型级请求覆盖会在 Command Code 支持时转发。
 
 #### 英伟达
 

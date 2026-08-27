@@ -844,6 +844,7 @@ You can select the `Change All Built-in Utility Models` button to update all `â˜
 | [Google AI Studio (Gemini API)](https://ai.google.dev/aistudio)                              | `google-ai-studio`       | `/v1beta/models:generateContent` | Automatically detect the version number suffix.                                     |
 | [Google Vertex AI](https://cloud.google.com/vertex-ai)                                       | `google-vertex-ai`       | `/v1beta/models:generateContent` | Provide different base URL based on authentication.                                 |
 | [Anthropic Messages API](https://platform.claude.com/docs/en/api/typescript/messages/create) | `anthropic`              | `/v1/messages`                   | Automatically removes duplicated `/v1` suffix.                                      |
+| [Command Code](https://commandcode.ai/docs/provider)                                        | `command-code`           | `/provider/v1`                   | Official API with automatic model synchronization.                                  |
 | [Ollama Chat API](https://docs.ollama.com/api/chat)                                          | `ollama`                 | `/api/chat`                      | Automatically removes duplicated `/api` suffix.                                     |
 | [Zed Cloud API](https://zed.dev/)                                                            | `zed`                    | `/completions`                   | Native sign-in, organization-scoped models, and Edit Prediction v3/v4.              |
 
@@ -873,6 +874,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Atlas Cloud](https://www.atlascloud.ai/docs/en/models/llm)                                           |                                                                                      |                            |
 | [AIHubMix](https://aihubmix.com/)                                                                      |                                                                                      |                            |       âœ…        |
 | [Cerebras](https://www.cerebras.ai/)                                                                   | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
+| [Command Code](https://commandcode.ai/docs/provider)                                                   | <li>Automatic official model synchronization                                        |                            |
 | [OpenCode Zen (OpenAI Chat Completion)](https://opencode.ai/)                                          | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
 | [OpenCode Zen (OpenAI Responses)](https://opencode.ai/)                                                | <li>ReasoningContent                                                                 | [Details](#opencode-zen)   |
 | [OpenCode Zen (Anthropic Messages)](https://opencode.ai/)                                              | <li>InterleavedThinking <li>FineGrainedToolStreaming                                 | [Details](#opencode-zen)   |
@@ -987,6 +989,11 @@ Long-Term Free Quotas:
   - GPT-OSS-120B
   - Qwen 3 235B Instruct
   - ...
+
+#### Command Code
+
+- One provider configuration and API key connect to Command Code's official API, and the official model catalog is synchronized automatically.
+- Provider-level and model-level request overrides are forwarded when supported by Command Code.
 
 #### Nvidia
 

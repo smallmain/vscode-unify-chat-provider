@@ -14,6 +14,7 @@ import { OpenAICodexProvider } from './openai/codex-client';
 import { OpenAIResponsesProvider } from './openai/responses-client';
 import { XaiGrokBuildProvider } from './xai/grok-build-client';
 import { ZedProvider } from './zed/provider';
+import { CommandCodeProvider } from './command-code/provider';
 import { Feature } from './types';
 import { matchProvider, matchModelFamily } from './utils';
 
@@ -25,6 +26,7 @@ export type ProviderType =
   | 'google-antigravity'
   | 'google-gemini-cli'
   | 'github-copilot'
+  | 'command-code'
   | 'zed'
   | 'openai-chat-completion'
   | 'openai-codex'
@@ -39,6 +41,14 @@ export const PROVIDER_TYPES: Record<ProviderType, ProviderDefinition> = {
     description: '/v1/messages',
     category: 'General',
     class: AnthropicProvider,
+    emptyChatResponsePolicy: 'success',
+  },
+  'command-code': {
+    type: 'command-code',
+    label: t('Command Code'),
+    description: t('Official API with automatic model synchronization'),
+    category: 'General',
+    class: CommandCodeProvider,
   },
   'google-ai-studio': {
     type: 'google-ai-studio',

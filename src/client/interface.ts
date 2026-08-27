@@ -7,7 +7,9 @@ import type {
 import type { ChatRequestTrace, ModelConfig, ProviderConfig } from '../types';
 import type { RequestLogger } from '../logger';
 import type { AuthTokenInfo, AuthTokenRefresh } from '../auth/types';
-import { ProviderType } from './definitions';
+import type { ProviderType } from './definitions';
+
+export type EmptyChatResponsePolicy = 'retry' | 'success';
 
 export interface ProviderDefinition {
   type: ProviderType;
@@ -19,6 +21,8 @@ export interface ProviderDefinition {
    */
   category: string;
   class: new (config: ProviderConfig) => ApiProvider;
+  /** How a clean response stream with no public VS Code parts is handled. */
+  emptyChatResponsePolicy?: EmptyChatResponsePolicy;
 }
 
 /**
@@ -46,6 +50,14 @@ export interface ApiProvider {
   estimateTokenCount(text: string): number;
 
   /**
+   * Override the provider definition's empty-stream policy for a model.
+   * Composite providers use this when the effective wire protocol is model-specific.
+   */
+  getEmptyChatResponsePolicy?(
+    model: ModelConfig,
+  ): EmptyChatResponsePolicy;
+
+  /**
    * Get available models from the provider
    * Returns a list of model configurations supported by this API client
    */
@@ -54,4 +66,16 @@ export interface ApiProvider {
     refreshCredential?: AuthTokenRefresh,
     signal?: AbortSignal,
   ): Promise<ModelConfig[]>;
+}
+
+export function resolveEmptyChatResponsePolicy(
+  definition: Pick<ProviderDefinition, 'emptyChatResponsePolicy'>,
+  provider: Pick<ApiProvider, 'getEmptyChatResponsePolicy'>,
+  model: ModelConfig,
+): EmptyChatResponsePolicy {
+  return (
+    provider.getEmptyChatResponsePolicy?.(model) ??
+    definition.emptyChatResponsePolicy ??
+    'retry'
+  );
 }

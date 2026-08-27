@@ -37,7 +37,11 @@ vi.mock('../../src/main-instance/index', () => ({
 }));
 
 vi.mock('../../src/client/definitions', () => ({
-  PROVIDER_TYPES: { 'openai-chat-completion': {}, zed: {} },
+  PROVIDER_TYPES: {
+    'command-code': {},
+    'openai-chat-completion': {},
+    zed: {},
+  },
 }));
 
 vi.mock('../../src/utils', () => ({
@@ -369,8 +373,47 @@ describe('main-instance completion configuration sync', () => {
     expect(provider.balanceProvider).toEqual({ method: 'sub2api' });
   });
 
-  it('uses compatibility version 8 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(8);
+  it('round-trips the composite Command Code provider contract', () => {
+    const provider = parseProviderConfig(
+      {
+        type: 'command-code',
+        name: 'Command Code',
+        baseUrl: 'https://api.commandcode.ai/provider/v1',
+        useRawBaseUrl: false,
+        transport: 'sse',
+        serviceTier: 'priority',
+        extraBody: { shared_provider_option: true },
+        models: [
+          {
+            id: 'opaque-id',
+            name: 'Claude Opaque',
+            serviceTier: 'standard',
+            extraBody: { model_option: 'override' },
+          },
+        ],
+      },
+      METHOD,
+    );
+
+    expect(provider).toMatchObject({
+      type: 'command-code',
+      name: 'Command Code',
+      transport: 'sse',
+      serviceTier: 'priority',
+      extraBody: { shared_provider_option: true },
+      models: [
+        {
+          id: 'opaque-id',
+          name: 'Claude Opaque',
+          serviceTier: 'standard',
+          extraBody: { model_option: 'override' },
+        },
+      ],
+    });
+  });
+
+  it('uses compatibility version 9 without changing protocol version 1', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(9);
     expect(PROTOCOL_VERSION).toBe(1);
   });
 

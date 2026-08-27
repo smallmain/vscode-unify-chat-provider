@@ -20,6 +20,7 @@
     "oai",
     "openai",
     "anthropic",
+    "command-code",
     "gemini",
     "ollama",
     "deepseek",
@@ -636,7 +637,8 @@
                   "xai-grok-build",
                   "ollama",
                   "claude-code",
-                  "zed"
+                  "zed",
+                  "command-code"
                 ],
                 "enumDescriptions": [
                   "%configuration.endpoints.type.enumDescriptions.0%",
@@ -651,7 +653,8 @@
                   "%configuration.endpoints.type.enumDescriptions.11%",
                   "%configuration.endpoints.type.enumDescriptions.5%",
                   "%configuration.endpoints.type.enumDescriptions.9%",
-                  "%configuration.endpoints.type.enumDescriptions.12%"
+                  "%configuration.endpoints.type.enumDescriptions.12%",
+                  "%configuration.endpoints.type.enumDescriptions.13%"
                 ]
               },
               "name": {
