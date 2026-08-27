@@ -473,9 +473,17 @@ export enum FeatureId {
    */
   OpenAIUseDisableReasoningParam = 'openai_use-disable-reasoning-param',
   /**
-   * @see https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode
+   * Use `thinking.clear_thinking` in Z.AI-compatible Chat Completion APIs.
+   *
+   * @see https://docs.z.ai/api-reference/llm/chat-completion
    */
   OpenAIUseClearThinking = 'openai_use-clear-thinking',
+  /**
+   * Use a provider-specific top-level `clear_thinking` variant.
+   *
+   * @see https://inference-docs.cerebras.ai/api-reference/chat-completions
+   */
+  OpenAIUseTopLevelClearThinking = 'openai_use-top-level-clear-thinking',
   /**
    * Use `reasoning_split` parameter in OpenAI-compatible Chat Completion APIs.
    */
@@ -896,6 +904,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIUseClearThinking]: {
     supportedProviders: ['open.bigmodel.cn', 'api.z.ai'],
+  },
+  [FeatureId.OpenAIUseTopLevelClearThinking]: {
     customCheckers: [
       // Checker for Cerebras GLM 4.7 model:
       (model, provider) =>
@@ -903,7 +913,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
         matchModelFamily(model.family ?? getBaseModelId(model.id), [
           'zai-glm-4.7',
         ]),
-      // Checker for Nvidia GLM 4.7 model:
+      // Preserve the existing Nvidia GLM 4.7 wire shape.
       (model, provider) =>
         matchProvider(provider.baseUrl, 'integrate.api.nvidia.com') &&
         matchModelFamily(model.family ?? getBaseModelId(model.id), [

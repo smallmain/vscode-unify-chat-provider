@@ -91,7 +91,16 @@ declare module 'openai/resources/chat/completions' {
      * @see https://www.volcengine.com/docs/82379/1569618?lang=zh
      * @see https://docs.bigmodel.cn/cn/guide/start/migrate-to-glm-new
      */
-    thinking?: { type: 'enabled' | 'disabled' | 'auto' };
+    thinking?: {
+      type: 'enabled' | 'disabled' | 'auto';
+
+      /**
+       * Preserve reasoning content from previous turns on Z.AI-compatible APIs.
+       *
+       * @see https://docs.z.ai/api-reference/llm/chat-completion
+       */
+      clear_thinking?: boolean;
+    };
 
     /**
      * Non-standard reasoning effort supported by some OpenAI-compatible providers.
@@ -110,7 +119,10 @@ declare module 'openai/resources/chat/completions' {
       | 'max';
 
     /**
-     * @see https://docs.bigmodel.cn/cn/guide/capabilities/thinking-mode
+     * Provider-specific top-level variant. Cerebras documents it for the
+     * `zai-glm-4.7` model.
+     *
+     * @see https://inference-docs.cerebras.ai/api-reference/chat-completions
      */
     clear_thinking?: boolean;
 

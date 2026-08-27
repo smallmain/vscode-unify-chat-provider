@@ -673,6 +673,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
   private buildReasoningParams(
     model: ModelConfig,
     type: ReasoningParamType,
+    useNestedClearThinking = false,
   ): Partial<ChatCompletionCreateParamsBase> {
     const thinking = model.thinking;
     const isDisabled = this.isThinkingDisabled(thinking);
@@ -716,7 +717,12 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       // @see https://api-docs.deepseek.com/zh-cn/guides/thinking_mode
       case 'thinking': {
         if (!thinking) return {};
-        return { thinking: { type: thinking.type } };
+        return {
+          thinking: this.buildThinkingParam(
+            thinking.type,
+            useNestedClearThinking,
+          ),
+        };
       }
 
       // GLM / DeepSeek V4 — `thinking: { type }` + `reasoning_effort: high|max`
@@ -728,13 +734,17 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         }
         if (isDisabled) {
           return {
-            thinking: { type: 'disabled' },
+            thinking: this.buildThinkingParam(
+              'disabled',
+              useNestedClearThinking,
+            ),
           };
         }
         return {
-          thinking: {
-            type: this.normalizeThinkingTypeForDeepSeek(thinking.type),
-          },
+          thinking: this.buildThinkingParam(
+            this.normalizeThinkingTypeForDeepSeek(thinking.type),
+            useNestedClearThinking,
+          ),
         };
       }
 
@@ -745,7 +755,10 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           return {};
         }
         return {
-          thinking: { type: 'enabled' },
+          thinking: this.buildThinkingParam(
+            'enabled',
+            useNestedClearThinking,
+          ),
         };
       }
 
@@ -757,12 +770,18 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         }
         if (thinking.type === 'disabled') {
           return {
-            thinking: { type: 'disabled' },
+            thinking: this.buildThinkingParam(
+              'disabled',
+              useNestedClearThinking,
+            ),
             reasoning_effort: 'minimal',
           };
         }
         return {
-          thinking: { type: thinking.type },
+          thinking: this.buildThinkingParam(
+            thinking.type,
+            useNestedClearThinking,
+          ),
           ...(thinking.effort == null
             ? {}
             : {
@@ -836,6 +855,16 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
         return {};
       }
     }
+  }
+
+  private buildThinkingParam(
+    type: NonNullable<ChatCompletionCreateParamsBase['thinking']>['type'],
+    useNestedClearThinking: boolean,
+  ): NonNullable<ChatCompletionCreateParamsBase['thinking']> {
+    return {
+      type,
+      ...(useNestedClearThinking ? { clear_thinking: false } : {}),
+    };
   }
 
   private isThinkingDisabled(
@@ -1110,8 +1139,13 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       this.config,
       model,
     );
-    const useClearThinking = isFeatureSupported(
+    const useNestedClearThinking = isFeatureSupported(
       FeatureId.OpenAIUseClearThinking,
+      this.config,
+      model,
+    );
+    const useTopLevelClearThinking = isFeatureSupported(
+      FeatureId.OpenAIUseTopLevelClearThinking,
       this.config,
       model,
     );
@@ -1193,13 +1227,17 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     const baseBody: ChatCompletionCreateParamsBase = {
       model: getBaseModelId(model.id),
       messages: convertedMessages,
-      ...this.buildReasoningParams(model, thinkingParamType),
+      ...this.buildReasoningParams(
+        model,
+        thinkingParamType,
+        useNestedClearThinking,
+      ),
       ...(useThinkingStrategyParam
         ? this.buildThinkingStrategyParam(model)
         : {}),
       ...(serviceTier !== undefined ? { service_tier: serviceTier } : {}),
       ...(useTopK && model.topK !== undefined ? { top_k: model.topK } : {}),
-      ...(useClearThinking ? { clear_thinking: false } : {}),
+      ...(useTopLevelClearThinking ? { clear_thinking: false } : {}),
       ...(useReasoningSplitParam ? { reasoning_split: true } : {}),
       ...(useMaxInputTokens && model.maxInputTokens !== undefined
         ? { max_input_tokens: model.maxInputTokens }
