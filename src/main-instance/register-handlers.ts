@@ -46,6 +46,7 @@ import {
   parseProviderSourceGuard as parseProviderSourceGuardValue,
   type ProviderSourceGuard,
 } from '../auth/provider-source-guard';
+import { normalizeAutoFetchOfficialModelsFilter } from '../official-model-filter';
 
 type OAuthWaitResult = { type: 'success'; url: string } | { type: 'cancel' };
 
@@ -815,6 +816,16 @@ export function parseProviderConfig(
     method,
     'provider.completion',
   );
+  const autoFetchOfficialModelsFilter =
+    record['autoFetchOfficialModelsFilter'] === undefined
+      ? undefined
+      : normalizeAutoFetchOfficialModelsFilter(
+          requireStringArray(
+            record['autoFetchOfficialModelsFilter'],
+            method,
+            'provider.autoFetchOfficialModelsFilter',
+          ),
+        );
 
   return {
     type: typeRaw,
@@ -836,6 +847,9 @@ export function parseProviderConfig(
     ...(typeof record['autoFetchOfficialModels'] === 'boolean'
       ? { autoFetchOfficialModels: record['autoFetchOfficialModels'] }
       : {}),
+    ...(autoFetchOfficialModelsFilter === undefined
+      ? {}
+      : { autoFetchOfficialModelsFilter }),
     ...(contextCache ? { contextCache } : {}),
   };
 }

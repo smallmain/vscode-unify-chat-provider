@@ -1340,5 +1340,12 @@
   "LiteLLM Budget": "LiteLLM Budget",
   "Monitor budget via LiteLLM key info API": "Monitor budget via LiteLLM key info API",
   "No budget limit configured": "No budget limit configured",
-  "Spent": "Spent"
+  "Spent": "Spent",
+  "All models": "All models",
+  "Filter Auto-Fetched Models": "Filter Auto-Fetched Models",
+  "Filter Auto-Fetched Models...": "Filter Auto-Fetched Models...",
+  "Not returned by provider": "Not returned by provider",
+  "Select models to include": "Select models to include",
+  "{0} selected": "{0} selected",
+  "Include all current and future models": "Include all current and future models"
 }

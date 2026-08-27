@@ -28,6 +28,7 @@ import { SocksClient } from 'socks';
 import type { SocksProxy } from 'socks';
 import { t } from './i18n';
 import { PLACEHOLDER_MODEL_ID } from './model-id-utils';
+import { filterAutoFetchedOfficialModels } from './official-model-filter';
 
 export {
   isPlaceholderModelId,
@@ -3096,9 +3097,10 @@ export async function getAllModelsForProviderData(
   const official = await officialModelsManager.getOfficialModelsData(provider, {
     forceFetch: options?.forceFetch,
   });
-  const officialModels = official.models.filter(
-    (model) => !userModelIds.has(model.id),
-  );
+  const officialModels = filterAutoFetchedOfficialModels(
+    provider,
+    official.models,
+  ).filter((model) => !userModelIds.has(model.id));
   return {
     models: [...userModels, ...officialModels],
     ...(official.state?.lastError ? { error: official.state.lastError } : {}),
@@ -3142,8 +3144,8 @@ export function getAllModelsForProviderSync(
 
     if (state && state.models.length > 0) {
       // Cache exists - use it
-      officialModels = state.models;
-    } else {
+      officialModels = filterAutoFetchedOfficialModels(provider, state.models);
+    } else if (provider.autoFetchOfficialModelsFilter?.length !== 0) {
       // No cache - return placeholder
       officialModels = [
         {

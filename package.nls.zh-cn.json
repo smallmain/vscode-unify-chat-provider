@@ -150,6 +150,7 @@
   "configuration.endpoints.retry.jitterFactor.description": "聊天请求的抖动因子（0-1），用于随机化重试延迟。",
   "configuration.endpoints.proxy.description": "此供应商的代理设置。会覆盖全局代理设置。",
   "configuration.endpoints.autoFetchOfficialModels.description": "自动从供应商 API 拉取并同步官方模型。",
+  "configuration.endpoints.autoFetchOfficialModelsFilter.description": "要从自动拉取的官方模型列表中包含的模型 ID 白名单。省略时包含所有官方模型。",
   "configuration.endpoints.models.description": "可用模型列表。",
   "configuration.endpoints.models.string.description": "模型 ID",
   "configuration.endpoints.models.id.description": "模型 ID（例如：claude-sonnet-4-20250514）。",

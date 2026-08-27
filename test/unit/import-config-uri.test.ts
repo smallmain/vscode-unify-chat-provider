@@ -161,6 +161,21 @@ describe('ImportConfigUriHandler auth validation', () => {
     ).toBeUndefined();
   });
 
+  it('normalizes valid official model filters and rejects malformed ones', () => {
+    expect(
+      parseProviderConfigInput({
+        type: 'openai-chat-completion',
+        autoFetchOfficialModelsFilter: [' model-b ', 'model-a', 'model-b'],
+      })?.autoFetchOfficialModelsFilter,
+    ).toEqual(['model-b', 'model-a']);
+    expect(
+      parseProviderConfigInput({
+        type: 'openai-chat-completion',
+        autoFetchOfficialModelsFilter: ['model-a', 42],
+      }),
+    ).toBeUndefined();
+  });
+
   it('rejects malformed auth without opening the provider form', async () => {
     state.decoded = {
       type: 'openai-chat-completion',

@@ -32,6 +32,7 @@ import {
   isSessionAuthConfig,
   stripSessionAuthState,
 } from './auth/local-auth-state';
+import { normalizeAutoFetchOfficialModelsFilter } from './official-model-filter';
 
 export const CONFIG_NAMESPACE = 'unifyChatProvider';
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
@@ -381,6 +382,10 @@ export class ConfigStore {
     provider.extraHeaders = this.normalizeStringRecord(provider.extraHeaders);
     provider.extraBody = this.normalizeObjectRecord(provider.extraBody);
     provider.proxy = this.normalizeProxyConfig(provider.proxy);
+    provider.autoFetchOfficialModelsFilter =
+      normalizeAutoFetchOfficialModelsFilter(
+        provider.autoFetchOfficialModelsFilter,
+      );
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,
     );

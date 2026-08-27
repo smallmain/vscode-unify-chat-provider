@@ -219,6 +219,59 @@ describe('main-instance completion configuration sync', () => {
     });
   });
 
+  it('preserves and validates the auto-fetched official model filter', () => {
+    expect(
+      parseProviderConfig(
+        {
+          type: 'openai-chat-completion',
+          name: 'provider',
+          baseUrl: 'https://api.example.test/v1',
+          models: [],
+          autoFetchOfficialModels: true,
+          autoFetchOfficialModelsFilter: [
+            ' model-b ',
+            'model-a',
+            'model-b',
+          ],
+        },
+        METHOD,
+      ).autoFetchOfficialModelsFilter,
+    ).toEqual(['model-b', 'model-a']);
+
+    expect(
+      parseProviderConfig(
+        {
+          type: 'openai-chat-completion',
+          name: 'provider',
+          baseUrl: 'https://api.example.test/v1',
+          models: [],
+          autoFetchOfficialModelsFilter: [],
+        },
+        METHOD,
+      ).autoFetchOfficialModelsFilter,
+    ).toEqual([]);
+
+    expect(() =>
+      parseProviderConfig(
+        {
+          type: 'openai-chat-completion',
+          name: 'provider',
+          baseUrl: 'https://api.example.test/v1',
+          models: [],
+          autoFetchOfficialModelsFilter: ['model-a', 42],
+        },
+        METHOD,
+      ),
+    ).toThrowError(
+      expect.objectContaining({
+        code: 'BAD_REQUEST',
+        message: expect.stringContaining(
+          'provider.autoFetchOfficialModelsFilter',
+        ),
+      }),
+    );
+  });
+
   it('rejects legacy provider fields with a stable BAD_REQUEST diagnostic', () => {
     expect(() =>
       parseProviderConfig(
@@ -354,8 +407,8 @@ describe('main-instance completion configuration sync', () => {
     expect(provider.models[0].completion).toEqual({});
   });
 
-  it('uses compatibility version 7 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(7);
+  it('uses compatibility version 8 without changing protocol version 1', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(8);
     expect(PROTOCOL_VERSION).toBe(1);
   });
 
