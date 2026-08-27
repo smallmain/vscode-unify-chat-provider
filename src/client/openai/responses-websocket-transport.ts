@@ -110,9 +110,14 @@ export class OpenAIResponsesWebSocketTransport
     client: OpenAI,
     headers: Record<string, string> | undefined,
     beta: boolean,
+    ignoreSSLErrors: boolean,
   ) {
+    const options = {
+      headers,
+      ...(ignoreSSLErrors ? { rejectUnauthorized: false } : {}),
+    };
     if (beta) {
-      const ws = new BetaResponsesWS(client, { headers });
+      const ws = new BetaResponsesWS(client, options);
       this.sendPayload = (payload) => {
         ws.sendRaw(JSON.stringify(payload));
       };
@@ -133,7 +138,7 @@ export class OpenAIResponsesWebSocketTransport
       return;
     }
 
-    const ws = new ResponsesWS(client, { headers });
+    const ws = new ResponsesWS(client, options);
     this.sendPayload = (payload) => {
       ws.sendRaw(JSON.stringify(payload));
     };

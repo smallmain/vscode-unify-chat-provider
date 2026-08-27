@@ -380,6 +380,10 @@ export class ConfigStore {
     provider.serviceTier = this.normalizeServiceTier(provider.serviceTier);
     provider.extraHeaders = this.normalizeStringRecord(provider.extraHeaders);
     provider.extraBody = this.normalizeObjectRecord(provider.extraBody);
+    provider.ignoreSSLErrors =
+      typeof provider.ignoreSSLErrors === 'boolean'
+        ? provider.ignoreSSLErrors
+        : undefined;
     provider.proxy = this.normalizeProxyConfig(provider.proxy);
     provider.contextCache = this.normalizeContextCacheConfig(
       provider.contextCache,

@@ -67,6 +67,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'extraBody',
   'timeout',
   'retry',
+  'ignoreSSLErrors',
   'proxy',
   'autoFetchOfficialModels',
   'contextCache',

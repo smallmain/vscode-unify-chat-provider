@@ -573,19 +573,41 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
 
     try {
       const proxy = input.provider.proxy;
-      const apiId = await this.fetchApiId(baseUrl, apiKey, logger, proxy);
+      const ignoreSSLErrors = input.provider.ignoreSSLErrors === true;
+      const apiId = await this.fetchApiId(
+        baseUrl,
+        apiKey,
+        logger,
+        proxy,
+        ignoreSSLErrors,
+      );
       const [userStats, dailyStats, weeklyStats, monthlyStats] =
         await Promise.all([
-          this.fetchUserStats(baseUrl, apiId, logger, proxy),
-          this.fetchUserModelStats(baseUrl, apiId, 'daily', logger, proxy),
+          this.fetchUserStats(baseUrl, apiId, logger, proxy, ignoreSSLErrors),
+          this.fetchUserModelStats(
+            baseUrl,
+            apiId,
+            'daily',
+            logger,
+            proxy,
+            ignoreSSLErrors,
+          ),
           this.fetchUserModelStats(
             baseUrl,
             apiId,
             'natural_weekly',
             logger,
             proxy,
+            ignoreSSLErrors,
           ),
-          this.fetchUserModelStats(baseUrl, apiId, 'monthly', logger, proxy),
+          this.fetchUserModelStats(
+            baseUrl,
+            apiId,
+            'monthly',
+            logger,
+            proxy,
+            ignoreSSLErrors,
+          ),
         ]);
 
       const usage = this.aggregateUsage(userStats, {
@@ -731,6 +753,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
     apiKey: string,
     logger: ReturnType<typeof createSimpleHttpLogger>,
     proxy: ProxyConfig | undefined,
+    ignoreSSLErrors: boolean,
   ): Promise<string> {
     const endpoint = createEndpoint(baseUrl, 'get-key-id');
     const response = await fetchWithRetry(endpoint, {
@@ -741,6 +764,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
       },
       body: JSON.stringify({ apiKey }),
       logger,
+      ignoreSSLErrors,
       proxy,
     });
 
@@ -793,6 +817,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
     apiId: string,
     logger: ReturnType<typeof createSimpleHttpLogger>,
     proxy: ProxyConfig | undefined,
+    ignoreSSLErrors: boolean,
   ): Promise<CrsUserStatsPayload> {
     const endpoint = createEndpoint(baseUrl, 'user-stats');
     const response = await fetchWithRetry(endpoint, {
@@ -803,6 +828,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
       },
       body: JSON.stringify({ apiId }),
       logger,
+      ignoreSSLErrors,
       proxy,
     });
 
@@ -884,6 +910,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
     period: CrsModelStatsPeriod,
     logger: ReturnType<typeof createSimpleHttpLogger>,
     proxy: ProxyConfig | undefined,
+    ignoreSSLErrors: boolean,
   ): Promise<CrsModelStatsPayload[]> {
     const endpoint = createEndpoint(baseUrl, 'user-model-stats');
     const response = await fetchWithRetry(endpoint, {
@@ -894,6 +921,7 @@ export class ClaudeRelayServiceBalanceProvider implements BalanceProvider {
       },
       body: JSON.stringify({ apiId, period }),
       logger,
+      ignoreSSLErrors,
       proxy,
     });
 

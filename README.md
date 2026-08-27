@@ -430,6 +430,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
 | Global Backoff Multiplier          | `networkSettings.retry.backoffMultiplier`      | Exponential backoff multiplier. Default: `2`; minimum: `1`.                                                                                           |
 | Global Jitter Factor               | `networkSettings.retry.jitterFactor`           | Jitter factor used to randomize delays. Default: `0.1`; range: `0`-`1`.                                                                               |
 | Global Retryable Status Codes      | `networkSettings.retry.statusCodes`            | HTTP status codes that trigger retries. When set, this fully replaces the default rules: `408`, `409`, `429`, and all status codes `>=500`.          |
+| Ignore SSL Certificate Errors      | `networkSettings.ignoreSSLErrors`              | Whether to ignore TLS certificate validation errors for provider API requests. Independent of proxy settings; default: `false`.                    |
 | Global Proxy Settings              | `networkSettings.proxy`                        | Global proxy settings for provider requests. See [Proxy Configuration](#proxy-configuration) for fields.                                             |
 | Enable Code Completion             | `completion.enabled`                           | Whether to enable this extension's code completion. Default: `true`; see [Completion Algorithm Parameters](#completion-algorithm-parameters).         |
 | Completion Providers               | `completion.providers`                         | Array of completion algorithm configurations. Default: `[]`; see [Completion Algorithm Parameters](#completion-algorithm-parameters).                |
@@ -458,6 +459,8 @@ Proxy settings can be configured globally through `unifyChatProvider.networkSett
 - `vscode` (default): Use VS Code `http.proxy`, `http.proxyAuthorization`, `http.proxyStrictSSL`, and `http.noProxy`.
 - `direct`: Connect directly and bypass VS Code/global proxy settings.
 - `custom`: Use `proxy.url`; optional fields are `authorization`, `strictSSL`, and `noProxy`.
+
+Whether API requests ignore SSL/TLS certificate errors is controlled independently by `networkSettings.ignoreSSLErrors`. A provider-level `ignoreSSLErrors` value can override the global setting.
 
 Supported custom proxy URL protocols are `http`, `https`, `socks`, `socks4`, `socks4a`, `socks5`, and `socks5h`. Proxy settings apply to provider HTTP requests, including chat requests, balance refreshes, and official model fetching.
 
@@ -526,6 +529,7 @@ The following fields correspond to `ProviderConfig` (field names used in import/
 | Connection Timeout         | `timeout.connection`                             | Must be a positive integer. Inherits the global value when unset; built-in default: `60000` (60 seconds).                                                                                               |
 | Response Interval Timeout  | `timeout.response`                               | Must be a positive integer. Inherits the global value when unset; built-in default: `300000` (5 minutes).                                                                                              |
 | Retry                      | `retry`                                          | Provider-level retry override for chat requests. Retryable HTTP status codes can be configured only through global `networkSettings.retry.statusCodes`.                                                  |
+| Ignore SSL Certificate Errors | `ignoreSSLErrors`                            | Whether to ignore TLS certificate validation errors for this provider's API requests. Independent of proxy settings; default: `false`.                                                            |
 | Max Retries                | `retry.maxRetries`                               | Must be a non-negative integer. Inherits the global value when unset; built-in default: `10`.                                                                                                            |
 | Initial Delay              | `retry.initialDelayMs`                           | Must be a non-negative integer in milliseconds. Inherits the global value when unset; built-in default: `1000`.                                                                                         |
 | Max Delay                  | `retry.maxDelayMs`                               | Must be a positive integer in milliseconds. Inherits the global value when unset; built-in default: `60000`.                                                                                            |

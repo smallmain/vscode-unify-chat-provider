@@ -755,6 +755,7 @@ export class GitHubCopilotProvider implements ApiProvider {
       responseTimeoutMs: effectiveTimeout.response,
       logger,
       retryConfig: chatNetwork.retry,
+      ignoreSSLErrors: chatNetwork.ignoreSSLErrors,
       proxy: chatNetwork.proxy,
       type: 'normal',
     });

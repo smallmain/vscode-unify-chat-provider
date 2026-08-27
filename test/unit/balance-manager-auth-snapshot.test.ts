@@ -7,6 +7,10 @@ const state = vi.hoisted(() => ({
 }));
 
 vi.mock('vscode', () => {
+  class ThemeIcon {
+    constructor(readonly id: string) {}
+  }
+
   class EventEmitter<T> {
     private readonly listeners = new Set<(value: T) => void>();
     readonly event = (listener: (value: T) => void) => {
@@ -25,7 +29,11 @@ vi.mock('vscode', () => {
 
   return {
     EventEmitter,
+    ThemeIcon,
     l10n: { t: (message: string) => message },
+    workspace: {
+      getConfiguration: () => ({ get: () => undefined }),
+    },
     window: { showErrorMessage: vi.fn() },
   };
 });

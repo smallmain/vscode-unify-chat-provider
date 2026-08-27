@@ -430,6 +430,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
 | 全局退避倍数               | `networkSettings.retry.backoffMultiplier`      | 指数退避倍数。默认：`2`，最小：`1`。                                                                                                        |
 | 全局抖动因子               | `networkSettings.retry.jitterFactor`           | 用于随机化延迟的抖动因子。默认：`0.1`，范围：`0`-`1`。                                                                                      |
 | 全局可重试状态码           | `networkSettings.retry.statusCodes`            | 触发重试的 HTTP 状态码数组。设置后会完整覆盖默认规则；默认规则为 `408`、`409`、`429` 及所有 `>=500` 状态码。                                  |
+| 忽略 SSL 证书错误           | `networkSettings.ignoreSSLErrors`              | 是否忽略供应商 API 请求的 TLS 证书校验错误。与代理设置独立，默认：`false`；启用后会降低连接安全性。                                        |
 | 全局代理配置               | `networkSettings.proxy`                        | 供应商请求的全局代理设置。字段请查看 [代理配置](#代理配置)。                                                                                 |
 | 启用代码补全               | `completion.enabled`                           | 是否启用本扩展的代码补全。默认：`true`；详细说明请查看 [补全算法参数](#补全算法参数)。                                                       |
 | 补全供应商                 | `completion.providers`                         | 补全算法配置数组。默认：`[]`；详细字段请查看 [补全算法参数](#补全算法参数)。                                                                |
@@ -458,6 +459,8 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
 - `vscode`（默认）：使用 VS Code 的 `http.proxy`、`http.proxyAuthorization`、`http.proxyStrictSSL` 和 `http.noProxy`。
 - `direct`：直连，并绕过 VS Code 与全局代理设置。
 - `custom`：使用 `proxy.url`；可选字段包括 `authorization`、`strictSSL` 和 `noProxy`。
+
+API 请求是否忽略 SSL/TLS 证书错误由 `networkSettings.ignoreSSLErrors` 控制，与是否使用代理无关。也可以在单个供应商的 `ignoreSSLErrors` 字段中覆盖该设置。
 
 自定义代理 URL 支持 `http`、`https`、`socks`、`socks4`、`socks4a`、`socks5` 和 `socks5h` 协议。代理设置会影响供应商 HTTP 请求，包括聊天请求、余额刷新和官方模型拉取。
 
@@ -526,6 +529,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
 | 建连超时                 | `timeout.connection`                             | 必须为正整数。未设置时继承全局值；内置默认：`60000`（60 秒）。                                                                                                                                       |
 | 响应间隔超时             | `timeout.response`                               | 必须为正整数。未设置时继承全局值；内置默认：`300000`（5 分钟）。                                                                                                                                     |
 | 重试配置                 | `retry`                                          | 聊天请求的供应商级重试覆盖；可重试 HTTP 状态码只能通过全局 `networkSettings.retry.statusCodes` 配置。                                                                                                 |
+| 忽略 SSL 证书错误        | `ignoreSSLErrors`                                | 是否忽略该供应商 API 请求的 TLS 证书校验错误。独立于代理设置，默认：`false`；启用后会降低连接安全性。                                                                                              |
 | 最大重试次数             | `retry.maxRetries`                               | 必须为非负整数。未设置时继承全局值；内置默认：`10`。                                                                                                                                                  |
 | 初始延迟                 | `retry.initialDelayMs`                           | 必须为非负整数，单位毫秒。未设置时继承全局值；内置默认：`1000`。                                                                                                                                     |
 | 最大延迟                 | `retry.maxDelayMs`                               | 必须为正整数，单位毫秒。未设置时继承全局值；内置默认：`60000`。                                                                                                                                      |
