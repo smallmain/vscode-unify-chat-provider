@@ -1065,8 +1065,9 @@ export function isRetryableStreamReadError(error: unknown): boolean {
           normalizedMessage.includes('stream id') ||
           normalizedMessage.includes('received from peer'));
       if (
-        normalizedMessage.includes('stream_read_error') ||
-        normalizedMessage.includes('stream read error') ||
+        normalizedMessage.includes("stream_read_error") ||
+        normalizedMessage.includes("stream read error") ||
+        normalizedMessage.includes("servers are currently overloaded") ||
         isInternalStreamError
       ) {
         return true;
