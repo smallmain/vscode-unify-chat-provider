@@ -30,9 +30,10 @@ export function patchChatLibParserSource(
   source: string,
 ): string {
   const resolved = resolve(filePath);
+  const normalizedSource = source.replace(/\r\n?/g, '\n');
   if (resolved === blockTrimmerPath) {
     return replaceOnce(
-      source,
+      normalizedSource,
       "import { IPosition, TextDocumentContents } from '../textDocument';",
       [
         'interface IPosition {',
@@ -51,7 +52,7 @@ export function patchChatLibParserSource(
   }
   if (resolved === parseBlockPath) {
     return replaceOnce(
-      source,
+      normalizedSource,
       [
         '\t\tif (endIndex < solution.length) {',
         '\t\t\t// descendant block is finished, stop at end of block',
