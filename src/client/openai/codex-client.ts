@@ -448,6 +448,11 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
   ): Promise<ModelConfig[]> {
     return [
       {
+        id: 'gpt-6-astra',
+        maxInputTokens: 272000,
+        ...CODEX_REASONING_SUMMARY_DEFAULTS,
+      },
+      {
         id: 'gpt-5.6-sol',
         maxInputTokens: 272000,
         ...CODEX_REASONING_SUMMARY_DEFAULTS,

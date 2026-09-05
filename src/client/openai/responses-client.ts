@@ -1248,8 +1248,9 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     const baseModelId = getBaseModelId(model.id).toLowerCase();
     const family = model.family?.trim().toLowerCase();
-    return /^gpt-5\.6(?:-|$)/.test(baseModelId) ||
-      (family !== undefined && /^gpt-5\.6(?:-|$)/.test(family))
+    const supportsMaxEffort = /^gpt-(?:5\.6|6-astra)(?:-|$)/;
+    return supportsMaxEffort.test(baseModelId) ||
+      (family !== undefined && supportsMaxEffort.test(family))
       ? 'max'
       : 'xhigh';
   }

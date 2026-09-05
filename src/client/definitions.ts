@@ -635,6 +635,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
     ],
     supportedFamilys: [
       'codex-mini-latest',
+      'gpt-6-astra',
       'gpt-5.2',
       'gpt-5.1',
       'gpt-5.1-codex',
@@ -972,8 +973,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.GeminiUseThinkingLevel]: {
     supportedFamilys: [
+      'gemini-3.8-flash',
       'gemini-3-',
       'gemma-4-',
+      'models/gemini-3.8-flash',
       'models/gemini-3-',
       'models/gemma-4-',
     ],

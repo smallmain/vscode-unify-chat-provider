@@ -31,6 +31,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.openai.com',
     authTypes: ['api-key'],
     models: [
+      'gpt-6-astra',
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
@@ -51,6 +52,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'gemini-3.1-pro-preview',
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
       'gemini-3.5-flash-lite',
     ],
@@ -63,6 +65,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['google-vertex-ai-auth'],
     models: [
       'gemini-3.1-pro-preview',
+      'gemini-3.8-flash',
       'gemini-3.7-flash',
       'gemini-3.5-flash-lite',
     ],

@@ -32,6 +32,13 @@ const OPENAI_GPT_5_6_REASONING_EFFORTS = [
   'low',
   'none',
 ] as const;
+const OPENAI_GPT_6_ASTRA_REASONING_EFFORTS = [
+  'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
 const OPENAI_STANDARD_REASONING_EFFORTS = [
   'high',
   'medium',
@@ -105,6 +112,7 @@ const GEMINI_3_FLASH_REASONING_EFFORTS = [
   'low',
   'minimal',
 ] as const;
+const GEMINI_3_8_FLASH_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const GEMINI_2_5_PRO_REASONING_BUDGETS = {
   high: 32768,
   medium: 8192,
@@ -1060,6 +1068,42 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
+  },
+  {
+    // https://developers.openai.com/api/docs/models/gpt-6-astra
+    id: 'gpt-6-astra',
+    overrides: [
+      {
+        // Astra tool calling requires Responses on the official API.
+        matchers: [
+          (provider) =>
+            provider.type === 'openai-chat-completion' &&
+            matchProvider(provider.baseUrl, 'api.openai.com'),
+        ],
+        config: { capabilities: { toolCalling: false } },
+      },
+    ],
+    name: 'GPT-6 Astra',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'max',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_6_ASTRA_REASONING_EFFORTS, 'max'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
   },
   {
     id: 'gpt-5.6-sol',
@@ -5044,6 +5088,26 @@ const _WELL_KNOWN_MODELS = [
       toolCalling: true,
       imageInput: true,
     },
+  },
+  {
+    // https://ai.google.dev/gemini-api/docs/models/gemini-3.8-flash
+    id: 'gemini-3.8-flash',
+    overrides: ['models/gemini-3.8-flash'],
+    name: 'Gemini 3.8 Flash',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65536,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      geminiReasoningEffort(GEMINI_3_8_FLASH_REASONING_EFFORTS, 'medium'),
+    ],
   },
   {
     id: 'gemini-3.7-flash',
