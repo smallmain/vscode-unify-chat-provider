@@ -2,6 +2,7 @@ import * as vscode from 'vscode';
 import { pickQuickItem } from '../component';
 import { resolveChatNetwork, type ResolvedChatNetworkConfig, type RetryConfig } from '../../utils';
 import type { ProxyConfig, ProxyType, TimeoutConfig } from '../../types';
+import type { RateLimitConfig } from '../../rate-limit';
 import type {
   TimeoutFormRoute,
   UiContext,
@@ -24,7 +25,8 @@ type NetworkField =
   | {
       kind: 'proxy';
       field: 'type' | 'url' | 'authorization' | 'strictSSL' | 'noProxy';
-    };
+    }
+  | { kind: 'rateLimit'; field: 'rpm' };
 
 interface NetworkSettingsItem extends vscode.QuickPickItem {
   action?: 'back' | 'reset';
@@ -40,6 +42,7 @@ export async function runTimeoutFormScreen(
   const timeout = route.timeout;
   const retry = route.retry;
   const proxy = route.proxy;
+  const rateLimit = route.rateLimit;
   const globalDefaults = resolveChatNetwork(undefined);
   const isCodeAssist =
     route.draft.type === 'google-antigravity' ||
@@ -47,6 +50,16 @@ export async function runTimeoutFormScreen(
 
   const items: NetworkSettingsItem[] = [
     { label: `$(arrow-left) ${t('Back')}`, action: 'back' },
+    { label: '', kind: vscode.QuickPickItemKind.Separator },
+    {
+      label: `$(dashboard) ${t('Rate Limit (RPM)')}`,
+      description:
+        rateLimit.rpm && rateLimit.rpm > 0
+          ? String(rateLimit.rpm)
+          : t('Disabled'),
+      detail: t('Maximum requests per minute (0 = disabled)'),
+      edit: { kind: 'rateLimit', field: 'rpm' },
+    },
     { label: '', kind: vscode.QuickPickItemKind.Separator },
     {
       label: `$(clock) ${t('Connection Timeout')}`,
@@ -188,6 +201,7 @@ export async function runTimeoutFormScreen(
     route.draft.timeout = hasTimeoutValues(timeout) ? timeout : undefined;
     route.draft.retry = hasRetryValues(retry) ? retry : undefined;
     route.draft.proxy = hasProxyValues(proxy) ? proxy : undefined;
+    route.draft.rateLimit = hasRateLimitValues(rateLimit) ? rateLimit : undefined;
     return { kind: 'pop' };
   }
 
@@ -204,6 +218,7 @@ export async function runTimeoutFormScreen(
     route.proxy.authorization = undefined;
     route.proxy.strictSSL = undefined;
     route.proxy.noProxy = undefined;
+    route.rateLimit.rpm = undefined;
     return { kind: 'stay' };
   }
 
@@ -223,6 +238,8 @@ export async function runTimeoutFormScreen(
       await editTimeoutField(timeout, selection.edit.field, defaultValue);
     } else if (selection.edit.kind === 'retry') {
       await editRetryField(retry, selection.edit.field, globalDefaults.retry);
+    } else if (selection.edit.kind === 'rateLimit') {
+      await editRateLimitField(rateLimit, selection.edit.field);
     } else {
       await editProxyField(proxy, selection.edit.field);
     }
@@ -297,6 +314,47 @@ function hasProxyValues(proxy: ProxyConfig): boolean {
     proxy.strictSSL !== undefined ||
     (proxy.noProxy !== undefined && proxy.noProxy.length > 0)
   );
+}
+
+function hasRateLimitValues(rateLimit: RateLimitConfig): boolean {
+  return (
+    rateLimit.rpm !== undefined &&
+    Number.isFinite(rateLimit.rpm) &&
+    Number.isInteger(rateLimit.rpm) &&
+    rateLimit.rpm >= 0
+  );
+}
+
+async function editRateLimitField(
+  rateLimit: RateLimitConfig,
+  field: 'rpm',
+): Promise<void> {
+  const currentValue = rateLimit[field];
+
+  const input = await vscode.window.showInputBox({
+    title: t('Rate Limit (RPM)'),
+    prompt: t('Enter maximum requests per minute (0 = disabled)'),
+    value: currentValue?.toString() ?? '',
+    placeHolder: '0',
+    validateInput: (value) => {
+      if (!value.trim()) return null;
+      const n = Number(value);
+      if (!Number.isInteger(n) || n < 0) {
+        return t('Please enter a non-negative integer');
+      }
+      return null;
+    },
+  });
+
+  if (input === undefined) {
+    return;
+  }
+
+  if (!input.trim()) {
+    rateLimit[field] = undefined;
+  } else {
+    rateLimit[field] = Number(input);
+  }
 }
 
 function formatProxyType(type: ProxyType | undefined): string {
