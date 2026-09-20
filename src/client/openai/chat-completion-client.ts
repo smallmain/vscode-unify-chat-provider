@@ -6,6 +6,7 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
+import { applyOpenCodeSessionHeader } from '../opencode/session';
 import {
   ChatRequestTrace,
   CopilotUsage,
@@ -1365,6 +1366,9 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
     );
 
     const headers = this.buildHeaders(credential, model, sanitizedMessages);
+    applyOpenCodeSessionHeader(
+      headers, this.config, model, messages, requestTrace,
+    );
     const serviceTier = resolveOpenAIServiceTier(this.config, model);
 
     const baseBody: ChatCompletionCreateParamsBase = {

@@ -23,6 +23,7 @@ import type {
 import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
+import { applyOpenCodeSessionHeader } from '../opencode/session';
 import {
   createStatefulMarkerIdentity,
   DEFAULT_CONTEXT_CACHE_TTL_SECONDS,
@@ -1093,6 +1094,9 @@ export class AnthropicProvider implements ApiProvider {
         messages: sanitizedMessages,
         requestState,
       });
+      applyOpenCodeSessionHeader(
+        headers, this.config, model, messages, requestTrace,
+      );
 
       const client = this.createClient(
         logger,

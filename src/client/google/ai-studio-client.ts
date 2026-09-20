@@ -21,6 +21,7 @@ import {
 import { createSimpleHttpLogger } from '../../logger';
 import type { RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
+import { applyOpenCodeSessionHeader } from '../opencode/session';
 import {
   ChatRequestTrace,
   CopilotUsage,
@@ -210,6 +211,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     streamEnabled: boolean,
     credential?: AuthTokenInfo,
     mode: FetchMode = 'chat',
+    requestHeaders?: Record<string, string>,
   ): GoogleGenAI {
     const chatNetwork =
       mode === 'chat' ? resolveChatNetwork(this.config) : undefined;
@@ -225,7 +227,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
 
     const httpOptions: HttpOptions = {
       baseUrl: this.baseUrl,
-      headers: this.buildHeaders(credential, modelConfig),
+      headers: requestHeaders ?? this.buildHeaders(credential, modelConfig),
       ...(sdkTimeoutMs !== undefined ? { timeout: sdkTimeoutMs } : {}),
       extraBody: this.buildExtraBody(modelConfig),
     };
@@ -1009,11 +1011,15 @@ export class GoogleAIStudioProvider implements ApiProvider {
       tools,
     );
     const streamEnabled = model.stream ?? true;
+    const headers = this.buildHeaders(credential, model);
+    applyOpenCodeSessionHeader(
+      headers, this.config, model, messages, requestTrace,
+    );
 
     const generateConfig: GenerateContentConfig = {
       abortSignal: abortController.signal,
       httpOptions: {
-        headers: this.buildHeaders(credential, model),
+        headers,
         extraBody: this.buildExtraBody(model),
       },
       ...(systemInstruction ? { systemInstruction } : {}),
@@ -1038,7 +1044,9 @@ export class GoogleAIStudioProvider implements ApiProvider {
       ...{ ...this.buildThinkingConfig(model, useThinkingLevel) },
     };
 
-    const client = this.createClient(model, streamEnabled, credential);
+    const client = this.createClient(
+      model, streamEnabled, credential, 'chat', headers,
+    );
 
     performanceTrace.ttf = Date.now() - performanceTrace.tts;
 

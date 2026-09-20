@@ -850,6 +850,14 @@ You can select the `Change All Built-in Utility Models` button to update all `â˜
 
 </details>
 
+### OpenCode Request Sessions
+
+Inference requests to the official OpenCode Zen and Go endpoints automatically include `x-opencode-session`. This covers the built-in OpenCode providers and existing generic Chat Completions, Responses (HTTP/SSE and WebSocket), Anthropic, and Gemini configurations pointing to `https://opencode.ai/zen/...`.
+
+Following [opencode-go-copilot PR #119](https://github.com/OnesoftQwQ/opencode-go-copilot/pull/119), UCP derives a UUID-formatted ID from the API model ID and the first non-empty user message text using SHA-256. Images and tool results are excluded from the text anchor. Requests with no user text use a random UUID, reused for retries of that request. A non-empty `x-opencode-session` in `extraHeaders` overrides this default; model-level headers take precedence over provider-level headers regardless of casing.
+
+This is a history-based routing hint because VS Code does not expose a conversation ID to model providers. Conversations with the same model and first user text share an ID; switching models or replacing the first user text during history compaction can change it.
+
 ## Provider Support Table
 
 The providers listed below support [One-Click Configuration](#one-click-configuration). Implementations follow the best practices from official docs to help you get the best performance.

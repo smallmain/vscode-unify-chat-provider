@@ -850,6 +850,14 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 
 </details>
 
+### OpenCode 请求会话
+
+发送到 OpenCode Zen 和 Go 官方端点的推理请求会自动携带 `x-opencode-session`。该行为覆盖内置 OpenCode 供应商，以及指向 `https://opencode.ai/zen/...` 的已有通用 Chat Completions、Responses（HTTP/SSE 和 WebSocket）、Anthropic 和 Gemini 配置。
+
+参考 [opencode-go-copilot PR #119](https://github.com/OnesoftQwQ/opencode-go-copilot/pull/119)，UCP 对 API 模型 ID 和首条非空用户消息文本计算 SHA-256，并格式化为 UUID。图片和工具结果不参与文本锚点计算。没有用户文本时生成随机 UUID，同一次请求的重试会复用它。`extraHeaders` 中非空的 `x-opencode-session` 可覆盖默认值；模型级配置优先于供应商级配置，不区分请求头名称大小写。
+
+由于 VS Code 未向模型供应商暴露会话 ID，这是一种基于历史内容的路由标识。相同模型、相同首条用户文本会得到相同 ID；切换模型，或历史压缩替换首条用户文本时，ID 可能改变。
+
 ## 供应商支持表
 
 以下列出的供应商均支持 [一键配置](#一键配置)，并且已在实现中遵循官方文档的最佳实践，能够发挥模型的最佳性能。
