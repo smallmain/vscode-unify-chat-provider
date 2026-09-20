@@ -474,18 +474,25 @@ export class KimiCodeBalanceProvider implements BalanceProvider {
       for (let index = 0; index < rows.length; index++) {
         const row = rows[index];
         const period = inferPeriodFromLabel(row.label);
-        const remaining =
-          row.limit > 0 ? Math.max(0, row.limit - row.used) : undefined;
-
-        items.push({
-          id: `tokens-${index + 1}`,
-          type: 'token',
+        const ratio = remainingRatio(row);
+        const common = {
+          id: `quota-${index + 1}`,
           period,
           ...(period === 'custom' ? { periodLabel: row.label } : {}),
           label: row.label,
-          used: row.used,
-          ...(row.limit > 0 ? { limit: row.limit } : {}),
-          ...(remaining !== undefined ? { remaining } : {}),
+        };
+
+        // Kimi reports normalized quota units, not a count of model tokens.
+        items.push(ratio === undefined ? {
+          ...common,
+          type: 'integer',
+          direction: 'used',
+          value: row.used,
+        } : {
+          ...common,
+          type: 'percent',
+          basis: 'remaining',
+          value: Math.max(0, Math.min(100, ratio * 100)),
         });
       }
 
@@ -529,13 +536,29 @@ export class KimiCodeBalanceProvider implements BalanceProvider {
       }
 
       if (!primaryId && summaryRow) {
-        const summaryToken = items.find(
-          (item) => item.type === 'token' && item.label === summaryRow.label,
+        const summaryQuota = items.find(
+          (item) => item.label === summaryRow.label,
         );
-        primaryId = summaryToken?.id;
+        primaryId = summaryQuota?.id;
       }
       if (!primaryId) {
         primaryId = items[0]?.id;
+      }
+
+      const exhaustedRow = rows.find(
+        (row) => row.limit > 0 && row.used >= row.limit,
+      );
+      if (exhaustedRow) {
+        primaryId = 'quota-exhausted';
+        const period = inferPeriodFromLabel(exhaustedRow.label);
+        items.push({
+          id: primaryId,
+          type: 'status',
+          value: 'exhausted',
+          period,
+          ...(period === 'custom' ? { periodLabel: exhaustedRow.label } : {}),
+          label: exhaustedRow.label,
+        });
       }
 
       const normalizedItems = items.map((item) => ({
