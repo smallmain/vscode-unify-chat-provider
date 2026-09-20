@@ -3,7 +3,8 @@ import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import * as vscode from "vscode";
 
-const EXTENSION_ID = "SmallMain.vscode-unify-chat-provider";
+const EXTENSION_ID = process.env["UCP_E2E_EXTENSION_ID"]
+  ?? "SmallMain.vscode-unify-chat-provider";
 const FAKE_LANGUAGE_MODEL_EXTENSION_ID = "ucp-e2e.fake-language-model";
 const FAKE_NES_MODEL = { vendor: "ucp-e2e-fake", id: "controlled" } as const;
 const CURSOR_PREDICTION_SYSTEM_MESSAGE_PREFIX =
@@ -2941,10 +2942,41 @@ async function runCompletionTemplateEligibilityE2E(
   }
 }
 
+async function activateWithPendingCopilot(): Promise<void> {
+  const extension = vscode.extensions.getExtension(EXTENSION_ID);
+  const copilot = vscode.extensions.getExtension("github.copilot-chat");
+  assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
+  assert.ok(copilot, "Hanging Copilot fixture should be installed");
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  try {
+    await Promise.race([
+      extension.activate(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(
+          "UCP activation must not wait for Copilot authentication",
+        )), 15_000);
+      }),
+    ]);
+    assert.equal(extension.isActive, true);
+    const startedAt = Date.now();
+    while (!(await vscode.commands.getCommands(true)).includes(
+      "ucp-e2e.copilot.activationPending",
+    ) && Date.now() - startedAt < 5_000) {
+      await delay(20);
+    }
+    assert.equal(copilot.isActive, false, "Copilot activation should still be pending");
+    assert.equal(await vscode.commands.executeCommand<boolean>(
+      "ucp-e2e.copilot.activationPending",
+    ), true, "UCP should have started Copilot activation opportunistically");
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 async function runDisabledProposedApiE2E(): Promise<void> {
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
   assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
-  await extension.activate();
+  await activateWithPendingCopilot();
   assert.equal(
     extension.isActive,
     true,
@@ -3158,7 +3190,7 @@ export async function run(): Promise<void> {
   const extension = vscode.extensions.getExtension(EXTENSION_ID);
   assert.ok(extension, `Extension ${EXTENSION_ID} should be installed`);
 
-  await extension.activate();
+  await activateWithPendingCopilot();
   assert.equal(extension.isActive, true, "Extension should activate");
 
   const commands = await vscode.commands.getCommands(true);

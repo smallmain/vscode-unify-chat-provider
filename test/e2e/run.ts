@@ -6,13 +6,16 @@ import {
   readdir,
   readFile,
   rm,
+  symlink,
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import * as path from "node:path";
 import { runTests } from "@vscode/test-electron";
+import { resolveInstalledVSCode } from "./vscode-installation";
 
 const MINIMUM_SUPPORTED_VSCODE_VERSION = "1.115.0";
+const DISABLED_PROPOSAL_EXTENSION_ID = "ucp-e2e.unify-chat-provider-disabled";
 const AUTH_E2E_BINDING = "00000000-0000-4000-8000-000000000901";
 const AUTH_E2E_ENVELOPE_KEY =
   `ucp:state:auth-session-v1.${AUTH_E2E_BINDING}`;
@@ -514,7 +517,53 @@ exports.deactivate = function () {};
   ]);
 }
 
+async function createHangingCopilotExtension(destination: string): Promise<void> {
+  await mkdir(destination, { recursive: true });
+  await writeFile(path.join(destination, "package.json"), JSON.stringify({
+    name: "copilot-chat",
+    publisher: "github",
+    version: "0.0.1",
+    engines: { vscode: `^${MINIMUM_SUPPORTED_VSCODE_VERSION}` },
+    main: "./extension.js",
+    activationEvents: [],
+  }));
+  await writeFile(path.join(destination, "extension.js"), `
+const vscode = require('vscode');
+exports.activate = (context) => {
+  context.subscriptions.push(vscode.commands.registerCommand(
+    'ucp-e2e.copilot.activationPending', () => true,
+  ));
+  return new Promise(() => {});
+};
+`);
+}
+
+async function createDisabledProposalExtension(
+  source: string,
+  destination: string,
+): Promise<void> {
+  const manifest = parseJson(
+    await readFile(path.join(source, "package.json"), "utf8"),
+    "extension manifest",
+  );
+  if (!isRecord(manifest)) throw new Error("Invalid extension manifest");
+  await mkdir(destination, { recursive: true });
+  // A separate extension ID cannot inherit product.json grants for the user's
+  // real installation. Only the extension is copied; VS Code is reused as-is.
+  await writeFile(path.join(destination, "package.json"), JSON.stringify({
+    ...manifest,
+    publisher: "ucp-e2e",
+    name: "unify-chat-provider-disabled",
+  }));
+  for (const entry of ["out", "l10n", "package.nls.json", "package.nls.zh-cn.json"]) {
+    await cp(path.join(source, entry), path.join(destination, entry), { recursive: true });
+  }
+  await symlink(path.join(source, "node_modules"), path.join(destination, "node_modules"), "junction");
+}
+
 async function main(): Promise<void> {
+  const vscodeExecutablePath = await resolveInstalledVSCode();
+  console.log(`Using installed VS Code: ${vscodeExecutablePath}`);
   const sourceExtensionPath = path.resolve(__dirname, "../..");
   const extensionTestsPath = path.resolve(__dirname, "suite");
   const fixtureWorkspaceSource = path.join(
@@ -538,8 +587,16 @@ async function main(): Promise<void> {
         modeRoot,
         "fake-language-model",
       );
+      const hangingCopilotPath = path.join(modeRoot, "hanging-copilot");
+      const extensionPath = mode === "disabled"
+        ? path.join(modeRoot, "extension")
+        : sourceExtensionPath;
+      if (mode === "disabled") {
+        await createDisabledProposalExtension(sourceExtensionPath, extensionPath);
+      }
       await createNotebookContributionExtension(notebookContributionPath);
       await createFakeLanguageModelExtension(fakeLanguageModelPath);
+      await createHangingCopilotExtension(hangingCopilotPath);
       await cp(fixtureWorkspaceSource, fixtureWorkspace, { recursive: true });
       const proposalArgs =
         mode === "enabled"
@@ -549,13 +606,20 @@ async function main(): Promise<void> {
             ]
           : [];
       await runTests({
+        vscodeExecutablePath,
         extensionDevelopmentPath: [
-          sourceExtensionPath,
+          extensionPath,
           notebookContributionPath,
           fakeLanguageModelPath,
+          hangingCopilotPath,
         ],
         extensionTestsPath,
-        extensionTestsEnv: { UCP_E2E_PROPOSED_MODE: mode },
+        extensionTestsEnv: {
+          UCP_E2E_PROPOSED_MODE: mode,
+          UCP_E2E_EXTENSION_ID: mode === "disabled"
+            ? DISABLED_PROPOSAL_EXTENSION_ID
+            : "SmallMain.vscode-unify-chat-provider",
+        },
         launchArgs: [
           fixtureWorkspace,
           `--user-data-dir=${userDataDir}`,
@@ -586,6 +650,7 @@ async function main(): Promise<void> {
         const deviceRoot = path.dirname(userDataDir);
         const resultFile = path.join(authRoot, `${phase}.result.json`);
         await runTests({
+          vscodeExecutablePath,
           extensionDevelopmentPath: sourceExtensionPath,
           extensionTestsPath,
           extensionTestsEnv: {

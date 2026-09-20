@@ -62,6 +62,7 @@ import {
   scheduleProposedApiStartupReminder,
 } from './proposed-api/reminder';
 import { clearZedModelRoutes } from './client/zed/route-cache';
+import { activateCopilotChatInBackground } from './copilot-chat-activation';
 import {
   isSessionAuthConfig,
   isValidAuthBindingId,
@@ -471,15 +472,11 @@ export async function activate(
 
   // Copilot Chat is built into VS Code, but Remote-SSH hosts may not enumerate
   // it early enough for a hard extension dependency to work reliably.
-  // Activate it opportunistically before we fire the first model refresh.
-  try {
-    await vscode.extensions.getExtension('github.copilot-chat')?.activate();
-  } catch {
-    authLog.warn(
-      'main-instance',
-      'Copilot Chat activation unavailable; initial model refresh may be delayed',
-    );
-  }
+  context.subscriptions.push(
+    activateCopilotChatInBackground(() => {
+      chatProvider.handleConfigurationChange();
+    }),
+  );
 
   // Trigger initial model cache refresh
   chatProvider.handleConfigurationChange();

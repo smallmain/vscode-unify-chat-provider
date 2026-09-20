@@ -1181,6 +1181,8 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 - 新版本发布: `npm run release`
 - GitHub Actions 新版本发布：`Actions → Release (VS Code Extension) → Run workflow`
 
+E2E 测试复用机器上已安装的 VS Code，并使用隔离的临时用户数据，不下载、复制 VS Code 或修改已安装的应用。测试入口会检查常见安装目录和 `PATH`；也可以通过 `VSCODE_EXECUTABLE_PATH` 指定已有的可执行文件或 macOS `.app` 目录。找不到安装版本时直接报错并提示配置。禁用 Proposed API 的测试使用独立的测试扩展 ID，避免受 UCP 已有授权影响。发布工作流会先在一次性 CI 机器上显式准备 VS Code，再运行同一套测试。
+
 ## 许可证
 
 [MIT @ SmallMain](./LICENSE)

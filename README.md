@@ -1181,6 +1181,8 @@ Prerequisite: Node.js 24.12 or later.
 - New release: `npm run release`
 - GitHub Actions release: `Actions → Release (VS Code Extension) → Run workflow`
 
+E2E tests reuse an installed VS Code version and isolated temporary user data. They never download or copy VS Code or modify the installed app. The runner checks standard installation locations and `PATH`; set `VSCODE_EXECUTABLE_PATH` to an existing executable or macOS `.app` bundle to select a version explicitly. If no installation is found, the tests fail with setup instructions. The disabled Proposed API suite uses a separate test extension ID so existing grants for UCP do not affect the result. The release workflow provisions VS Code explicitly on its disposable CI runner before starting the tests.
+
 ## License
 
 [MIT @ SmallMain](./LICENSE)

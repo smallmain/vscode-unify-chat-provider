@@ -164,6 +164,14 @@ jobs:
         if: ${{ inputs.mode == 'full' }}
         run: npm run check
 
+      - name: Provision VS Code on CI runner
+        if: ${{ inputs.mode == 'full' }}
+        run: |
+          curl --fail --location --retry 3 \
+            https://update.code.visualstudio.com/latest/linux-deb-x64/stable \
+            --output "${RUNNER_TEMP}/vscode.deb"
+          sudo apt-get install --yes "${RUNNER_TEMP}/vscode.deb"
+
       - name: Run extension host tests
         if: ${{ inputs.mode == 'full' }}
         run: xvfb-run -a npm run test:e2e
