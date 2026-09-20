@@ -872,6 +872,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)                  |                                                                                      |                            |
 | [OpenRouter](https://openrouter.ai/)                                                                   | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [Details](#openrouter)     |       ✅        |
 | [Atlas Cloud](https://www.atlascloud.ai/docs/en/models/llm)                                           |                                                                                      |                            |
+| [OrcaRouter](https://docs.orcarouter.ai/)                                                             |                                                                                      | [Details](#orcarouter)      |
 | [AIHubMix](https://aihubmix.com/)                                                                      |                                                                                      |                            |       ✅        |
 | [Cerebras](https://www.cerebras.ai/)                                                                   | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
 | [Command Code](https://commandcode.ai/docs/provider)                                                   | <li>Automatic official model synchronization                                        |                            |
@@ -946,6 +947,12 @@ Experimental Supported Providers:
 | [Synthetic](https://synthetic.new/)                          | [Details](#synthetic)          |       ✅        |
 
 Long-Term Free Quotas:
+
+#### OrcaRouter
+
+Select the `OrcaRouter` built-in provider and enter your API key. It uses the [OpenAI-compatible Chat Completions API](https://docs.orcarouter.ai/api-reference/chat/create-a-chat-completion) at `https://api.orcarouter.ai/v1`.
+
+Add chat models from the official model list using the exact API IDs, such as `openai/gpt-4.1`. Automatic model synchronization is disabled by default because the catalog also contains image, video, and embedding models. Balance monitoring is not included in this preset.
 
 #### Kilo Code
 

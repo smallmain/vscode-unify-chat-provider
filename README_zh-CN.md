@@ -872,6 +872,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Hugging Face (Inference Providers)](https://huggingface.co/docs/inference-providers)         |                                                                                      |                       |
 | [OpenRouter](https://openrouter.ai/)                                                          | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [详情](#openrouter)   |    ✅    |
 | [Atlas Cloud](https://www.atlascloud.ai/docs/zh/models/llm)                                   |                                                                                      |                       |
+| [OrcaRouter](https://docs.orcarouter.ai/)                                                     |                                                                                      | [详情](#orcarouter)   |
 | [AIHubMix](https://aihubmix.com/)                                                             |                                                                                      |                       |    ✅    |
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
 | [Command Code](https://commandcode.ai/docs/provider)                                          | <li>自动同步官方模型                                                                 |                       |
@@ -946,6 +947,12 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Synthetic](https://synthetic.new/)                          | [详情](#synthetic)          |    ✅    |
 
 长期免费额度：
+
+#### OrcaRouter
+
+选择 `OrcaRouter` 内置供应商并填写 API Key。该配置使用 `https://api.orcarouter.ai/v1` 的 [OpenAI 兼容 Chat Completions API](https://docs.orcarouter.ai/api-reference/chat/create-a-chat-completion)。
+
+从官方模型列表中添加聊天模型，保留完整 API ID，例如 `openai/gpt-4.1`。由于目录还包含图片、视频和嵌入模型，默认不启用自动同步模型。此预设不包含余额监控。
 
 #### Kilo Code
 

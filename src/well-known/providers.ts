@@ -155,6 +155,16 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     autoFetchOfficialModels: true,
   },
   {
+    name: 'OrcaRouter',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.orcarouter.ai/v1',
+    authTypes: ['api-key'],
+    models: [],
+    // The catalog includes non-chat models; let users select their chat models.
+    autoFetchOfficialModels: false,
+  },
+  {
     name: 'Kilo Code',
     category: 'General',
     type: 'openai-chat-completion',
