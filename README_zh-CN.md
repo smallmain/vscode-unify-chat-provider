@@ -224,6 +224,25 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
    <img src="assets/screenshot-5.png" width="600" />
    </div>
 
+### A2Agent 配置示例
+
+通过现有 OpenAI Chat Completions 格式配置 A2Agent：运行 `Unify Chat Provider: 添加供应商`，填写以下字段：
+
+| 字段 | 值 |
+| --- | --- |
+| 名称 | `A2Agent`（或其它唯一名称） |
+| API 格式 | `OpenAI Chat Completion API`（`openai-chat-completion`） |
+| API 基础 URL | `https://api.a2agent.me/v1` |
+| 身份验证 | `API Key`，在身份验证界面输入 A2Agent 密钥 |
+
+现有客户端会发送 `Authorization: Bearer <API_KEY>`，并使用 `/v1/chat/completions`；不要在基础 URL 中包含 `/chat/completions`，也无需手动添加身份验证请求头。
+
+在 `模型` 中启用 `自动拉取官方模型`，通过需要身份验证的 `/v1/models` 接口获取模型列表，然后保存供应商。如果无法拉取，可通过 [管理模型](#管理模型) 手动添加 [A2Agent 模型目录](https://a2agent.me/models) 中的准确模型 ID。
+
+在 Copilot Chat 中选择已配置的模型，先发送一条简短的文本请求。请分别验证所用模型的流式输出、工具调用、图片输入和上下文限制；模型发现返回模型 ID，并不代表已验证这些能力。本配置示例不等同于实际兼容性测试或对供应商的背书。
+
+接口与身份验证约定请参阅 [A2Agent Chat Completions 文档](https://docs.a2agent.me/api-reference/chat-completions)。请勿在共享配置示例、Issue 或 PR 中包含真实 API Key。
+
 ## 一键迁移
 
 查看 [应用迁移支持表](#应用迁移支持表) 以了解支持一键迁移的应用和扩展。

@@ -224,6 +224,25 @@ This section uses DeepSeek as an example, adding the provider and two models.
    <img src="assets/screenshot-22.png" width="600" />
    </div>
 
+### A2Agent example
+
+To configure A2Agent through the existing OpenAI Chat Completions format, run `Unify Chat Provider: Add Provider` and enter:
+
+| Field | Value |
+| --- | --- |
+| Name | `A2Agent` (or another unique name) |
+| API Format | `OpenAI Chat Completion API` (`openai-chat-completion`) |
+| API Base URL | `https://api.a2agent.me/v1` |
+| Authentication | `API Key` — enter your A2Agent key in the authentication UI |
+
+The existing client sends `Authorization: Bearer <API_KEY>` and uses `/v1/chat/completions`; do not include `/chat/completions` in the base URL or add an authentication header manually.
+
+In `Models`, enable `Auto-Fetch Official Models` to request the authenticated `/v1/models` catalog, then save the provider. If discovery is unavailable, add the exact model IDs from the [A2Agent model catalog](https://a2agent.me/models) manually through [Manage Models](#manage-models).
+
+Select a configured model in Copilot Chat and start with a short text request. Verify streaming, tool calls, image inputs, and context limits separately for each model you intend to use; discovery returns model IDs and does not establish those capabilities. This configuration example is not a live compatibility test or a provider endorsement.
+
+See the [A2Agent Chat Completions documentation](https://docs.a2agent.me/api-reference/chat-completions) for the endpoint and authentication contract. Do not put real API keys in shared configuration examples, issues, or pull requests.
+
 ## One-Click Migration
 
 See the [Application Migration Support Table](#application-migration-support-table) to learn which apps and extensions are supported.
