@@ -42,6 +42,21 @@ Integrate multiple LLM API providers into VS Code's GitHub Copilot Chat using th
 - Search for [Unify Chat Provider](https://marketplace.visualstudio.com/items?itemName=SmallMain.vscode-unify-chat-provider) in the VS Code Extension Marketplace and install it.
 - Download the latest `.vsix` file from [GitHub Releases](https://github.com/smallmain/vscode-unify-chat-provider/releases), then install it in VS Code via `Install from VSIX...` or by dragging it into the Extensions view.
 
+## Sponsors
+
+<table>
+<tbody>
+<tr>
+<td width="180"><a href="#"><img src="./assets/sponsor/placeholder-logo.png" alt="AltName" width="150"></a></td>
+<td>Placeholder text.</td>
+</tr>
+</tbody>
+</table>
+
+---
+
+> To become a sponsor of the project, please contact smallmain@outlook.com.
+
 ## Quick Start
 
 If the provider you want to add is in the [Provider Support Table](#provider-support-table), use [One-Click Configuration](#one-click-configuration).
