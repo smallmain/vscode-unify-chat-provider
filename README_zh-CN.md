@@ -42,6 +42,22 @@ Unify Chat Provider
 - 在 VS Code 扩展市场搜索 [Unify Chat Provider](https://marketplace.visualstudio.com/items?itemName=SmallMain.vscode-unify-chat-provider) 并安装。
 - 通过 [GitHub Releases](https://github.com/smallmain/vscode-unify-chat-provider/releases) 下载最新的 `.vsix` 文件，在 VS Code 中通过 `从 VSIX 安装扩展...` 或拖动到扩展面板进行安装。
 
+
+## 赞助商
+
+<table>
+<tbody>
+<tr>
+<td width="180"><a href="#"><img src="./assets/sponsor/placeholder-logo.png" alt="AltName" width="150"></a></td>
+<td>Placeholder text.</td>
+</tr>
+</tbody>
+</table>
+
+---
+
+> To become a sponsor of the project, please contact smallmain@outlook.com.
+
 ## 快速开始
 
 如果你要添加的供应商在 [供应商支持表](#供应商支持表) 中，则使用 [一键配置](#一键配置)。
