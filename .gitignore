@@ -11,3 +11,4 @@ scripts/claude-proxy.log
 .env
 .env.local
 .env.*.local
+.vscode/

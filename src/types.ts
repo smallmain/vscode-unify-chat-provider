@@ -3,6 +3,7 @@ import type { ProviderType } from './client/definitions';
 import type { RetryConfig } from './utils';
 import type { TokenizerId } from './tokenizer/tokenizers';
 import type { BalanceConfig } from './balance/types';
+import type { RateLimitConfig } from './rate-limit';
 
 export type ContextCacheType = 'only-free' | 'allow-paid';
 
@@ -118,6 +119,14 @@ export interface ProviderConfig {
   autoFetchOfficialModels?: boolean;
   /** Context cache / prompt caching configuration. */
   contextCache?: ContextCacheConfig;
+  /**
+   * Rate-limit configuration for logical chat requests in this VS Code window.
+   * One token is consumed per request at the service entry point, covering
+   * HTTP, SSE, and WebSocket transports without sharing limits across windows.
+   *
+   * When `rpm` is 0 or unset, no rate limiting is applied.
+   */
+  rateLimit?: RateLimitConfig;
   /** Default code-completion capability settings for this provider. */
   completion?: CompletionConfig;
 }
