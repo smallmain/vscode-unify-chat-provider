@@ -25,15 +25,6 @@ export type WellKnownAuthTypeId = AuthMethod | WellKnownAuthPresetId;
 
 export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
   {
-    name: 'Tsubasa',
-    category: 'General',
-    type: 'openai-chat-completion',
-    baseUrl: 'https://api.tsubasa.sh/v1',
-    authTypes: ['api-key'],
-    models: ['tsubasa-fast', 'tsubasa-pro'],
-    autoFetchOfficialModels: false,
-  },
-  {
     name: 'Open AI',
     category: 'General',
     type: 'openai-responses',
@@ -270,6 +261,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://integrate.api.nvidia.com',
     authTypes: ['api-key'],
     models: [],
+  },
+  {
+    name: 'Tsubasa',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.tsubasa.sh/v1',
+    authTypes: ['api-key'],
+    models: ['tsubasa-fast', 'tsubasa-pro'],
+    autoFetchOfficialModels: false,
   },
   {
     name: 'Alibaba Cloud Model Studio (China)',

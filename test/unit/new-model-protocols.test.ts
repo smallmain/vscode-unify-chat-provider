@@ -142,6 +142,22 @@ async function requestBody(
 }
 
 describe('New model request protocols', () => {
+  it.each([
+    ['tsubasa-fast', 8192],
+    ['tsubasa-pro', 16384],
+  ])('serializes %s through Chat Completions with one token limit', async (id, maxTokens) => {
+    const body = await requestBody(
+      'https://api.tsubasa.sh/v1',
+      mergeWithWellKnownModel({ id }),
+    );
+    expect(body).toMatchObject({ model: id, max_tokens: maxTokens });
+    expect(body).not.toHaveProperty('max_completion_tokens');
+    expect(body).not.toHaveProperty('reasoning_effort');
+    expect(body).not.toHaveProperty('thinking');
+    expect(network.requests[0].url).toBe('https://api.tsubasa.sh/v1/chat/completions');
+    expect(network.requests[0].headers.get('Authorization')).toBe('Bearer test-key');
+  });
+
   it.each(['cn', 'sgp', 'ams'])(
     'preserves MiMo thinking and tool-call reasoning on the %s Token Plan',
     async (region) => {

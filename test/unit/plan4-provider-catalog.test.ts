@@ -56,6 +56,12 @@ describe('Plan 4 provider definitions', () => {
 });
 
 describe('Plan 4 well-known catalog', () => {
+  it('preserves the existing Chat Completions fallback for Codex imports', () => {
+    expect(WELL_KNOWN_PROVIDERS.find(
+      (provider) => provider.type === 'openai-chat-completion',
+    )?.name).toBe('Inception');
+  });
+
   it('resolves Tsubasa using one token-limit field and text-only models', () => {
     const provider = WELL_KNOWN_PROVIDERS.find(
       (candidate) => candidate.name === 'Tsubasa',
