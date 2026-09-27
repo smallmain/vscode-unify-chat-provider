@@ -51,10 +51,36 @@ describe('Plan 4 provider definitions', () => {
 
     expect(featureBlock).toContain("'api.inceptionlabs.ai'");
     expect(featureBlock).toContain("'api.mistral.ai'");
+    expect(featureBlock).toContain("'api.tsubasa.sh'");
   });
 });
 
 describe('Plan 4 well-known catalog', () => {
+  it('resolves Tsubasa using one token-limit field and text-only models', () => {
+    const provider = WELL_KNOWN_PROVIDERS.find(
+      (candidate) => candidate.name === 'Tsubasa',
+    );
+    if (!provider) throw new Error('Tsubasa provider is missing');
+    expect(provider).toMatchObject({
+      type: 'openai-chat-completion',
+      baseUrl: 'https://api.tsubasa.sh/v1',
+      authTypes: ['api-key'],
+      autoFetchOfficialModels: false,
+    });
+    const models = resolveProviderModels(provider);
+    expect(models.map((model) => model.id)).toEqual([
+      'tsubasa-fast', 'tsubasa-pro',
+    ]);
+    expect(models.map((model) => model.maxOutputTokens)).toEqual([8192, 16384]);
+    for (const model of models) {
+      expect(model).toMatchObject({
+        maxInputTokens: 32768,
+        stream: true,
+        capabilities: { toolCalling: false, imageInput: false },
+      });
+      expect(model.thinking).toBeUndefined();
+    }
+  });
   it('resolves the upgraded Kimi Code alias without capturing HighSpeed', () => {
     const provider = WELL_KNOWN_PROVIDERS.find(
       (candidate) => candidate.name === 'Moonshot AI (Coding Plan)',

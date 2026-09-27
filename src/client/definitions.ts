@@ -674,6 +674,7 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.OpenAIOnlyMaxTokens]: {
     supportedProviders: [
+      'api.tsubasa.sh',
       'ark.cn-beijing.volces.com',
       'ark.ap-southeast.bytepluses.com',
       'tokenhub.tencentmaas.com',

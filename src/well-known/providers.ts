@@ -25,6 +25,15 @@ export type WellKnownAuthTypeId = AuthMethod | WellKnownAuthPresetId;
 
 export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
   {
+    name: 'Tsubasa',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.tsubasa.sh/v1',
+    authTypes: ['api-key'],
+    models: ['tsubasa-fast', 'tsubasa-pro'],
+    autoFetchOfficialModels: false,
+  },
+  {
     name: 'Open AI',
     category: 'General',
     type: 'openai-responses',
