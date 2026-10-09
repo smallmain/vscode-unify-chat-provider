@@ -1,6 +1,6 @@
 import OpenAI from 'openai';
 import * as vscode from 'vscode';
-import type { AuthTokenInfo } from '../../auth/types';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
 import type { ProviderHttpLogger } from '../../logger';
 import {
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
@@ -444,8 +444,16 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
   }
 
   override async getAvailableModels(
-    _credential: AuthTokenInfo,
+    credential: AuthTokenInfo,
+    refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
   ): Promise<ModelConfig[]> {
+    // Only the ChatGPT OAuth backend lacks a usable /models endpoint; custom
+    // endpoints (e.g. local proxies with API-key auth) serve their own list.
+    if (this.config.auth?.method !== 'openai-codex') {
+      return super.getAvailableModels(credential, refreshCredential, signal);
+    }
+
     return [
       {
         id: 'gpt-6-astra',
