@@ -310,6 +310,7 @@ export async function runProviderFormScreen(
           timeout: draft.timeout ?? {},
           retry: draft.retry ?? {},
           proxy: draft.proxy ?? {},
+          rateLimit: draft.rateLimit ?? {},
           draft,
         },
       };

@@ -70,6 +70,7 @@ export const PROVIDER_CONFIG_KEYS = [
   'proxy',
   'autoFetchOfficialModels',
   'contextCache',
+  'rateLimit',
   'completion',
 ] as const satisfies ReadonlyArray<ProviderConfigPersistedKey>;
 
