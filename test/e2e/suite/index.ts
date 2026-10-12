@@ -1,6 +1,7 @@
 import * as assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
+import * as path from "node:path";
 import * as vscode from "vscode";
 
 const EXTENSION_ID = process.env["UCP_E2E_EXTENSION_ID"]
@@ -3163,6 +3164,46 @@ async function runAuthIsolationE2E(phase: AuthIsolationPhase): Promise<void> {
   console.log(`Extension Host auth isolation ${phase} E2E passed`);
 }
 
+async function runTsubasaCatalogE2E(extensionPath: string): Promise<void> {
+  const catalog: unknown = require(path.join(extensionPath, "out/well-known/providers.js"));
+  assert.ok(typeof catalog === "object" && catalog !== null);
+  assert.ok("WELL_KNOWN_PROVIDERS" in catalog && Array.isArray(catalog.WELL_KNOWN_PROVIDERS));
+  assert.ok("resolveProviderModels" in catalog && typeof catalog.resolveProviderModels === "function");
+  const preset: unknown = catalog.WELL_KNOWN_PROVIDERS.find(
+    (entry: unknown) => typeof entry === "object" && entry !== null && "name" in entry && entry.name === "Tsubasa",
+  );
+  assert.ok(typeof preset === "object" && preset !== null, "Tsubasa must be present in the native catalog");
+  const resolvedModels: unknown = catalog.resolveProviderModels(preset);
+  assert.ok(Array.isArray(resolvedModels));
+  const configuration = vscode.workspace.getConfiguration("unifyChatProvider");
+  const previousEndpoints = configuration.inspect("endpoints")?.globalValue;
+  try {
+    await configuration.update("endpoints", [{
+      ...preset,
+      auth: { method: "none" },
+      models: resolvedModels,
+    }], vscode.ConfigurationTarget.Global);
+    await delay(100);
+    const models = await vscode.lm.selectChatModels({ vendor: "unify-chat-provider" });
+    for (const [id, maxOutputTokens] of [["tsubasa-fast", 8192], ["tsubasa-pro", 16384]] as const) {
+      const model = models.find((candidate) => candidate.id.includes(`Tsubasa/${id}`));
+      assert.ok(model, `${id} must be selectable through the VS Code Language Model API`);
+      assert.equal(model.maxInputTokens, 32768);
+      const information = await vscode.commands.executeCommand<ProposedApiModelInformation[]>(
+        "unifyChatProvider.proposedApi.test.getModelInformation",
+      );
+      const raw = information.find((candidate) => candidate.id.includes(`Tsubasa/${id}`));
+      assert.ok(raw);
+      assert.equal(raw.capabilities.toolCalling, false);
+      assert.equal(raw.capabilities.imageInput, false);
+      assert.equal(Reflect.get(raw, "maxOutputTokens"), maxOutputTokens);
+    }
+  } finally {
+    await configuration.update("endpoints", previousEndpoints, vscode.ConfigurationTarget.Global);
+  }
+  console.log("Extension Host Tsubasa native catalog/model selection E2E passed (no inference)");
+}
+
 export async function run(): Promise<void> {
   const authIsolationPhase = parseAuthIsolationPhase(
     process.env["UCP_E2E_AUTH_ISOLATION_PHASE"],
@@ -3192,6 +3233,8 @@ export async function run(): Promise<void> {
 
   await activateWithPendingCopilot();
   assert.equal(extension.isActive, true, "Extension should activate");
+  await runTsubasaCatalogE2E(extension.extensionPath);
+  if (process.env["UCP_E2E_TSUBASA_ONLY"] === "1") return;
 
   const commands = await vscode.commands.getCommands(true);
   assert.ok(

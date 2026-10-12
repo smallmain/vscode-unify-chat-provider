@@ -263,6 +263,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     models: [],
   },
   {
+    name: 'Tsubasa',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.tsubasa.sh/v1',
+    authTypes: ['api-key'],
+    models: ['tsubasa-fast', 'tsubasa-pro'],
+    autoFetchOfficialModels: false,
+  },
+  {
     name: 'Alibaba Cloud Model Studio (China)',
     category: 'General',
     type: 'openai-chat-completion',

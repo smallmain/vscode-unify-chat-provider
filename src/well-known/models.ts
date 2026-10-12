@@ -259,6 +259,22 @@ function mergeModelConfig(
  */
 const _WELL_KNOWN_MODELS = [
   {
+    id: 'tsubasa-fast',
+    name: 'Tsubasa Fast',
+    maxInputTokens: 32768,
+    maxOutputTokens: 8192,
+    stream: true,
+    capabilities: { toolCalling: false, imageInput: false },
+  },
+  {
+    id: 'tsubasa-pro',
+    name: 'Tsubasa Pro',
+    maxInputTokens: 32768,
+    maxOutputTokens: 16384,
+    stream: true,
+    capabilities: { toolCalling: false, imageInput: false },
+  },
+  {
     id: 'zeta',
     overrides: ['zed-industries/zeta'],
     name: 'Zeta',
