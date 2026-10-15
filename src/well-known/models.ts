@@ -2446,7 +2446,7 @@ const _WELL_KNOWN_MODELS = [
     id: 'deepseek-flash',
     overrides: ['deepseek-v4.1-flash', 'deepseek-ai/DeepSeek-V4.1-Flash'],
     name: 'DeepSeek V4.1 Flash',
-    maxInputTokens: 1000000,
+    maxInputTokens: 606784,
     maxOutputTokens: 393216,
     stream: true,
     tokenizer: 'deepseek',
