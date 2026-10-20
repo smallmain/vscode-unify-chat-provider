@@ -1037,35 +1037,23 @@ export class OpenAIResponsesProvider implements ApiProvider {
         throw new Error('Thinking parts can only appear in assistant messages');
       }
       const metadata = part.metadata as ThinkingBlockMetadata | undefined;
-      const id = part.id ?? metadata?.signature ?? `reasoning_${randomUUID()}`;
-      const completeThinking = metadata?._completeThinking;
-      const contents =
-        typeof part.value === 'string' ? [part.value] : part.value;
-      if (metadata?.redactedData) {
-        return {
-          type: 'reasoning',
-          id,
-          summary: [],
-          encrypted_content: metadata.redactedData,
-        };
-      } else {
-        return {
-          type: 'reasoning',
-          id,
-          summary: [],
-          content: completeThinking
-            ? [
-                {
-                  type: 'reasoning_text',
-                  text: completeThinking,
-                },
-              ]
-            : contents.map((text) => ({
-                type: 'reasoning_text',
-                text,
-              })),
-        };
+      const encryptedContent = [
+        metadata?.redactedData,
+        metadata?.encrypted_content,
+        metadata?.encrypted,
+      ].find(
+        (value): value is string => typeof value === 'string' && value.length > 0,
+      );
+      if (!encryptedContent) {
+        return undefined;
       }
+      const id = part.id ?? metadata?.signature ?? `reasoning_${randomUUID()}`;
+      return {
+        type: 'reasoning',
+        id,
+        summary: [],
+        encrypted_content: encryptedContent,
+      };
     } else if (part instanceof vscode.LanguageModelDataPart) {
       if (isCacheControlMarker(part)) {
         // ignore it, just use the officially recommended caching strategy.

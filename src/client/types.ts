@@ -43,6 +43,8 @@ export interface ThinkingBlockMetadata {
    * VSCode use this.
    */
   redactedData?: string;
+  encrypted_content?: string;
+  encrypted?: string;
 
   /**
    * The complete thinking content (if available).

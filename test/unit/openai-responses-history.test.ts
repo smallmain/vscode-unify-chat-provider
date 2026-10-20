@@ -166,12 +166,6 @@ function toolRound(round: number): vscode.LanguageModelChatRequestMessage[] {
 function expectedToolInput(round: number): object[] {
   return [
     {
-      type: 'reasoning',
-      id: `rs_byok_${round}`,
-      summary: [],
-      content: [{ type: 'reasoning_text', text: 'inspect the file' }],
-    },
-    {
       type: 'function_call',
       call_id: `call-${round}`,
       name: 'inspect',
@@ -237,6 +231,84 @@ async function send(
 }
 
 describe('Responses markerless history requests', () => {
+  it.each(['redactedData', 'encrypted_content', 'encrypted'])(
+    'preserves %s reasoning metadata without replaying display-only thinking',
+    async (metadataKey) => {
+      const round = toolRound(0);
+      round[0] = message(
+        vscode.LanguageModelChatMessageRole.Assistant,
+        new vscode.LanguageModelThinkingPart('Encrypted thinking...'),
+        new vscode.LanguageModelThinkingPart('Visible summary', 'rs_byok_summary'),
+        new vscode.LanguageModelThinkingPart('', 'rs_original', {
+          [metadataKey]: 'opaque-reasoning',
+        }),
+      );
+
+      const request = await send([
+        message(
+          vscode.LanguageModelChatMessageRole.User,
+          new vscode.LanguageModelTextPart('question'),
+        ),
+        ...round,
+        ...toolRound(1),
+      ]);
+
+      expect(request).toMatchObject({
+        input: [
+          { role: 'user', content: [{ type: 'input_text', text: 'question' }] },
+          {
+            type: 'reasoning',
+            id: 'rs_original',
+            summary: [],
+            encrypted_content: 'opaque-reasoning',
+          },
+          ...expectedToolInput(0),
+          ...expectedToolInput(1),
+        ],
+      });
+      expect(JSON.stringify(request)).not.toContain('reasoning_text');
+      expect(JSON.stringify(request)).not.toContain('Encrypted thinking...');
+      expect(JSON.stringify(request)).not.toContain('Visible summary');
+    },
+  );
+
+  it.each([
+    new vscode.LanguageModelThinkingPart('Visible summary', 'rs_byok_summary'),
+    new vscode.LanguageModelThinkingPart(['First summary', 'Second summary']),
+    new vscode.LanguageModelThinkingPart('', undefined, {
+      _completeThinking: 'Display-only complete thinking',
+    }),
+    new vscode.LanguageModelThinkingPart('', 'rs_empty'),
+  ])(
+    'does not synthesize reasoning from display text or empty thinking (%#)',
+    (part) => {
+      const provider = new HistoryTestProvider(config);
+      expect(
+        provider.convertPart(vscode.LanguageModelChatMessageRole.Assistant, part),
+      ).toBeUndefined();
+    },
+  );
+
+  it('omits response-only fields when replaying encrypted reasoning', () => {
+    const provider = new HistoryTestProvider(config);
+    const input = provider.convertPart(
+      vscode.LanguageModelChatMessageRole.Assistant,
+      new vscode.LanguageModelThinkingPart(
+        'Encrypted thinking...',
+        'rs_original',
+        { encrypted_content: 'opaque-reasoning' },
+      ),
+    );
+    expect(input).toEqual({
+      type: 'reasoning',
+      id: 'rs_original',
+      summary: [],
+      encrypted_content: 'opaque-reasoning',
+    });
+    expect(input).not.toHaveProperty('content');
+    expect(input).not.toHaveProperty('status');
+  });
+
   it.each([false, true])(
     'sends full tool history with proxy previous-response metadata=%s',
     async (withPreviousResponse) => {
