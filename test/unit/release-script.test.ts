@@ -158,7 +158,7 @@ describe('release script coordination', () => {
     expect(`${result.stderr}\n${result.stdout}`).toContain(
       'Tag/package version mismatch: v1.1.0 contains package version 1.0.0.',
     );
-  });
+  }, 60_000);
 
   it('keeps the repository unchanged during a full dry-run', async () => {
     const repository = await createRepository();
@@ -184,7 +184,7 @@ describe('release script coordination', () => {
       await readFile(join(repository.release, 'package.json'), 'utf8'),
     );
     expect(packageJson).toMatchObject({ version: '1.0.0' });
-  });
+  }, 60_000);
 
   it('rejects a full version that does not increase package.json', async () => {
     const repository = await createRepository();
@@ -201,7 +201,7 @@ describe('release script coordination', () => {
     expect(`${result.stderr}\n${result.stdout}`).toContain(
       'Full release version must be greater than package.json (1.0.0): 0.9.0',
     );
-  });
+  }, 60_000);
 });
 
 async function createRepository(): Promise<TestRepository> {

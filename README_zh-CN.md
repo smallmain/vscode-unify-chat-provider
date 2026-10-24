@@ -1202,7 +1202,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 
 ## 开发
 
-环境要求：Node.js 24.12 或更高版本。
+环境要求：Node.js 24.22.1 或更高版本。
 
 - Build: `npm run compile`
 - Watch: `npm run watch`

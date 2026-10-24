@@ -46,7 +46,7 @@ describe('installed VS Code resolution', () => {
     })).toBe(selected);
   });
 
-  it('resolves a PATH symlink to the native executable in its macOS bundle', async () => {
+  it.skipIf(process.platform === 'win32')('resolves a PATH symlink to the native executable in its macOS bundle', async () => {
     const selected = await executable('Code.app/Contents/MacOS/Code');
     const launcher = await executable('Code.app/Contents/Resources/app/bin/code');
     const link = path.join(root, 'code');

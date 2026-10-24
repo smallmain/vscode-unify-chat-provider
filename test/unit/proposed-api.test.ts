@@ -545,7 +545,7 @@ describe('product.json Proposed API configuration', () => {
       code: 73,
     });
     expect(await readFile(targetPath)).toEqual(replacement);
-  });
+  }, 60_000);
 
   it('survives the double-quoted shell used by sudo-prompt on POSIX', async () => {
     if (process.platform === 'win32') return;

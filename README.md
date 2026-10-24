@@ -1201,7 +1201,7 @@ The applications listed below support [One-Click Migration](#one-click-migration
 
 ## Development
 
-Prerequisite: Node.js 24.12 or later.
+Prerequisite: Node.js 24.22.1 or later.
 
 - Build: `npm run compile`
 - Watch: `npm run watch`
