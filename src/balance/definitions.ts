@@ -20,6 +20,7 @@ import { CodexBalanceProvider } from './providers/codex';
 import { SyntheticBalanceProvider } from './providers/synthetic';
 import { MiniMaxBalanceProvider } from './providers/minimax';
 import { LiteLLMBalanceProvider } from './providers/litellm';
+import { ZhiPuBalanceProvider } from './providers/zhipu';
 
 export interface BalanceMethodDefinition {
   id: Exclude<BalanceMethod, 'none'>;
@@ -259,6 +260,19 @@ export const BALANCE_METHODS = {
     resolveForExport: LiteLLMBalanceProvider.resolveForExport,
     normalizeOnImport: LiteLLMBalanceProvider.normalizeOnImport,
     prepareForDuplicate: LiteLLMBalanceProvider.prepareForDuplicate,
+  },
+  zhipu: {
+    id: 'zhipu',
+    label: t('ZhiPu Balance'),
+    description: t('Monitor ZhiPu Coding Plan quota and PayGo balance'),
+    category: 'General',
+    ctor: ZhiPuBalanceProvider,
+    supportsSensitiveDataInSettings:
+      ZhiPuBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: ZhiPuBalanceProvider.redactForExport,
+    resolveForExport: ZhiPuBalanceProvider.resolveForExport,
+    normalizeOnImport: ZhiPuBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: ZhiPuBalanceProvider.prepareForDuplicate,
   },
 } as const satisfies Record<
   Exclude<BalanceMethod, 'none'>,

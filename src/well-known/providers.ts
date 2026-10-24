@@ -703,6 +703,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -722,6 +723,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -740,6 +742,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.z.ai/api/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -759,6 +762,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',

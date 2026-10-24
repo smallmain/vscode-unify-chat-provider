@@ -840,6 +840,18 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "zhipu",
+                        "description": "%configuration.endpoints.balanceProvider.method.zhipu.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "sub2api",
                         "description": "%configuration.endpoints.balanceProvider.method.sub2api.description%"
                       }

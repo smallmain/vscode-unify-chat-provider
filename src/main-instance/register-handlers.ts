@@ -656,6 +656,7 @@ function isBalanceConfig(value: unknown): value is BalanceConfig {
     case 'codex':
     case 'synthetic':
     case 'minimax':
+    case 'zhipu':
       return true;
     case 'claude-relay-service':
       return hasOptionalStringFields(value, ['baseUrl']);

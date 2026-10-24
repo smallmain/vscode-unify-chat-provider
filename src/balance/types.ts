@@ -17,7 +17,8 @@ export type BalanceMethod =
   | 'codex'
   | 'synthetic'
   | 'minimax'
-  | 'litellm';
+  | 'litellm'
+  | 'zhipu';
 
 export interface NoBalanceConfig {
   method: 'none';
@@ -100,6 +101,10 @@ export interface LiteLLMBalanceConfig {
   method: 'litellm';
 }
 
+export interface ZhiPuBalanceConfig {
+  method: 'zhipu';
+}
+
 export type BalanceConfig =
   | NoBalanceConfig
   | MoonshotAIBalanceConfig
@@ -116,7 +121,8 @@ export type BalanceConfig =
   | CodexBalanceConfig
   | SyntheticBalanceConfig
   | MiniMaxBalanceConfig
-  | LiteLLMBalanceConfig;
+  | LiteLLMBalanceConfig
+  | ZhiPuBalanceConfig;
 
 export type BalanceMetricType =
   | 'amount'
@@ -307,4 +313,10 @@ export function isLiteLLMBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is LiteLLMBalanceConfig {
   return config?.method === 'litellm';
+}
+
+export function isZhiPuBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is ZhiPuBalanceConfig {
+  return config?.method === 'zhipu';
 }
