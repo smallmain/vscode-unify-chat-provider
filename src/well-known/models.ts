@@ -39,6 +39,21 @@ const OPENAI_GPT_6_ASTRA_REASONING_EFFORTS = [
   'medium',
   'low',
 ] as const;
+const OPENAI_GPT_6_REASONING_EFFORTS = [
+  'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+  'none',
+] as const;
+const OPENAI_GPT_6_1_REASONING_EFFORTS = [
+  'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
 const OPENAI_STANDARD_REASONING_EFFORTS = [
   'high',
   'medium',
@@ -66,6 +81,14 @@ const DEEPSEEK_V4_REASONING_EFFORTS = ['max', 'high','low', 'none'] as const;
 const GLM_5_2_REASONING_EFFORTS = ['max', 'high', 'none'] as const;
 const GLM_5_3_REASONING_EFFORTS = ['max', 'high', 'low'] as const;
 const KIMI_K3_REASONING_EFFORTS = ['max', 'high', 'low'] as const;
+const KIMI_K3_1_REASONING_EFFORTS = ['max', 'high', 'low'] as const;
+const MINIMAX_M3_1_REASONING_EFFORTS = [
+  'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
 const NVIDIA_MINIMAX_REASONING_EFFORTS = [
   'high',
   'medium',
@@ -99,6 +122,13 @@ const ANTHROPIC_OPUS_5_REASONING_EFFORTS = [
   'medium',
   'low',
 ] as const;
+const ANTHROPIC_5_5_REASONING_EFFORTS = [
+  'max',
+  'xhigh',
+  'high',
+  'medium',
+  'low',
+] as const;
 const ANTHROPIC_SONNET_5_REASONING_EFFORTS = [
   'xhigh',
   'high',
@@ -112,6 +142,7 @@ const ANTHROPIC_OPUS_4_6_REASONING_EFFORTS = [
   'low',
 ] as const;
 const ANTHROPIC_STANDARD_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
+const GEMINI_4_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const GEMINI_3_1_PRO_REASONING_EFFORTS = ['high', 'medium', 'low'] as const;
 const GEMINI_3_PRO_REASONING_EFFORTS = ['high', 'low'] as const;
 const GEMINI_3_FLASH_REASONING_EFFORTS = [
@@ -693,6 +724,84 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    // https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html
+    id: 'claude-opus-5-5',
+    name: 'Claude Opus 5.5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'medium',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_5_5_REASONING_EFFORTS,
+          'medium',
+        ),
+      ),
+    ],
+  },
+  {
+    // https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-sonnet-5-5.html
+    id: 'claude-sonnet-5-5',
+    name: 'Claude Sonnet 5.5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'high',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_5_5_REASONING_EFFORTS,
+          'high',
+        ),
+      ),
+    ],
+  },
+  {
+    // https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-haiku-5-5.html
+    id: 'claude-haiku-5-5',
+    name: 'Claude Haiku 5.5',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 128000,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'medium',
+      summary: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'multi-find-replace',
+    },
+    presetTemplates: [
+      withThinkingSummaryAuto(
+        anthropicAdaptiveReasoningEffort(
+          ANTHROPIC_5_5_REASONING_EFFORTS,
+          'medium',
+        ),
+      ),
+    ],
+  },
+  {
     id: 'claude-fable-5-1',
     name: 'Claude Fable 5.1',
     maxInputTokens: 1000000,
@@ -1134,6 +1243,92 @@ const _WELL_KNOWN_MODELS = [
     },
     presetTemplates: [
       openAiReasoningEffort(OPENAI_GPT_6_ASTRA_REASONING_EFFORTS, 'max'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
+  },
+  {
+    // https://developers.openai.com/api/docs/models/gpt-6.1-sol
+    id: 'gpt-6.1-sol',
+    overrides: [
+      {
+        // GPT-6.1 Sol tool calling requires Responses on the official API.
+        matchers: [
+          (provider) =>
+            provider.type === 'openai-chat-completion' &&
+            matchProvider(provider.baseUrl, 'api.openai.com'),
+        ],
+        config: { capabilities: { toolCalling: false } },
+      },
+    ],
+    name: 'GPT-6.1 Sol',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_6_1_REASONING_EFFORTS, 'medium'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
+  },
+  {
+    // https://developers.openai.com/api/docs/models/gpt-6-sol
+    id: 'gpt-6-sol',
+    name: 'GPT-6 Sol',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_6_REASONING_EFFORTS, 'medium'),
+      reasoningMode(),
+      reasoningContext(),
+    ],
+  },
+  {
+    // https://developers.openai.com/api/docs/models/gpt-6-luna
+    id: 'gpt-6-luna',
+    name: 'GPT-6 Luna',
+    maxInputTokens: 1050000,
+    maxOutputTokens: 128000,
+    stream: true,
+    tokenizer: 'openai',
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+      mode: 'standard',
+      context: 'auto',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+      editTools: 'apply-patch',
+    },
+    presetTemplates: [
+      openAiReasoningEffort(OPENAI_GPT_6_REASONING_EFFORTS, 'medium'),
       reasoningMode(),
       reasoningContext(),
     ],
@@ -2072,6 +2267,34 @@ const _WELL_KNOWN_MODELS = [
     },
   },
   {
+    // https://platform.minimax.io/docs/api-reference/text-anthropic-api.md
+    id: 'MiniMax-M3.1-Flash',
+    overrides: [
+      {
+        matchers: ['api.minimaxi.com/anthropic', 'api.minimax.io/anthropic'],
+        config: {
+          id: 'MiniMax-M3.1-Flash-Preview',
+        },
+      },
+    ],
+    name: 'MiniMax-M3.1-Flash',
+    maxInputTokens: 1000000,
+    maxOutputTokens: 524288,
+    stream: true,
+    thinking: {
+      type: 'auto',
+      effort: 'max',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    temperature: 1.0,
+    presetTemplates: [
+      anthropicAdaptiveReasoningEffort(MINIMAX_M3_1_REASONING_EFFORTS, 'max'),
+    ],
+  },
+  {
     id: 'MiniMax-M3',
     name: 'MiniMax-M3',
     maxInputTokens: 1000000,
@@ -2845,6 +3068,76 @@ const _WELL_KNOWN_MODELS = [
     temperature: 1.0,
   },
   {
+    // https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart.md
+    id: 'kimi-k3.1-pro',
+    overrides: [
+      {
+        matchers: ['api.kimi.com/coding', 'api.kimi.ai/coding'],
+        config: {
+          id: 'k3.1-pro',
+          thinking: {
+            type: 'enabled',
+            effort: 'high',
+          },
+          maxOutputTokens: 131072,
+          presetTemplates: [
+            openAiReasoningEffort(KIMI_K3_1_REASONING_EFFORTS, 'high'),
+          ],
+        },
+      },
+    ],
+    name: 'Kimi K3.1 Pro',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 1048576,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'max',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      openAiReasoningEffort(KIMI_K3_1_REASONING_EFFORTS, 'max'),
+    ],
+  },
+  {
+    // https://platform.kimi.ai/docs/guide/kimi-k3-1-pro-quickstart.md
+    id: 'kimi-k3.1-pro-highspeed',
+    overrides: [
+      {
+        matchers: ['api.kimi.com/coding', 'api.kimi.ai/coding'],
+        config: {
+          id: 'k3.1-pro-highspeed',
+          thinking: {
+            type: 'enabled',
+            effort: 'high',
+          },
+          maxOutputTokens: 131072,
+          presetTemplates: [
+            openAiReasoningEffort(KIMI_K3_1_REASONING_EFFORTS, 'high'),
+          ],
+        },
+      },
+    ],
+    name: 'Kimi K3.1 Pro Highspeed',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 1048576,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'max',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      openAiReasoningEffort(KIMI_K3_1_REASONING_EFFORTS, 'max'),
+    ],
+  },
+  {
     id: 'kimi-k3',
     overrides: [
       {
@@ -2868,6 +3161,25 @@ const _WELL_KNOWN_MODELS = [
     },
     presetTemplates: [
       openAiReasoningEffort(KIMI_K3_REASONING_EFFORTS, 'max'),
+    ],
+  },
+  {
+    // https://www.kimi.com/code/docs/en/kimi-code/models.html
+    id: 'k3-256k',
+    name: 'Kimi K3 256K',
+    maxInputTokens: 262144,
+    maxOutputTokens: 131072,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'high',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      openAiReasoningEffort(KIMI_K3_REASONING_EFFORTS, 'high'),
     ],
   },
   {
@@ -5337,6 +5649,26 @@ const _WELL_KNOWN_MODELS = [
     },
     presetTemplates: [
       geminiReasoningEffort(GEMINI_3_FLASH_REASONING_EFFORTS, 'medium'),
+    ],
+  },
+  {
+    // https://ai.google.dev/gemini-api/docs/models/gemini-4-argon
+    id: 'gemini-4-argon',
+    overrides: ['models/gemini-4-argon'],
+    name: 'Gemini 4 Argon',
+    maxInputTokens: 1048576,
+    maxOutputTokens: 65536,
+    stream: true,
+    thinking: {
+      type: 'enabled',
+      effort: 'medium',
+    },
+    capabilities: {
+      toolCalling: true,
+      imageInput: true,
+    },
+    presetTemplates: [
+      geminiReasoningEffort(GEMINI_4_REASONING_EFFORTS, 'medium'),
     ],
   },
   {
