@@ -1249,7 +1249,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     const baseModelId = getBaseModelId(model.id).toLowerCase();
     const family = model.family?.trim().toLowerCase();
-    const supportsMaxEffort = /^gpt-(?:5\.6|6-astra)(?:-|$)/;
+    const supportsMaxEffort = /^gpt-(?:5\.6|6-astra|6(?:\.1)?-sol|6\.1-terra|6-luna)(?:-|$)/;
     return supportsMaxEffort.test(baseModelId) ||
       (family !== undefined && supportsMaxEffort.test(family))
       ? 'max'
