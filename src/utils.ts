@@ -987,7 +987,10 @@ export function isRetryableNetworkError(
 
 const RETRYABLE_STREAM_READ_ERROR_CODES = new Set([
   'stream_read_error',
+  'upstream_http2_stream_error',
 ]);
+
+const RETRYABLE_STREAM_READ_ERROR_TYPES = new Set(['upstream_error']);
 
 export class RetryableStreamReadError extends Error {
   constructor(cause: Error) {
@@ -1006,6 +1009,7 @@ function readStreamErrorStringField(
 
 function getRetryableStreamReadErrorFields(error: unknown): {
   code?: string;
+  type?: string;
   message?: string;
 } {
   if (!isRecord(error)) {
@@ -1018,6 +1022,11 @@ function getRetryableStreamReadErrorFields(error: unknown): {
       readStreamErrorStringField(error, 'code') ??
       (nestedError
         ? readStreamErrorStringField(nestedError, 'code')
+        : undefined),
+    type:
+      readStreamErrorStringField(error, 'type') ??
+      (nestedError
+        ? readStreamErrorStringField(nestedError, 'type')
         : undefined),
     message:
       (error instanceof Error ? error.message : undefined) ??
@@ -1051,8 +1060,11 @@ export function isRetryableStreamReadError(error: unknown): boolean {
   while (current !== undefined && !seen.has(current)) {
     seen.add(current);
 
-    const { code, message } = getRetryableStreamReadErrorFields(current);
+    const { code, type, message } = getRetryableStreamReadErrorFields(current);
     if (code && RETRYABLE_STREAM_READ_ERROR_CODES.has(code)) {
+      return true;
+    }
+    if (type && RETRYABLE_STREAM_READ_ERROR_TYPES.has(type)) {
       return true;
     }
 
@@ -1068,6 +1080,9 @@ export function isRetryableStreamReadError(error: unknown): boolean {
         normalizedMessage.includes("stream_read_error") ||
         normalizedMessage.includes("stream read error") ||
         normalizedMessage.includes("servers are currently overloaded") ||
+        normalizedMessage.includes("upstream stream returned an error payload") ||
+        normalizedMessage.includes("upstream service temporarily unavailable") ||
+        normalizedMessage.includes("closed before response.completed") ||
         isInternalStreamError
       ) {
         return true;
