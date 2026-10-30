@@ -33,6 +33,7 @@ vi.mock('vscode', () => {
 import { FeatureId } from '../../src/client/definitions';
 import { GoogleAIStudioProvider } from '../../src/client/google/ai-studio-client';
 import { OpenAIChatCompletionProvider } from '../../src/client/openai/chat-completion-client';
+import { OpenAICodexProvider } from '../../src/client/openai/codex-client';
 import { OpenAIResponsesProvider } from '../../src/client/openai/responses-client';
 import { isFeatureSupported } from '../../src/client/utils';
 import {
@@ -41,6 +42,7 @@ import {
 } from '../../src/preset-templates';
 import type { ModelConfig, ProviderConfig } from '../../src/types';
 import { mergeWithWellKnownModel } from '../../src/well-known/models';
+import { reasoningEffort } from '../../src/well-known/preset-templates';
 import {
   resolveProviderModels,
   WELL_KNOWN_PROVIDERS,
@@ -159,6 +161,31 @@ describe('GPT-6 Astra provider and request compatibility', () => {
       maxInputTokens: 1050000,
       maxOutputTokens: 128000,
     });
+  });
+});
+
+describe('Codex advertised reasoning support', () => {
+  it('honors max only for Codex OAuth models advertising that preset', () => {
+    const config: ProviderConfig = {
+      ...openaiConfig,
+      type: 'openai-codex',
+      auth: { method: 'openai-codex', bindingId: 'codex' },
+    };
+    const model: ModelConfig = {
+      id: 'gpt-6.1-sol',
+      thinking: { type: 'enabled', effort: 'max' },
+      presetTemplates: [reasoningEffort({ supported: ['medium', 'max'], default: 'medium' })],
+    };
+    const codex = new OpenAICodexProvider(config);
+    expect(invokeBuilder(codex, 'buildReasoningParams', [model, false]))
+      .toEqual({ reasoning: { effort: 'max' } });
+    expect(invokeBuilder(codex, 'buildReasoningParams', [
+      { ...model, presetTemplates: undefined }, false,
+    ])).toEqual({ reasoning: { effort: 'xhigh' } });
+    expect(invokeBuilder(new OpenAIResponsesProvider(openaiConfig), 'buildReasoningParams', [model, false]))
+      .toEqual({ reasoning: { effort: 'xhigh' } });
+    expect(invokeBuilder(new OpenAICodexProvider({ ...config, auth: { method: 'api-key' } }), 'buildReasoningParams', [model, false]))
+      .toEqual({ reasoning: { effort: 'xhigh' } });
   });
 });
 

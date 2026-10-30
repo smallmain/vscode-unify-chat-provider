@@ -1,7 +1,7 @@
 import OpenAI from 'openai';
 import * as vscode from 'vscode';
-import type { AuthTokenInfo } from '../../auth/types';
-import type { ProviderHttpLogger } from '../../logger';
+import type { AuthTokenInfo, AuthTokenRefresh } from '../../auth/types';
+import { createSimpleHttpLogger, type ProviderHttpLogger } from '../../logger';
 import {
   DEFAULT_NORMAL_TIMEOUT_CONFIG,
   FetchMode,
@@ -9,7 +9,7 @@ import {
   resolveChatNetwork,
   resolveSdkTotalTimeoutMs,
 } from '../../utils';
-import type { ModelConfig } from '../../types';
+import type { ModelConfig, ThinkingEffort } from '../../types';
 import { createCustomFetch, getToken } from '../utils';
 import {
   OpenAIResponsesProvider,
@@ -18,8 +18,11 @@ import {
 } from './responses-client';
 import { randomUUID } from 'crypto';
 import { codexBaseInstructionsForModel } from './codex-instructions';
+import { reasoningEffort, verbosity } from '../../well-known/preset-templates';
 
 const CODEX_API_ENDPOINT = 'https://chatgpt.com/backend-api/codex/responses';
+const CODEX_LATEST_RELEASE_URL =
+  'https://api.github.com/repos/openai/codex/releases/latest';
 // Align with CLIProxyAPI internal/runtime/executor/codex_executor.go defaults.
 const CODEX_USER_AGENT =
   'codex-tui/0.135.0 (Mac OS 26.5.0; arm64) iTerm.app/3.6.10 (codex-tui; 0.135.0)';
@@ -39,16 +42,131 @@ const CODEX_COMMON_REQUEST_FIELDS_TO_DELETE = [
   'frequency_penalty',
   'presence_penalty',
 ] as const;
-const CODEX_REASONING_SUMMARY_DEFAULTS = {
-  maxOutputTokens: undefined,
-  thinking: {
-    type: 'enabled',
-    effort: 'xhigh',
-    summary: 'auto',
-  },
-} satisfies Pick<ModelConfig, 'maxOutputTokens' | 'thinking'>;
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+async function getCodexModelsClientVersion(
+  fetchWithNetwork: typeof fetch,
+  signal?: AbortSignal,
+): Promise<string> {
+  signal?.throwIfAborted();
+  const response = await fetchWithNetwork(CODEX_LATEST_RELEASE_URL, {
+    method: 'GET',
+    headers: {
+      Accept: 'application/vnd.github+json',
+      'User-Agent': 'unify-chat-provider',
+    },
+    signal,
+    redirect: 'error',
+  });
+  if (!response.ok) {
+    throw new Error(
+      `Failed to get latest Codex version: HTTP ${response.status}`,
+    );
+  }
+  const release: unknown = await response.json();
+  const tag = isRecord(release) ? release['tag_name'] : undefined;
+  const version =
+    typeof tag === 'string'
+      ? /^rust-v(\d+\.\d+\.\d+)$/.exec(tag)?.[1]
+      : undefined;
+  if (
+    !version ||
+    !isRecord(release) ||
+    release['draft'] === true ||
+    release['prerelease'] === true
+  ) {
+    throw new Error('Failed to get latest Codex version: unexpected release');
+  }
+  signal?.throwIfAborted();
+  return version;
+}
+
+function isThinkingEffort(value: unknown): value is ThinkingEffort {
+  return (
+    value === 'none' ||
+    value === 'minimal' ||
+    value === 'low' ||
+    value === 'medium' ||
+    value === 'high' ||
+    value === 'xhigh' ||
+    value === 'max'
+  );
+}
+
+function parseCodexModels(raw: unknown): ModelConfig[] {
+  if (!isRecord(raw) || !Array.isArray(raw['models'])) {
+    throw new Error('Failed to get available models: unexpected Codex response');
+  }
+
+  const models: ModelConfig[] = [];
+  for (const item of raw['models']) {
+    if (
+      !isRecord(item) ||
+      item['visibility'] !== 'list' ||
+      item['supported_in_api'] === false ||
+      typeof item['slug'] !== 'string' ||
+      !item['slug'].trim()
+    ) {
+      continue;
+    }
+    const contextWindow = item['context_window'];
+    const name = item['display_name'];
+    const levels = Array.isArray(item['supported_reasoning_levels'])
+      ? item['supported_reasoning_levels']
+          .filter(isRecord)
+          .map((level) => level['effort'])
+          .filter(isThinkingEffort)
+      : [];
+    const defaultEffort = item['default_reasoning_level'];
+    const effort = isThinkingEffort(defaultEffort) && levels.includes(defaultEffort)
+      ? defaultEffort
+      : levels[0];
+    const summary = item['default_reasoning_summary'];
+    const defaultVerbosity = item['default_verbosity'];
+    const presetTemplates = [
+      ...(levels.length ? [reasoningEffort({ supported: levels, default: effort })] : []),
+      ...(item['support_verbosity'] === true ? [verbosity()] : []),
+    ];
+    models.push({
+      id: item['slug'].trim(),
+      ...(typeof name === 'string' && name.trim()
+        ? { name: name.trim().replace(/^(GPT-\d+(?:\.\d+)?)-/i, '$1 ') }
+        : {}),
+      ...(typeof contextWindow === 'number' &&
+      Number.isSafeInteger(contextWindow) && contextWindow > 0
+        ? { maxInputTokens: contextWindow }
+        : {}),
+      maxOutputTokens: undefined,
+      thinking: {
+        type: effort === 'none' ? 'disabled' : 'enabled',
+        effort,
+        summary:
+          item['supports_reasoning_summaries'] === false ||
+          item['supports_reasoning_summary_parameter'] === false
+            ? undefined
+            : summary === 'none' || summary === 'auto' ||
+              summary === 'concise' || summary === 'detailed'
+              ? summary : 'auto',
+      },
+      capabilities: {
+        toolCalling: true,
+        imageInput:
+          Array.isArray(item['input_modalities']) &&
+          item['input_modalities'].includes('image'),
+        ...(item['apply_patch_tool_type'] === 'freeform'
+          ? { editTools: 'apply-patch' } : {}),
+      },
+      ...(typeof item['supports_parallel_tool_calls'] === 'boolean'
+        ? { parallelToolCalling: item['supports_parallel_tool_calls'] } : {}),
+      ...(item['support_verbosity'] === true &&
+        (defaultVerbosity === 'low' || defaultVerbosity === 'medium' || defaultVerbosity === 'high')
+        ? { verbosity: defaultVerbosity } : {}),
+      ...(presetTemplates.length ? { presetTemplates } : {}),
+    });
+  }
+  return models;
 }
 
 function isResponsesClientEvent(
@@ -251,6 +369,22 @@ function readStringHeader(
  * - OAuth account identity headers only for openai-codex auth
  */
 export class OpenAICodexProvider extends OpenAIResponsesProvider {
+  protected override normalizeReasoningEffortForOpenAi(
+    model: ModelConfig,
+  ): ThinkingEffort {
+    if (
+      this.config.auth?.method === 'openai-codex' &&
+      model.thinking?.effort === 'max' &&
+      model.presetTemplates?.some(template =>
+        template.id === 'reasoningEffort' &&
+        template.presets.some(preset => preset.config.thinking?.effort === 'max'),
+      )
+    ) {
+      return 'max';
+    }
+    return super.normalizeReasoningEffortForOpenAi(model);
+  }
+
   protected override shouldEnableResponsesContextManagement(
     model: ModelConfig,
   ): boolean {
@@ -444,40 +578,54 @@ export class OpenAICodexProvider extends OpenAIResponsesProvider {
   }
 
   override async getAvailableModels(
-    _credential: AuthTokenInfo,
+    credential: AuthTokenInfo,
+    refreshCredential?: AuthTokenRefresh,
+    signal?: AbortSignal,
   ): Promise<ModelConfig[]> {
-    return [
-      {
-        id: 'gpt-6-astra',
-        maxInputTokens: 272000,
-        ...CODEX_REASONING_SUMMARY_DEFAULTS,
-      },
-      {
-        id: 'gpt-5.6-sol',
-        maxInputTokens: 272000,
-        ...CODEX_REASONING_SUMMARY_DEFAULTS,
-      },
-      {
-        id: 'gpt-5.6-terra',
-        maxInputTokens: 272000,
-        ...CODEX_REASONING_SUMMARY_DEFAULTS,
-      },
-      {
-        id: 'gpt-5.6-luna',
-        maxInputTokens: 272000,
-        ...CODEX_REASONING_SUMMARY_DEFAULTS,
-      },
-      {
-        id: 'gpt-5.5',
-        maxInputTokens: 272000,
-        ...CODEX_REASONING_SUMMARY_DEFAULTS,
-      },
-      { id: 'gpt-5.4', ...CODEX_REASONING_SUMMARY_DEFAULTS },
-      { id: 'gpt-5.2', ...CODEX_REASONING_SUMMARY_DEFAULTS },
-      { id: 'gpt-5.4-mini', ...CODEX_REASONING_SUMMARY_DEFAULTS },
-      { id: 'gpt-5.3-codex', ...CODEX_REASONING_SUMMARY_DEFAULTS },
-      { id: 'gpt-5.3-codex-spark', ...CODEX_REASONING_SUMMARY_DEFAULTS },
-    ];
+    if (this.config.auth?.method !== 'openai-codex') {
+      return super.getAvailableModels(credential, refreshCredential, signal);
+    }
+    const token = getToken(credential);
+    if (!token) {
+      throw new Error('Authentication required to fetch Codex models');
+    }
+    const logger = createSimpleHttpLogger({
+      purpose: 'Get Available Models',
+      providerName: this.config.name,
+      providerType: this.config.type,
+    });
+    const network = resolveChatNetwork(this.config);
+    const fetchWithNetwork = createCustomFetch({
+      connectionTimeoutMs: DEFAULT_NORMAL_TIMEOUT_CONFIG.connection,
+      responseTimeoutMs: DEFAULT_NORMAL_TIMEOUT_CONFIG.response,
+      logger,
+      proxy: network.proxy,
+      type: 'normal',
+    });
+    try {
+      const clientVersion = await getCodexModelsClientVersion(
+        fetchWithNetwork,
+        signal,
+      );
+      const headers = this.buildHeaders(this.generateSessionId(), credential);
+      headers['Authorization'] = `Bearer ${token}`;
+      headers['Accept'] = 'application/json';
+      headers['User-Agent'] = `codex-tui/${clientVersion}`;
+      const response = await fetchWithNetwork(
+        `https://chatgpt.com/backend-api/codex/models?client_version=${clientVersion}`,
+        { method: 'GET', headers, signal, redirect: 'error' },
+      );
+      if (!response.ok) {
+        throw new Error(
+          `Failed to get available models: HTTP ${response.status}`,
+        );
+      }
+      const raw: unknown = await response.json();
+      return parseCodexModels(raw);
+    } catch (error) {
+      logger.error(error);
+      throw error;
+    }
   }
 }
 
