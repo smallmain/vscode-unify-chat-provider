@@ -628,34 +628,67 @@ function buildGoogleRequest(
   };
 }
 
+function supportsGeminiMinimalThinkingLevel(modelId: string): boolean {
+  return (
+    !modelId.startsWith('gemini-3.8-') &&
+    !modelId.startsWith('gemini-4')
+  );
+}
+
+function geminiThinkingLevelForEffort(
+  effort: string,
+  modelId: string,
+): string | undefined {
+  switch (effort) {
+    case 'minimal':
+      return supportsGeminiMinimalThinkingLevel(modelId)
+        ? 'MINIMAL'
+        : 'LOW';
+    case 'low':
+      return 'LOW';
+    case 'medium':
+      return 'MEDIUM';
+    case 'high':
+    case 'max':
+    case 'xhigh':
+      return 'HIGH';
+    default:
+      return undefined;
+  }
+}
+
 function googleThinkingConfig(
   modelId: string,
   model: ModelConfig,
 ): Record<string, unknown> | undefined {
   const supportsThinking =
-    modelId.startsWith('gemini-2.5-') || modelId.startsWith('gemini-3');
+    modelId.startsWith('gemini-2.5-') ||
+    modelId.startsWith('gemini-3') ||
+    modelId.startsWith('gemini-4');
   if (!supportsThinking) return undefined;
 
   if (thinkingIsAllowed(model)) {
+    if (modelId.startsWith('gemini-2.5-')) {
+      return { includeThoughts: true };
+    }
     const effort = model.thinking?.effort?.toLowerCase();
-    const thinkingLevel =
-      effort === 'minimal' ||
-      effort === 'low' ||
-      effort === 'medium' ||
-      effort === 'high'
-        ? effort.toUpperCase()
-        : undefined;
+    const thinkingLevel = effort
+      ? geminiThinkingLevelForEffort(effort, modelId)
+      : undefined;
     return {
       includeThoughts: true,
       ...(thinkingLevel ? { thinkingLevel } : {}),
     };
   }
 
-  if (modelId.startsWith('gemini-3')) {
-    return {
-      thinkingLevel:
-        modelId.includes('-pro') ? 'LOW' : 'MINIMAL',
-    };
+  if (modelId.startsWith('gemini-3') || modelId.startsWith('gemini-4')) {
+    if (
+      modelId.includes('-pro') ||
+      !supportsGeminiMinimalThinkingLevel(modelId)
+    ) {
+      return { thinkingLevel: 'LOW' };
+    }
+    return { thinkingLevel: 'MINIMAL' };
   }
   if (
     new Set([

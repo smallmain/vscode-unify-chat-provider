@@ -570,6 +570,123 @@ describe('Zed Chat adapters', () => {
     expect(disabledGemini25).toMatchObject({
       generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
     });
+
+    const enabledGemini25 = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-2.5-flash#reasoningEffort=high',
+        thinking: { type: 'auto', effort: 'high' },
+      },
+      messages(),
+      options(),
+    );
+    expect(enabledGemini25).toMatchObject({
+      model: 'models/gemini-2.5-flash',
+      generationConfig: { thinkingConfig: { includeThoughts: true } },
+    });
+    expect(
+      enabledGemini25['generationConfig'],
+    ).not.toHaveProperty('thinkingConfig.thinkingLevel');
+
+    const disabledGemini25Pro = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-2.5-pro', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini25Pro).toMatchObject({
+      generationConfig: { candidateCount: 1, stopSequences: [] },
+    });
+    expect(
+      disabledGemini25Pro['generationConfig'],
+    ).not.toHaveProperty('thinkingConfig');
+
+    const clampedGemini38Minimal = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.8-flash#reasoningEffort=minimal',
+        thinking: { type: 'auto', effort: 'minimal' },
+      },
+      messages(),
+      options(),
+    );
+    expect(clampedGemini38Minimal).toMatchObject({
+      model: 'models/gemini-3.8-flash',
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'LOW' },
+      },
+    });
+
+    const disabledGemini38 = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-3.8-flash', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini38).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } },
+    });
+
+    const xhighEffort = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.5-flash#reasoningEffort=xhigh',
+        thinking: { type: 'auto', effort: 'xhigh' },
+      },
+      messages(),
+      options(),
+    );
+    expect(xhighEffort).toMatchObject({
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'HIGH' },
+      },
+    });
+
+    const maxEffort = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.5-flash#reasoningEffort=max',
+        thinking: { type: 'auto', effort: 'max' },
+      },
+      messages(),
+      options(),
+    );
+    expect(maxEffort).toMatchObject({
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'HIGH' },
+      },
+    });
+
+    const enabledGemini4 = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-4-argon#reasoningEffort=medium',
+        thinking: { type: 'auto', effort: 'medium' },
+      },
+      messages(),
+      options(),
+    );
+    expect(enabledGemini4).toMatchObject({
+      model: 'models/gemini-4-argon',
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'MEDIUM' },
+      },
+    });
+
+    const disabledGemini4 = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-4-argon', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini4).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } },
+    });
   });
 
   it('preserves Responses item order around mixed text and tool parts', () => {
