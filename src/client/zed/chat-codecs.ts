@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import type { ModelConfig } from '../../types';
 import { getBaseModelId } from '../../model-id-utils';
+import { cleanJsonSchemaForGemini } from './gemini-schema';
 import type { ZedUpstreamProvider } from './types';
 import { isLanguageModelThinkingPart } from '../../proposed-api/thinking';
 
@@ -610,10 +611,7 @@ function buildGoogleRequest(
               functionDeclarations: options.tools.map((tool) => ({
                 name: tool.name,
                 description: tool.description,
-                parameters: tool.inputSchema ?? {
-                  type: 'object',
-                  properties: {},
-                },
+                parameters: cleanJsonSchemaForGemini(tool.inputSchema),
               })),
             },
           ],
