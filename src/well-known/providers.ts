@@ -167,6 +167,15 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     autoFetchOfficialModels: false,
   },
   {
+    name: 'Standard Compute',
+    category: 'General',
+    type: 'openai-chat-completion',
+    baseUrl: 'https://api.stdcmpt.com/v1',
+    authTypes: ['api-key'],
+    models: [],
+    autoFetchOfficialModels: true,
+  },
+  {
     name: 'Kilo Code',
     category: 'General',
     type: 'openai-chat-completion',

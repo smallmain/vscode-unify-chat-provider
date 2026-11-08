@@ -897,6 +897,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [OpenRouter](https://openrouter.ai/)                                                          | <li>CacheControl <li>ReasoningParam <li>ReasoningDetails <li>ClaudeAdaptiveVerbosity | [详情](#openrouter)   |    ✅    |
 | [Atlas Cloud](https://www.atlascloud.ai/docs/zh/models/llm)                                   |                                                                                      |                       |
 | [OrcaRouter](https://docs.orcarouter.ai/)                                                     |                                                                                      | [详情](#orcarouter)   |
+| [Standard Compute](https://docs.standardcompute.com/)                                         |                                                                                      |                       |
 | [AIHubMix](https://aihubmix.com/)                                                             |                                                                                      |                       |    ✅    |
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
 | [Command Code](https://commandcode.ai/docs/provider)                                          | <li>自动同步官方模型                                                                 |                       |
