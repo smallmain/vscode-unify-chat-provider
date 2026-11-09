@@ -62,6 +62,10 @@ function executionContext(
       requests.push(request);
       return buffered;
     },
+    async executeQwen(request) {
+      requests.push(request);
+      return buffered;
+    },
     async executeCopilotReplicaNes(request) {
       requests.push(request);
       return streaming;
@@ -430,6 +434,7 @@ describe('completion request transformer registry validation', () => {
       simple: [
         REQUEST_TRANSFORMERS.simple[0],
         REQUEST_TRANSFORMERS.simple[1],
+        REQUEST_TRANSFORMERS.simple[2],
         {
           ...REQUEST_TRANSFORMERS.simple[1],
           targetKind: 'copilot-replica-nes',

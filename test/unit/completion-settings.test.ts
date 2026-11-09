@@ -201,6 +201,7 @@ describe('CompletionConfig UI diagnostics', () => {
     expect(labels).toEqual([
       'fim',
       'codegemma',
+      'qwen2.5-coder',
       'copilot-replica-nes',
       'zeta1',
       'zeta2',

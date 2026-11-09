@@ -1,4 +1,5 @@
 import OpenAI from 'openai';
+import { shouldIgnoreApiSSLErrors } from '../../utils';
 import type {
   ResponseErrorEvent,
   ResponsesClientEvent,
@@ -111,8 +112,12 @@ export class OpenAIResponsesWebSocketTransport
     headers: Record<string, string> | undefined,
     beta: boolean,
   ) {
+    const options = {
+      headers,
+      ...(shouldIgnoreApiSSLErrors() ? { rejectUnauthorized: false } : {}),
+    };
     if (beta) {
-      const ws = new BetaResponsesWS(client, { headers });
+      const ws = new BetaResponsesWS(client, options);
       this.sendPayload = (payload) => {
         ws.sendRaw(JSON.stringify(payload));
       };
@@ -133,7 +138,7 @@ export class OpenAIResponsesWebSocketTransport
       return;
     }
 
-    const ws = new ResponsesWS(client, { headers });
+    const ws = new ResponsesWS(client, options);
     this.sendPayload = (payload) => {
       ws.sendRaw(JSON.stringify(payload));
     };

@@ -176,6 +176,10 @@ export interface CodeGemmaCompletionRequest {
   readonly options: CompletionExecutionOptions;
 }
 
+export interface QwenCompletionRequest extends Omit<CodeGemmaCompletionRequest, 'kind'> {
+  readonly kind: 'qwen2.5-coder';
+}
+
 export interface CopilotReplicaNesCompletionRequest {
   readonly kind: 'copilot-replica-nes';
   readonly messages: readonly CompletionChatMessage[];
@@ -230,6 +234,7 @@ export interface AlgorithmRequestMap {
 export interface CompletionRequestMap {
   readonly fim: FimCompletionRequest;
   readonly codegemma: CodeGemmaCompletionRequest;
+  readonly 'qwen2.5-coder': QwenCompletionRequest;
   readonly 'copilot-replica-nes': CopilotReplicaNesCompletionRequest;
   readonly zeta1: ZetaCompletionRequest & { readonly kind: 'zeta1' };
   readonly zeta2: ZetaCompletionRequest & { readonly kind: 'zeta2' };

@@ -183,6 +183,27 @@ const provider = new TestDeepSeekChatProvider({
 });
 
 describe('DeepSeek vision Chat Completions message conversion', () => {
+  it('preserves image-role conversion while combining assistant parts', () => {
+    const converted = provider.convertForRequest([{
+      role: vscode.LanguageModelChatMessageRole.Assistant, name: undefined,
+      content: [new vscode.LanguageModelTextPart('before'), imagePart(1), new vscode.LanguageModelTextPart('after')],
+    }]);
+    expect(converted.map((message) => message.role)).toEqual(['assistant', 'user', 'assistant']);
+    expect(converted[1]).toMatchObject({ content: [{ type: 'image_url' }] });
+  });
+  it.each([false, true])('groups markerless parallel tool calls (split=%s)', (split) => {
+    const calls = ['call-a', 'call-b'].map((id) => new vscode.LanguageModelToolCallPart(id, 'inspect', {}));
+    const messages: LanguageModelChatRequestMessage[] = split
+      ? calls.map((part) => ({ role: vscode.LanguageModelChatMessageRole.Assistant, name: undefined, content: [part] }))
+      : [{ role: vscode.LanguageModelChatMessageRole.Assistant, name: undefined, content: [new vscode.LanguageModelTextPart('checking'), ...calls] }];
+    const converted = provider.convertForRequest([
+      ...messages,
+      userMessage(calls.map((call) => toolResult(call.callId, [new vscode.LanguageModelTextPart('done')]))),
+    ]);
+    expect(converted).toHaveLength(3);
+    expect(converted[0]).toMatchObject({ role: 'assistant', tool_calls: [{ id: 'call-a' }, { id: 'call-b' }] });
+    expect(converted.slice(1)).toMatchObject([{ role: 'tool', tool_call_id: 'call-a' }, { role: 'tool', tool_call_id: 'call-b' }]);
+  });
   it('keeps text and image blocks in one user message', () => {
     const converted = provider.convertForRequest([
       userMessage([

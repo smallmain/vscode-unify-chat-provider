@@ -72,6 +72,21 @@ afterEach(() => {
 });
 
 describe('chat stream retry classification', () => {
+  it.each([
+    { error: { code: 'upstream_http2_stream_error' } },
+    new Error('upstream stream returned an error payload'),
+    new Error('stream closed before response.completed'),
+  ])('retries documented gateway failures only before output (%j)', (error) => {
+    const state = { emittedPartCount: 0, cancellationRequested: false, retryAttempt: 0, maxRetries: 2 };
+    expect(shouldRetryStreamReadError(error, state)).toBe(true);
+    expect(shouldRetryStreamReadError(error, { ...state, emittedPartCount: 1 })).toBe(false);
+    expect(shouldRetryStreamReadError(error, { ...state, cancellationRequested: true })).toBe(false);
+    expect(shouldRetryStreamReadError(error, { ...state, retryAttempt: 2 })).toBe(false);
+  });
+
+  it('does not retry arbitrary upstream errors', () => {
+    expect(isRetryableStreamReadError({ type: 'upstream_error', message: 'invalid model' })).toBe(false);
+  });
   it('marks response idle timeouts as retryable stream-read errors', async () => {
     vi.useFakeTimers();
     const onTimeout = vi.fn();

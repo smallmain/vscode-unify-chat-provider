@@ -84,6 +84,20 @@ describe('Plan 4 well-known catalog', () => {
     ['mimo-v2.6-pro', 'mimo-v2.6-pro'],
     ['mimo-v2.6-flash', 'mimo-v2.6-flash'],
     ['mimo-v2.6-pro-ultraspeed', 'mimo-v2.6-pro-ultraspeed'],
+    ['gpt-6-sol', 'gpt-6-sol'],
+    ['gpt-6-luna', 'gpt-6-luna'],
+    ['gpt-6.1-sol', 'gpt-6.1-sol'],
+    ['claude-opus-5-5', 'claude-opus-5-5'],
+    ['claude-sonnet-5-5', 'claude-sonnet-5-5'],
+    ['claude-haiku-5-5', 'claude-haiku-5-5'],
+    ['gemini-4-argon', 'gemini-4-argon'],
+    ['gemini-3.1-flash-lite-preview', 'gemini-3.1-flash-lite-preview'],
+    ['kimi-k3.1-pro', 'kimi-k3.1-pro'],
+    ['kimi-k3.1-pro-highspeed', 'kimi-k3.1-pro-highspeed'],
+    ['k3-256k', 'k3-256k'],
+    ['MiniMax-M3.1-Flash', 'MiniMax-M3.1-Flash'],
+    ['MiniMax-M3.1-Flash-Preview', 'MiniMax-M3.1-Flash'],
+    ['k3', 'kimi-k3'],
   ])('matches %s to its own model instead of a predecessor', (id, expected) => {
     expect(findBestMatchingWellKnownModel(id)?.id).toBe(expected);
   });

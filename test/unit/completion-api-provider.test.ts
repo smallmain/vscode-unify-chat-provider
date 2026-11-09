@@ -12,6 +12,7 @@ import {
 } from '../../src/completion/api/compatible-provider';
 import {
   buildOpenAICodeGemmaRequestBody,
+  buildOpenAIQwenRequestBody,
   buildOpenAIFimRequestBody,
   createOpenAICompletionsApiProvider,
   parseOpenAICompletionsResponse,
@@ -21,6 +22,7 @@ import { buildCompletionBaseUrl } from '../../src/completion/api/base-url';
 import { nativeCompletionApiProviderRegistry } from '../../src/completion/api/registry';
 import {
   buildOllamaCodeGemmaRequestBody,
+  buildOllamaQwenRequestBody,
   buildOllamaFimRequestBody,
   createOllamaGenerateApiProvider,
   parseOllamaGenerateResponse,
@@ -45,6 +47,23 @@ const vscodeMockState = vi.hoisted(() => ({
     message: string;
   }>,
 }));
+
+describe('Qwen2.5-Coder native requests', () => {
+  it('embeds the FIM suffix in the prompt on both native transports', () => {
+    const provider: ProviderConfig = { type: 'openai-chat-completion', name: 'local', baseUrl: 'http://localhost/v1', models: [] };
+    const model: ModelConfig = { id: 'Qwen2.5-Coder-7B' };
+    const request = { kind: 'qwen2.5-coder', prefix: 'before', suffix: 'after', targetPath: 'main.ts', contexts: [{ path: 'lib.ts', content: 'context' }], options: {} } as const;
+    const openai = buildOpenAIQwenRequestBody(provider, model, request);
+    const ollama = buildOllamaQwenRequestBody(provider, model, request);
+    for (const body of [openai, ollama]) {
+      expect(body).not.toHaveProperty('suffix');
+      expect(body.prompt).toBe('<|file_sep|>lib.ts\ncontext<|file_sep|>main.ts\n<|fim_prefix|>before<|fim_suffix|>after<|fim_middle|>');
+    }
+    expect(openai.stop).toContain('<|endoftext|>');
+    expect(openai.stop).toContain('<|fim_pad|>');
+    expect(ollama.raw).toBe(true);
+  });
+});
 
 vi.mock('vscode', () => {
   class Disposable {

@@ -372,12 +372,41 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
               }
             }
 
+            let assistant: ChatCompletionAssistantMessageParam = { role: 'assistant' };
+            const flushAssistant = (): void => {
+              if (Object.keys(assistant).length > 1) outMessages.push(assistant);
+              assistant = { role: 'assistant' };
+            };
             for (const part of msg.content) {
-              const parts = this.convertPart(msg.role, part, reasoningType) as
-                | ChatCompletionAssistantMessageParam
-                | undefined;
-              if (parts) outMessages.push(parts);
+              const parts = this.convertPart(msg.role, part, reasoningType);
+              if (!parts) continue;
+              if (Array.isArray(parts)) throw new Error('Expected a single assistant history part');
+              if (parts.role !== 'assistant') {
+                flushAssistant();
+                outMessages.push(parts);
+                continue;
+              }
+              if (parts.tool_calls) {
+                assistant.tool_calls = [...(assistant.tool_calls ?? []), ...parts.tool_calls];
+              } else {
+                if (typeof parts.content === 'string') {
+                  assistant.content = typeof assistant.content === 'string'
+                    ? assistant.content + parts.content : parts.content;
+                } else if (parts.content) {
+                  assistant.content = [...(Array.isArray(assistant.content) ? assistant.content : []), ...parts.content];
+                }
+                if (parts.reasoning_content !== undefined) {
+                  assistant.reasoning_content = (assistant.reasoning_content ?? '') + parts.reasoning_content;
+                }
+                if (parts.reasoning !== undefined) {
+                  assistant.reasoning = (assistant.reasoning ?? '') + parts.reasoning;
+                }
+                if (parts.reasoning_details) {
+                  assistant.reasoning_details = [...(assistant.reasoning_details ?? []), ...parts.reasoning_details];
+                }
+              }
             }
+            flushAssistant();
           }
           break;
 
@@ -394,7 +423,18 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
       outMessages[index] = raw;
     }
 
-    // TODO 将连续的不同种类的 Assistant 消息尽量合并为一条消息（比如 content, reasoning_content, tool_calls 可以合并，但是 content, content 则不可以合并，(content and reasoning_content), tool_calls 可以合并）
+    // Agent hosts may split one assistant tool batch across adjacent messages.
+    for (let index = outMessages.length - 1; index > 0; index--) {
+      const current = outMessages[index];
+      const previous = outMessages[index - 1];
+      if (current.role === 'assistant' && previous.role === 'assistant' &&
+          current.tool_calls?.length && previous.tool_calls?.length &&
+          !current.content && !current.reasoning_content && !current.reasoning &&
+          !current.reasoning_details) {
+        previous.tool_calls = [...previous.tool_calls, ...current.tool_calls];
+        outMessages.splice(index, 1);
+      }
+    }
 
     // add a cache breakpoint at the end.
     if (shouldApplyCacheControl) {
@@ -1394,10 +1434,7 @@ export class OpenAIChatCompletionProvider implements ApiProvider {
           ? { max_completion_tokens: model.maxOutputTokens }
           : useOnlyMaxTokens
             ? { max_tokens: model.maxOutputTokens }
-            : {
-                max_tokens: model.maxOutputTokens,
-                max_completion_tokens: model.maxOutputTokens,
-              }
+            : { max_completion_tokens: model.maxOutputTokens }
         : {}),
       ...(model.temperature !== undefined
         ? { temperature: model.temperature }

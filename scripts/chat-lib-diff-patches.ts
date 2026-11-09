@@ -52,6 +52,9 @@ function replaceOnce(
   replacement: string,
   filePath: string,
 ): string {
+  const newline = source.includes('\r\n') ? '\r\n' : '\n';
+  expected = expected.replace(/\r?\n/g, newline);
+  replacement = replacement.replace(/\r?\n/g, newline);
   const first = source.indexOf(expected);
   if (first < 0 || source.indexOf(expected, first + expected.length) >= 0) {
     throw new Error(

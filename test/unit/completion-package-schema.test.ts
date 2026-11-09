@@ -240,6 +240,7 @@ describe('completion package schemas', () => {
       expect(requireRecord(arrayVariant.items, 'template items').enum).toEqual([
         'fim',
         'codegemma',
+        'qwen2.5-coder',
         'copilot-replica-nes',
         'zeta1',
         'zeta2',

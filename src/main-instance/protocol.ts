@@ -8,7 +8,8 @@ export const PROTOCOL_VERSION = 1 as const;
  * when IPC/RPC message contracts, shared state contracts, or leader/follower
  * behavior become incompatible across extension instances.
  */
-export const MAIN_INSTANCE_COMPATIBILITY_VERSION = 10 as const;
+// Older peers cannot round-trip the zhipu balance method or Qwen completion ID.
+export const MAIN_INSTANCE_COMPATIBILITY_VERSION = 11 as const;
 
 export type HelloMessage = {
   type: 'hello';

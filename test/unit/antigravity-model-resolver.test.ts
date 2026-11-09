@@ -7,7 +7,7 @@ import {
 
 describe('Antigravity model resolver', () => {
   it('lists the current supported Gemini Flash models newest first', () => {
-    expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS[0]).toBe('gemini-3.7-flash');
+    expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS[0]).toBe('gemini-3.8-flash');
     expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.5-flash');
     expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.6-flash');
     expect(ANTIGRAVITY_AVAILABLE_MODEL_IDS).toContain('gemini-3.7-flash');
@@ -21,6 +21,12 @@ describe('Antigravity model resolver', () => {
     ['medium', 'gemini-3.7-flash-medium', 'medium'],
     ['high', 'gemini-3.7-flash-high', 'high'],
   ];
+
+  it.each(['low', 'medium', 'high'] as const)('routes Gemini 3.8 Flash %s', (level) => {
+    expect(resolveAntigravityModelForRequest('gemini-3.8-flash', level)).toEqual({
+      requestModelId: `gemini-3.8-flash-${level}`, gemini3ThinkingLevel: level,
+    });
+  });
 
   it.each(gemini37FlashRoutes)(
     'routes Gemini 3.7 Flash %s through %s',

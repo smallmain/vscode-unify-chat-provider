@@ -142,6 +142,12 @@ export interface ChatNetworkOverrides {
 
 const CHAT_NETWORK_CONFIG_NAMESPACE = 'unifyChatProvider';
 
+export function shouldIgnoreApiSSLErrors(): boolean {
+  const settings = vscode.workspace.getConfiguration(CHAT_NETWORK_CONFIG_NAMESPACE)
+    .get<unknown>('networkSettings');
+  return isRecord(settings) && settings['ignoreSSLErrors'] === true;
+}
+
 function readFiniteNumber(value: unknown): number | undefined {
   return typeof value === 'number' && Number.isFinite(value)
     ? value
@@ -987,6 +993,7 @@ export function isRetryableNetworkError(
 
 const RETRYABLE_STREAM_READ_ERROR_CODES = new Set([
   'stream_read_error',
+  'upstream_http2_stream_error',
 ]);
 
 export class RetryableStreamReadError extends Error {
@@ -1068,6 +1075,9 @@ export function isRetryableStreamReadError(error: unknown): boolean {
         normalizedMessage.includes("stream_read_error") ||
         normalizedMessage.includes("stream read error") ||
         normalizedMessage.includes("servers are currently overloaded") ||
+        normalizedMessage.includes('upstream stream returned an error payload') ||
+        normalizedMessage.includes('upstream service temporarily unavailable') ||
+        normalizedMessage.includes('closed before response.completed') ||
         isInternalStreamError
       ) {
         return true;
@@ -1690,7 +1700,7 @@ function createAgentOptions(
   if (base.requestCA !== undefined) {
     connect.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (!settings.proxyStrictSSL || shouldIgnoreApiSSLErrors()) {
     connect.rejectUnauthorized = false;
   }
   if (hasOwnProperties(connect)) {
@@ -1747,7 +1757,7 @@ function createTlsSocketOverSocks(
       servername: getTlsServerName(options),
       socket,
     };
-    if (!settings.proxyStrictSSL) {
+    if (!settings.proxyStrictSSL || shouldIgnoreApiSSLErrors()) {
       tlsOptions.rejectUnauthorized = false;
     }
 
@@ -1893,6 +1903,7 @@ function createEnvProxyDispatcher(
   originalDispatcher: Dispatcher | undefined,
   settings: ResolvedHttpProxySettings,
 ): Dispatcher {
+  const ignoreSSLErrors = shouldIgnoreApiSSLErrors();
   const base =
     originalDispatcher === undefined
       ? {}
@@ -1925,6 +1936,7 @@ function createEnvProxyDispatcher(
     proxyCA: base.proxyCA ? 'custom' : '',
     proxyProtocol: proxyProtocol ?? '',
     proxyStrictSSL: settings.proxyStrictSSL,
+    ignoreSSLErrors,
     requestCA: base.requestCA ? 'custom' : '',
   });
 
@@ -1967,7 +1979,7 @@ function createEnvProxyDispatcher(
   if (base.requestCA !== undefined) {
     connect.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (!settings.proxyStrictSSL || ignoreSSLErrors) {
     connect.rejectUnauthorized = false;
   }
   if (hasOwnProperties(connect)) {
@@ -1978,7 +1990,7 @@ function createEnvProxyDispatcher(
   if (base.requestCA !== undefined) {
     requestTls.ca = base.requestCA;
   }
-  if (!settings.proxyStrictSSL) {
+  if (!settings.proxyStrictSSL || ignoreSSLErrors) {
     requestTls.rejectUnauthorized = false;
   }
   if (hasOwnProperties(requestTls)) {
@@ -2007,6 +2019,17 @@ function getUndiciInitWithProxySupport(
   proxyConfig?: ProxyConfig,
 ): RequestInitWithDispatcher | undefined {
   const settings = getConfiguredHttpProxySettings(proxyConfig);
+  if (shouldIgnoreApiSSLErrors() && (
+    settings.proxySupport === 'off' || proxyConfig?.type === 'direct' ||
+    (proxyConfig?.type === 'custom' && settings.proxy === undefined)
+  )) {
+    return {
+      ...init,
+      dispatcher: createEnvProxyDispatcher(init?.dispatcher, {
+        ...settings, proxy: '', noProxy: ['*'],
+      }),
+    };
+  }
   if (settings.proxySupport === 'off') {
     return init;
   }
