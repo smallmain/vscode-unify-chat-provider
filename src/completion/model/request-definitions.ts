@@ -8,6 +8,7 @@ export type CompletionResponseMode = 'buffered' | 'streaming';
 export const COMPLETION_REQUEST_RESPONSE_MODES = {
   fim: 'buffered',
   codegemma: 'buffered',
+  'qwen2.5-coder': 'buffered',
   'copilot-replica-nes': 'streaming',
   zeta1: 'buffered',
   zeta2: 'buffered',
@@ -20,9 +21,9 @@ export const COMPLETION_REQUEST_RESPONSE_MODES = {
 >;
 
 export const ALGORITHM_REQUEST_DEFINITIONS = {
-  simple: { targets: ['fim', 'codegemma'], responseMode: 'buffered' },
+  simple: { targets: ['fim', 'codegemma', 'qwen2.5-coder'], responseMode: 'buffered' },
   'copilot-replica/fim': {
-    targets: ['fim', 'codegemma'],
+    targets: ['fim', 'codegemma', 'qwen2.5-coder'],
     responseMode: 'buffered',
   },
   'copilot-replica/nes': {

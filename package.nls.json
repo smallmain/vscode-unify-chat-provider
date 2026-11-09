@@ -1,4 +1,5 @@
 {
+  "configuration.networkSettings.ignoreSSLErrors.description": "Ignore TLS certificate errors for API requests globally. Disabled by default. Enabling this reduces connection security.",
   "displayName": "Unify Chat Provider",
   "description": "Integrate multiple LLM API providers into VS Code's GitHub Copilot Chat using the Language Model API.",
   "languageModelChatProviders.displayName": "Unify Chat Provider",
@@ -113,6 +114,7 @@
   "configuration.endpoints.balanceProvider.method.codex.description": "Use Codex usage monitor.",
   "configuration.endpoints.balanceProvider.method.synthetic.description": "Use Synthetic quota monitor.",
   "configuration.endpoints.balanceProvider.method.minimax.description": "Use MiniMax balance monitor.",
+  "configuration.endpoints.balanceProvider.method.zhipu.description": "Use ZhiPu balance monitor.",
   "configuration.endpoints.balanceProvider.method.sub2api.description": "Use Sub2API balance and quota monitor.",
   "configuration.endpoints.balanceProvider.method.newapi.description": "Use New API balance monitor.",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API user ID.",

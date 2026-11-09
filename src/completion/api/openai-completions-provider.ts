@@ -1,3 +1,4 @@
+import { buildQwenPrompt, QWEN_FIM_STOPS } from '../template/qwen';
 import { getBaseModelId } from '../../model-id-utils';
 import type { AuthTokenInfo } from '../../auth/types';
 import type { ModelConfig, ProviderConfig } from '../../types';
@@ -5,6 +6,7 @@ import { isRawBaseUrlEnabled } from '../../utils';
 import { isRecord } from '../configuration';
 import type {
   CodeGemmaCompletionRequest,
+  QwenCompletionRequest,
   FimCompletionRequest,
   ZetaCompletionRequest,
 } from '../model/requests';
@@ -44,6 +46,7 @@ import { runWithCompletionConcurrency } from './concurrency';
 import { computeCompletionRequestTargetSignature } from '../provider-target';
 
 export const OPENAI_COMPLETIONS_CAPABILITIES = {
+  'qwen2.5-coder': { responseMode: 'buffered', multiCandidateSupport: 'single-request' },
   fim: {
     responseMode: 'buffered',
     multiCandidateSupport: 'single-request',
@@ -108,7 +111,7 @@ function mergedBody(
 }
 
 function requestOptions(
-  request: FimCompletionRequest | CodeGemmaCompletionRequest,
+  request: FimCompletionRequest | CodeGemmaCompletionRequest | QwenCompletionRequest,
 ): Record<string, unknown> {
   return {
     ...(request.options.maxTokens === undefined
@@ -147,6 +150,21 @@ export function buildOpenAICodeGemmaRequestBody(
     model: getBaseModelId(model.id),
     prompt: buildCodeGemmaPrompt(request),
     stop: [...FIM_PROTOCOL_STOPS],
+    stream: false,
+  };
+}
+
+export function buildOpenAIQwenRequestBody(
+  provider: ProviderConfig,
+  model: ModelConfig,
+  request: QwenCompletionRequest,
+): Record<string, unknown> {
+  return {
+    ...mergedBody(provider, model),
+    ...requestOptions(request),
+    model: getBaseModelId(model.id),
+    prompt: buildQwenPrompt(request),
+    stop: [...QWEN_FIM_STOPS],
     stream: false,
   };
 }
@@ -359,6 +377,41 @@ function createCodeGemmaOperation(
   };
 }
 
+function createQwenOperation(
+  context: NativeCompletionApiContext,
+): CompletionApiOperation<'qwen2.5-coder'> {
+  return {
+    async execute(request, token) {
+      return await runNativeCompletionOperation(
+        context,
+        request.kind,
+        token,
+        async (logger) => {
+          const { provider, credential } =
+            await resolveRequestSnapshot(context);
+          const payload = await postCompletionJson(
+            completionUrl(context, provider),
+            buildOpenAIQwenRequestBody(
+              provider,
+              context.model,
+              request,
+            ),
+            provider,
+            context.model,
+            credential,
+            token,
+            logger,
+          );
+          return parseOpenAICompletionsResponse(
+            payload,
+            buildEffectiveStops([...(request.options.stop ?? []), ...QWEN_FIM_STOPS]),
+          );
+        },
+      );
+    },
+  };
+}
+
 async function executeZeta(
   context: NativeCompletionApiContext,
   request: ZetaCompletionRequest,
@@ -429,6 +482,7 @@ export const OPENAI_COMPLETIONS_PROVIDER_DEFINITION =
     operationFactories: {
       fim: createFimOperation,
       codegemma: createCodeGemmaOperation,
+      'qwen2.5-coder': createQwenOperation,
       zeta1: createZeta1Operation,
       zeta2: createZeta2Operation,
       'zeta2.1': createZeta21Operation,

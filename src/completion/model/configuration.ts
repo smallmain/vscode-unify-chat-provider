@@ -11,6 +11,7 @@ import type {
 export const COMPLETION_TEMPLATE_ORDER = [
   'fim',
   'codegemma',
+  'qwen2.5-coder',
   'copilot-replica-nes',
   'zeta1',
   'zeta2',
@@ -87,6 +88,7 @@ export function isCompletionTemplate(
   switch (value) {
     case 'fim':
     case 'codegemma':
+    case 'qwen2.5-coder':
     case 'copilot-replica-nes':
     case 'zeta1':
     case 'zeta2':

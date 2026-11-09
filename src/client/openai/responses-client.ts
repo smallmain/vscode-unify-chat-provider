@@ -31,6 +31,7 @@ import {
   resolveChatNetwork,
   resolveSdkTotalTimeoutMs,
   sanitizeMessagesForModelSwitchDetailed,
+  shouldIgnoreApiSSLErrors,
   tryNormalizeCopilotUsage,
   withIdleTimeout,
 } from '../../utils';
@@ -370,6 +371,10 @@ function normalizeMarkerOutputItem(
   item: OpenAIResponsesOutputItem,
 ): OpenAIResponsesInputItem {
   switch (item.type) {
+    case 'reasoning': {
+      const { status: _status, ...input } = item;
+      return input;
+    }
     case 'compaction': {
       const agentName = readAgentName(item);
       if (agentName !== undefined) {
@@ -1039,16 +1044,22 @@ export class OpenAIResponsesProvider implements ApiProvider {
       const metadata = part.metadata as ThinkingBlockMetadata | undefined;
       const id = part.id ?? metadata?.signature ?? `reasoning_${randomUUID()}`;
       const completeThinking = metadata?._completeThinking;
-      const contents =
-        typeof part.value === 'string' ? [part.value] : part.value;
-      if (metadata?.redactedData) {
+      const contents = (typeof part.value === 'string' ? [part.value] : part.value)
+        .filter((text) => text.trim() !== ENCRYPTED_THINKING_PLACEHOLDER);
+      const encryptedContent = [
+        metadata?.redactedData,
+        metadata?.encrypted_content,
+        metadata?.encrypted,
+      ].find((value): value is string => typeof value === 'string' && value.length > 0);
+      if (encryptedContent) {
         return {
           type: 'reasoning',
           id,
           summary: [],
-          encrypted_content: metadata.redactedData,
+          encrypted_content: encryptedContent,
         };
       } else {
+        if (!completeThinking && contents.every((text) => text.length === 0)) return undefined;
         return {
           type: 'reasoning',
           id,
@@ -1236,7 +1247,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
     }
   }
 
-  private normalizeReasoningEffortForOpenAi(
+  protected normalizeReasoningEffortForOpenAi(
     model: ModelConfig,
   ): 'none' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'max' {
     const effort = model.thinking?.effort;
@@ -1249,7 +1260,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
 
     const baseModelId = getBaseModelId(model.id).toLowerCase();
     const family = model.family?.trim().toLowerCase();
-    const supportsMaxEffort = /^gpt-(?:5\.6|6-astra)(?:-|$)/;
+    const supportsMaxEffort = /^gpt-(?:5\.6|6-astra|6(?:\.1)?-sol|6\.1-terra|6-luna)(?:-|$)/;
     return supportsMaxEffort.test(baseModelId) ||
       (family !== undefined && supportsMaxEffort.test(family))
       ? 'max'
@@ -1709,6 +1720,7 @@ export class OpenAIResponsesProvider implements ApiProvider {
       this.config.name,
       this.baseUrl,
       fingerprint,
+      shouldIgnoreApiSSLErrors() ? 'tls-unverified' : 'tls-verified',
       sessionId,
     ].join('|');
   }

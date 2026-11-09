@@ -33,6 +33,9 @@ class SimpleAlgorithm implements CompletionAlgorithm {
     private readonly options: SimpleAlgorithmOptions,
   ) {}
 
+  // Models are resolved for every request; catalog events need no runtime reset.
+  handleDidChangeChatModels(): void {}
+
   async provideInlineCompletions(
     input: Parameters<CompletionAlgorithm['provideInlineCompletions']>[0],
     token: vscode.CancellationToken,

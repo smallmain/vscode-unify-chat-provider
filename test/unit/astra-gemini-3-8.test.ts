@@ -119,6 +119,9 @@ describe('GPT-6 Astra provider and request compatibility', () => {
   it.each([
     { id: 'gpt-6-astra#reasoningEffort=max', expected: 'max' },
     { id: 'deployment', family: 'gpt-6-astra', expected: 'max' },
+    { id: 'gpt-6.1-terra#reasoningEffort=max', expected: 'max' },
+    { id: 'deployment', family: 'gpt-6.1-terra', expected: 'max' },
+    { id: 'gpt-6.1-terrarium', expected: 'xhigh' },
     { id: 'gpt-5.6-sol', expected: 'max' },
     { id: 'gpt-5.4', expected: 'xhigh' },
     { id: 'gpt-6-astral', expected: 'xhigh' },

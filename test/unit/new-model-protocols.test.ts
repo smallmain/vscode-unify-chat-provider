@@ -142,6 +142,14 @@ async function requestBody(
 }
 
 describe('New model request protocols', () => {
+  it.each(['https://api.minimaxi.com/anthropic', 'https://api.minimax.io/anthropic'])(
+    'uses the current MiniMax M3.1 wire ID on %s', async (baseUrl) => {
+      const config: ProviderConfig = { name: 'MiniMax', type: 'anthropic', baseUrl, models: [] };
+      const model = mergeWithWellKnownModel({ id: 'MiniMax-M3.1-Flash' }, config);
+      const body = await requestBody(baseUrl, model, 'anthropic');
+      expect(body).toMatchObject({ model: 'MiniMax-M3.1-Flash', output_config: { effort: 'max' } });
+    },
+  );
   it.each([
     ['tsubasa-fast', 8192],
     ['tsubasa-pro', 16384],

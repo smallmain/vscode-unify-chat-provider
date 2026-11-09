@@ -1,9 +1,11 @@
+import { buildQwenPrompt, QWEN_FIM_STOPS } from '../template/qwen';
 import { getBaseModelId } from '../../model-id-utils';
 import type { ModelConfig, ProviderConfig } from '../../types';
 import { isRawBaseUrlEnabled } from '../../utils';
 import { isRecord } from '../configuration';
 import type {
   CodeGemmaCompletionRequest,
+  QwenCompletionRequest,
   FimCompletionRequest,
   ZetaCompletionRequest,
 } from '../model/requests';
@@ -140,6 +142,28 @@ export function buildOllamaCodeGemmaRequestBody(
   };
 }
 
+export function buildOllamaQwenRequestBody(
+  provider: ProviderConfig,
+  model: ModelConfig,
+  request: QwenCompletionRequest,
+): Record<string, unknown> {
+  const extra = splitExtraBody(provider, model);
+  return {
+    ...extra.body,
+    model: getBaseModelId(model.id),
+    prompt: buildQwenPrompt(request),
+    raw: true,
+    options: {
+      ...extra.options,
+      ...(request.options.maxTokens === undefined
+        ? {}
+        : { num_predict: request.options.maxTokens }),
+      stop: [...buildEffectiveStops([...(request.options.stop ?? []), ...QWEN_FIM_STOPS])],
+    },
+    stream: false,
+  };
+}
+
 export function buildOllamaZetaRequestBody(
   provider: ProviderConfig,
   model: ModelConfig,
@@ -245,6 +269,7 @@ const SINGLE_RESULT_CAPABILITY = {
 export const OLLAMA_GENERATE_CAPABILITIES = {
   fim: SINGLE_RESULT_CAPABILITY,
   codegemma: SINGLE_RESULT_CAPABILITY,
+  'qwen2.5-coder': SINGLE_RESULT_CAPABILITY,
   zeta1: SINGLE_RESULT_CAPABILITY,
   zeta2: SINGLE_RESULT_CAPABILITY,
   'zeta2.1': SINGLE_RESULT_CAPABILITY,
@@ -311,6 +336,40 @@ function createCodeGemmaOperation(
           return parseOllamaGenerateResponse(
             payload,
             buildEffectiveStops(request.options.stop),
+          );
+        },
+      );
+    },
+  };
+}
+
+function createQwenOperation(
+  context: NativeCompletionApiContext,
+): CompletionApiOperation<'qwen2.5-coder'> {
+  return {
+    async execute(request, token) {
+      return await runNativeCompletionOperation(
+        context,
+        request.kind,
+        token,
+        async (logger) => {
+          const credential = await context.resolveCredential();
+          const payload = await postCompletionJson(
+            completionUrl(context),
+            buildOllamaQwenRequestBody(
+              context.provider,
+              context.model,
+              request,
+            ),
+            context.provider,
+            context.model,
+            credential,
+            token,
+            logger,
+          );
+          return parseOllamaGenerateResponse(
+            payload,
+            buildEffectiveStops([...(request.options.stop ?? []), ...QWEN_FIM_STOPS]),
           );
         },
       );
@@ -388,6 +447,7 @@ export const OLLAMA_GENERATE_PROVIDER_DEFINITION =
     operationFactories: {
       fim: createFimOperation,
       codegemma: createCodeGemmaOperation,
+      'qwen2.5-coder': createQwenOperation,
       zeta1: createZeta1Operation,
       zeta2: createZeta2Operation,
       'zeta2.1': createZeta21Operation,

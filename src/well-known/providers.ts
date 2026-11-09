@@ -32,6 +32,10 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     authTypes: ['api-key'],
     models: [
       'gpt-6-astra',
+      'gpt-6.1-sol',
+      'gpt-6.1-terra',
+      'gpt-6-luna',
+      'gpt-6-sol',
       'gpt-5.6-sol',
       'gpt-5.6-terra',
       'gpt-5.6-luna',
@@ -51,6 +55,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://generativelanguage.googleapis.com',
     authTypes: ['api-key'],
     models: [
+      'gemini-4-argon',
       'gemini-3.1-pro-preview',
       'gemini-3.8-flash',
       'gemini-3.7-flash',
@@ -64,6 +69,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://aiplatform.googleapis.com',
     authTypes: ['google-vertex-ai-auth'],
     models: [
+      'gemini-4-argon',
       'gemini-3.1-pro-preview',
       'gemini-3.8-flash',
       'gemini-3.7-flash',
@@ -77,6 +83,9 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.anthropic.com',
     authTypes: ['api-key'],
     models: [
+      'claude-opus-5-5',
+      'claude-sonnet-5-5',
+      'claude-haiku-5-5',
       'claude-fable-5-1',
       'claude-fable-5',
       'claude-mythos-5',
@@ -712,6 +721,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://open.bigmodel.cn/api/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -731,6 +741,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -749,6 +760,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.z.ai/api/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -768,6 +780,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'openai-chat-completion',
     baseUrl: 'https://api.z.ai/api/coding/paas/v4',
+    balanceProvider: { method: 'zhipu' },
     authTypes: ['api-key'],
     models: [
       'glm-5.3',
@@ -788,7 +801,11 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.minimaxi.com/anthropic',
     balanceProvider: { method: 'minimax' },
     authTypes: ['api-key'],
-    models: ['MiniMax-M3', 'MiniMax-M2.7-highspeed'],
+    models: [
+      'MiniMax-M3.1-Flash',
+      'MiniMax-M3',
+      'MiniMax-M2.7-highspeed',
+    ],
   },
   {
     name: 'MiniMax (International)',
@@ -797,7 +814,11 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.minimax.io/anthropic',
     balanceProvider: { method: 'minimax' },
     authTypes: ['api-key'],
-    models: ['MiniMax-M3', 'MiniMax-M2.7-highspeed'],
+    models: [
+      'MiniMax-M3.1-Flash',
+      'MiniMax-M3',
+      'MiniMax-M2.7-highspeed',
+    ],
   },
   {
     name: 'LongCat',
@@ -816,7 +837,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.cn',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
+    models: [
+      'kimi-k3.1-pro',
+      'kimi-k3.1-pro-highspeed',
+      'kimi-k3',
+      'kimi-k2.7-code',
+      'kimi-k2.7-code-highspeed',
+      'kimi-k2.6',
+    ],
   },
   {
     name: 'Moonshot AI (International)',
@@ -825,7 +853,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.moonshot.ai',
     balanceProvider: { method: 'moonshot-ai' },
     authTypes: ['api-key'],
-    models: ['kimi-k3', 'kimi-k2.7-code', 'kimi-k2.7-code-highspeed', 'kimi-k2.6'],
+    models: [
+      'kimi-k3.1-pro',
+      'kimi-k3.1-pro-highspeed',
+      'kimi-k3',
+      'kimi-k2.7-code',
+      'kimi-k2.7-code-highspeed',
+      'kimi-k2.6',
+    ],
   },
   {
     name: 'Moonshot AI (Coding Plan)',
@@ -834,7 +869,14 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     baseUrl: 'https://api.kimi.com/coding',
     balanceProvider: { method: 'kimi-code' },
     authTypes: ['api-key'],
-    models: ['k3', 'kimi-for-coding', 'kimi-for-coding-highspeed'],
+    models: [
+      'k3.1-pro',
+      'k3.1-pro-highspeed',
+      'k3',
+      'k3-256k',
+      'kimi-for-coding',
+      'kimi-for-coding-highspeed',
+    ],
   },
   {
     name: 'SiliconFlow (China)',

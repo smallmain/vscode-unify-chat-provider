@@ -27,6 +27,7 @@ export interface CompletionApiOperation<
 export interface CompletionApiOperations {
   readonly fim?: CompletionApiOperation<'fim'>;
   readonly codegemma?: CompletionApiOperation<'codegemma'>;
+  readonly 'qwen2.5-coder'?: CompletionApiOperation<'qwen2.5-coder'>;
   readonly 'copilot-replica-nes'?: CompletionApiOperation<'copilot-replica-nes'>;
   readonly zeta1?: CompletionApiOperation<'zeta1'>;
   readonly zeta2?: CompletionApiOperation<'zeta2'>;
@@ -129,6 +130,7 @@ export interface NativeCompletionApiContext {
 }
 
 export interface NativeCompletionApiOperationFactories {
+  readonly 'qwen2.5-coder'?: (context: NativeCompletionApiContext) => CompletionApiOperation<'qwen2.5-coder'>;
   readonly fim?: (
     context: NativeCompletionApiContext,
   ) => CompletionApiOperation<'fim'>;
@@ -167,6 +169,7 @@ function operationFactoryMarkers(
   factories: NativeCompletionApiOperationFactories,
 ): object {
   return {
+    ...(factories['qwen2.5-coder'] === undefined ? {} : { 'qwen2.5-coder': { execute: factories['qwen2.5-coder'] } }),
     ...(factories.fim === undefined
       ? {}
       : { fim: { execute: factories.fim } }),
@@ -221,6 +224,7 @@ export function createNativeCompletionApiProvider(
     transport: 'native',
     capabilities: definition.capabilities,
     operations: {
+      ...(factories['qwen2.5-coder'] === undefined ? {} : { 'qwen2.5-coder': factories['qwen2.5-coder'](context) }),
       ...(factories.fim === undefined
         ? {}
         : { fim: factories.fim(context) }),

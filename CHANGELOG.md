@@ -1,5 +1,20 @@
 # Changelog
 
+## v8.14.0 - 2026-10-09
+
+### Features
+- add sponsorship plans and placeholder assets (09937fe, SmallMain)
+
+### Fixes
+- preserve markerless tool history in agent host sessions (#348) (d5149ef, SmallMain)
+
+### Docs
+- add sponsors section to README (6cad2b5, SmallMain)
+- clarify sponsorship plan benefits and supplier interface requirements (08777f8, SmallMain)
+
+### Chores
+- remove placeholder sponsorship banner (17467e4, SmallMain)
+
 ## v8.13.0 - 2026-09-22
 
 ### Features

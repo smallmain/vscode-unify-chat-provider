@@ -463,9 +463,22 @@ describe('main-instance completion configuration sync', () => {
     });
   });
 
-  it('uses compatibility version 10 without changing protocol version 1', () => {
-    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(10);
+  it('uses a separate compatibility version for the new configuration IDs', () => {
+    expect(MAIN_INSTANCE_COMPATIBILITY_VERSION).toBe(11);
     expect(PROTOCOL_VERSION).toBe(1);
+  });
+
+  it('round-trips zhipu balance and Qwen completion configurations', () => {
+    const provider = parseProviderConfig({
+      type: 'openai-chat-completion', name: 'quota', baseUrl: 'https://bigmodel.cn',
+      balanceProvider: { method: 'zhipu' },
+      completion: { transport: 'native', templates: ['qwen2.5-coder'] },
+      models: [],
+    }, METHOD);
+    expect(provider).toMatchObject({
+      balanceProvider: { method: 'zhipu' },
+      completion: { transport: 'native', templates: ['qwen2.5-coder'] },
+    });
   });
 
   it('keeps a committed provider save successful when model ID migration fails', async () => {

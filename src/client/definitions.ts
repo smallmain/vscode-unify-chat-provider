@@ -586,6 +586,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicAlwaysOnAdaptiveThinking]: {
     supportedFamilys: [
+      'MiniMax-M3.1',
+      'claude-opus-5-5',
       'claude-fable-5',
       'claude-mythos-5',
       'claude-sonnet-5',
@@ -593,6 +595,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicXHighEffort]: {
     supportedFamilys: [
+      'claude-haiku-5-5',
+      'MiniMax-M3.1',
       'claude-fable-5-1',
       'claude-opus-5',
       'claude-sonnet-5',
@@ -647,6 +651,10 @@ export const FEATURES: Record<FeatureId, Feature> = {
     supportedFamilys: [
       'codex-mini-latest',
       'gpt-6-astra',
+      'gpt-6.1-sol',
+      'gpt-6.1-terra',
+      'gpt-6-sol',
+      'gpt-6-luna',
       'gpt-5.2',
       'gpt-5.1',
       'gpt-5.1-codex',
@@ -994,6 +1002,8 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.GeminiUseThinkingLevel]: {
     supportedFamilys: [
+      'gemini-4-',
+      'models/gemini-4-',
       'gemini-3.8-flash',
       'gemini-3-',
       'gemma-4-',
