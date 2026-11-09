@@ -17,6 +17,7 @@ export type ProxyType = 'vscode' | 'direct' | 'custom';
 export type CompletionTemplate =
   | 'fim'
   | 'codegemma'
+  | 'qwen2.5-coder'
   | 'copilot-replica-nes'
   | 'zeta1'
   | 'zeta2'

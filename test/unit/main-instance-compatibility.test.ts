@@ -142,7 +142,7 @@ import {
 const coordinators: MainInstanceCoordinator[] = [];
 
 beforeEach(() => {
-  network.welcomeCompatibilityVersion = 10;
+  network.welcomeCompatibilityVersion = MAIN_INSTANCE_COMPATIBILITY_VERSION;
   network.welcomeExtensionVersion = 'leader-1.0.0';
   network.writes = [];
 });
@@ -227,7 +227,7 @@ function hello(
 }
 
 describe('main-instance compatibility handshake', () => {
-  it('accepts a differently-versioned v10 follower at a v10 leader', () => {
+  it('accepts different extension versions with the same compatibility version', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
@@ -242,18 +242,18 @@ describe('main-instance compatibility handshake', () => {
     expect(response).toMatchObject({
       type: 'welcome',
       protocolVersion: 1,
-      mainInstanceCompatibilityVersion: 10,
+      mainInstanceCompatibilityVersion: MAIN_INSTANCE_COMPATIBILITY_VERSION,
     });
   });
 
-  it('rejects a v9 follower at a v10 leader', () => {
+  it('rejects a previous-contract follower that cannot preserve the new config IDs', () => {
     const coordinator = createCoordinator();
     Reflect.set(coordinator, 'authToken', 'test-token');
     const peer = createLeaderSocket();
 
     invokePrivate(coordinator, 'handleLeaderSideMessage', [
       peer.socket,
-      hello(9),
+      hello(10),
     ]);
 
     expect(peer.isDestroyed()).toBe(true);
@@ -266,7 +266,7 @@ describe('main-instance compatibility handshake', () => {
     });
   });
 
-  it('connects differently-versioned v10 follower and leader releases', async () => {
+  it('connects different extension releases using the current contract', async () => {
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 
@@ -286,12 +286,12 @@ describe('main-instance compatibility handshake', () => {
     expect(parseMessageLine(network.writes[0] ?? '')).toMatchObject({
       type: 'hello',
       extensionVersion: 'follower-9.9.9',
-      mainInstanceCompatibilityVersion: 10,
+      mainInstanceCompatibilityVersion: MAIN_INSTANCE_COMPATIBILITY_VERSION,
     });
   });
 
-  it('rejects a v9 leader at a v10 follower', async () => {
-    network.welcomeCompatibilityVersion = 9;
+  it('rejects a previous-contract leader that cannot preserve the new config IDs', async () => {
+    network.welcomeCompatibilityVersion = 10;
     const coordinator = createCoordinator();
     configureFollower(coordinator);
 

@@ -237,6 +237,38 @@ async function send(
 }
 
 describe('Responses markerless history requests', () => {
+  it('does not replay a display-only encrypted placeholder as reasoning text', async () => {
+    const request = await send([
+      message(vscode.LanguageModelChatMessageRole.User, new vscode.LanguageModelTextPart('question')),
+      message(vscode.LanguageModelChatMessageRole.Assistant, new vscode.LanguageModelThinkingPart('Encrypted thinking...')),
+    ]);
+    expect(request).toMatchObject({ input: [{ role: 'user' }] });
+    expect(JSON.stringify(request)).not.toContain('reasoning_text');
+  });
+  it.each(['redactedData', 'encrypted_content', 'encrypted'])('replays %s encrypted reasoning', async (key) => {
+    const request = await send([
+      message(vscode.LanguageModelChatMessageRole.User, new vscode.LanguageModelTextPart('question')),
+      message(vscode.LanguageModelChatMessageRole.Assistant, new vscode.LanguageModelThinkingPart('visible summary', 'rs-test', { [key]: 'opaque' })),
+    ]);
+    expect(request).toMatchObject({ input: [
+      { role: 'user' }, { type: 'reasoning', id: 'rs-test', summary: [], encrypted_content: 'opaque' },
+    ] });
+    expect(JSON.stringify(request)).not.toContain('visible summary');
+  });
+
+  it('strips output-only status from reasoning in a trusted marker', async () => {
+    const envelope = {
+      identity: createStatefulMarkerIdentity(config, model),
+      data: { data: [{ type: 'reasoning', id: 'rs-marker', summary: [], status: 'completed', encrypted_content: 'opaque' }] },
+    };
+    const marker = new vscode.LanguageModelDataPart(Buffer.from(`${modelId}\\${Buffer.from(JSON.stringify(envelope)).toString('base64')}`), 'stateful_marker');
+    const request = await send([
+      message(vscode.LanguageModelChatMessageRole.User, new vscode.LanguageModelTextPart('question')),
+      message(vscode.LanguageModelChatMessageRole.Assistant, marker),
+    ]);
+    expect(request).toMatchObject({ input: [{ role: 'user' }, { type: 'reasoning', encrypted_content: 'opaque' }] });
+    expect(JSON.stringify(request)).not.toContain('"status"');
+  });
   it.each([false, true])(
     'sends full tool history with proxy previous-response metadata=%s',
     async (withPreviousResponse) => {

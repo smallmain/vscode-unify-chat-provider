@@ -91,6 +91,7 @@ export interface AlgorithmResponseMap {
 export interface CompletionResponseMap {
   readonly fim: BufferedCompletionResponse;
   readonly codegemma: BufferedCompletionResponse;
+  readonly 'qwen2.5-coder': BufferedCompletionResponse;
   readonly 'copilot-replica-nes': StreamingCompletionResponse;
   readonly zeta1: BufferedCompletionResponse;
   readonly zeta2: BufferedCompletionResponse;

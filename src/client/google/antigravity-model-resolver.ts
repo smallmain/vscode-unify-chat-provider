@@ -1,6 +1,7 @@
 export type Gemini3ThinkingLevel = 'minimal' | 'low' | 'medium' | 'high';
 
 export const ANTIGRAVITY_AVAILABLE_MODEL_IDS = [
+  'gemini-3.8-flash',
   'gemini-3.7-flash',
   'gemini-3.6-flash',
   'gemini-3.5-flash',
@@ -140,7 +141,8 @@ export function resolveAntigravityModelForRequest(
   if (
     baseModelLower === 'gemini-3.5-flash' ||
     baseModelLower === 'gemini-3.6-flash' ||
-    baseModelLower === 'gemini-3.7-flash'
+    baseModelLower === 'gemini-3.7-flash' ||
+    baseModelLower === 'gemini-3.8-flash'
   ) {
     const flashThinkingLevel =
       normalizeAntigravityFlashThinkingLevel(effectiveLevel);

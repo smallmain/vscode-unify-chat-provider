@@ -3,6 +3,7 @@ import type {
   AlgorithmRequestKind,
   AlgorithmRequestMap,
   CodeGemmaCompletionRequest,
+  QwenCompletionRequest,
   CodestralCompletionRequest,
   CompletionRequestKind,
   CompletionRequestMap,
@@ -49,6 +50,7 @@ export interface CompletionRequestExecutionContext {
     request: FimCompletionRequest,
     token: vscode.CancellationToken,
   ): Promise<CompletionResponseMap['fim']>;
+  executeQwen(request: QwenCompletionRequest, token: vscode.CancellationToken): Promise<CompletionResponseMap['qwen2.5-coder']>;
   executeCodeGemma(
     request: CodeGemmaCompletionRequest,
     token: vscode.CancellationToken,
@@ -123,6 +125,8 @@ function defineTransformer<
 
 const executeFim: ExecuteTarget<'fim'> = (context, request, token) =>
   context.executeFim(request, token);
+
+const executeQwen: ExecuteTarget<'qwen2.5-coder'> = (context, request, token) => context.executeQwen(request, token);
 
 const executeCodeGemma: ExecuteTarget<'codegemma'> = (
   context,
@@ -216,6 +220,35 @@ const simpleToCodeGemma = defineTransformer(
   executeCodeGemma,
 );
 
+const simpleToQwen = defineTransformer(
+  {
+    sourceKind: 'simple',
+    targetKind: 'qwen2.5-coder',
+    transformRequest(source) {
+      return {
+        kind: 'qwen2.5-coder',
+        prefix: source.prefix,
+        suffix: source.suffix,
+        contexts: [],
+        options: {},
+      };
+    },
+    transformResponse(_source, _target, response) {
+      const first = firstChoice(response);
+      return {
+        kind: 'simple',
+        text: first?.text ?? '',
+        ...(first?.finishReason === undefined
+          ? {}
+          : { finishReason: first.finishReason }),
+        ...(response.usage === undefined ? {} : { usage: response.usage }),
+        ...(response.choices.length > 1 ? { choices: response.choices } : {}),
+      };
+    },
+  } satisfies RequestTransformer<'simple', 'qwen2.5-coder'>,
+  executeQwen,
+);
+
 const copilotFimToFim = defineTransformer(
   {
     sourceKind: 'copilot-replica/fim',
@@ -274,6 +307,38 @@ const copilotFimToCodeGemma = defineTransformer(
     },
   } satisfies RequestTransformer<'copilot-replica/fim', 'codegemma'>,
   executeCodeGemma,
+);
+
+const copilotFimToQwen = defineTransformer(
+  {
+    sourceKind: 'copilot-replica/fim',
+    targetKind: 'qwen2.5-coder',
+    transformRequest(source) {
+      return {
+        kind: 'qwen2.5-coder',
+        ...(source.targetPath === undefined
+          ? {}
+          : { targetPath: source.targetPath }),
+        prefix: source.prefix,
+        suffix: source.suffix,
+        contexts: source.contexts,
+        options: source.options,
+      };
+    },
+    transformResponse(_source, _target, response) {
+      const first = firstChoice(response);
+      return {
+        kind: 'copilot-replica/fim',
+        text: first?.text ?? '',
+        ...(first?.finishReason === undefined
+          ? {}
+          : { finishReason: first.finishReason }),
+        ...(response.usage === undefined ? {} : { usage: response.usage }),
+        ...(response.choices.length > 1 ? { choices: response.choices } : {}),
+      };
+    },
+  } satisfies RequestTransformer<'copilot-replica/fim', 'qwen2.5-coder'>,
+  executeQwen,
 );
 
 const copilotNesToCompatible = defineTransformer(
@@ -492,8 +557,8 @@ export type RequestTransformerTable = {
 };
 
 export const REQUEST_TRANSFORMERS = {
-  simple: [simpleToFim, simpleToCodeGemma],
-  'copilot-replica/fim': [copilotFimToFim, copilotFimToCodeGemma],
+  simple: [simpleToFim, simpleToCodeGemma, simpleToQwen],
+  'copilot-replica/fim': [copilotFimToFim, copilotFimToCodeGemma, copilotFimToQwen],
   'copilot-replica/nes': [copilotNesToCompatible],
   'copilot-replica/cursor-prediction': [cursorPredictionToCompatible],
   zed: [zedToZeta3, zedToZeta21, zedToZeta2, zedToZeta1],

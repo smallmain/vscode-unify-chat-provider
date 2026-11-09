@@ -269,6 +269,11 @@
           "scope": "application",
           "description": "%configuration.networkSettings.description%",
           "properties": {
+            "ignoreSSLErrors": {
+              "type": "boolean",
+              "default": false,
+              "description": "%configuration.networkSettings.ignoreSSLErrors.description%"
+            },
             "timeout": {
               "type": "object",
               "description": "%configuration.networkSettings.timeout.description%",
@@ -840,6 +845,18 @@
                     "properties": {
                       "method": {
                         "type": "string",
+                        "const": "zhipu",
+                        "description": "%configuration.endpoints.balanceProvider.method.zhipu.description%"
+                      }
+                    },
+                    "required": [
+                      "method"
+                    ]
+                  },
+                  {
+                    "properties": {
+                      "method": {
+                        "type": "string",
                         "const": "sub2api",
                         "description": "%configuration.endpoints.balanceProvider.method.sub2api.description%"
                       }
@@ -959,6 +976,7 @@
                           "enum": [
                             "fim",
                             "codegemma",
+                            "qwen2.5-coder",
                             "copilot-replica-nes",
                             "zeta1",
                             "zeta2",
@@ -1585,6 +1603,7 @@
                                     "enum": [
                                       "fim",
                                       "codegemma",
+                                      "qwen2.5-coder",
                                       "copilot-replica-nes",
                                       "zeta1",
                                       "zeta2",
@@ -2027,13 +2046,18 @@
     "@types/ws": "^8.18.1",
     "@vscode/test-electron": "^3.0.0",
     "@vscode/tree-sitter-wasm": "0.0.5-php.2",
-    "@vscode/vsce": "3.9.2",
+    "@vscode/vsce": "4.1.0",
     "esbuild": "0.28.1",
     "jszip": "^3.10.1",
     "tsx": "^4.23.0",
     "typescript": "^6.0.3",
-    "vitest": "^4.1.10",
+    "vitest": "^4.1.12",
     "web-tree-sitter": "0.23.2"
+  },
+  "overrides": {
+    "@vscode/vsce": {
+      "minimatch": "$minimatch"
+    }
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.102.0",
@@ -2042,12 +2066,12 @@
     "@iarna/toml": "^2.2.5",
     "@vscode/sudo-prompt": "^9.3.2",
     "ignore": "7.0.6",
-    "minimatch": "^10.2.5",
+    "minimatch": "^11.0.5",
     "ollama": "^0.6.3",
     "openai": "^6.46.0",
     "socks": "^2.8.9",
     "tiktoken": "^1.0.22",
-    "undici": "^7.22.0",
+    "undici": "^7.30.1",
     "ws": "^8.21.0"
   }
 }

@@ -22,6 +22,7 @@ import type {
   AlgorithmRequestKind,
   AlgorithmRequestMap,
   CodeGemmaCompletionRequest,
+  QwenCompletionRequest,
   CompletionRequestKind,
   CompletionRequestMap,
   CopilotReplicaAlgorithmCursorPredictionRequest,
@@ -61,7 +62,7 @@ function supportsTemplate(
 }
 
 function withCandidateCapability<
-  Kind extends 'fim' | 'codegemma',
+  Kind extends 'fim' | 'codegemma' | 'qwen2.5-coder',
 >(
   request: CompletionRequestMap[Kind],
   capability: CompletionApiCapability,
@@ -227,6 +228,17 @@ export class ConfiguredCompletionModel
     );
   }
 
+  async executeQwen(
+    request: QwenCompletionRequest,
+    token: vscode.CancellationToken,
+  ) {
+    const resolved = await this.resolveOperation('qwen2.5-coder');
+    return await resolved.operation.execute(
+      withCandidateCapability<'qwen2.5-coder'>(request, resolved.capability),
+      token,
+    );
+  }
+
   async executeCopilotReplicaNes(
     request: CopilotReplicaNesCompletionRequest,
     token: vscode.CancellationToken,
@@ -338,6 +350,7 @@ export class ConfiguredCompletionModel
   private async resolveOperation(
     kind: 'codegemma',
   ): Promise<ResolvedCompletionApiOperation<'codegemma'>>;
+  private async resolveOperation(kind: 'qwen2.5-coder'): Promise<ResolvedCompletionApiOperation<'qwen2.5-coder'>>;
   private async resolveOperation(
     kind: 'copilot-replica-nes',
   ): Promise<ResolvedCompletionApiOperation<'copilot-replica-nes'>>;
@@ -364,6 +377,7 @@ export class ConfiguredCompletionModel
   ): Promise<
     | ResolvedCompletionApiOperation<'fim'>
     | ResolvedCompletionApiOperation<'codegemma'>
+    | ResolvedCompletionApiOperation<'qwen2.5-coder'>
     | ResolvedCompletionApiOperation<'copilot-replica-nes'>
     | ResolvedCompletionApiOperation<'zeta1'>
     | ResolvedCompletionApiOperation<'zeta2'>
@@ -375,6 +389,12 @@ export class ConfiguredCompletionModel
     switch (kind) {
       case 'fim':
         return await this.resolveFimOperation();
+      case 'qwen2.5-coder':
+        return await this.resolveNativeOnlyOperation(kind, (provider) => {
+          const capability = provider.capabilities[kind];
+          const operation = provider.operations[kind];
+          return capability && operation ? { capability, operation } : undefined;
+        });
       case 'codegemma':
         return await this.resolveCodeGemmaOperation();
       case 'copilot-replica-nes':
@@ -654,6 +674,8 @@ export class ConfiguredCompletionModel
     switch (kind) {
       case 'fim':
         return provider.capabilities.fim !== undefined && provider.operations.fim !== undefined;
+      case 'qwen2.5-coder':
+        return provider.capabilities[kind] !== undefined && provider.operations[kind] !== undefined;
       case 'codegemma':
         return provider.capabilities.codegemma !== undefined && provider.operations.codegemma !== undefined;
       case 'copilot-replica-nes':

@@ -42,7 +42,7 @@ export const XAI_TOKEN_AUTH_VALUE = 'xai-grok-cli';
 export const XAI_CLIENT_VERSION_HEADER = 'x-grok-client-version';
 
 /** Client version value — keep in sync with the current Grok CLI client version. */
-export const XAI_CLIENT_VERSION_VALUE = '0.2.93';
+export const XAI_CLIENT_VERSION_VALUE = '1.0.46';
 
 /** User-Agent string for chat-proxy requests. */
 export const XAI_USER_AGENT = `xai-grok-workspace/${XAI_CLIENT_VERSION_VALUE}`;

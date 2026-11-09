@@ -90,6 +90,7 @@ import { RequestLogger } from '../../src/logger';
 import type { ChatRequestTrace, ModelConfig, ProviderConfig } from '../../src/types';
 import { buildZedProviderRequest } from '../../src/client/zed/chat-codecs';
 import { ZedChatEventDecoder } from '../../src/client/zed/codecs';
+import { cleanJsonSchemaForGemini } from '../../src/client/zed/gemini-schema';
 import {
   ZedProvider,
   ZedStreamEndedUnexpectedlyError,
@@ -229,6 +230,8 @@ function options(): vscode.ProvideLanguageModelChatResponseOptions {
         inputSchema: {
           type: 'object',
           properties: { query: { type: 'string' } },
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          'x-mcp-header': 'Authorization: Bearer test',
         },
       },
     ],
@@ -402,9 +405,23 @@ describe('Zed Chat adapters', () => {
       systemInstruction: { parts: [{ text: 'system' }] },
       contents: [{ role: 'user', parts: [{ text: 'hello' }] }],
       generationConfig: { candidateCount: 1, stopSequences: [] },
-      tools: [{ functionDeclarations: [{ name: 'lookup' }] }],
+      tools: [
+        {
+          functionDeclarations: [
+            {
+              name: 'lookup',
+              parameters: {
+                type: 'object',
+                properties: { query: { type: 'string' } },
+              },
+            },
+          ],
+        },
+      ],
       toolConfig: { functionCallingConfig: { mode: 'auto' } },
     });
+    expect(JSON.stringify(google)).not.toContain('$schema');
+    expect(JSON.stringify(google)).not.toContain('x-mcp-header');
 
     const xai = buildZedProviderRequest(
       'x_ai',
@@ -552,6 +569,123 @@ describe('Zed Chat adapters', () => {
     );
     expect(disabledGemini25).toMatchObject({
       generationConfig: { thinkingConfig: { thinkingBudget: 0 } },
+    });
+
+    const enabledGemini25 = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-2.5-flash#reasoningEffort=high',
+        thinking: { type: 'auto', effort: 'high' },
+      },
+      messages(),
+      options(),
+    );
+    expect(enabledGemini25).toMatchObject({
+      model: 'models/gemini-2.5-flash',
+      generationConfig: { thinkingConfig: { includeThoughts: true } },
+    });
+    expect(
+      enabledGemini25['generationConfig'],
+    ).not.toHaveProperty('thinkingConfig.thinkingLevel');
+
+    const disabledGemini25Pro = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-2.5-pro', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini25Pro).toMatchObject({
+      generationConfig: { candidateCount: 1, stopSequences: [] },
+    });
+    expect(
+      disabledGemini25Pro['generationConfig'],
+    ).not.toHaveProperty('thinkingConfig');
+
+    const clampedGemini38Minimal = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.8-flash#reasoningEffort=minimal',
+        thinking: { type: 'auto', effort: 'minimal' },
+      },
+      messages(),
+      options(),
+    );
+    expect(clampedGemini38Minimal).toMatchObject({
+      model: 'models/gemini-3.8-flash',
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'LOW' },
+      },
+    });
+
+    const disabledGemini38 = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-3.8-flash', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini38).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } },
+    });
+
+    const xhighEffort = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.5-flash#reasoningEffort=xhigh',
+        thinking: { type: 'auto', effort: 'xhigh' },
+      },
+      messages(),
+      options(),
+    );
+    expect(xhighEffort).toMatchObject({
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'HIGH' },
+      },
+    });
+
+    const maxEffort = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-3.5-flash#reasoningEffort=max',
+        thinking: { type: 'auto', effort: 'max' },
+      },
+      messages(),
+      options(),
+    );
+    expect(maxEffort).toMatchObject({
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'HIGH' },
+      },
+    });
+
+    const enabledGemini4 = buildZedProviderRequest(
+      'google',
+      {
+        ...model,
+        id: 'gemini-4-argon#reasoningEffort=medium',
+        thinking: { type: 'auto', effort: 'medium' },
+      },
+      messages(),
+      options(),
+    );
+    expect(enabledGemini4).toMatchObject({
+      model: 'models/gemini-4-argon',
+      generationConfig: {
+        thinkingConfig: { includeThoughts: true, thinkingLevel: 'MEDIUM' },
+      },
+    });
+
+    const disabledGemini4 = buildZedProviderRequest(
+      'google',
+      { ...model, id: 'gemini-4-argon', thinking: { type: 'disabled' } },
+      messages(),
+      options(),
+    );
+    expect(disabledGemini4).toMatchObject({
+      generationConfig: { thinkingConfig: { thinkingLevel: 'LOW' } },
     });
   });
 
@@ -1294,5 +1428,215 @@ describe('Zed Chat adapters', () => {
       ),
     ).toEqual([]);
     expect(calls).toBe(callsAfterError);
+  });
+});
+
+describe('cleanJsonSchemaForGemini', () => {
+  it('strips non-Gemini fields from the root and nested properties', () => {
+    const cleaned = cleanJsonSchemaForGemini({
+      type: 'object',
+      $schema: 'https://json-schema.org/draft/2020-12/schema',
+      'x-mcp-header': 'Authorization: Bearer test',
+      additionalProperties: false,
+      exclusiveMinimum: 0,
+      'x-custom': true,
+      properties: {
+        query: {
+          type: 'string',
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+          'x-mcp-header': 'x-token',
+          'x-custom': 1,
+        },
+      },
+    });
+    expect(cleaned).toEqual({
+      type: 'object',
+      properties: { query: { type: 'string' } },
+    });
+  });
+
+  it('keeps whitelisted Gemini schema fields', () => {
+    const cleaned = cleanJsonSchemaForGemini({
+      type: 'object',
+      title: 'Tool',
+      description: 'A tool',
+      nullable: true,
+      default: { query: 'x' },
+      example: { query: 'y' },
+      required: ['query', 42, '  '],
+      propertyOrdering: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          format: 'date',
+          pattern: '^[a-z]+$',
+          minLength: 1,
+          maxLength: 9,
+          enum: ['a', 'b'],
+        },
+        count: { type: 'number', minimum: 1, maximum: 9 },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 5,
+        },
+        meta: { type: 'object', minProperties: 1, maxProperties: 3 },
+      },
+    });
+    expect(cleaned).toEqual({
+      type: 'object',
+      title: 'Tool',
+      description: 'A tool',
+      nullable: true,
+      default: { query: 'x' },
+      example: { query: 'y' },
+      required: ['query'],
+      propertyOrdering: ['query'],
+      properties: {
+        query: {
+          type: 'string',
+          format: 'date',
+          pattern: '^[a-z]+$',
+          minLength: 1,
+          maxLength: 9,
+          enum: ['a', 'b'],
+        },
+        count: { type: 'number', minimum: 1, maximum: 9 },
+        tags: {
+          type: 'array',
+          items: { type: 'string' },
+          minItems: 1,
+          maxItems: 5,
+        },
+        meta: { type: 'object', minProperties: 1, maxProperties: 3 },
+      },
+    });
+  });
+
+  it('keeps anyOf variants and cleans dirty fields inside them', () => {
+    const cleaned = cleanJsonSchemaForGemini({
+      anyOf: [
+        {
+          type: 'string',
+          minLength: 1,
+          $schema: 'https://json-schema.org/draft/2020-12/schema',
+        },
+        { type: 'number', minimum: 0 },
+      ],
+    });
+    expect(cleaned).toEqual({
+      anyOf: [{ type: 'string', minLength: 1 }, { type: 'number', minimum: 0 }],
+    });
+  });
+
+  it('maps array-typed schemas onto nullable or anyOf shapes', () => {
+    expect(cleanJsonSchemaForGemini({ type: ['string', 'null'] })).toEqual({
+      type: 'string',
+      nullable: true,
+    });
+    expect(cleanJsonSchemaForGemini({ type: ['string', 'number'] })).toEqual({
+      anyOf: [{ type: 'string' }, { type: 'number' }],
+    });
+    expect(
+      cleanJsonSchemaForGemini({ type: ['string', 'null', 'number'] }),
+    ).toEqual({
+      type: 'string',
+      nullable: true,
+      description: 'Accepts: string | number',
+    });
+  });
+
+  it('resolves $ref to object placeholders and drops $defs', () => {
+    expect(
+      cleanJsonSchemaForGemini({
+        $defs: { Item: { type: 'string' } },
+        $ref: '#/$defs/Item',
+      }),
+    ).toEqual({ type: 'object', description: 'See: Item' });
+    expect(
+      cleanJsonSchemaForGemini({
+        definitions: { Item: { type: 'string' } },
+        $ref: '#/definitions/Item',
+        description: 'An item',
+      }),
+    ).toEqual({ type: 'object', description: 'An item (See: Item)' });
+  });
+
+  it('merges allOf branches into one schema', () => {
+    expect(
+      cleanJsonSchemaForGemini({
+        type: 'object',
+        allOf: [
+          { properties: { a: { type: 'string' } }, required: ['a'] },
+          { properties: { b: { type: 'number' } }, required: ['b'] },
+        ],
+      }),
+    ).toEqual({
+      type: 'object',
+      properties: { a: { type: 'string' }, b: { type: 'number' } },
+      required: ['a', 'b'],
+    });
+  });
+
+  it('converts oneOf to anyOf and const to enum', () => {
+    expect(
+      cleanJsonSchemaForGemini({
+        oneOf: [{ type: 'string' }, { type: 'number' }],
+      }),
+    ).toEqual({ anyOf: [{ type: 'string' }, { type: 'number' }] });
+    expect(
+      cleanJsonSchemaForGemini({ type: 'string', const: 'fixed' }),
+    ).toEqual({ type: 'string', enum: ['fixed'] });
+  });
+
+  it('turns enumDescriptions and propertyNames into description hints', () => {
+    expect(
+      cleanJsonSchemaForGemini({
+        type: 'object',
+        propertyNames: { pattern: '^[a-z]+$' },
+        properties: {
+          mode: {
+            type: 'string',
+            enum: ['a', 'b'],
+            enumDescriptions: ['A desc', 'B desc'],
+          },
+        },
+      }),
+    ).toEqual({
+      type: 'object',
+      description: 'propertyNames: removed',
+      properties: {
+        mode: {
+          type: 'string',
+          enum: ['a', 'b'],
+          description: 'enumDescriptions: removed',
+        },
+      },
+    });
+  });
+
+  it('falls back to an empty object schema for unusable input', () => {
+    const fallback = { type: 'object', properties: {} };
+    expect(cleanJsonSchemaForGemini(undefined)).toEqual(fallback);
+    expect(cleanJsonSchemaForGemini(null)).toEqual(fallback);
+    expect(cleanJsonSchemaForGemini('schema')).toEqual(fallback);
+    expect(cleanJsonSchemaForGemini({})).toEqual(fallback);
+    expect(
+      cleanJsonSchemaForGemini({ $schema: 'https://json-schema.org' }),
+    ).toEqual(fallback);
+  });
+
+  it('does not mutate the input schema', () => {
+    const input: Record<string, unknown> = {
+      type: 'object',
+      properties: {
+        query: { type: 'string', $schema: 'https://json-schema.org' },
+      },
+      allOf: [{ properties: { extra: { type: 'number' } } }],
+    };
+    const snapshot = JSON.parse(JSON.stringify(input));
+    cleanJsonSchemaForGemini(input);
+    expect(input).toEqual(snapshot);
   });
 });

@@ -1,4 +1,5 @@
 {
+  "configuration.networkSettings.ignoreSSLErrors.description": "全局忽略 API 请求的 TLS 证书错误。默认关闭，开启会降低连接安全性。",
   "displayName": "Unify Chat Provider",
   "description": "通过 Language Model API，将多个大语言模型 API 供应商集成到 VS Code 的 GitHub Copilot Chat 中。",
   "languageModelChatProviders.displayName": "Unify Chat Provider",
@@ -113,6 +114,7 @@
   "configuration.endpoints.balanceProvider.method.codex.description": "使用 Codex 用量监控。",
   "configuration.endpoints.balanceProvider.method.synthetic.description": "使用 Synthetic 配额监控。",
   "configuration.endpoints.balanceProvider.method.minimax.description": "使用 MiniMax 余额监控。",
+  "configuration.endpoints.balanceProvider.method.zhipu.description": "使用智谱余额监控。",
   "configuration.endpoints.balanceProvider.method.sub2api.description": "使用 Sub2API 余额与配额监控。",
   "configuration.endpoints.balanceProvider.method.newapi.description": "使用 New API 余额监控。",
   "configuration.endpoints.balanceProvider.newapi.userId.description": "New API 用户 ID。",
