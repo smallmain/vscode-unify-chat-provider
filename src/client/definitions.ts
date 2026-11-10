@@ -336,6 +336,8 @@ export enum FeatureId {
    * @see https://platform.claude.com/docs/en/about-claude/models/whats-new-opus-5#mid-conversation-tool-changes-beta
    */
   AnthropicMidConversationToolChanges = 'anthropic_mid-conversation-tool-changes',
+  /** @see https://platform.claude.com/docs/en/build-with-claude/preserved-thinking */
+  AnthropicThinkingBlockBinding = 'anthropic_thinking-block-binding',
   /**
    * Adaptive thinking is always enabled and cannot be disabled.
    *
@@ -583,6 +585,13 @@ export const FEATURES: Record<FeatureId, Feature> = {
   },
   [FeatureId.AnthropicMidConversationToolChanges]: {
     supportedFamilys: ['claude-opus-5'],
+  },
+  [FeatureId.AnthropicThinkingBlockBinding]: {
+    supportedFamilys: [
+      'claude-fable-5-1', 'claude-fable-5-2',
+      'claude-mythos-5-1', 'claude-mythos-5-2',
+      'claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5',
+    ],
   },
   [FeatureId.AnthropicAlwaysOnAdaptiveThinking]: {
     supportedFamilys: [
