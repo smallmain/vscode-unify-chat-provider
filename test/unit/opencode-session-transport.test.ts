@@ -25,7 +25,7 @@ vi.mock('vscode', () => {
     LanguageModelTextPart,
     LanguageModelDataPart,
     LanguageModelThinkingPart: class {
-      constructor(readonly value: string | readonly string[]) {}
+      constructor(readonly value: string | readonly string[], readonly id?: string, readonly metadata?: object) {}
     },
     LanguageModelToolCallPart,
     LanguageModelToolResultPart,
@@ -225,5 +225,53 @@ describe('OpenCode request isolation', () => {
     })).rejects.toThrow(STOP);
     expect(state.requests).toHaveLength(1);
     expect(state.requests[0].headers.has('x-opencode-session')).toBe(false);
+  });
+});
+
+describe('Anthropic thinking prefix recovery SDK serialization', () => {
+  it.each(['command-code', 'anthropic'] as const)('sends binding controls through %s', async (type) => {
+    const config = configuration(type, 'https://api.anthropic.com/v1');
+    config.extraHeaders = { 'Anthropic-Beta': 'custom-beta-2026-01-01' };
+    const history = [
+      ...messages,
+      {
+        role: vscode.LanguageModelChatMessageRole.Assistant,
+        name: undefined,
+        content: [
+          new vscode.LanguageModelThinkingPart('earlier reasoning', undefined, {
+            _completeThinking: 'earlier reasoning', signature: 'earlier-signature',
+          }),
+          new vscode.LanguageModelTextPart('earlier answer'),
+        ],
+      },
+      { ...messages[0], content: [new vscode.LanguageModelTextPart('continue with a new tool')] },
+    ];
+    await expect(send(new PROVIDER_TYPES[type].class(config), {
+      id: 'claude-haiku-5-5', stream: true, thinking: { type: 'auto', effort: 'medium' },
+    }, history)).rejects.toThrow(STOP);
+    expect(state.requests).toHaveLength(1);
+    const request = state.requests[0];
+    expect(request.headers.get('anthropic-beta')).toContain('thinking-binding-controls-2026-08-01');
+    expect(request.headers.get('anthropic-beta')).toContain('custom-beta-2026-01-01');
+    const body: unknown = await request.json();
+    expect(body).toMatchObject({
+      thinking: { type: 'adaptive', block_binding: { prefix_mismatch_behavior: 'drop_block' } },
+    });
+    expect(JSON.stringify(body)).toContain('earlier-signature');
+  });
+
+  it('keeps the binding beta out of older Claude requests', async () => {
+    const config = configuration('anthropic', 'https://api.anthropic.com/v1');
+    const history = [
+      ...messages,
+      { role: vscode.LanguageModelChatMessageRole.Assistant, name: undefined, content: [
+        new vscode.LanguageModelThinkingPart('earlier', undefined, { _completeThinking: 'earlier', signature: 'signature' }),
+      ] },
+      ...messages,
+    ];
+    await expect(send(new PROVIDER_TYPES.anthropic.class(config), {
+      id: 'claude-haiku-4-5', stream: false, thinking: { type: 'enabled', budgetTokens: 1024 },
+    }, history)).rejects.toThrow(STOP);
+    expect(state.requests[0].headers.get('anthropic-beta') ?? '').not.toContain('thinking-binding-controls');
   });
 });

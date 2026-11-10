@@ -42,6 +42,8 @@ import {
 } from './utils';
 import { SecretStore } from './secret';
 import { AuthManager } from './auth';
+import { CredentialRequestCoordinator } from './auth/credential-request';
+import { stableStringify } from './config-ops';
 import { toAuthTokenInfo, type AuthTokenInfo } from './auth/types';
 import {
   computeStaticAuthFingerprint,
@@ -95,6 +97,7 @@ interface BalanceConfigurationOption {
 
 export class UnifyChatService implements vscode.LanguageModelChatProvider {
   private readonly clients = new Map<string, ApiProvider>();
+  private readonly credentialRequests = new CredentialRequestCoordinator<AuthTokenInfo>();
   private readonly onDidChangeModelInfoEmitter =
     new vscode.EventEmitter<void>();
 
@@ -528,8 +531,27 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
   private async resolveCredential(
     providerName: string,
+    token: vscode.CancellationToken,
+  ): Promise<AuthTokenInfo> {
+    const provider = this.configStore.getProvider(providerName);
+    const key = stableStringify({
+      providerName,
+      type: provider?.type,
+      baseUrl: provider?.baseUrl,
+      useRawBaseUrl: provider?.useRawBaseUrl,
+      auth: provider?.auth,
+    });
+    return this.credentialRequests.run(key, token, (operationToken) =>
+      this.resolveCredentialInteractively(providerName, operationToken),
+    );
+  }
+
+  private async resolveCredentialInteractively(
+    providerName: string,
+    token: vscode.CancellationToken,
   ): Promise<AuthTokenInfo> {
     while (true) {
+      throwIfCredentialRequestCancelled(token);
       const provider = this.configStore.getProvider(providerName);
       if (!provider) {
         throw new Error(t('Provider "{0}" not found.', providerName));
@@ -547,6 +569,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
       }
 
       const credential = await this.authManager.getCredential(providerName);
+      throwIfCredentialRequestCancelled(token);
 
       if (credential) {
         return toAuthTokenInfo(credential);
@@ -576,12 +599,15 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           { modal: true },
           ...buttons,
         );
+        throwIfCredentialRequestCancelled(token);
 
         if (action === t('Retry')) {
           const success = await this.authManager.retryRefresh(providerName);
+          throwIfCredentialRequestCancelled(token);
           if (success) {
             const newCredential =
               await this.authManager.getCredential(providerName);
+            throwIfCredentialRequestCancelled(token);
             if (newCredential) {
               return toAuthTokenInfo(newCredential);
             }
@@ -598,9 +624,11 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
             kind: 'providerForm',
             providerName,
           });
+          throwIfCredentialRequestCancelled(token);
 
           const newCredential =
             await this.authManager.getCredential(providerName);
+          throwIfCredentialRequestCancelled(token);
           if (newCredential) {
             return toAuthTokenInfo(newCredential);
           }
@@ -622,11 +650,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
           { modal: true },
           t('Authenticate'),
         );
+        throwIfCredentialRequestCancelled(token);
         if (confirm === t('Authenticate')) {
           const result = await authProvider.configure();
+          throwIfCredentialRequestCancelled(token);
           if (result.success) {
             const newCredential =
               await this.authManager.getCredential(providerName);
+            throwIfCredentialRequestCancelled(token);
             if (newCredential) {
               return toAuthTokenInfo(newCredential);
             }
@@ -660,19 +691,22 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
 
   private async resolveRequestProviderAndCredential(
     modelId: string,
+    token: vscode.CancellationToken,
   ): Promise<{
     provider: ProviderConfig;
     model: ModelConfig;
     credential: AuthTokenInfo;
   }> {
+    throwIfCredentialRequestCancelled(token);
     let found = await this.findProviderAndModel(modelId);
     if (!found) {
       throw new Error(`Model not found: ${modelId}`);
     }
 
     for (let attempt = 0; attempt < 3; attempt++) {
-      const credential = await this.resolveCredential(found.provider.name);
+      const credential = await this.resolveCredential(found.provider.name, token);
       const resolved = await this.findProviderAndModel(modelId);
+      throwIfCredentialRequestCancelled(token);
       if (!resolved) {
         throw new Error(`Model not found: ${modelId}`);
       }
@@ -722,7 +756,7 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
         provider: resolvedProvider,
         model: resolvedModel,
         credential,
-      } = await this.resolveRequestProviderAndCredential(model.id);
+      } = await this.resolveRequestProviderAndCredential(model.id, token);
       const resolvedRequestModel = applyPresetTemplateSelections(
         resolvedModel,
         this.canUseChatProviderProposal
@@ -972,9 +1006,14 @@ export class UnifyChatService implements vscode.LanguageModelChatProvider {
   }
 
   dispose(): void {
+    this.credentialRequests.dispose();
     this.clearClients();
     this.onDidChangeModelInfoEmitter.dispose();
   }
+}
+
+function throwIfCredentialRequestCancelled(token: vscode.CancellationToken): void {
+  if (token.isCancellationRequested) throw new vscode.CancellationError();
 }
 
 function sessionAuthTargetSignature(

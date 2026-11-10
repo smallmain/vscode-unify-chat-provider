@@ -24,6 +24,7 @@ import { createSimpleHttpLogger } from '../../logger';
 import type { ProviderHttpLogger, RequestLogger } from '../../logger';
 import { ApiProvider } from '../interface';
 import { applyOpenCodeSessionHeader } from '../opencode/session';
+import { applyThinkingBlockBinding } from './thinking-block-binding';
 import {
   createStatefulMarkerIdentity,
   DEFAULT_CONTEXT_CACHE_TTL_SECONDS,
@@ -1081,6 +1082,9 @@ export class AnthropicProvider implements ApiProvider {
       });
 
       Object.assign(requestBase, this.config.extraBody, model.extraBody);
+      const thinkingBindingApplied = isFeatureSupported(
+        FeatureId.AnthropicThinkingBlockBinding, this.config, model,
+      ) && applyThinkingBlockBinding(requestBase);
       requestBase = this.finalizeRequestBase(requestBase, {
         model,
         stream,
@@ -1094,6 +1098,17 @@ export class AnthropicProvider implements ApiProvider {
         messages: sanitizedMessages,
         requestState,
       });
+      if (thinkingBindingApplied) {
+        const betas = new Set(requestBase.betas ?? []);
+        for (const key of Object.keys(headers)) {
+          if (key.toLowerCase() !== 'anthropic-beta') continue;
+          for (const beta of headers[key]?.split(',') ?? []) {
+            if (beta.trim()) betas.add(beta.trim());
+          }
+          delete headers[key];
+        }
+        headers['anthropic-beta'] = [...betas].join(',');
+      }
       applyOpenCodeSessionHeader(
         headers, this.config, model, messages, requestTrace,
       );

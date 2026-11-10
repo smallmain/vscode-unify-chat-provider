@@ -2,6 +2,7 @@ import * as assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { writeFile } from "node:fs/promises";
 import * as vscode from "vscode";
+import { runCredentialRequestE2E } from './credential-request';
 
 const EXTENSION_ID = process.env["UCP_E2E_EXTENSION_ID"]
   ?? "SmallMain.vscode-unify-chat-provider";
@@ -2982,6 +2983,7 @@ async function runDisabledProposedApiE2E(): Promise<void> {
     true,
     "Extension should activate without --enable-proposed-api",
   );
+  await runCredentialRequestE2E(extension.extensionPath);
 
   const state = await vscode.commands.executeCommand<ProposedApiTestState>(
     "unifyChatProvider.proposedApi.test.getState",
@@ -3192,6 +3194,7 @@ export async function run(): Promise<void> {
 
   await activateWithPendingCopilot();
   assert.equal(extension.isActive, true, "Extension should activate");
+  await runCredentialRequestE2E(extension.extensionPath);
 
   const commands = await vscode.commands.getCommands(true);
   assert.ok(
