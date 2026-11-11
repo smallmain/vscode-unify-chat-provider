@@ -1,5 +1,11 @@
 # Changelog
 
+## v8.15.0 - 2026-11-11
+
+### Fixes
+- coordinate chat authentication and recover Claude thinking prefixes (4efc95f, SmallMain)
+- resolve provider maintenance backlog (39e711b, SmallMain)
+
 ## v8.14.0 - 2026-10-09
 
 ### Features
