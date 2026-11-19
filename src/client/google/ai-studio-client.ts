@@ -71,6 +71,7 @@ import {
 } from '../utils';
 import { randomUUID } from 'node:crypto';
 import { FeatureId } from '../definitions';
+import { cleanJsonSchemaForGemini } from '../zed/gemini-schema';
 
 const TOOL_CALL_ID_PREFIX = 'google-tool:';
 
@@ -249,7 +250,9 @@ export class GoogleAIStudioProvider implements ApiProvider {
     const declarations: FunctionDeclaration[] = tools.map((tool) => ({
       name: tool.name,
       description: tool.description,
-      parametersJsonSchema: normalizeToolInputSchema(tool.inputSchema),
+      parametersJsonSchema: cleanJsonSchemaForGemini(
+        normalizeToolInputSchema(tool.inputSchema),
+      ),
     }));
 
     return [{ functionDeclarations: declarations }];
@@ -430,6 +433,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
         : undefined;
 
     // from gemini sdk
+    this.removeEmptyTextParts(contents);
     contents = this.extractCuratedHistory(contents.slice(0, -1)).concat(
       contents.at(-1)!,
     );
@@ -754,6 +758,29 @@ export class GoogleAIStudioProvider implements ApiProvider {
             part.functionResponse.id = parsed.id;
           }
         }
+      }
+    }
+  }
+
+  private removeEmptyTextParts(contents: Content[]): void {
+    for (let index = contents.length - 1; index >= 0; index--) {
+      const content = contents[index];
+      if (!content.parts) {
+        contents.splice(index, 1);
+        continue;
+      }
+
+      content.parts = content.parts.filter((part) => {
+        if (typeof part.text !== 'string' || part.text.trim()) {
+          return true;
+        }
+
+        const nonTextKeys = Object.keys(part).filter((key) => key !== 'text');
+        return nonTextKeys.length > 0;
+      });
+
+      if (content.parts.length === 0) {
+        contents.splice(index, 1);
       }
     }
   }
@@ -1171,13 +1198,18 @@ export class GoogleAIStudioProvider implements ApiProvider {
     let toolCallIndex = 0;
 
     for (const part of parts) {
+      const thoughtSignature = getThoughtSignature(part);
       if (part.text) {
         if (part.thought) {
           const text = part.text;
           if (text) {
             metadata._completeThinking =
               (metadata._completeThinking ?? '') + text;
-            yield* createLanguageModelThinkingParts(text);
+            yield* createLanguageModelThinkingParts(
+              text,
+              undefined,
+              thoughtSignature ? { signature: thoughtSignature } : undefined,
+            );
           }
           stateParts.push(part);
         } else {
@@ -1193,6 +1225,9 @@ export class GoogleAIStudioProvider implements ApiProvider {
         // Preserve original API response in state parts
         stateParts.push(part);
       } else {
+        if (part.thought && thoughtSignature) {
+          metadata.signature = thoughtSignature;
+        }
         stateParts.push(part);
       }
     }
@@ -1233,6 +1268,7 @@ export class GoogleAIStudioProvider implements ApiProvider {
     const recordFirstToken = createFirstTokenRecorder(performanceTrace);
 
     let _completeThinking = '';
+    let lastThoughtSignature: string | undefined;
     // Preserve signatures on the raw Part objects; moving them into generic
     // thinking metadata would lose the part positions Gemini validates.
     let lastUsage: GenerateContentResponse['usageMetadata'] | undefined;
@@ -1276,13 +1312,21 @@ export class GoogleAIStudioProvider implements ApiProvider {
         }
 
         for (const part of parts) {
+          const thoughtSignature = getThoughtSignature(part);
           if (part.text) {
             if (part.thought) {
               _completeThinking += part.text;
-              yield* createLanguageModelThinkingParts(part.text);
+              lastThoughtSignature = thoughtSignature ?? lastThoughtSignature;
+              yield* createLanguageModelThinkingParts(
+                part.text,
+                undefined,
+                thoughtSignature ? { signature: thoughtSignature } : undefined,
+              );
             } else {
               yield new vscode.LanguageModelTextPart(part.text);
             }
+          } else if (part.thought && thoughtSignature) {
+            lastThoughtSignature = thoughtSignature;
           }
 
           // Only yield tool call parts for named function calls — nameless chunks are
@@ -1312,10 +1356,19 @@ export class GoogleAIStudioProvider implements ApiProvider {
       return;
     }
 
-    if (_completeThinking) {
-      yield* createLanguageModelThinkingParts('', undefined, {
-        _completeThinking,
-      });
+    if (_completeThinking || lastThoughtSignature) {
+      const thinkingMetadata: ThinkingBlockMetadata = {};
+      if (_completeThinking) {
+        thinkingMetadata._completeThinking = _completeThinking;
+      }
+      if (lastThoughtSignature) {
+        thinkingMetadata.signature = lastThoughtSignature;
+      }
+      yield* createLanguageModelThinkingParts(
+        '',
+        undefined,
+        thinkingMetadata,
+      );
     }
 
     const normalizedUsage = lastUsage
