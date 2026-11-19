@@ -13,8 +13,27 @@ vi.mock('vscode', () => {
     constructor(readonly id: string) {}
   }
 
+  class LanguageModelTextPart {
+    constructor(readonly value: string) {}
+  }
+
+  class LanguageModelThinkingPart {
+    constructor(
+      readonly value: string | string[],
+      readonly id?: string,
+      readonly metadata?: object,
+    ) {}
+  }
+
   return {
     env: { language: 'en' },
+    LanguageModelTextPart,
+    LanguageModelThinkingPart,
+    LanguageModelChatMessageRole: {
+      System: 1,
+      User: 2,
+      Assistant: 3,
+    },
     EventEmitter,
     ThemeIcon,
     extensions: { getExtension: () => undefined },
@@ -215,5 +234,126 @@ describe('Gemini 3.8 Flash provider and request compatibility', () => {
     expect(isFeatureSupported(FeatureId.GeminiUseThinkingLevel, googleConfig, {
       id: 'gemini-2.5-flash',
     })).toBe(false);
+  });
+
+  it('drops empty plain text history parts but keeps signature-only thoughts', () => {
+    const contents = [
+      {
+        role: 'model',
+        parts: [{ text: '' }, { thought: true, thoughtSignature: 'sig' }],
+      },
+    ];
+
+    const removeEmptyTextParts = Reflect.get(client, 'removeEmptyTextParts');
+    if (typeof removeEmptyTextParts !== 'function') {
+      throw new Error('Missing removeEmptyTextParts');
+    }
+    removeEmptyTextParts.call(client, contents);
+
+    expect(contents).toEqual([{
+      role: 'model',
+      parts: [{ thought: true, thoughtSignature: 'sig' }],
+    }]);
+  });
+
+  it('sanitizes tool schemas for native Gemini requests', () => {
+    const tools = invokeBuilder(client, 'convertTools', [[{
+      name: 'open_browser_page',
+      description: 'Open a page',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          url: {
+            type: 'string',
+            description: 'Page URL',
+            '$comment': 'unsupported',
+          },
+        },
+        required: ['url'],
+        '$schema': 'https://json-schema.org/draft/2020-12/schema',
+      },
+    }]]) as Array<{ functionDeclarations: Array<{ parametersJsonSchema: Record<string, unknown> }> }>;
+
+    const schema = tools[0]?.functionDeclarations[0]?.parametersJsonSchema;
+    expect(schema).toMatchObject({
+      type: 'object',
+      properties: { url: { type: 'string', description: 'Page URL' } },
+      required: ['url'],
+    });
+    expect(schema).not.toHaveProperty('$schema');
+    expect(schema.properties).not.toHaveProperty('url.$comment');
+  });
+
+  it.each([
+    { label: 'text', text: 'internal reasoning' },
+    { label: 'signature-only', text: undefined },
+  ])('emits Gemini $label thought signatures in VS Code thinking metadata', async ({ text }) => {
+    const parseMessage = Reflect.get(client, 'parseMessage');
+    if (typeof parseMessage !== 'function') {
+      throw new Error('Missing parseMessage');
+    }
+
+    const response = parseMessage.call(
+      client,
+      {
+        candidates: [{
+          content: {
+            role: 'model',
+            parts: [{
+              thought: true,
+              ...(text ? { text } : {}),
+              thoughtSignature: 'gemini-signature',
+            }],
+          },
+        }],
+      },
+      { performance: {} },
+      { providerResponseChunk: () => undefined },
+      'test-identity',
+    ) as AsyncGenerator<unknown>;
+
+    const first = await response.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toMatchObject({
+      value: text ?? '',
+      metadata: { signature: 'gemini-signature' },
+    });
+  });
+
+  it('emits a signature-only thought delta from streaming metadata', async () => {
+    const parseMessageStream = Reflect.get(client, 'parseMessageStream');
+    if (typeof parseMessageStream !== 'function') {
+      throw new Error('Missing parseMessageStream');
+    }
+
+    async function* chunks(): AsyncGenerator<unknown> {
+      yield {
+        candidates: [{
+          content: {
+            role: 'model',
+            parts: [{
+              thought: true,
+              thoughtSignature: 'streaming-gemini-signature',
+            }],
+          },
+        }],
+      };
+    }
+
+    const response = parseMessageStream.call(
+      client,
+      chunks(),
+      { isCancellationRequested: false },
+      { providerResponseChunk: () => undefined },
+      { performance: {} },
+      'test-identity',
+    ) as AsyncGenerator<unknown>;
+
+    const first = await response.next();
+    expect(first.done).toBe(false);
+    expect(first.value).toMatchObject({
+      value: '',
+      metadata: { signature: 'streaming-gemini-signature' },
+    });
   });
 });
