@@ -17,6 +17,7 @@ import { ClaudeRelayServiceBalanceProvider } from './providers/claude-relay-serv
 import { AntigravityBalanceProvider } from './providers/antigravity';
 import { GeminiCliBalanceProvider } from './providers/gemini-cli';
 import { CodexBalanceProvider } from './providers/codex';
+import { OpenCodeGoBalanceProvider } from './providers/opencode-go';
 import { SyntheticBalanceProvider } from './providers/synthetic';
 import { MiniMaxBalanceProvider } from './providers/minimax';
 import { LiteLLMBalanceProvider } from './providers/litellm';
@@ -219,6 +220,19 @@ export const BALANCE_METHODS = {
     resolveForExport: CodexBalanceProvider.resolveForExport,
     normalizeOnImport: CodexBalanceProvider.normalizeOnImport,
     prepareForDuplicate: CodexBalanceProvider.prepareForDuplicate,
+  },
+  'opencode-go': {
+    id: 'opencode-go',
+    label: t('OpenCode Go Usage'),
+    description: t('Monitor usage percentages via OpenCode Go usage API'),
+    category: 'General',
+    ctor: OpenCodeGoBalanceProvider,
+    supportsSensitiveDataInSettings:
+      OpenCodeGoBalanceProvider.supportsSensitiveDataInSettings,
+    redactForExport: OpenCodeGoBalanceProvider.redactForExport,
+    resolveForExport: OpenCodeGoBalanceProvider.resolveForExport,
+    normalizeOnImport: OpenCodeGoBalanceProvider.normalizeOnImport,
+    prepareForDuplicate: OpenCodeGoBalanceProvider.prepareForDuplicate,
   },
   synthetic: {
     id: 'synthetic',

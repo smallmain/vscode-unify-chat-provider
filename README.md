@@ -411,6 +411,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Antigravity Usage`: no extra config required; uses the provider OAuth credential and project settings.
   - `Gemini CLI Usage`: no extra config required; uses the provider OAuth credential and optional project settings.
   - `Codex Usage`: no extra config required; uses provider credential (API key or Codex auth token).
+  - `OpenCode Go Usage`: no extra config required; uses provider `baseUrl` and API key to show the 5-hour, weekly and monthly quota percentages.
 - Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balance Information` to force refresh balances for all configured providers.
 
 ## Adjust Parameters
@@ -903,7 +904,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Cerebras](https://www.cerebras.ai/)                                                                   | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
 | [Command Code](https://commandcode.ai/docs/provider)                                                   | <li>Automatic official model synchronization                                        |                            |
 | [OpenCode Zen](https://opencode.ai/)                                                                   | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-zen)   |
-| [OpenCode Go](https://opencode.ai/)                                                                    | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-go)    |
+| [OpenCode Go](https://opencode.ai/)                                                                    | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-go)    |       ✅        |
 | [Nvidia](https://build.nvidia.com/)                                                                    |                                                                                      | [Details](#nvidia)         |
 | [Kilo Code](https://kilo.ai/)                                                                          | <li>RawBaseUrl                                                                       | [Details](#kilo-code)      |
 | [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                           | <li>ThinkingParam3 <li>ReasoningEffortParam <li>ReasoningContent                     |                            |

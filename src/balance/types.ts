@@ -15,6 +15,7 @@ export type BalanceMethod =
   | 'antigravity'
   | 'gemini-cli'
   | 'codex'
+  | 'opencode-go'
   | 'synthetic'
   | 'minimax'
   | 'litellm'
@@ -89,6 +90,10 @@ export interface CodexBalanceConfig {
   method: 'codex';
 }
 
+export interface OpenCodeGoBalanceConfig {
+  method: 'opencode-go';
+}
+
 export interface SyntheticBalanceConfig {
   method: 'synthetic';
 }
@@ -119,6 +124,7 @@ export type BalanceConfig =
   | AntigravityBalanceConfig
   | GeminiCliBalanceConfig
   | CodexBalanceConfig
+  | OpenCodeGoBalanceConfig
   | SyntheticBalanceConfig
   | MiniMaxBalanceConfig
   | LiteLLMBalanceConfig
@@ -295,6 +301,12 @@ export function isCodexBalanceConfig(
   config: BalanceConfig | undefined,
 ): config is CodexBalanceConfig {
   return config?.method === 'codex';
+}
+
+export function isOpenCodeGoBalanceConfig(
+  config: BalanceConfig | undefined,
+): config is OpenCodeGoBalanceConfig {
+  return config?.method === 'opencode-go';
 }
 
 export function isSyntheticBalanceConfig(

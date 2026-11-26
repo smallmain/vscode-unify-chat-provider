@@ -1347,5 +1347,15 @@
   "OrcaRouter": "OrcaRouter",
   "Official API with automatic model endpoint routing": "支持按模型自动路由端点的官方 API",
   "OpenCode Go": "OpenCode Go",
-  "OpenCode Zen": "OpenCode Zen"
+  "OpenCode Zen": "OpenCode Zen",
+  "5-hour window": "5 小时窗口",
+  "Weekly window": "每周窗口",
+  "Monthly window": "每月窗口",
+  "OpenCode Go Usage": "OpenCode Go 用量",
+  "Monitor usage percentages via OpenCode Go usage API": "通过 OpenCode Go 用量 API 监控用量百分比",
+  "OpenCode Go quota": "OpenCode Go 配额",
+  "OpenCode Go API key is required to query usage.": "查询 OpenCode Go 用量需要 API Key。",
+  "Failed to query OpenCode Go usage.": "查询 OpenCode Go 用量失败。",
+  "OpenCode Go usage response from {0} does not include quota percentages.": "OpenCode Go 在 {0} 返回的用量响应中缺少配额百分比。",
+  "Failed to query OpenCode Go usage from all endpoints: {0}.": "从所有端点查询 OpenCode Go 用量失败：{0}。"
 }

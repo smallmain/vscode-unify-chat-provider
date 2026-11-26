@@ -412,6 +412,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
   - `Antigravity 用量`：无需额外配置，使用供应商 OAuth 凭据与项目配置。
   - `Gemini CLI 用量`：无需额外配置，使用供应商 OAuth 凭据与可选项目配置。
   - `Codex 用量`：无需额外配置，使用供应商凭据（API Key 或 Codex 授权令牌）。
+  - `OpenCode Go 用量`：无需额外配置，使用供应商 `baseUrl` 和 API Key 显示 5 小时、每周和每月配额百分比。
 - 可通过 VS Code 命令 `Unify Chat Provider: 刷新所有供应商的余额信息` 强制刷新所有已配置余额监控的供应商。
 
 ## 调整参数
@@ -904,7 +905,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
 | [Command Code](https://commandcode.ai/docs/provider)                                          | <li>自动同步官方模型                                                                 |                       |
 | [OpenCode Zen](https://opencode.ai/)                                                          | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-zen) |
-| [OpenCode Go](https://opencode.ai/)                                                           | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-go)  |
+| [OpenCode Go](https://opencode.ai/)                                                           | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-go)  |       ✅        |
 | [英伟达](https://build.nvidia.com/)                                                           |                                                                                      | [详情](#英伟达)       |
 | [Kilo Code](https://kilo.ai/)                                                                 | <li>RawBaseUrl                                                                       | [详情](#kilo-code)    |
 | [阿里云百炼平台 (中国站)](https://www.aliyun.com/product/bailian)                             | <li>ThinkingParam3 <li>ReasoningEffortParam <li>ReasoningContent                     |                       |
