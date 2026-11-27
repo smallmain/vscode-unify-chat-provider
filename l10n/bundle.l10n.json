@@ -1347,5 +1347,18 @@
   "OrcaRouter": "OrcaRouter",
   "Official API with automatic model endpoint routing": "Official API with automatic model endpoint routing",
   "OpenCode Go": "OpenCode Go",
-  "OpenCode Zen": "OpenCode Zen"
+  "OpenCode Zen": "OpenCode Zen",
+  "5-hour window": "5-hour window",
+  "Weekly window": "Weekly window",
+  "Monthly window": "Monthly window",
+  "OpenCode Go Usage": "OpenCode Go Usage",
+  "Monitor usage percentages via OpenCode Go usage API": "Monitor usage percentages via OpenCode Go usage API",
+  "OpenCode Go quota": "OpenCode Go quota",
+  "OpenCode Go API key is required to query usage.": "OpenCode Go API key is required to query usage.",
+  "Failed to query OpenCode Go usage.": "Failed to query OpenCode Go usage.",
+  "OpenCode Go usage response from {0} does not include quota percentages.": "OpenCode Go usage response from {0} does not include quota percentages.",
+  "Failed to query OpenCode Go usage from all endpoints: {0}.": "Failed to query OpenCode Go usage from all endpoints: {0}.",
+  "Status bar: show usage text": "Status bar: show usage text",
+  "Status bar: show icon only": "Status bar: show icon only",
+  "Toggle the status bar between the icon and the usage percentages": "Toggle the status bar between the icon and the usage percentages"
 }

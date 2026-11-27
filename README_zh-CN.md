@@ -412,6 +412,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
   - `Antigravity 用量`：无需额外配置，使用供应商 OAuth 凭据与项目配置。
   - `Gemini CLI 用量`：无需额外配置，使用供应商 OAuth 凭据与可选项目配置。
   - `Codex 用量`：无需额外配置，使用供应商凭据（API Key 或 Codex 授权令牌）。
+  - `OpenCode Go 用量`：无需额外配置，使用供应商 `baseUrl` 和 API Key 显示 5 小时、每周和每月配额百分比。
 - 可通过 VS Code 命令 `Unify Chat Provider: 刷新所有供应商的余额信息` 强制刷新所有已配置余额监控的供应商。
 
 ## 调整参数
@@ -432,6 +433,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
 | 余额刷新间隔               | `balanceRefreshIntervalMs`                     | 供应商余额的定时刷新间隔（毫秒）。默认：`60000`，最小：`1000`。                                                                            |
 | 余额节流窗口               | `balanceThrottleWindowMs`                      | 请求结束后刷新余额的节流窗口（毫秒）。默认：`10000`，最小：`0`。                                                                           |
 | 余额状态栏图标             | `balanceStatusBarIcon`                         | 供应商余额状态栏使用的主题图标文本。默认：`$(credit-card)`；空字符串隐藏。                                                                 |
+| 余额状态栏模式             | `balanceStatusBarMode`                         | `icon` 显示配置的图标；`summary` 显示供应商名称及各项用量百分比（如 `OpenCode Go: 45% / 71% / 0%`）。默认：`icon`。                        |
 | 在配置中显示余额           | `displayBalanceInConfiguration`                | 是否在模型配置按钮区域显示已刷新的余额信息。默认：`false`。                                                                                 |
 | 启用余额警告               | `balanceWarning.enabled`                       | 是否在余额接近阈值时于模型名称旁显示警告图标。默认：`true`。                                                                                |
 | 到期警告阈值               | `balanceWarning.timeThresholdDays`             | 到期提醒阈值（天，支持小数）。默认：`1`，最小：`0`。                                                                                        |
@@ -904,7 +906,7 @@ vscode://SmallMain.vscode-unify-chat-provider/import-config?config=<input>&auth=
 | [Cerebras](https://www.cerebras.ai/)                                                          | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [详情](#cerebras)     |
 | [Command Code](https://commandcode.ai/docs/provider)                                          | <li>自动同步官方模型                                                                 |                       |
 | [OpenCode Zen](https://opencode.ai/)                                                          | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-zen) |
-| [OpenCode Go](https://opencode.ai/)                                                           | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-go)  |
+| [OpenCode Go](https://opencode.ai/)                                                           | <li>自动路由模型端点 <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [详情](#opencode-go)  |       ✅        |
 | [英伟达](https://build.nvidia.com/)                                                           |                                                                                      | [详情](#英伟达)       |
 | [Kilo Code](https://kilo.ai/)                                                                 | <li>RawBaseUrl                                                                       | [详情](#kilo-code)    |
 | [阿里云百炼平台 (中国站)](https://www.aliyun.com/product/bailian)                             | <li>ThinkingParam3 <li>ReasoningEffortParam <li>ReasoningContent                     |                       |

@@ -1,8 +1,12 @@
 import * as vscode from 'vscode';
-import type { BalanceProviderState } from '../balance/types';
+import type {
+  BalancePercentMetric,
+  BalanceProviderState,
+} from '../balance/types';
 import {
   balanceManager,
   formatDetailLines,
+  formatPrimaryBadge,
   isUnlimited,
   resolveProgressPercent,
 } from '../balance';
@@ -54,6 +58,37 @@ function formatProgressText(percent: number | undefined): string {
   }
 
   return `${Math.round(clampPercent(percent))}%`;
+}
+
+function formatUsedPercentValue(metric: BalancePercentMetric): string {
+  const used = metric.basis === 'used' ? metric.value : 100 - metric.value;
+  return formatProgressText(used);
+}
+
+/**
+ * Builds the text shown in the status bar when `balanceStatusBarMode` is
+ * `summary`, e.g. `OpenCode Go: 45% / 71% / 0%` (monthly / weekly / 5-hour).
+ * Percentages are the *used* share of each quota so the text matches the detail
+ * lines and badges shown in the balance panel and the tooltip, and they keep
+ * the order in which the provider reports them.
+ */
+function buildSummaryText(providers: ProviderConfig[]): string {
+  return providers
+    .map((provider) => {
+      const snapshot = balanceManager.getProviderState(provider.name)?.snapshot;
+      const percents = (snapshot?.items ?? []).filter(
+        (item): item is BalancePercentMetric => item.type === 'percent',
+      );
+
+      if (percents.length === 0) {
+        const badge = formatPrimaryBadge(snapshot);
+        return badge ? `${provider.name}: ${badge}` : provider.name;
+      }
+
+      const values = percents.map(formatUsedPercentValue).join(' / ');
+      return `${provider.name}: ${values}`;
+    })
+    .join('  |  ');
 }
 
 function isUnlimitedBalanceState(
@@ -143,8 +178,9 @@ export function registerBalanceStatusBar(options: {
   item.command = 'unifyChatProvider.manageBalances';
 
   const refresh = (): void => {
+    const mode = options.store.balanceStatusBarMode;
     const icon = options.store.balanceStatusBarIcon;
-    if (!icon.trim()) {
+    if (mode === 'icon' && !icon.trim()) {
       item.hide();
       return;
     }
@@ -158,7 +194,7 @@ export function registerBalanceStatusBar(options: {
       return;
     }
 
-    item.text = icon;
+    item.text = mode === 'summary' ? buildSummaryText(providers) : icon;
     item.tooltip = buildTooltip(providers);
     item.show();
   };

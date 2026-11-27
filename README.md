@@ -411,6 +411,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
   - `Antigravity Usage`: no extra config required; uses the provider OAuth credential and project settings.
   - `Gemini CLI Usage`: no extra config required; uses the provider OAuth credential and optional project settings.
   - `Codex Usage`: no extra config required; uses provider credential (API key or Codex auth token).
+  - `OpenCode Go Usage`: no extra config required; uses provider `baseUrl` and API key to show the 5-hour, weekly and monthly quota percentages.
 - Run the VS Code command `Unify Chat Provider: Refresh All Providers' Balance Information` to force refresh balances for all configured providers.
 
 ## Adjust Parameters
@@ -431,6 +432,7 @@ Use this feature to monitor provider balances in `Provider Settings`.
 | Balance Refresh Interval           | `balanceRefreshIntervalMs`                     | Periodic provider balance refresh interval in milliseconds. Default: `60000`; minimum: `1000`.                                                       |
 | Balance Throttle Window            | `balanceThrottleWindowMs`                      | Throttle window for refreshing balances after a request, in milliseconds. Default: `10000`; minimum: `0`.                                           |
 | Balance Status Bar Icon            | `balanceStatusBarIcon`                         | Theme icon text used for provider balances in the status bar. Default: `$(credit-card)`; use an empty string to hide it.                              |
+| Balance Status Bar Mode            | `balanceStatusBarMode`                         | `icon` shows the configured icon; `summary` shows the provider name followed by its usage percentages (e.g. `OpenCode Go: 45% / 71% / 0%`). Default: `icon`. |
 | Display Balance in Configuration   | `displayBalanceInConfiguration`                | Whether to show refreshed balance information in the model configuration button area. Default: `false`.                                              |
 | Enable Balance Warnings            | `balanceWarning.enabled`                       | Whether to show a warning icon beside a model name when its balance approaches a threshold. Default: `true`.                                         |
 | Expiration Warning Threshold       | `balanceWarning.timeThresholdDays`             | Expiration warning threshold in days; decimals are supported. Default: `1`; minimum: `0`.                                                            |
@@ -903,7 +905,7 @@ The providers listed below support [One-Click Configuration](#one-click-configur
 | [Cerebras](https://www.cerebras.ai/)                                                                   | <li>ReasoningField <li>DisableReasoningParam <li>ClearThinking                       | [Details](#cerebras)       |
 | [Command Code](https://commandcode.ai/docs/provider)                                                   | <li>Automatic official model synchronization                                        |                            |
 | [OpenCode Zen](https://opencode.ai/)                                                                   | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-zen)   |
-| [OpenCode Go](https://opencode.ai/)                                                                    | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-go)    |
+| [OpenCode Go](https://opencode.ai/)                                                                    | <li>Automatic endpoint routing <li>ReasoningContent <li>InterleavedThinking <li>FineGrainedToolStreaming | [Details](#opencode-go)    |       ✅        |
 | [Nvidia](https://build.nvidia.com/)                                                                    |                                                                                      | [Details](#nvidia)         |
 | [Kilo Code](https://kilo.ai/)                                                                          | <li>RawBaseUrl                                                                       | [Details](#kilo-code)      |
 | [Alibaba Cloud Model Studio (China)](https://www.aliyun.com/product/bailian)                           | <li>ThinkingParam3 <li>ReasoningEffortParam <li>ReasoningContent                     |                            |

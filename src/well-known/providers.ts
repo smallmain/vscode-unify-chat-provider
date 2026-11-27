@@ -259,6 +259,7 @@ export const WELL_KNOWN_PROVIDERS: WellKnownProviderConfig[] = [
     category: 'General',
     type: 'opencode-go',
     baseUrl: 'https://opencode.ai/zen/go/v1',
+    balanceProvider: { method: 'opencode-go' },
     authTypes: ['api-key'],
     models: [],
     autoFetchOfficialModels: true,
