@@ -1357,5 +1357,8 @@
   "OpenCode Go API key is required to query usage.": "查询 OpenCode Go 用量需要 API Key。",
   "Failed to query OpenCode Go usage.": "查询 OpenCode Go 用量失败。",
   "OpenCode Go usage response from {0} does not include quota percentages.": "OpenCode Go 在 {0} 返回的用量响应中缺少配额百分比。",
-  "Failed to query OpenCode Go usage from all endpoints: {0}.": "从所有端点查询 OpenCode Go 用量失败：{0}。"
+  "Failed to query OpenCode Go usage from all endpoints: {0}.": "从所有端点查询 OpenCode Go 用量失败：{0}。",
+  "Status bar: show usage text": "状态栏：显示用量文字",
+  "Status bar: show icon only": "状态栏：仅显示图标",
+  "Toggle the status bar between the icon and the usage percentages": "在状态栏图标与用量百分比之间切换"
 }

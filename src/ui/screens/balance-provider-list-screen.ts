@@ -31,6 +31,7 @@ type BalanceProviderListItem = vscode.QuickPickItem & {
     | 'provider'
     | 'edit-provider'
     | 'refresh-all'
+    | 'toggle-status-bar-mode'
     | 'view-all-providers';
   providerName?: string;
 };
@@ -192,6 +193,18 @@ export async function runBalanceProviderListScreen(
       alwaysShow: true,
     });
     items.push({
+      label:
+        '$(symbol-color) ' +
+        (ctx.store.balanceStatusBarMode === 'summary'
+          ? t('Status bar: show usage text')
+          : t('Status bar: show icon only')),
+      description: t(
+        'Toggle the status bar between the icon and the usage percentages',
+      ),
+      action: 'toggle-status-bar-mode',
+      alwaysShow: true,
+    });
+    items.push({
       label: '$(list-unordered) ' + t('View all providers...'),
       action: 'view-all-providers',
       alwaysShow: true,
@@ -290,6 +303,13 @@ export async function runBalanceProviderListScreen(
 
   if (!selection) {
     return { kind: 'pop' };
+  }
+
+  if (selection.action === 'toggle-status-bar-mode') {
+    const nextMode =
+      ctx.store.balanceStatusBarMode === 'summary' ? 'icon' : 'summary';
+    await ctx.store.setBalanceStatusBarMode(nextMode);
+    return { kind: 'stay' };
   }
 
   if (selection.action === 'view-all-providers') {

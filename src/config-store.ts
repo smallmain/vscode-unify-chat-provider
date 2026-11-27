@@ -740,6 +740,19 @@ export class ConfigStore {
   }
 
   /**
+   * Set how the balance status bar item is rendered.
+   * Always writes to application-scoped user settings.
+   */
+  async setBalanceStatusBarMode(mode: BalanceStatusBarMode): Promise<void> {
+    const config = vscode.workspace.getConfiguration(CONFIG_NAMESPACE);
+    await config.update(
+      'balanceStatusBarMode',
+      mode,
+      vscode.ConfigurationTarget.Global,
+    );
+  }
+
+  /**
    * Set whether the Manage Providers panel lists recently added or modified
    * providers first.
    * Always writes to application-scoped user settings.

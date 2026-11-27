@@ -228,8 +228,10 @@ function buildSnapshotItems(windows: ParsedUsageWindow[]): BalanceMetric[] {
   let primaryPercentIndex = -1;
   let rateLimited = false;
 
-  windows.forEach((window) => {
-    const metricIdPrefix = `opencode-go-${window.key}`;
+  windows.forEach((window, order) => {
+    // The numeric prefix keeps the display order (monthly, weekly, 5-hour) when
+    // metrics are sorted by id inside the shared formatter.
+    const metricIdPrefix = `opencode-go-${order + 1}-${window.key}`;
 
     const percentMetricIndex = items.length;
     items.push({
