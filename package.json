@@ -227,6 +227,20 @@
           "description": "%configuration.balanceStatusBarIcon.description%",
           "default": "$(credit-card)"
         },
+        "unifyChatProvider.balanceStatusBarMode": {
+          "type": "string",
+          "enum": [
+            "icon",
+            "summary"
+          ],
+          "enumDescriptions": [
+            "%configuration.balanceStatusBarMode.icon%",
+            "%configuration.balanceStatusBarMode.summary%"
+          ],
+          "scope": "application",
+          "description": "%configuration.balanceStatusBarMode.description%",
+          "default": "icon"
+        },
         "unifyChatProvider.displayBalanceInConfiguration": {
           "type": "boolean",
           "scope": "application",

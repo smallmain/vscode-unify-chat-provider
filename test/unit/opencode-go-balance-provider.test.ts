@@ -125,23 +125,39 @@ beforeEach(() => {
 });
 
 describe('OpenCode Go usage windows', () => {
-  it('maps the 5-hour, weekly and monthly windows to used percentages', async () => {
+  it('orders the windows monthly, weekly, 5-hour and keeps monthly primary', async () => {
     const snapshot = await refresh(usageResponse);
 
-    expect(snapshot.items).toContainEqual(
+    expect(snapshot.items[0]).toEqual(
       expect.objectContaining({
-        id: 'opencode-go-rolling-used-percent',
+        id: 'opencode-go-monthly-used-percent',
         type: 'percent',
-        label: '5-hour window',
-        value: 30,
+        label: 'Monthly window',
+        value: 20,
         basis: 'used',
       }),
     );
+    expect(
+      snapshot.items
+        .filter((item) => item.type === 'percent')
+        .map((item) => item.id),
+    ).toEqual([
+      'opencode-go-monthly-used-percent',
+      'opencode-go-weekly-used-percent',
+      'opencode-go-rolling-used-percent',
+    ]);
     expect(snapshot.items).toContainEqual(
       expect.objectContaining({
         id: 'opencode-go-weekly-used-percent',
         label: 'Weekly window',
         value: 50,
+      }),
+    );
+    expect(snapshot.items).toContainEqual(
+      expect.objectContaining({
+        id: 'opencode-go-rolling-used-percent',
+        label: '5-hour window',
+        value: 30,
       }),
     );
     expect(snapshot.items).toContainEqual(
@@ -153,9 +169,9 @@ describe('OpenCode Go usage windows', () => {
       }),
     );
     expect(snapshot.items.filter((item) => item.primary)).toEqual([
-      expect.objectContaining({ id: 'opencode-go-weekly-used-percent' }),
+      expect.objectContaining({ id: 'opencode-go-monthly-used-percent' }),
     ]);
-    expect(formatPrimaryBadge(snapshot)).toBe('50%');
+    expect(formatPrimaryBadge(snapshot)).toBe('20%');
     expect(evaluateBalanceWarning(snapshot.items, thresholds).isNearThreshold).toBe(
       false,
     );

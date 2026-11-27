@@ -34,9 +34,17 @@ import {
 } from './auth/local-auth-state';
 
 export const CONFIG_NAMESPACE = 'unifyChatProvider';
+
+/**
+ * How the balance status bar item is rendered: a static icon, or a text summary
+ * that appends the usage percentages for each monitored provider.
+ */
+export type BalanceStatusBarMode = 'icon' | 'summary';
+
 const DEFAULT_BALANCE_REFRESH_INTERVAL_MS = 60_000;
 const DEFAULT_BALANCE_THROTTLE_WINDOW_MS = 10_000;
 const DEFAULT_BALANCE_STATUS_BAR_ICON = '$(credit-card)';
+const DEFAULT_BALANCE_STATUS_BAR_MODE: BalanceStatusBarMode = 'icon';
 const DEFAULT_DISPLAY_BALANCE_IN_CONFIGURATION = false;
 const DEFAULT_MODEL_DISPLAY_NAME_TEMPLATE = '{modelName}{{ ({providerName})}}';
 const DEFAULT_PROVIDER_LIST_NEWEST_FIRST = true;
@@ -61,6 +69,7 @@ const OBSERVED_CONFIG_KEYS = [
   'balanceRefreshIntervalMs',
   'balanceThrottleWindowMs',
   'balanceStatusBarIcon',
+  'balanceStatusBarMode',
   'displayBalanceInConfiguration',
   'balanceWarning.enabled',
   'balanceWarning.timeThresholdDays',
@@ -202,6 +211,12 @@ export class ConfigStore {
     const raw = this.readConfiguredUnknown('balanceStatusBarIcon');
 
     return typeof raw === 'string' ? raw : DEFAULT_BALANCE_STATUS_BAR_ICON;
+  }
+
+  get balanceStatusBarMode(): BalanceStatusBarMode {
+    const raw = this.readConfiguredUnknown('balanceStatusBarMode');
+
+    return raw === 'summary' ? 'summary' : DEFAULT_BALANCE_STATUS_BAR_MODE;
   }
 
   get displayBalanceInConfiguration(): boolean {

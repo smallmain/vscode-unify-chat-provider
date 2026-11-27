@@ -32,10 +32,14 @@ type ParsedUsageWindow = {
   resetAt?: ParsedResetAt;
 };
 
+/**
+ * Windows are ordered from the outermost quota to the innermost one so that the
+ * monthly quota is reported first and becomes the primary metric.
+ */
 const USAGE_WINDOW_KEYS: readonly UsageWindowKey[] = [
-  'rolling',
-  'weekly',
   'monthly',
+  'weekly',
+  'rolling',
 ];
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -222,7 +226,6 @@ function buildSnapshotItems(windows: ParsedUsageWindow[]): BalanceMetric[] {
   const items: BalanceMetric[] = [];
 
   let primaryPercentIndex = -1;
-  let highestUsedPercent = Number.NEGATIVE_INFINITY;
   let rateLimited = false;
 
   windows.forEach((window) => {
@@ -238,8 +241,9 @@ function buildSnapshotItems(windows: ParsedUsageWindow[]): BalanceMetric[] {
       basis: 'used',
     });
 
-    if (window.usedPercent > highestUsedPercent) {
-      highestUsedPercent = window.usedPercent;
+    // The first window in USAGE_WINDOW_KEYS is the outermost quota (monthly),
+    // so it stays the primary metric regardless of how much of it is used.
+    if (primaryPercentIndex < 0) {
       primaryPercentIndex = percentMetricIndex;
     }
 
