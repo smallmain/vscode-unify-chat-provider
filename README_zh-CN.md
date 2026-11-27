@@ -433,7 +433,7 @@ Zed 编辑器使用自研的 Zeta 系列模型，这里推荐两种方式添加�
 | 余额刷新间隔               | `balanceRefreshIntervalMs`                     | 供应商余额的定时刷新间隔（毫秒）。默认：`60000`，最小：`1000`。                                                                            |
 | 余额节流窗口               | `balanceThrottleWindowMs`                      | 请求结束后刷新余额的节流窗口（毫秒）。默认：`10000`，最小：`0`。                                                                           |
 | 余额状态栏图标             | `balanceStatusBarIcon`                         | 供应商余额状态栏使用的主题图标文本。默认：`$(credit-card)`；空字符串隐藏。                                                                 |
-| 余额状态栏模式             | `balanceStatusBarMode`                         | `icon` 显示配置的图标；`summary` 显示供应商名称及各项用量百分比（如 `OpenCode Go: 56% / 29% / 70%`）。默认：`icon`。                        |
+| 余额状态栏模式             | `balanceStatusBarMode`                         | `icon` 显示配置的图标；`summary` 显示供应商名称及各项用量百分比（如 `OpenCode Go: 45% / 71% / 0%`）。默认：`icon`。                        |
 | 在配置中显示余额           | `displayBalanceInConfiguration`                | 是否在模型配置按钮区域显示已刷新的余额信息。默认：`false`。                                                                                 |
 | 启用余额警告               | `balanceWarning.enabled`                       | 是否在余额接近阈值时于模型名称旁显示警告图标。默认：`true`。                                                                                |
 | 到期警告阈值               | `balanceWarning.timeThresholdDays`             | 到期提醒阈值（天，支持小数）。默认：`1`，最小：`0`。                                                                                        |

@@ -60,16 +60,17 @@ function formatProgressText(percent: number | undefined): string {
   return `${Math.round(clampPercent(percent))}%`;
 }
 
-function formatRemainingPercentValue(metric: BalancePercentMetric): string {
-  const remaining = metric.basis === 'used' ? 100 - metric.value : metric.value;
-  return formatProgressText(remaining);
+function formatUsedPercentValue(metric: BalancePercentMetric): string {
+  const used = metric.basis === 'used' ? metric.value : 100 - metric.value;
+  return formatProgressText(used);
 }
 
 /**
  * Builds the text shown in the status bar when `balanceStatusBarMode` is
- * `summary`, e.g. `OpenCode Go: 56% / 29% / 70%` (monthly / weekly / 5-hour).
- * Percentages are the *remaining* share of each quota, matching the status bar
- * tooltip, and they keep the order in which the provider reports them.
+ * `summary`, e.g. `OpenCode Go: 45% / 71% / 0%` (monthly / weekly / 5-hour).
+ * Percentages are the *used* share of each quota so the text matches the detail
+ * lines and badges shown in the balance panel and the tooltip, and they keep
+ * the order in which the provider reports them.
  */
 function buildSummaryText(providers: ProviderConfig[]): string {
   return providers
@@ -84,7 +85,7 @@ function buildSummaryText(providers: ProviderConfig[]): string {
         return badge ? `${provider.name}: ${badge}` : provider.name;
       }
 
-      const values = percents.map(formatRemainingPercentValue).join(' / ');
+      const values = percents.map(formatUsedPercentValue).join(' / ');
       return `${provider.name}: ${values}`;
     })
     .join('  |  ');
